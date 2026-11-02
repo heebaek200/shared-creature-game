@@ -58,6 +58,12 @@ User user = userRepository.findById(id).orElseThrow();
 
 # 1. 백엔드 (Spring Boot)
 
+## 1.0. Java 실행 환경
+
+- Java 21 LTS를 로컬 개발, Gradle Toolchain과 CI의 공통 기준으로 사용합니다.
+- Gradle은 Java Toolchain 21을 선언하고 팀원은 JDK 21로 빌드·테스트합니다.
+- 기준 Package는 `com.team.sharedcreature`입니다. 새 백엔드 코드는 이 Root Package 아래에 작성합니다.
+
 ## 1.1. 로깅
 
 **프로그램의 실행 상태를 확인할 때는 `System.out.println()` 대신 로거를 사용합니다.**
@@ -136,7 +142,7 @@ com.example.project
 ### 프로젝트 적용 구조
 
 ```text
-com.team.sharedcreaturegame
+com.team.sharedcreature
 ├── _core
 │   ├── api
 │   ├── config
@@ -452,7 +458,7 @@ Service의 트랜잭션 안에서 조회한 Entity의 상태를 변경하면 JPA
 - 백엔드 자동 테스트는 Spring Boot가 기본 제공하는 JUnit 5를 사용합니다. 필요한 경우 Mockito로 Repository나 외부 연동의 반환값만 대신합니다.
 - Docker와 Testcontainers는 사용하지 않습니다. MySQL 동작이 필요한 Repository·잠금 테스트는 팀원의 로컬 MySQL에 `shared_creature_game_test` 데이터베이스를 만들어 실행합니다.
 - 테스트 데이터는 각 테스트가 시작할 때 필요한 최소 사용자·그룹·퀘스트만 만들고, 다른 테스트가 남긴 데이터에 의존하지 않습니다.
-- 포트원처럼 실제 호출하면 결제 상태가 바뀌는 외부 시스템은 테스트에서 직접 호출하지 않습니다. `PaymentGateway`의 가짜 구현이 성공·실패·응답 불명 상태를 돌려주게 하여 Service 흐름을 확인합니다.
+- 포트원이나 Gemini처럼 비용·외부 상태가 발생하는 시스템은 자동 테스트에서 직접 호출하지 않습니다. `PaymentGateway`, `TextProofreader`의 가짜 구현으로 성공·실패·응답 불명 또는 잘못된 형식 흐름을 확인합니다.
 - 자동 테스트의 최소 필수 범위는 그룹 정원 동시 가입, 퀘스트 중복 완료 방지, 최초 장착 후 환불 불가와 동일 환불 중복 처리입니다.
 - 로그인, 화면 이동, WebSocket 재연결, PortOne 테스트 결제와 관리자 화면은 체크리스트를 보고 브라우저에서 수동 검증합니다.
 - LLM이 테스트 코드를 작성해도 테스트 이름, 준비 데이터, 기대 결과를 팀원이 읽고 직접 실행해 확인합니다.
@@ -611,9 +617,9 @@ frontend/src/mocks
 - `local`은 팀원 PC의 로컬 MySQL, `test`는 `shared_creature_game_test`, `prod`는 배포 환경 DB에 연결합니다.
 - Docker는 어느 Profile에서도 전제로 사용하지 않습니다.
 - 공통값은 `application.yml`, 환경별 비밀이 아닌 차이는 `application-{profile}.yml`에 둡니다.
-- DB 비밀번호, OAuth Client Secret, PortOne API·Webhook Secret은 Git에 저장하지 않고 환경변수로 전달합니다.
+- DB 비밀번호, OAuth Client Secret, PortOne API·Webhook Secret과 Gemini API Key는 Git에 저장하지 않고 환경변수로 전달합니다.
 - `.env.example`에는 실제 값 없이 필요한 변수 이름과 설명만 기록합니다.
-- `test` Profile은 실제 Google·Naver OAuth 또는 PortOne API를 호출하지 않고 가짜 Adapter를 사용합니다.
+- `test` Profile은 실제 Google·Naver OAuth, PortOne 또는 Gemini API를 호출하지 않고 가짜 Adapter를 사용합니다.
 - DB 시각은 UTC로 저장하고 시즌·퀘스트·가입 제한 같은 업무 시각은 `Asia/Seoul`로 계산합니다.
 
 ## 3.3. 프론트엔드 실행 환경

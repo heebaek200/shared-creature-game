@@ -2,7 +2,7 @@
 
 ## 1. 문서 목적과 읽는 법
 
-이 문서는 구현할 Java 클래스의 책임과 의존 방향을 보여줍니다. 39개 업무 테이블의 모든 컬럼을 한 그림에 넣지 않고, 팀원이 기능별 흐름을 찾기 쉽도록 네 영역으로 나눕니다.
+이 문서는 구현할 Java 클래스의 책임과 의존 방향을 보여줍니다. 40개 업무 테이블의 모든 컬럼을 한 그림에 넣지 않고, 팀원이 기능별 흐름을 찾기 쉽도록 네 영역으로 나눕니다.
 
 - `Controller`는 HTTP 요청과 응답만 담당합니다.
 - `Service`는 권한, 상태 전이, 동시성 및 트랜잭션 같은 업무 규칙을 담당합니다.
@@ -16,6 +16,8 @@
 ## 2. 인증·사용자·그룹·권한
 
 사용자는 소셜 계정으로 로그인하고 동시에 하나의 활성 그룹에만 속합니다. 가입·탈퇴·강퇴·역할 변경은 현재 멤버십, 그룹 정원과 가입 제한을 Service가 같은 트랜잭션에서 다시 검사합니다.
+
+`AuthService.handleCallback()`은 신규 사용자에게 가입 대기 세션만 만들고, `completeSignup()`이 닉네임 확정과 계정 생성 및 가능한 초대 그룹 가입을 담당합니다.
 
 ```mermaid
 classDiagram
@@ -80,8 +82,9 @@ classDiagram
         <<Entity>>
         +id: Long
         +status: UserStatus
-        +superAdmin: boolean
+        +globalRole: GlobalRole
         +lastLoginAt: Instant
+        +lastActiveAt: Instant
     }
     class SocialAccount {
         <<Entity>>
@@ -166,10 +169,10 @@ classDiagram
     GroupAdminService --> GroupMembershipRepository
     User "1" --> "1" SocialAccount
     User "1" --> "1" UserProfile
-    User "1" --> "0..*" OAuthLoginAttempt
     User "1" --> "0..*" GroupMembership
     Group "1" --> "0..*" GroupMembership
     Group "1" --> "0..*" GroupInviteLink
+    GroupInviteLink "0..1" --> "0..*" OAuthLoginAttempt : carries context
     User "1" --> "0..1" GroupJoinRestriction
     User "1" --> "0..*" UserReport : target
     UserReport "1" --> "0..1" ModerationAction
@@ -177,9 +180,9 @@ classDiagram
 
 ### 구현 시 핵심 확인점
 
-- `GroupMembershipService.join()`은 사용자 → 그룹 순서로 잠그고 가입 제한과 활성 멤버십을 재검사한 뒤 정원 증가와 멤버십 생성을 한 트랜잭션에서 처리합니다.
-- 주 관리자 이전은 그룹, 기존 주 관리자 멤버십, 신규 주 관리자 멤버십을 고정 순서로 잠급니다.
-- 부 관리자 및 일반 회원 강퇴 권한과 72시간 미접속 조건은 Controller가 아닌 Service가 판정합니다.
+- `GroupMembershipService`와 `GroupAdminService`는 모든 멤버십 변경에서 영향 사용자 ID 오름차순 → 그룹 → 멤버십 ID 오름차순 → 가입 제한의 공통 잠금 순서를 사용합니다.
+- 주 관리자 이전은 기존·신규 사용자 행을 ID 오름차순으로 먼저 잠근 뒤 그룹과 두 멤버십을 잠그고 기존 주 관리자를 `MEMBER`, 대상을 `PRIMARY`로 변경합니다.
+- 일반·부 관리자 회원의 강퇴 권한과 `lastActiveAt` 기준 72시간 미활동 조건은 Controller가 아닌 Service가 판정합니다. 부 관리자 강퇴도 미접속 강퇴 흐름을 재사용합니다.
 - 전체 관리자의 신고 기반 강퇴도 최종적으로 같은 멤버십 종료·24시간 제한 생성 흐름을 재사용합니다.
 
 ## 3. 시즌·크리처·퀘스트·랭킹
@@ -203,6 +206,7 @@ classDiagram
     }
     class CreatureSelectionService {
         <<Service>>
+        +listActiveSpecies()
         +selectSpecies()
         +selectRandomSpeciesAtHatch()
     }
@@ -327,7 +331,7 @@ classDiagram
     RankingService --> SeasonGroupScore
     Season "1" --> "0..*" GroupSeason
     GroupSeason "1" --> "1" GroupCreature
-    GroupCreature "1" --> "1" CreatureSpecies
+    GroupCreature "0..*" --> "0..1" CreatureSpecies
     GroupCreature "1" --> "0..*" CreatureExperienceLedger
     QuestTemplate "1" --> "1..*" QuestTemplateVersion
     QuestPeriod "1" --> "1..*" QuestAssignment
@@ -344,9 +348,11 @@ classDiagram
 ### 구현 시 핵심 확인점
 
 - 알 상태에서도 `GroupCreature.addExperience()`를 호출하며 부화할 때 누적 경험치로 도달 단계를 즉시 계산합니다.
+- 시즌 중 그룹 생성 트랜잭션은 현재 시즌의 `GroupSeason`, 알 상태 `GroupCreature`와 0점 `SeasonGroupScore`를 함께 만들며 부화 기한은 생성 시각부터 72시간입니다.
 - `QuestCompletionService`는 완료 존재 여부만 먼저 조회해 믿지 않고 DB UNIQUE 충돌도 이미 완료된 요청으로 안전하게 해석합니다.
 - 완료 UNIQUE를 확보한 뒤 합계 갱신 잠금 순서는 개인 기여도 → 그룹 점수 → 크리처로 고정합니다.
 - 시즌 종료 Snapshot은 이후 닉네임·그룹명·멤버십 변경과 무관하게 당시 결과를 보존합니다.
+- `SeasonScheduler.closeSeason()`은 시즌을 `CLOSING`으로 선점하고 Snapshot UNIQUE를 이용해 중단 후 누락 결과만 보완한 뒤 `ENDED`로 확정합니다. 같은 시각의 `startSeason()`은 이전 시즌 종료 뒤 실행합니다.
 
 ## 4. 아바타·상품·결제·환불
 
@@ -492,13 +498,14 @@ classDiagram
     Purchase "1" --> "0..*" RefundRequest
     OwnedItem "1" --> "0..1" AvatarEquipment
     RefundRequest "1" --> "0..*" PgApiAttempt
-    PaymentTransaction "1" --> "0..*" PaymentWebhookEvent
+    PaymentTransaction "0..1" --> "0..*" PaymentWebhookEvent
 ```
 
 ### 구현 시 핵심 확인점
 
 - 결제 동기화는 주문 처리권 선점 트랜잭션 → 트랜잭션 없는 PG 조회 → 결과 확정 트랜잭션으로 나눕니다.
 - 결제 검증은 상태뿐 아니라 Store ID, 주문 번호, 금액과 통화까지 비교합니다.
+- 주문 `paymentId`는 `Purchase.orderNumber`에 유지하고 승인 거래 ID와 취소 `cancellation.id`는 `PaymentTransaction.providerTransactionId`에 공급자 코드와 함께 저장합니다.
 - 최초 장착은 `OwnedItem.usedAt`을 한 번만 설정하며 이후 장착 해제해도 되돌리지 않습니다.
 - 환불 승인은 환불 요청과 소유 아이템을 잠가 미사용 상태를 재검사한 뒤 처리권을 선점합니다.
 - PG 취소 Timeout이나 연결 단절은 실패로 추정하지 않고 `CANCEL_UNKNOWN`으로 보존한 뒤 조회로 복구합니다.
@@ -530,6 +537,31 @@ classDiagram
     class AdminAuditService {
         <<Service>>
         +record()
+    }
+    class ApiIdempotencyService {
+        <<Service>>
+        +claim()
+        +complete()
+        +returnStoredResult()
+    }
+    class ApiIdempotencyRecord {
+        <<Entity>>
+        +operation: String
+        +idempotencyKey: UUID
+        +requestHash: String
+        +status: IdempotencyStatus
+    }
+    class TextProofreadingService {
+        <<Service>>
+        +proofreadGroupDescription()
+    }
+    class TextProofreader {
+        <<Port>>
+        +proofread()
+    }
+    class GeminiTextProofreader {
+        <<Adapter>>
+        +proofread()
     }
     class SchedulerExecutionService {
         <<Service>>
@@ -588,6 +620,9 @@ classDiagram
     GroupPresenceRegistry --> GroupLiveEvent
     SchedulerExecutionService --> SchedulerExecution
     AdminAuditService --> AdminAuditLog
+    ApiIdempotencyService --> ApiIdempotencyRecord
+    TextProofreadingService --> TextProofreader
+    TextProofreader <|.. GeminiTextProofreader
     SchedulerExecutionService --> BusinessClock
     AdminAuditService --> CurrentUser
     TransactionBoundary ..> PessimisticLockRule : coordinates
@@ -601,6 +636,8 @@ classDiagram
 - WebSocket 이벤트는 DB Commit 이후에만 발행하고 명령 처리는 REST API가 담당합니다.
 - Presence는 MVP에서 단일 애플리케이션 인스턴스 메모리만 사용하며 영속 Entity로 만들지 않습니다.
 - 중요 권한 변경, 강퇴, 환불 판단과 운영 복구는 `AdminAuditService`로 감사 이력을 남깁니다.
+- 외부 효과 명령은 `ApiIdempotencyService`가 사용자·Operation·Key를 선점한 뒤 같은 요청에는 최초 결과를 반환합니다.
+- Gemini 교정은 `TextProofreader` Port 뒤에 격리하고 DB 트랜잭션 밖에서 한 번 호출합니다. 테스트는 외부 API 대신 단순 Fake를 사용합니다.
 
 ## 6. 패키지 배치 기준
 
@@ -614,6 +651,7 @@ classDiagram
 | 아바타 | `avatar` | `AvatarService`, `OwnedItem`, `AvatarEquipment` |
 | 결제·환불 | `payment` | `PaymentReconciliationService`, `RefundService`, `PaymentGateway` |
 | 전체 관리자 | `admin` | 신고 처리, 대시보드 조회, 운영 복구 Controller·Service |
+| AI 문장 교정 | `ai` | `TextProofreadingService`, `TextProofreader`, `GeminiTextProofreader` |
 | 공통 기술 | `_core` | 오류, 보안, 시간, 동시성, WebSocket 설정·공통 구현 |
 
 복잡한 기능만 `api`, `application`, `domain`, `infrastructure` 하위 패키지로 나눕니다. 단순 기능은 Controller·Service·Repository·Entity를 기능 패키지 바로 아래에 둘 수 있으며, 다이어그램의 인터페이스를 형식적으로 모두 만들 필요는 없습니다. `PaymentGateway`, `SocialLoginClient`, `GroupLiveEventPublisher`처럼 실제 외부 구현을 교체하거나 격리해야 하는 경계에만 Port 인터페이스를 둡니다.
