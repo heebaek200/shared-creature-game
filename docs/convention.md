@@ -351,9 +351,13 @@ Spring Security의 `AccessDeniedException`과 혼동하지 않도록 사용자 �
 - 자체 비밀번호 회원가입은 지원하지 않으며 비밀번호 컬럼과 비밀번호 처리 코드를 만들지 않습니다.
 - 공급자 토큰, Client Secret, 세션 ID 등 인증 정보는 응답, 로그, 예외 메시지에 노출하지 않습니다.
 - 공급자 액세스 토큰은 브라우저 저장소로 전달하지 않고 백엔드에서만 처리합니다.
-- 세션 쿠키에는 `HttpOnly`, `Secure`, `SameSite` 속성을 적용하고 상태 변경 API에는 CSRF 검증을 적용합니다.
+- 세션 쿠키에는 `HttpOnly`, `SameSite`를 적용하고 `Secure`는 `integration`·`prod`에서 필수로 사용합니다. localhost 전용 `local`만 `Secure=false`를 허용하며 상태 변경 API에는 CSRF 검증을 적용합니다.
+- OAuth 로그인 시작 시 익명 세션 ID의 Hash를 시도 데이터에 연결하고 Callback에서 같은 세션인지 검증합니다. 원문 세션 ID와 OAuth `state`는 로그에 남기지 않습니다.
+- STOMP `CONNECT`도 세션·허용 Origin·CSRF를 검증하고 인바운드 `SEND`·`MESSAGE`는 기본 거부합니다. 화면에서 메시지를 보내지 않는다는 전제만으로 서버 인가를 생략하지 않습니다.
 - 서버 세션의 비활성 만료시간은 7일이며 사용자당 최대 3개를 허용합니다. 초과 로그인 시 가장 오래 생성된 세션을 무효화합니다.
 - 신규 소셜 가입은 이메일 제공이 필수이고 기존 회원 로그인은 공급자와 공급자 사용자 식별자를 우선합니다.
+- 다른 사용자의 구매·보유 아이템·환불 자원은 존재 여부를 숨기도록 `404`, 존재하는 관리 기능의 역할 부족은 `403`으로 처리합니다. Controller의 Path ID만 믿지 않고 Service가 현재 사용자 소유권과 역할을 확인합니다.
+- 최초 전체 관리자 외에는 환경변수로 역할을 부여하지 않으며 공개 요청 DTO에 `globalRole`을 추가하지 않습니다.
 
 ### 인터셉터
 
@@ -459,8 +463,11 @@ Service의 트랜잭션 안에서 조회한 Entity의 상태를 변경하면 JPA
 - Docker와 Testcontainers는 사용하지 않습니다. MySQL 동작이 필요한 Repository·잠금 테스트는 팀원의 로컬 MySQL에 `shared_creature_game_test` 데이터베이스를 만들어 실행합니다.
 - 테스트 데이터는 각 테스트가 시작할 때 필요한 최소 사용자·그룹·퀘스트만 만들고, 다른 테스트가 남긴 데이터에 의존하지 않습니다.
 - 포트원이나 Gemini처럼 비용·외부 상태가 발생하는 시스템은 자동 테스트에서 직접 호출하지 않습니다. `PaymentGateway`, `TextProofreader`의 가짜 구현으로 성공·실패·응답 불명 또는 잘못된 형식 흐름을 확인합니다.
-- 자동 테스트의 최소 필수 범위는 그룹 정원 동시 가입, 퀘스트 중복 완료 방지, 최초 장착 후 환불 불가와 동일 환불 중복 처리입니다.
-- 로그인, 화면 이동, WebSocket 재연결, PortOne 테스트 결제와 관리자 화면은 체크리스트를 보고 브라우저에서 수동 검증합니다.
+- 자동 테스트의 최소 필수 범위는 그룹 정원 동시 가입, 퀘스트 중복 완료 방지, 시즌 종료·퀘스트 완료 경합, 탈퇴·퀘스트 완료 경합, 최초 장착 후 환불 불가와 동일 환불 중복 처리입니다.
+- 경계·복구 테스트는 1인 주 관리자 탈퇴 시 그룹 비활성화, 5분 지난 `CANCEL_PENDING`, 장기 Webhook `PENDING`·`FAILED`, 사진 마감 직전 처리, 저장된 활동 시각 72시간 10분 경계와 그룹 이동 전 활동의 `AGGREGATE` 제외를 고정 시각·가짜 Adapter로 확인합니다.
+- 보안 경계 테스트에는 다른 세션의 OAuth Callback 거부, STOMP `SEND`·다른 그룹 구독 거부, 다른 사용자의 구매·아이템·환불 ID 접근 시 `404`, 관리자 역할 부족 시 `403`을 포함합니다.
+- 호출량 테스트에는 OAuth 세션·IP 제한, Gemini 분당·일일·동시 호출 제한, 사진 분당·배정별 시도·파서 동시 처리·5초 Timeout 경계를 포함합니다.
+- 로그인, 화면 이동, WebSocket 재연결, PortOne 테스트 결제와 관리자 화면은 체크리스트를 보고 브라우저에서 수동 검증합니다. 모바일 OAuth·결제 Redirect와 Webhook은 `integration` Profile의 임시 공개 HTTPS 주소에서 확인합니다.
 - LLM이 테스트 코드를 작성해도 테스트 이름, 준비 데이터, 기대 결과를 팀원이 읽고 직접 실행해 확인합니다.
 
 # 2. 프론트엔드 (Full CSR·Vanilla JavaScript·Bootstrap v5)
@@ -613,11 +620,15 @@ frontend/src/mocks
 
 ## 3.2. Spring Profile과 비밀값
 
-- Spring Profile은 `local`, `test`, `prod` 세 가지를 사용합니다.
-- `local`은 팀원 PC의 로컬 MySQL, `test`는 `shared_creature_game_test`, `prod`는 배포 환경 DB에 연결합니다.
+- Spring Profile은 `local`, `test`, `integration`, `prod` 네 가지를 사용합니다.
+- `local`은 팀원 PC의 로컬 MySQL과 localhost HTTP, `test`는 `shared_creature_game_test`, `integration`은 팀원 PC의 애플리케이션을 임시 공개 HTTPS 터널로 검증하는 환경, `prod`는 배포 환경입니다.
+- 세션 쿠키 `Secure=false`는 localhost 전용 `local` Profile에서만 허용합니다. `integration`과 `prod`는 `Secure=true`를 사용하고 HTTPS가 아니면 실행 전 검증에서 실패시킵니다.
 - Docker는 어느 Profile에서도 전제로 사용하지 않습니다.
 - 공통값은 `application.yml`, 환경별 비밀이 아닌 차이는 `application-{profile}.yml`에 둡니다.
 - DB 비밀번호, OAuth Client Secret, PortOne API·Webhook Secret과 Gemini API Key는 Git에 저장하지 않고 환경변수로 전달합니다.
+- 최초 관리자용 `INITIAL_SUPER_ADMIN_PROVIDER`, `INITIAL_SUPER_ADMIN_EMAIL`도 환경변수로 전달하며 실제 이메일은 `.env.example`이나 문서에 기록하지 않습니다.
+- 전체 관리자가 아직 없으면 두 초기 관리자 변수를 함께 요구하고 한쪽 누락·지원하지 않는 공급자·잘못된 이메일 형식은 시작 검증에서 실패시킵니다. 기존 전체 관리자가 있으면 환경변수로 역할을 다시 변경하지 않습니다.
+- `integration`은 `APP_BASE_URL`에 현재 임시 HTTPS Origin을 설정합니다. 터널 제품은 고정하지 않고 실행 담당자와 등록 절차만 팀 실행 가이드에 둡니다.
 - `.env.example`에는 실제 값 없이 필요한 변수 이름과 설명만 기록합니다.
 - `test` Profile은 실제 Google·Naver OAuth, PortOne 또는 Gemini API를 호출하지 않고 가짜 Adapter를 사용합니다.
 - DB 시각은 UTC로 저장하고 시즌·퀘스트·가입 제한 같은 업무 시각은 `Asia/Seoul`로 계산합니다.
@@ -625,6 +636,7 @@ frontend/src/mocks
 ## 3.3. 프론트엔드 실행 환경
 
 - 개발 중 Vite는 `/api`, `/oauth2`, `/ws` 요청을 로컬 Spring Boot 서버로 Proxy합니다.
+- 통합 검증 시 터널은 Vite 개발 서버 한 곳만 공개하고 Vite Proxy가 `/api`, `/oauth2`, `/ws`를 Spring Boot로 전달합니다. OAuth Callback, PortOne Redirect와 Webhook도 같은 `APP_BASE_URL`을 사용합니다.
 - 운영에서는 프론트엔드와 API를 같은 Origin으로 제공합니다.
 - 브라우저에 노출되면 안 되는 비밀값은 `VITE_` 환경변수에 넣지 않습니다.
 - PortOne Store ID와 Channel Key처럼 브라우저에 필요한 공개 설정은 백엔드 설정 조회 API로 전달합니다.

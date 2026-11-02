@@ -13,6 +13,8 @@
 
 다이어그램의 클래스명은 구현 책임을 합의하기 위한 기준입니다. 파일 수가 적으면 같은 기능 패키지에 단순하게 두고, 구현 중 책임이 지나치게 커질 때만 확정된 컨벤션에 따라 하위 계층으로 나눕니다. 요청·응답 DTO는 이 그림에서 생략하며 `class` 또는 `record` 중 팀원이 읽기 쉬운 형태를 선택합니다.
 
+처음 구현하는 팀원은 [구현 시작 안내서](implementation-guide.md)의 고정 순서와 기능별 백엔드 시작점에서 Operation을 찾은 뒤 이 문서에서 담당 Service와 의존 방향을 확인합니다. 클래스명보다 [REST API 설계서](api-design.md)의 Operation ID와 [데이터베이스 설계서](database-design.md)의 테이블·제약조건이 상세 구현 계약입니다.
+
 ## 2. 인증·사용자·그룹·권한
 
 사용자는 소셜 계정으로 로그인하고 동시에 하나의 활성 그룹에만 속합니다. 가입·탈퇴·강퇴·역할 변경은 현재 멤버십, 그룹 정원과 가입 제한을 Service가 같은 트랜잭션에서 다시 검사합니다.
@@ -98,6 +100,7 @@ classDiagram
     class OAuthLoginAttempt {
         <<Entity>>
         +stateHash: String
+        +initiatingSessionHash: String
         +expiresAt: Instant
         +status: OAuthAttemptStatus
     }
@@ -182,7 +185,8 @@ classDiagram
 
 - `GroupMembershipService`와 `GroupAdminService`는 모든 멤버십 변경에서 영향 사용자 ID 오름차순 → 그룹 → 멤버십 ID 오름차순 → 가입 제한의 공통 잠금 순서를 사용합니다.
 - 주 관리자 이전은 기존·신규 사용자 행을 ID 오름차순으로 먼저 잠근 뒤 그룹과 두 멤버십을 잠그고 기존 주 관리자를 `MEMBER`, 대상을 `PRIMARY`로 변경합니다.
-- 일반·부 관리자 회원의 강퇴 권한과 `lastActiveAt` 기준 72시간 미활동 조건은 Controller가 아닌 Service가 판정합니다. 부 관리자 강퇴도 미접속 강퇴 흐름을 재사용합니다.
+- 주 관리자가 유일한 구성원이면 자기 탈퇴 흐름이 그룹 `INACTIVE`, 초대 링크 무효화, 그룹 시즌 `ENDED`와 크리처 `ARCHIVED`까지 같은 트랜잭션에서 처리하고 기존 기록은 보존합니다.
+- 일반·부 관리자 회원의 강퇴 권한과 저장된 `lastActiveAt` 기준 72시간 10분 미활동 조건은 Controller가 아닌 Service가 판정합니다. 부 관리자 강퇴도 미접속 강퇴 흐름을 재사용합니다.
 - 전체 관리자의 신고 기반 강퇴도 최종적으로 같은 멤버십 종료·24시간 제한 생성 흐름을 재사용합니다.
 
 ## 3. 시즌·크리처·퀘스트·랭킹
@@ -350,9 +354,12 @@ classDiagram
 - 알 상태에서도 `GroupCreature.addExperience()`를 호출하며 부화할 때 누적 경험치로 도달 단계를 즉시 계산합니다.
 - 시즌 중 그룹 생성 트랜잭션은 현재 시즌의 `GroupSeason`, 알 상태 `GroupCreature`와 0점 `SeasonGroupScore`를 함께 만들며 부화 기한은 생성 시각부터 72시간입니다.
 - `QuestCompletionService`는 완료 존재 여부만 먼저 조회해 믿지 않고 DB UNIQUE 충돌도 이미 완료된 요청으로 안전하게 해석합니다.
-- 완료 UNIQUE를 확보한 뒤 합계 갱신 잠금 순서는 개인 기여도 → 그룹 점수 → 크리처로 고정합니다.
+- 퀘스트 완료 잠금 순서는 시즌 공유 잠금 → 사용자 → 그룹 → 활성 멤버십 → 그룹 시즌 → 완료 UNIQUE → 개인 기여도 → 그룹 점수 → 크리처로 고정하고, 잠금 아래에서 시즌·멤버십과 배정의 귀속을 다시 검사합니다.
+- 탈퇴·강퇴와 완료가 경합하면 사용자·멤버십 잠금을 먼저 얻은 흐름이 선행합니다. 완료가 선행하면 보상 Commit 후 종료하고, 멤버십 종료가 선행하면 완료를 거절합니다.
+- `AGGREGATE`는 완료 시점과 같은 `membershipId`, `groupSeasonId`의 활동 Event만 집계해 이전 그룹 활동이 새 그룹 보상으로 이동하지 않게 합니다.
+- 사진 완료는 촬영·업로드 접수 시각이 모두 배정 기간 안이고 판정·보상 Commit이 마감과 시즌 `CLOSING` 전에 끝난 경우만 허용합니다.
 - 시즌 종료 Snapshot은 이후 닉네임·그룹명·멤버십 변경과 무관하게 당시 결과를 보존합니다.
-- `SeasonScheduler.closeSeason()`은 시즌을 `CLOSING`으로 선점하고 Snapshot UNIQUE를 이용해 중단 후 누락 결과만 보완한 뒤 `ENDED`로 확정합니다. 같은 시각의 `startSeason()`은 이전 시즌 종료 뒤 실행합니다.
+- `SeasonScheduler.closeSeason()`은 시즌 배타 잠금으로 진행 중 완료의 공유 잠금 해제를 기다린 뒤 `CLOSING`으로 선점하고, Snapshot UNIQUE를 이용해 중단 후 누락 결과만 보완한 뒤 `ENDED`로 확정합니다. 같은 시각의 `startSeason()`은 이전 시즌 종료 뒤 실행합니다.
 
 ## 4. 아바타·상품·결제·환불
 
@@ -403,6 +410,14 @@ classDiagram
         +approveRefund()
         +rejectRefund()
         +reconcileUnknownResult()
+    }
+    class RefundReconciliationScheduler {
+        <<Scheduler>>
+        +reconcileStaleRefunds()
+    }
+    class PaymentReconciliationScheduler {
+        <<Scheduler>>
+        +reconcileStaleWebhooks()
     }
     class PaymentGateway {
         <<Port>>
@@ -483,6 +498,8 @@ classDiagram
     PaymentController --> PaymentReconciliationService
     AvatarController --> AvatarService
     RefundAdminController --> RefundService
+    RefundReconciliationScheduler --> RefundService
+    PaymentReconciliationScheduler --> PaymentReconciliationService
     PurchaseService --> PurchaseRepository
     PaymentReconciliationService --> PaymentGatewayRouter
     PaymentReconciliationService --> PurchaseRepository
@@ -509,6 +526,7 @@ classDiagram
 - 최초 장착은 `OwnedItem.usedAt`을 한 번만 설정하며 이후 장착 해제해도 되돌리지 않습니다.
 - 환불 승인은 환불 요청과 소유 아이템을 잠가 미사용 상태를 재검사한 뒤 처리권을 선점합니다.
 - PG 취소 Timeout이나 연결 단절은 실패로 추정하지 않고 `CANCEL_UNKNOWN`으로 보존한 뒤 조회로 복구합니다.
+- `RefundReconciliationScheduler`는 5분 이상 고착된 `CANCEL_PENDING`을 PortOne 조회부터 복구하고, `PaymentReconciliationScheduler`는 오래된 Webhook `PENDING`과 `FAILED`를 같은 결제 정합성 Service로 재처리합니다.
 
 ## 5. 공통 기반·실시간·동시성 경계
 
@@ -583,6 +601,23 @@ classDiagram
         +disconnected()
         +snapshot()
     }
+    class RequestRateLimiter {
+        <<Core>>
+        +tryOAuth(session, ip)
+        +tryGemini(userId)
+        +tryPhoto(userId)
+    }
+    class StompInboundAuthorization {
+        <<Core>>
+        +authorizeConnect()
+        +authorizeSubscribe()
+        +denyClientMessage()
+    }
+    class PhotoProcessingLimiter {
+        <<Core>>
+        +tryAcquire()
+        +runWithTimeout()
+    }
     class GroupLiveEvent {
         <<Event>>
         +eventId: UUID
@@ -622,7 +657,10 @@ classDiagram
     AdminAuditService --> AdminAuditLog
     ApiIdempotencyService --> ApiIdempotencyRecord
     TextProofreadingService --> TextProofreader
+    TextProofreadingService --> RequestRateLimiter
     TextProofreader <|.. GeminiTextProofreader
+    StompInboundAuthorization --> CurrentUser
+    PhotoProcessingLimiter --> RequestRateLimiter
     SchedulerExecutionService --> BusinessClock
     AdminAuditService --> CurrentUser
     TransactionBoundary ..> PessimisticLockRule : coordinates
@@ -634,10 +672,12 @@ classDiagram
 - `BusinessClock`을 주입하여 시즌, KST 자정, 24시간 제한과 72시간 미접속 규칙을 고정 시각으로 테스트합니다.
 - 같은 Scheduler 작업은 `(jobType, scheduledFor)` 논리 키로 한 실행만 처리권을 얻습니다.
 - WebSocket 이벤트는 DB Commit 이후에만 발행하고 명령 처리는 REST API가 담당합니다.
+- `StompInboundAuthorization`은 세션·Origin·CSRF와 활성 그룹 구독만 허용하고 클라이언트 애플리케이션 메시지는 기본 거부합니다.
 - Presence는 MVP에서 단일 애플리케이션 인스턴스 메모리만 사용하며 영속 Entity로 만들지 않습니다.
 - 중요 권한 변경, 강퇴, 환불 판단과 운영 복구는 `AdminAuditService`로 감사 이력을 남깁니다.
 - 외부 효과 명령은 `ApiIdempotencyService`가 사용자·Operation·Key를 선점한 뒤 같은 요청에는 최초 결과를 반환합니다.
 - Gemini 교정은 `TextProofreader` Port 뒤에 격리하고 DB 트랜잭션 밖에서 한 번 호출합니다. 테스트는 외부 API 대신 단순 Fake를 사용합니다.
+- `RequestRateLimiter`와 `PhotoProcessingLimiter`는 단일 인스턴스 메모리·고정 동시 처리 수를 사용하고 애플리케이션 재시작 시 제한 Window 초기화를 허용합니다.
 
 ## 6. 패키지 배치 기준
 

@@ -115,6 +115,7 @@ erDiagram
         BIGINT id PK
         BIGINT invite_link_id FK
         VARCHAR state_hash UK
+        VARCHAR initiating_session_hash
         VARCHAR status
     }
     groups {
@@ -312,6 +313,8 @@ erDiagram
     user_activity_events {
         BIGINT id PK
         BIGINT user_id FK
+        BIGINT membership_id FK
+        BIGINT group_season_id FK
         VARCHAR event_type
         BIGINT source_id
         DATETIME occurred_at
@@ -341,6 +344,8 @@ erDiagram
     season_member_contributions ||--o{ quest_reward_ledgers : member_target
     season_group_scores ||--o{ quest_reward_ledgers : group_target
     users ||--o{ user_activity_events : produces
+    group_memberships ||--o{ user_activity_events : attributes
+    group_seasons ||--o{ user_activity_events : aggregates_in
     users ||--o{ service_check_ins : checks_in
     users ||--o{ photo_submissions : submits
     quest_assignments ||--o{ photo_submissions : verifies
@@ -406,6 +411,8 @@ erDiagram
         BIGINT purchase_id FK
         VARCHAR provider_event_id UK
         VARCHAR processing_status
+        DATETIME processing_started_at
+        INT attempt_count
     }
 
     users ||--o{ purchases : buys
@@ -489,6 +496,8 @@ erDiagram
 | `quest_periods` | `quest_assignments` | 1:N |
 | `quest_template_versions` | `quest_assignments` | 1:N |
 | `users` + `quest_assignments` | `quest_completions` | 조합당 0..1 |
+| `group_memberships` | `user_activity_events` | 1:N, 활동 발생 당시 귀속 보존 |
+| `group_seasons` | `user_activity_events` | 1:N, 기간 집계의 그룹 시즌 경계 |
 | `purchases` | `payment_transactions` | 1:N, 승인·재시도·취소 거래 이력 |
 | `purchases` | `owned_items` | 1:0..1 |
 | `purchases` | `refund_requests` | 1:N, 진행 중 요청은 최대 1건 |
@@ -497,7 +506,7 @@ erDiagram
 
 ### 5.2. 주 관리자 관계
 
-- `groups.primary_admin_user_id`는 `users.id`를 참조합니다.
+- `groups.primary_admin_user_id`는 `users.id`를 참조하며 활성 그룹에는 필수입니다. 유일한 주 관리자 탈퇴로 그룹이 `INACTIVE`가 되면 NULL로 변경합니다.
 - 활성 주 관리자 멤버십에는 `status = 'ACTIVE' AND role = 'PRIMARY'`일 때만 `group_id`가 생성되는 `primary_group_id` STORED 생성 컬럼을 둡니다.
 - `primary_group_id` UNIQUE로 그룹당 활성 주 관리자 멤버십을 한 건만 허용합니다.
 - 그룹 생성 시 그룹, 주 관리자 멤버십과 `group_admin_changes` 최초 이력을 같은 트랜잭션에서 생성합니다.
@@ -621,11 +630,13 @@ MySQL의 부분 UNIQUE 인덱스를 전제로 하지 않고 위 생성 컬럼 �
 ### 7.4. 행 잠금 대상
 
 - 그룹 가입·탈퇴·강퇴·역할 변경: 영향 사용자 ID 오름차순 → 그룹 → 관련 멤버십 ID 오름차순 → 가입 제한
-- 퀘스트 보상: 완료 UNIQUE 확보 → 사용자 시즌 기여도 → 그룹 시즌 점수 → 활성 크리처 → 보상 원장 생성
+- 퀘스트 보상: 시즌 공유 잠금 → 사용자 → 그룹 → 활성 멤버십 → 그룹 시즌 → 완료 UNIQUE 확보 → 사용자 시즌 기여도 → 그룹 시즌 점수 → 활성 크리처 → 보상 원장 생성
 - 아이템 장착·환불: 구매 → 보유 아이템 → 환불 요청
 - 주 관리자 교체: 기존·신규 사용자 ID 오름차순 → 그룹 → 두 멤버십 ID 오름차순
 
 각 흐름은 위 순서를 일관되게 사용해 교착 상태 가능성을 줄입니다. 실제 JPA 구현에서는 필요한 변경 행에 `PESSIMISTIC_WRITE` 또는 동등한 조건부 갱신을 적용하고, 읽기 전용 조회에는 불필요한 잠금을 사용하지 않습니다.
+
+퀘스트 완료의 시즌 잠금은 `PESSIMISTIC_READ` 또는 동등한 공유 잠금을 트랜잭션 종료까지 유지하고 나머지 변경 대상은 배타 잠금을 사용합니다. 활성 멤버십 잠금 아래에서 `status = 'ACTIVE'`와 배정·멤버십·`group_seasons`의 그룹·시즌 일치를 재검사합니다. 탈퇴·강퇴가 사용자 잠금을 먼저 얻어 멤버십 종료를 Commit하면 뒤의 완료는 실패하고, 완료가 먼저 얻으면 보상 Commit 뒤 멤버십 종료가 진행됩니다.
 
 ## 8. PG 취소와 트랜잭션 경계
 
@@ -671,6 +682,8 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 
 `last_login_at`은 로그인 감사·세션 운영 정보로 사용하고 강퇴 가능 여부는 `last_active_at`으로 판정합니다. `(status, last_active_at)` 인덱스로 72시간 미활동 관리자 조회를 지원합니다. 인증된 요청마다 쓰기 부하가 발생하지 않도록 마지막 영속화 후 10분 이상 지난 경우에만 조건부 갱신합니다.
 
+미접속 강퇴는 최대 10분의 영속화 지연을 보수적으로 반영해 `last_active_at <= :now - 72시간 - 10분`인 경우에만 허용합니다. 사용자 안내는 72시간 기준을 유지하되 실제 활동 후 72시간이 지나지 않은 사용자를 강퇴하지 않습니다.
+
 #### `social_accounts`
 
 | 컬럼 | 형식 | 제약·설명 |
@@ -704,6 +717,7 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 |---|---|---|
 | `id` | BIGINT | PK, AUTO_INCREMENT |
 | `state_hash` | CHAR(64) | OAuth state SHA-256 Hash, UNIQUE |
+| `initiating_session_hash` | CHAR(64) | 로그인 시작 익명 세션 ID의 SHA-256 Hash, 원문 세션 ID 저장 금지 |
 | `provider` | VARCHAR(30) | `GOOGLE`, `NAVER` |
 | `intent` | VARCHAR(30) | `LOGIN`, `SIGNUP`, `INVITED_SIGNUP` |
 | `invite_link_id` | BIGINT | FK → `group_invite_links.id`, 선택 |
@@ -713,7 +727,7 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 | `consumed_at` | DATETIME(6) | 사용 완료 시각 |
 | `created_at` | DATETIME(6) | 생성 시각 |
 
-`(status, expires_at)` 인덱스로 만료 조회·정리를 지원합니다. 임의 URL 대신 허용 목록의 Route 식별자만 저장합니다.
+`(status, expires_at)` 인덱스로 만료 조회·정리를 지원합니다. Callback은 현재 세션 ID를 같은 방식으로 Hash하여 `initiating_session_hash`와 상수 시간 비교하고 다르면 소비하지 않은 채 실패 처리합니다. 임의 URL 대신 허용 목록의 Route 식별자만 저장합니다.
 
 `oauth_login_attempts`는 로그인 이력이나 로그인 세션이 아닙니다. 사용자가 소셜 로그인 버튼을 누른 시점부터 공급자 콜백이 돌아올 때까지 `state` 검증, 공급자 구분과 초대 링크 문맥을 잠시 보관하는 1회성 인증 트랜잭션입니다. 콜백이 성공하면 `CONSUMED`, 제한 시간 안에 돌아오지 않으면 `EXPIRED`가 되며 장기 업무 이력으로 보존할 필요가 없습니다.
 
@@ -739,12 +753,14 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 | `status` | VARCHAR(30) | `ACTIVE`, `INACTIVE` |
 | `capacity` | SMALLINT | 기본값·MVP 최대값 20 |
 | `current_member_count` | SMALLINT | 활성 멤버십 카운터 |
-| `primary_admin_user_id` | BIGINT | FK → `users.id` |
+| `primary_admin_user_id` | BIGINT | FK → `users.id`, 활성 그룹은 필수, `INACTIVE` 전환 시 NULL |
 | `version` | BIGINT | 그룹 상태·카운터 동시 변경 감지 |
 | `created_at` | DATETIME(6) | 생성 시각 |
 | `updated_at` | DATETIME(6) | 수정 시각 |
 
 공개 목록을 위해 `(status, visibility, current_member_count)` 인덱스를 사용합니다.
+
+주 관리자가 유일한 활성 구성원인 상태에서 자기 탈퇴하면 공통 멤버십 종료 트랜잭션이 `groups.status = 'INACTIVE'`, `current_member_count = 0`, `primary_admin_user_id = NULL`을 함께 반영합니다. 활성 초대 링크는 `INVALIDATED`, 현재 `group_seasons`는 `ENDED`, `group_creatures`는 `ARCHIVED`로 전환하며 기존 경험치·점수·기여도·랭킹 이력은 삭제하지 않습니다. 해당 그룹은 이후 보상을 받지 않지만 정규 시즌 종료 작업은 조기 종료된 그룹 시즌도 최종 랭킹 Snapshot 대상에 포함합니다. 비활성 그룹 이름은 재사용하지 않습니다.
 
 #### `group_memberships`
 
@@ -1108,13 +1124,15 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 | `event_type` | VARCHAR(50) | 서버 정의 행동 유형 |
 | `source_type` | VARCHAR(50) | 원본 업무 유형 |
 | `source_id` | BIGINT | 원본 업무 행 식별자, 다형 참조 |
+| `membership_id` | BIGINT | 발생 당시 활성 멤버십 FK → `group_memberships.id` |
+| `group_season_id` | BIGINT | 발생 당시 그룹 시즌 FK → `group_seasons.id` |
 | `business_date` | DATE | `Asia/Seoul` 기준 집계일 |
 | `occurred_at` | DATETIME(6) | 실제 발생 UTC 시각 |
 | `deduplication_key` | VARCHAR(128) | 존재하는 경우 UNIQUE |
 | `metadata` | JSON | 판정에 필수적이지 않은 보조 정보 |
 | `created_at` | DATETIME(6) | 이벤트 기록 시각 |
 
-이벤트는 서버 업무 처리 결과로만 생성합니다. `(user_id, event_type, business_date)`와 `(event_type, occurred_at)` 인덱스로 기간 집계를 지원합니다.
+이벤트는 서버 업무 처리 결과로만 생성합니다. `(user_id, event_type, business_date)`와 `(membership_id, group_season_id, event_type, occurred_at)` 인덱스로 기간 집계를 지원합니다. `AGGREGATE` 완료는 완료 시점의 활성 `membership_id`, `group_season_id`와 모두 같은 이벤트만 사용합니다. 그룹 이동 전 이벤트는 개인 활동 이력으로 보존하지만 새 그룹의 완료 조건에는 포함하지 않습니다.
 
 ### 12.8. `service_check_ins`
 
@@ -1138,18 +1156,18 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 | `user_id` | BIGINT | FK → `users.id` |
 | `quest_assignment_id` | BIGINT | FK → `quest_assignments.id` |
 | `storage_key` | VARCHAR(500) | 파일 저장소 식별자, 삭제 후 NULL, UNIQUE |
-| `attempt_number` | INT | 사용자·배정별 제출 순번 |
+| `attempt_number` | INT | 사용자·배정별 제출 순번, 1 이상 5 이하 CHECK |
 | `captured_at` | DATETIME(6) | EXIF 촬영 UTC 시각, 누락 실패이면 NULL |
 | `uploaded_at` | DATETIME(6) | 업로드 UTC 시각 |
 | `latitude` | DECIMAL(10, 7) | EXIF 위도, 파일 삭제 후 NULL |
 | `longitude` | DECIMAL(10, 7) | EXIF 경도, 파일 삭제 후 NULL |
 | `verification_status` | VARCHAR(30) | `PENDING`, `VALID`, `INVALID` |
-| `failure_reason` | VARCHAR(50) | `EXIF_GPS_MISSING`, `EXIF_GPS_OUT_OF_RANGE`, `EXIF_CAPTURED_AT_MISSING`, `PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD` 등 실패 코드 |
+| `failure_reason` | VARCHAR(50) | `EXIF_GPS_MISSING`, `EXIF_GPS_OUT_OF_RANGE`, `EXIF_CAPTURED_AT_MISSING`, `PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD`, `PHOTO_PROCESSING_TIMEOUT`, `QUEST_PERIOD_ENDED` 등 실패 코드 |
 | `file_deleted_at` | DATETIME(6) | 파일과 위치정보 정리 완료 시각 |
 | `created_at` | DATETIME(6) | 제출 기록 시각 |
 | `updated_at` | DATETIME(6) | 검증 결과 변경 시각 |
 
-`(user_id, quest_assignment_id, attempt_number)` UNIQUE를 적용합니다. 사진 Binary와 원본 EXIF 전체는 DB에 저장하지 않고 필요한 촬영 시각·좌표·검증 결과만 저장합니다. `storage_key`, `captured_at`, `latitude`, `longitude`는 누락 판정 또는 삭제를 위해 NULL을 허용합니다. 위도·경도 범위와 촬영 시각의 배정 기간 포함 여부만 검사하며 사진 위치의 의미나 위변조는 판정하지 않습니다. `PENDING`이 1시간을 넘으면 `INVALID`로 전환하고, 실패 파일은 판정 후 24시간 안에 삭제합니다. 성공 파일은 해당 시즌 종료 후 30일에 삭제합니다. 파일 삭제와 함께 저장 키와 좌표를 NULL 처리하되 판정 상태, 실패 코드, 촬영·업로드·생성 시각은 활동 이력으로 유지합니다. 파일 삭제 실패는 관리자 대시보드 운영 경고에 표시합니다.
+`(user_id, quest_assignment_id, attempt_number)` UNIQUE와 `attempt_number BETWEEN 1 AND 5` CHECK를 적용합니다. 형식·전체 크기처럼 제출 행 생성 전에 거절한 요청은 이 순번에 포함하지 않지만 사용자별 분당 호출 제한에는 포함합니다. 사진 Binary와 원본 EXIF 전체는 DB에 저장하지 않고 필요한 촬영 시각·좌표·검증 결과만 저장합니다. `storage_key`, `captured_at`, `latitude`, `longitude`는 누락 판정 또는 삭제를 위해 NULL을 허용합니다. 위도·경도 범위와 촬영 시각의 배정 기간 포함 여부만 검사하며 사진 위치의 의미나 위변조는 판정하지 않습니다. `captured_at`과 `uploaded_at`이 모두 배정의 시작 이상·종료 미만이고, 판정·보상 트랜잭션이 배정 종료와 시즌 `CLOSING` 전에 Commit돼야 보상합니다. 마감 유예나 다음 기간 이월은 없습니다. 판정 중 기간이 종료되면 완료·보상은 만들지 않고 제출을 `INVALID`·`QUEST_PERIOD_ENDED`로 기록합니다. `PENDING`이 1시간을 넘으면 `INVALID`로 전환하고, 실패 파일은 판정 후 24시간 안에 삭제합니다. 성공 파일은 해당 시즌 종료 후 30일에 삭제합니다. 파일 삭제와 함께 저장 키와 좌표를 NULL 처리하되 판정 상태, 실패 코드, 촬영·업로드·생성 시각은 활동 이력으로 유지합니다. 파일 삭제 실패는 관리자 대시보드 운영 경고에 표시합니다.
 
 ## 13. 결제·아바타 상세 컬럼
 
@@ -1268,6 +1286,8 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 
 `(status, requested_at)`과 `(purchase_id, created_at)` 인덱스로 관리자 큐와 구매 이력을 조회합니다.
 
+`cancel_claimed_at`부터 5분 이상 `CANCEL_PENDING`인 행은 `REFUND_RECONCILIATION`이 조건부 갱신으로 선점합니다. 복구는 PortOne 상태 조회를 먼저 수행하며 취소 완료는 `COMPLETED`, 미취소는 기존 멱등 키 재시도, 취소 불가는 `FAILED`, 조회 결과 불명은 `CANCEL_UNKNOWN`으로 전환합니다.
+
 ### 13.8. `pg_api_attempts`
 
 | 컬럼 | 형식 | 제약·설명 |
@@ -1304,10 +1324,13 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 | `processing_status` | VARCHAR(30) | `PENDING`, `PROCESSED`, `IGNORED`, `FAILED` |
 | `failure_detail` | VARCHAR(1000) | 처리 실패 원인 |
 | `received_at` | DATETIME(6) | 수신 시각 |
+| `processing_started_at` | DATETIME(6) | 현재 처리 시도 시작 시각 |
+| `attempt_count` | INT | 최초 처리를 포함한 누적 시도 횟수 |
 | `processed_at` | DATETIME(6) | 처리 완료 시각 |
 | `created_at` | DATETIME(6) | 기록 시각 |
+| `updated_at` | DATETIME(6) | 처리 상태·시도 변경 시각 |
 
-`(provider, provider_event_id)` UNIQUE를 적용합니다. `(processing_status, received_at)` 인덱스로 미처리·실패 이벤트를 조회합니다. 포트원 V2 Webhook `2024-04-25`의 Signature를 원문 Body로 검증하되 전체 원문 Payload와 카드번호·인증정보는 저장하지 않습니다.
+`(provider, provider_event_id)` UNIQUE를 적용합니다. `(processing_status, processing_started_at)` 인덱스로 미처리·실패 이벤트를 조회합니다. `PROCESSED`, `IGNORED` 재수신과 5분 미만의 `PENDING`은 다시 실행하지 않습니다. 5분 이상 지난 `PENDING`과 `FAILED`는 `PAYMENT_RECONCILIATION`이 처리 시작 시각·시도 횟수를 원자적으로 갱신해 선점하고 PortOne 최신 상태 조회 후 같은 결제 정합성 Service로 복구합니다. 포트원 V2 Webhook `2024-04-25`의 Signature를 원문 Body로 검증하되 전체 원문 Payload와 카드번호·인증정보는 저장하지 않습니다.
 
 ## 14. 운영 공통 상세 컬럼과 보존 정책
 
@@ -1318,7 +1341,7 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 | 컬럼 | 형식 | 제약·설명 |
 |---|---|---|
 | `id` | BIGINT | PK, AUTO_INCREMENT |
-| `job_type` | VARCHAR(50) | `SEASON_START`, `SEASON_CLOSE`, `CREATURE_HATCH`, `DAILY_QUEST_ASSIGNMENT`, `WEEKLY_QUEST_ASSIGNMENT`, `REFUND_RECONCILIATION`, `GROUP_COUNT_RECONCILIATION`, `OAUTH_ATTEMPT_CLEANUP`, `PHOTO_CLEANUP` |
+| `job_type` | VARCHAR(50) | `SEASON_START`, `SEASON_CLOSE`, `CREATURE_HATCH`, `DAILY_QUEST_ASSIGNMENT`, `WEEKLY_QUEST_ASSIGNMENT`, `REFUND_RECONCILIATION`, `PAYMENT_RECONCILIATION`, `GROUP_COUNT_RECONCILIATION`, `OAUTH_ATTEMPT_CLEANUP`, `PHOTO_CLEANUP` |
 | `scheduled_for` | DATETIME(6) | 논리적 기준 실행 UTC 시각 |
 | `status` | VARCHAR(30) | `RUNNING`, `SUCCESS`, `FAILED` |
 | `attempt_count` | INT | 최초 실행을 포함한 누적 시도 횟수 |
@@ -1335,7 +1358,9 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 
 `(job_type, scheduled_for)` UNIQUE로 중복 논리 실행을 막습니다. `(status, lease_expires_at)` 인덱스로 실행권이 만료된 `RUNNING` 작업을 찾고 `(status, completed_at)` 인덱스로 대시보드와 보존 기간 정리 대상을 조회합니다. Lease 인계는 `status = 'RUNNING' AND lease_expires_at < :now` 조건부 갱신으로 선점하며, 각 업무 작업도 고유 키와 상태 조건으로 멱등성을 보장합니다.
 
-`SEASON_CLOSE`는 시즌 행을 잠가 `ACTIVE → CLOSING`으로 선점하고 퀘스트 완료가 더 이상 반영되지 않게 합니다. 개인 Snapshot은 `(group_season_id, user_id)`, 그룹 Snapshot은 `(season_id, group_id)` UNIQUE를 기준으로 누락 행만 생성합니다. 모든 그룹 크리처를 `ARCHIVED`, 그룹 시즌과 시즌을 `ENDED`로 확정한 뒤 같은 경계 시각의 `SEASON_START`가 새 시즌을 생성합니다. 중단 후 재실행은 `CLOSING` 시즌을 이어서 처리합니다.
+`SEASON_CLOSE`는 시즌 행의 배타 잠금을 얻습니다. 퀘스트 완료가 유지 중인 시즌 공유 잠금이 있으면 해당 완료가 Commit 또는 Rollback될 때까지 기다린 뒤 `ACTIVE → CLOSING`으로 선점하므로 Snapshot 뒤에 이전 시즌 보상이 추가되지 않습니다. 이후 개인 Snapshot은 `(group_season_id, user_id)`, 그룹 Snapshot은 `(season_id, group_id)` UNIQUE를 기준으로 누락 행만 생성합니다. 모든 그룹 크리처를 `ARCHIVED`, 그룹 시즌과 시즌을 `ENDED`로 확정한 뒤 같은 경계 시각의 `SEASON_START`가 새 시즌을 생성합니다. 중단 후 재실행은 `CLOSING` 시즌을 이어서 처리합니다.
+
+`REFUND_RECONCILIATION`과 `PAYMENT_RECONCILIATION`은 5분 간격의 논리 실행을 생성합니다. 환불 작업은 `cancel_claimed_at <= :now - 5분`인 `CANCEL_PENDING`과 `CANCEL_UNKNOWN`을, 결제 작업은 `processing_started_at <= :now - 5분`인 Webhook `PENDING`과 `FAILED`를 조건부 갱신으로 선점합니다. 두 작업 모두 외부 상태 조회를 먼저 수행하고 기존 멱등 키·상태 조건·UNIQUE 제약으로 결과를 확정합니다.
 
 ### 14.2. `admin_audit_logs`
 

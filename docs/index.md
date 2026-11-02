@@ -6,6 +6,7 @@ title: 다 같이 키우는 생명체
 
 공동 육성 게임 설계 문서입니다.
 
+- [초보 개발자를 위한 구현 시작 안내서](implementation-guide.md)
 - [기획안](project_plan.md)
 - [요구사항](requirements.md)
 - [사용자 시나리오 및 업무 규칙](business-rules.md)

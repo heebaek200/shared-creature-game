@@ -267,7 +267,7 @@
 99. **DTO·검증 자율성:** 요청·응답 DTO는 일반 `class` 또는 Java `record`를 자율적으로 사용하고 입력 검증도 Bean Validation 또는 명시적 `validate()`를 선택할 수 있다. 최신 DB 상태가 필요한 업무 검증은 Service가 담당한다.
 100. **초심자 중심 프론트엔드:** Vanilla JavaScript 화면은 Router 선택, API 호출, DOM 표시·Event 연결, Cleanup의 반복 구조로 설명하고 기존 Page를 따라 작성할 수 있게 한다. 프론트엔드 자동 테스트 Framework는 필수로 두지 않는다.
 101. **단순화한 테스트:** Docker·Testcontainers를 사용하지 않는다. 백엔드는 JUnit 5와 로컬 MySQL 테스트 DB로 핵심 업무·동시성만 자동 검증하고, 프론트엔드는 API 응답과 같은 목 데이터를 켜 브라우저 체크리스트로 검증한다.
-102. **포매팅·환경:** SQL 콤마 위치와 정렬은 팀원 자율로 하되 쿼리 내부 일관성을 유지한다. `local`, `test`, `prod` Profile을 사용하고 비밀값은 환경변수로 관리한다.
+102. **포매팅·환경:** SQL 콤마 위치와 정렬은 팀원 자율로 하되 쿼리 내부 일관성을 유지한다. `local`, `test`, `integration`, `prod` Profile을 사용하고 비밀값은 환경변수로 관리한다.
 103. **클래스 책임 분리:** 클래스 다이어그램은 인증·그룹, 시즌·퀘스트·랭킹, 아바타·결제·환불, 공통 기반·실시간·동시성의 네 영역으로 분리한다. Controller는 HTTP, Service는 업무 규칙·트랜잭션, Repository는 영속성, Adapter는 외부 연동을 담당한다.
 104. **ERD:** 40개 업무 테이블을 계정·그룹, 시즌·랭킹, 퀘스트·활동, 결제·아바타, 운영 공통의 5개 Mermaid ERD로 분리하고 PK·주요 FK·상태·UNIQUE 판단 키와 영역 간 관계를 표시한다.
 105. **요청 추적성:** 사용자 시나리오와 업무 규칙에 변경하지 않는 `REQ-{영역}-{번호}` 32개를 부여하고 화면 경로와 API Operation이 해당 번호를 직접 참조한다.
@@ -287,11 +287,29 @@
 119. **EXIF 핵심 범위:** 위치·촬영 시각 EXIF 사진 인증과 `photo_submissions`는 MVP 핵심 필수 기능이다. Android Chrome과 iOS Safari 검증 실패는 제외 사유가 아니라 MVP 미완료이며, 사진 템플릿은 중 난이도 활성 순회에 포함한다.
 120. **EXIF 이미지 형식:** 최대 10 MiB의 JPEG만 지원한다. 서버가 `image/jpeg` MIME 형식과 JPEG Signature를 함께 확인하고 HEIC·HEIF 등 다른 형식은 `PHOTO_FORMAT_UNSUPPORTED`로 거절한다.
 121. **EXIF 최소 판정:** GPS 존재·좌표 유효 범위와 촬영 시각의 배정 기간 포함 여부만 검증한다. Offset 없는 EXIF 시각은 `Asia/Seoul`로 해석하며 실외·현재 위치·장소·거리·위변조·사진 재사용은 판정하지 않는다.
+122. **초보자 구현 가능 API 계약:** 58개 Operation마다 입력 위치·DTO·성공 응답뿐 아니라 성공 HTTP 상태와 업무 오류를 연결한다. Endpoint별 Query DTO, 고정 정렬, 공통·Page·Rank Meta, 오류 필드, OAuth Redirect, PortOne Webhook 소비 필드와 Vanilla JS 호출 예시를 상세 정의한다. 사진 제출은 POST 안에서 최종 판정해 별도 조회 API를 추가하지 않는다.
+123. **설계에서 코드까지의 연결:** 구현 시작 안내서에 요청 ID → 화면 → Operation ID → DTO → Service·Repository·테이블의 고정 추적 순서, 기능 화면별 API 연결표, 기능별 백엔드 시작점, 목 데이터 작성법과 백엔드·프론트엔드 완료 체크리스트를 제공한다. 상세 계약은 기존 원문 설계서를 링크해 중복 정의하지 않는다.
+124. **1인 그룹 종료:** 주 관리자가 유일한 구성원이면 기존 탈퇴 동작이 그룹·초대 링크·현재 시즌 참여를 함께 비활성화하고 24시간 가입 제한을 적용한다. 기록은 보존하며 별도 해산 API는 만들지 않는다.
+125. **환불 고착 복구:** 5분 이상 지속된 `CANCEL_PENDING`은 5분 주기 복구 작업이 PG 상태를 먼저 조회하고 기존 멱등 키로 완료·재시도·실패·결과 불명 상태를 확정한다.
+126. **Webhook 복구:** 5분 이상 지속된 Webhook `PENDING`과 `FAILED`는 PortOne 최신 결제를 조회하고 기존 결제 정합성 Service로 복구한다.
+127. **사진 마감:** 촬영·업로드 접수 시각이 배정 기간 안이고 판정·보상 Commit이 마감과 시즌 종료 선점 전에 완료돼야 보상하며 유예와 이월은 제공하지 않는다.
+128. **미접속 강퇴 안전 여유:** 활동 시각의 최대 10분 영속화 지연을 고려해 저장값 기준 72시간 10분 경과 후 강퇴를 허용한다.
+129. **주간 활동 귀속:** 기간 집계는 완료 시점과 같은 멤버십·그룹 시즌에서 발생한 활동만 사용하고 이전 그룹 활동을 새 그룹 보상으로 이전하지 않는다.
+130. **OAuth 시작 세션 귀속:** OAuth 시도에 시작 익명 세션 ID의 Hash를 보관하고 Callback 세션이 다르면 `OAUTH_SESSION_MISMATCH`로 중단한다. 성공 후에는 인증 세션 ID를 교체한다.
+131. **WebSocket 인바운드 기본 거부:** STOMP `CONNECT`는 세션·Origin·CSRF를 확인하고 현재 활성 그룹 구독과 정상 종료만 허용한다. 클라이언트 애플리케이션 `SEND`·`MESSAGE`는 모두 거부한다.
+132. **외부 요청 호출량:** OAuth 시작은 세션당 10분 5회·IP당 10분 30회, Gemini는 사용자당 1분 5회·KST 하루 30회·전체 동시 2건으로 제한한다. 단일 인스턴스 메모리 제한은 재시작 시 초기화를 허용한다.
+133. **사진 처리 자원:** 사진은 사용자·배정당 5회, 사용자당 1분 5회로 제한하고 EXIF는 최대 1 MiB·동시 4건·5초 Timeout으로 메타데이터만 읽는다.
+134. **통합 HTTPS 검증:** 평상시는 localhost HTTP와 `local` Profile을 사용한다. 모바일 OAuth·결제 Redirect·Webhook·실기기 사진 통합 검증 때만 제품을 고정하지 않은 임시 HTTPS 터널과 `integration` Profile을 사용하며 운영 HTTPS 구축은 범위에서 제외한다.
+135. **포트원 취소 매핑:** `SUCCEEDED → COMPLETED`, `FAILED → FAILED`, `REQUESTED → CANCEL_PENDING`으로 변환하고 `REQUESTED`는 Webhook 또는 재조회 전까지 완료로 간주하지 않는다.
+136. **최초 전체 관리자:** 공개 생성 API나 역할 입력 필드를 두지 않고 환경변수의 공급자·검증 이메일과 정확히 일치하는 신규 계정만 `SUPER_ADMIN`으로 생성한다.
+137. **자원 인가 응답:** 다른 사용자의 구매·보유 아이템·환불 개별 자원은 `404`로 존재를 숨기고, 존재하는 그룹·전체 관리자 기능의 역할 부족은 `403`으로 응답한다.
 
 ### 구현 단계에서 확인할 사항
 
 - 카카오페이 테스트 채널에서 실제로 관찰되는 PG 오류 코드의 내부 표준 오류 매핑 검증.
 - JPEG EXIF 핵심 기능의 Android Chrome·iOS Safari 실기기 촬영·업로드 검증 결과.
+- 임시 공개 HTTPS 주소에서 Google·Naver Callback, PortOne 모바일 Redirect·Webhook과 WebSocket 연결 검증 결과.
+- 선택한 `GEMINI_MODEL`의 구조화 출력, Timeout과 실제 할당량 검증 결과.
 
 위 항목은 확정된 설계를 바꾸는 정책 결정이 아니라 실제 외부 환경에서 확인하고 결과를 기록할 구현 검증 항목입니다.
 

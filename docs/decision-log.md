@@ -619,6 +619,28 @@
 - 근거: 오래된 소셜 인증 결과와 초대 문맥이 뒤늦게 회원가입에 사용되는 것을 막고 임시 개인정보의 보관 시간을 제한하기 위함입니다.
 - 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, screen-design.md, design/wireframes/signup.md, project_plan.md, common-foundation.yaml
 
+## 2026-11-03 OAuth·WebSocket 보안 경계 확정
+
+- 결정: OAuth 로그인 시도를 시작 익명 세션 Hash에 귀속하고 다른 세션의 Callback을 거부합니다. STOMP 연결은 세션·허용 Origin·CSRF를 확인하며 현재 활성 그룹 구독과 정상 종료 외의 클라이언트 `SEND`·`MESSAGE`를 기본 거부합니다.
+- 상태: confirmed
+- 근거: 로그인 CSRF와 조작된 WebSocket 클라이언트가 다른 사용자 세션이나 그룹 이벤트 경계에 접근하는 문제를 서버에서 차단하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, convention.md, class-diagram.md, implementation-guide.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-03 호출량·사진 처리 자원 한도 확정
+
+- 결정: OAuth는 세션당 10분 5회·IP당 10분 30회, Gemini는 사용자당 1분 5회·KST 하루 30회·전체 동시 2건으로 제한합니다. 사진은 사용자·배정당 5회·사용자당 1분 5회, EXIF 1 MiB·동시 4건·5초 Timeout으로 제한하고 메타데이터만 읽습니다. 단일 인스턴스 메모리 제한은 재시작 시 초기화를 허용합니다.
+- 상태: confirmed
+- 근거: 2주 단일 인스턴스 MVP에 별도 분산 인프라를 추가하지 않으면서 외부 비용과 비정상 반복 요청·파일 파싱의 자원 고갈을 제한하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, convention.md, class-diagram.md, implementation-guide.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-03 통합 HTTPS·관리자 초기화·외부 상태 매핑 확정
+
+- 결정: 평상시는 localhost HTTP를 사용하고 통합 검증 때만 임시 HTTPS 터널과 `integration` Profile을 사용합니다. 최초 전체 관리자는 환경변수의 공급자·검증 이메일과 일치하는 신규 계정에만 부여합니다. 포트원 취소 상태는 `SUCCEEDED`, `FAILED`, `REQUESTED`를 각각 완료·실패·대기로 변환하며, 타인 소유 개별 자원은 `404`, 관리 기능 역할 부족은 `403`으로 응답합니다.
+- 상태: confirmed
+- 근거: HTTPS 서버 구축 학습을 프로젝트 범위에 추가하지 않고 모바일·OAuth·Webhook을 실제 검증하며, 관리자 권한 주입·비동기 취소 오판·자원 존재 노출을 방지하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, api-design.md, convention.md, implementation-guide.md, project_plan.md, common-foundation.yaml
+- 대체한 결정: 모든 Profile의 세션 쿠키에 `Secure`를 일괄 적용하는 규칙. localhost 전용 `local`만 예외로 하고 `integration`·`prod`에는 계속 필수 적용합니다.
+
 ## 2026-11-02 Java 기준 버전 확정
 
 - 결정: 백엔드의 로컬 개발, Gradle Toolchain과 CI 실행 환경은 Java 21 LTS로 통일합니다. 기준 Package는 `com.team.sharedcreature`를 사용하며 현재 초기 생성 소스와 일치합니다.
@@ -668,3 +690,31 @@
 - 상태: confirmed
 - 근거: EXIF로 실제 야외 활동을 과도하게 단정하지 않고 프로젝트의 핵심 메타데이터 추출·서버 판정 흐름만 구현하기 위함입니다.
 - 영향 문서: requirements.md, business-rules.md, api-design.md, database-design.md, screen-design.md, design/wireframes/quests.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-02 초보 개발자 기준 REST API 계약 완성도 보강
+
+- 결정: 설계 문서만으로 백엔드와 Vanilla JavaScript 프론트엔드를 구현할 수 있도록 58개 Operation에 성공 HTTP 상태와 Operation별 업무 오류를 연결하고, Endpoint별 Query DTO·고정 정렬·공통 Envelope·Page·Rank Meta·오류 필드·OAuth Redirect·PortOne Webhook 소비 필드를 상세 정의합니다. 임의 `object` 차트 응답은 강타입 DTO로 교체하고 JSON·Multipart 호출 예시를 제공합니다.
+- 상태: confirmed
+- 결정: EXIF 사진 제출은 POST 안에서 최종 판정을 끝내 외부 응답을 `VALID`, `INVALID`로 제한하며 `PENDING`은 내부 DB 처리 상태로만 사용합니다. 별도 상태 조회 API는 추가하지 않습니다.
+- 결정: 요청 ID에서 화면·Operation·DTO·Service·테이블까지 따라가는 구현 시작 안내서와 화면별 API 연결표를 제공하고, 백엔드·프론트엔드 구현 및 목 데이터 완료 체크리스트를 같은 진입점에 둡니다.
+- 근거: 초보 팀원이 Endpoint 목록과 여러 절 사이의 암묵적 규칙을 추론하지 않고 표와 예시를 그대로 구현하고 테스트할 수 있게 하기 위함입니다.
+- 영향 문서: index.md, requirements.md, screen-design.md, api-design.md, class-diagram.md, implementation-guide.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-02 시즌·멤버십·퀘스트 완료 공통 직렬화 확정
+
+- 결정: 퀘스트 완료는 시즌 공유 잠금 → 사용자 → 그룹 → 활성 멤버십 → 그룹 시즌 → 완료 UNIQUE → 개인 기여도 → 그룹 점수 → 활성 크리처 순으로 잠그고 시즌·멤버십·배정 귀속을 잠금 아래 재검사합니다.
+- 결정: 시즌 종료는 같은 시즌 행의 배타 잠금으로 진행 중 완료의 종료를 기다린 뒤 `CLOSING`으로 전환합니다. 탈퇴·강퇴와 완료는 사용자·멤버십 잠금을 먼저 얻은 흐름을 선행시킵니다.
+- 상태: confirmed
+- 근거: 시즌 최종 Snapshot 뒤 보상이 추가되거나 멤버십 종료 뒤 이전 그룹에 보상이 반영되는 경합을 제거하기 위함입니다.
+- 영향 문서: business-rules.md, database-design.md, class-diagram.md, common-foundation.yaml
+
+## 2026-11-03 비즈니스 경계·장애 복구 정책 확정
+
+- 결정: 유일한 구성원인 주 관리자의 기존 탈퇴 요청은 그룹 `INACTIVE`, 초대 링크 무효화, 현재 그룹 시즌 종료와 크리처 보관을 함께 처리합니다. 기록은 보존하고 별도 해산 API를 추가하지 않습니다.
+- 결정: `CANCEL_PENDING`과 Webhook `PENDING`의 고착 기준은 5분이며 `REFUND_RECONCILIATION`, `PAYMENT_RECONCILIATION`을 5분 주기로 실행합니다. 복구는 PortOne 최신 상태 조회를 먼저 수행하고 기존 멱등·정합성 Service를 재사용합니다.
+- 결정: 사진은 촬영·업로드 접수 시각이 배정 기간 안이고 판정·보상 Commit이 마감과 시즌 `CLOSING` 전에 완료돼야 보상합니다. 마감 유예와 이월은 제공하지 않습니다.
+- 결정: 최대 10분의 활동 시각 저장 지연을 고려해 저장값 기준 72시간 10분 경과 후 미접속 강퇴를 허용합니다. 사용자 안내는 72시간을 유지합니다.
+- 결정: 활동 Event에 발생 당시 멤버십·그룹 시즌을 저장하고 `AGGREGATE`는 완료 시점과 같은 귀속의 Event만 집계합니다. 이전 그룹 활동 이력은 보존하지만 새 그룹 보상에는 사용하지 않습니다.
+- 상태: confirmed
+- 근거: 1인 그룹의 종료 불가 상태를 해소하고 외부 시스템 중단·기간 경계·활동 저장 지연·그룹 이동에서도 보상과 결제 상태를 일관되게 유지하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, screen-design.md, api-design.md, convention.md, class-diagram.md, implementation-guide.md, project_plan.md, common-foundation.yaml

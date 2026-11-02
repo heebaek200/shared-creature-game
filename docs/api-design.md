@@ -1,5 +1,28 @@
 # REST API 설계서
 
+## 0. 초보 개발자를 위한 읽는 순서
+
+API 하나를 구현할 때 다음 다섯 곳을 순서대로 확인합니다.
+
+1. **9절 Endpoint 표**에서 Operation ID, Method, Path, 입력 DTO와 응답 DTO를 찾습니다.
+2. **10절 요청 필드 표**에서 Path·Query·Header·Body 각 필드의 타입, 필수 여부와 제한을 그대로 구현합니다.
+3. **11절 응답 필드 표**에서 `data` 안에 넣을 필드를 확인합니다. 목록이면 `PageMeta`, 랭킹이면 `RankMeta`도 함께 만듭니다.
+4. **9.5절**에서 성공 HTTP 상태와 해당 Operation에서 발생할 수 있는 업무 오류를 확인합니다.
+5. **2절 공통 계약**대로 성공 Envelope, 오류 Body, `X-Request-Id`와 CSRF를 적용합니다.
+
+백엔드는 Entity나 외부 공급자 응답을 그대로 반환하지 않고 표에 정의된 DTO만 반환합니다. 프론트엔드는 문구가 아닌 `code`와 Enum으로 분기하며, 표에 없는 필드를 임의로 보내거나 사용하지 않습니다.
+
+```javascript
+// 목록 API의 가장 단순한 호출 예시입니다.
+const response = await fetch('/api/v1/groups?page=0&size=20', {
+  credentials: 'include',
+  headers: { Accept: 'application/json' },
+});
+const body = await response.json();
+if (!response.ok) throw new Error(body.code);
+renderGroups(body.data, body.meta);
+```
+
 ## 1. 인증 아키텍처
 
 Full CSR이지만 브라우저가 구글·네이버 액세스 토큰을 직접 보관하는 구조는 사용하지 않습니다. 백엔드가 OAuth 2.0 Authorization Code 흐름의 콜백과 토큰 교환을 담당하고, 애플리케이션 로그인 상태는 서버 세션으로 유지합니다.
@@ -8,14 +31,15 @@ Full CSR이지만 브라우저가 구글·네이버 액세스 토큰을 직접 �
 
 1. CSR 클라이언트가 백엔드의 공급자별 로그인 시작 API로 이동합니다.
 2. 백엔드는 예측 불가능한 일회용 `state`를 생성하고 초대 링크 문맥이 있으면 서버 측 OAuth 시도 상태에 함께 저장합니다.
-3. 백엔드는 사용자를 구글 또는 네이버의 인가 화면으로 Redirect합니다.
-4. 공급자는 인가 코드를 백엔드 콜백 URI로 전달합니다.
-5. 백엔드는 `state`를 검증하고 인가 코드를 공급자 토큰으로 서버 간 교환합니다.
-6. 백엔드는 공급자 사용자 정보를 조회하고 `provider + provider_user_id`로 기존 회원을 찾습니다.
-7. 기존 회원이면 인증 세션을 생성하고, 신규 회원이면 이메일 제공·동일 이메일의 다른 공급자 계정을 검사한 뒤 계정을 생성하지 않고 검증된 소셜 정보와 초대 문맥을 가입 대기 세션에 저장합니다.
-8. 백엔드는 세션 ID를 `HttpOnly`, `Secure`, `SameSite=Lax` 쿠키로 설정한 뒤 기존 회원은 로그인 완료 경로, 신규 사용자는 `/signup`으로 Redirect합니다.
-9. 신규 사용자가 `/signup`에서 닉네임을 제출하면 링크·정원·기존 소속·가입 제한을 다시 검사하고 계정과 가능한 초대 그룹 멤버십을 생성합니다.
-10. CSR은 `/api/v1/me`를 호출해 온보딩·그룹 소속 상태에 맞는 화면으로 이동합니다.
+3. 백엔드는 로그인 시작 익명 세션 ID의 SHA-256 Hash를 OAuth 시도에 저장합니다.
+4. 백엔드는 사용자를 구글 또는 네이버의 인가 화면으로 Redirect합니다.
+5. 공급자는 인가 코드를 백엔드 콜백 URI로 전달합니다.
+6. 백엔드는 `state`와 Callback 세션 Hash를 검증하고 인가 코드를 공급자 토큰으로 서버 간 교환합니다.
+7. 백엔드는 공급자 사용자 정보를 조회하고 `provider + provider_user_id`로 기존 회원을 찾습니다.
+8. 기존 회원이면 인증 세션을 생성하고, 신규 회원이면 이메일 제공·동일 이메일의 다른 공급자 계정을 검사한 뒤 계정을 생성하지 않고 검증된 소셜 정보와 초대 문맥을 가입 대기 세션에 저장합니다.
+9. 백엔드는 세션 ID를 `HttpOnly`, `SameSite=Lax` 쿠키로 설정하고 `integration`·`prod`에서는 `Secure`를 필수로 적용한 뒤 기존 회원은 로그인 완료 경로, 신규 사용자는 `/signup`으로 Redirect합니다. localhost 전용 `local`만 `Secure=false`를 허용합니다.
+10. 신규 사용자가 `/signup`에서 닉네임을 제출하면 링크·정원·기존 소속·가입 제한을 다시 검사하고 계정과 가능한 초대 그룹 멤버십을 생성합니다.
+11. CSR은 `/api/v1/me`를 호출해 온보딩·그룹 소속 상태에 맞는 화면으로 이동합니다.
 
 ### 1.2. 권장 보안 정책
 
@@ -24,6 +48,7 @@ Full CSR이지만 브라우저가 구글·네이버 액세스 토큰을 직접 �
 - 공급자 액세스 토큰과 애플리케이션 인증 토큰을 `localStorage` 또는 `sessionStorage`에 저장하지 않습니다.
 - 로그인 완료 후 세션 ID를 교체하여 Session Fixation을 방지합니다.
 - `state`는 로그인 시도마다 새로 만들고 짧은 시간 동안 한 번만 사용합니다.
+- OAuth Callback은 현재 익명 세션 ID의 Hash가 로그인 시작 시 저장한 `initiating_session_hash`와 일치할 때만 처리합니다. 다른 브라우저·세션이면 공급자 Token 교환 전에 중단합니다.
 - Google OpenID Connect를 사용할 때는 ID Token의 서명, 발급자, 대상, 만료와 `nonce`를 검증합니다.
 - 쿠키 기반 인증이므로 상태 변경 REST API에는 CSRF 토큰 검증을 적용합니다.
 - CORS는 허용된 CSR Origin만 명시하고 Credential 요청에서 와일드카드 Origin을 사용하지 않습니다.
@@ -87,6 +112,25 @@ Full CSR이지만 브라우저가 구글·네이버 액세스 토큰을 직접 �
 - 목록 응답의 `meta`에는 `page`, `size`, `totalElements`, `totalPages`를 포함합니다.
 - 모든 응답에는 로그와 오류를 연결할 수 있는 `X-Request-Id` Header를 포함합니다.
 
+| 필드 | 타입 | null 가능 | 규칙 |
+|---|---|---|---|
+| `data` | Operation별 DTO | 아니요 | 9절의 성공 `data` 타입. 빈 응답은 `{}`인 `EmptyResponse` |
+| `meta.serverTime` | datetime | 아니요 | 응답 생성 UTC 시각 |
+| `meta.page` | int32 | 조건부 | Page 목록에서만 제공, 요청 page와 동일, 0 이상 |
+| `meta.size` | int32 | 조건부 | Page 목록에서만 제공, 1~50 |
+| `meta.totalElements` | int64 | 조건부 | Page 목록에서만 제공, 전체 행 수, 0 이상 |
+| `meta.totalPages` | int32 | 조건부 | Page 목록에서만 제공, 전체 Page 수, 빈 목록이면 0 |
+| `meta.currentSubject` | `RankSubjectMeta` | 조건부 | 랭킹 목록에서만 제공 |
+
+Page 필드 네 개는 Page 목록에서 항상 함께 제공하고 일반 단건·일반 목록에서는 모두 생략합니다. 랭킹 목록은 Page 필드와 `currentSubject`를 함께 제공합니다.
+
+| `RankSubjectMeta` 필드 | 타입 | null 가능 | 규칙 |
+|---|---|---|---|
+| `subjectType` | enum | 아니요 | 개인 랭킹은 `USER`, 그룹 랭킹은 `GROUP` |
+| `subjectId` | int64 | 아니요 | 현재 사용자 또는 현재 그룹 ID, 1 이상 |
+| `rank` | int32 | 예 | 랭킹 참여 기록이 없으면 `null`, 있으면 1 이상 |
+| `score` | int64 | 아니요 | 현재 시즌 기여도 또는 그룹 점수, 미참여면 0 |
+
 ```json
 {
   "data": {},
@@ -108,14 +152,31 @@ Full CSR이지만 브라우저가 구글·네이버 액세스 토큰을 직접 �
 }
 ```
 
+| 필드 | 타입 | null 가능 | 제한·의미 |
+|---|---|---|---|
+| `code` | string | 아니요 | 8.3절의 불변 오류 코드, 1~100자 |
+| `message` | string | 아니요 | 사용자 표시 가능 문구, 1~500자. 프론트 분기에는 사용 금지 |
+| `fieldErrors` | `FieldError[]` | 아니요 | 필드 오류가 없으면 빈 배열, 최대 50개 |
+| `traceId` | string | 아니요 | 응답 Header `X-Request-Id`와 동일, 1~64자 |
+| `timestamp` | datetime | 아니요 | 오류 응답 생성 UTC 시각 |
+
+| `FieldError` 필드 | 타입 | null 가능 | 제한·의미 |
+|---|---|---|---|
+| `field` | string | 아니요 | DTO 기준 필드 경로, 1~200자. 예: `nickname`, `file` |
+| `reason` | enum | 아니요 | `REQUIRED`, `INVALID_FORMAT`, `INVALID_ENUM`, `LENGTH_OUT_OF_RANGE`, `OUT_OF_RANGE`, `FILE_TOO_LARGE`, `UNSUPPORTED_MEDIA_TYPE` |
+| `rejectedValue` | string | 예 | 안전한 값만 최대 100자. Token·파일·개인정보·긴 본문은 `null` |
+
 | HTTP 상태 | 사용 기준 |
 |---|---|
 | `400 Bad Request` | JSON 형식, 필드와 입력값 검증 실패 |
 | `401 Unauthorized` | 로그인 필요 또는 세션 만료 |
-| `403 Forbidden` | 역할·자원 접근 권한 또는 CSRF 검증 실패 |
+| `403 Forbidden` | 존재하는 그룹·관리자 기능의 역할 부족 또는 CSRF 검증 실패 |
 | `404 Not Found` | 존재하지 않거나 현재 사용자에게 공개할 수 없는 자원 |
 | `409 Conflict` | 정원 마감, 이름 중복, 상태 경합과 멱등 키 오용 |
-| `502 Bad Gateway`, `503 Service Unavailable` | PG·소셜 공급자 등 외부 시스템 실패·일시 장애 |
+| `413 Payload Too Large` | 허용한 사진 파일 크기 초과 |
+| `415 Unsupported Media Type` | 지원하지 않는 사진 형식 또는 Content Type |
+| `429 Too Many Requests` | OAuth·Gemini·사진 제출 호출량 제한 초과 |
+| `503 Service Unavailable` | PG·소셜·Gemini 공급자 실패, 외부 호출·사진 처리 포화 또는 Timeout |
 
 내부 예외 클래스명, SQL, Stack Trace와 비밀정보는 응답하지 않습니다. `message`는 사용자에게 표시 가능한 문구이고 분기 로직은 변경 가능한 문구가 아닌 안정적인 `code`를 사용합니다.
 
@@ -126,7 +187,16 @@ Full CSR이지만 브라우저가 구글·네이버 액세스 토큰을 직접 �
 - Token은 `localStorage`와 `sessionStorage`에 저장하지 않습니다.
 - 로그인으로 Session ID가 교체되거나 세션이 만료되면 새 Token을 발급받습니다.
 
-### 2.4. 멱등성과 요청 추적
+### 2.4. 호출량과 처리 자원 제한
+
+- OAuth 시작은 익명 세션당 10분에 5회, IP당 10분에 30회입니다.
+- Gemini 교정은 사용자당 1분에 5회, `Asia/Seoul` 날짜당 30회이며 전체 동시 호출은 2건입니다.
+- 사진 제출은 사용자당 1분에 5회, 같은 사용자·퀘스트 배정당 판정 제출 이력 5건이며 전체 동시 EXIF 파싱은 4건입니다.
+- 횟수 초과는 `429 RATE_LIMIT_EXCEEDED`로 반환하고 `Retry-After` Header에 다시 요청 가능한 초 단위 시간을 넣습니다. 단일 인스턴스 MVP의 메모리 제한값은 애플리케이션 재시작 시 초기화될 수 있습니다.
+- Gemini 동시 처리 포화는 `503 AI_BUSY`, 사진 파서 포화는 `503 PHOTO_PROCESSING_BUSY`입니다. 대기열을 무제한으로 늘리지 않습니다.
+- IP 제한은 서버가 신뢰하도록 설정한 Proxy가 전달한 주소 또는 직접 연결 주소만 사용하고 임의의 `X-Forwarded-For` Header는 신뢰하지 않습니다.
+
+### 2.5. 멱등성과 요청 추적
 
 - 결제 시작, 환불 요청과 환불 승인처럼 외부 효과가 있는 명령은 UUID 형식의 `Idempotency-Key` Header를 필수로 받습니다.
 - 같은 Key와 같은 Payload의 재요청은 최초 처리 결과를 반환합니다.
@@ -136,12 +206,12 @@ Full CSR이지만 브라우저가 구글·네이버 액세스 토큰을 직접 �
 - 퀘스트 완료는 사용자·배정 UNIQUE를 자연 멱등 키로 사용하고 이미 완료된 요청에는 기존 완료 결과를 반환합니다.
 - `X-Request-Id`가 없으면 서버가 생성하며 입력값이 있더라도 허용 형식·길이를 검증합니다.
 
-### 2.5. 시간 표현
+### 2.6. 시간 표현
 
 - 시각은 ISO 8601 UTC의 `Z` 형식, 업무 날짜는 `YYYY-MM-DD`로 전달합니다.
 - KST 업무 경계가 중요한 응답은 서버가 계산한 `restrictionUntil`, `periodStartsAt`, `periodEndsAt`과 기준 시간대 `Asia/Seoul`을 함께 제공합니다.
 
-### 2.6. 인증·온보딩 Endpoint
+### 2.7. 인증·온보딩 Endpoint
 
 | Method | 경로 | 인증 | 책임 |
 |---|---|---|---|
@@ -158,9 +228,14 @@ Full CSR이지만 브라우저가 구글·네이버 액세스 토큰을 직접 �
 
 - `oauth-attempts` 요청은 `GOOGLE`, `NAVER` 외 공급자를 거절하고 응답의 인가 URL도 허용된 공급자 Host만 사용합니다.
 - OAuth Callback은 공통 JSON Envelope 대상이 아닌 브라우저 Redirect Endpoint입니다. 인가 코드·공급자 Token·실패 상세를 CSR URL에 포함하지 않습니다.
+- OAuth Callback 성공은 신규·기존 회원 모두 CSR 진입 경로 `/`로 `302` Redirect합니다. CSR은 즉시 `/api/v1/me`를 호출하고 상태 조합에 따라 `/signup`, `/groups/select`, `/creature` 또는 관리자 기본 경로로 이동합니다.
+- OAuth Callback 실패는 `/login?oauthError={code}`로만 Redirect합니다. `code` 허용값은 `OAUTH_ACCESS_DENIED`, `OAUTH_STATE_INVALID`, `OAUTH_SESSION_MISMATCH`, `OAUTH_PROVIDER_ERROR`, `OAUTH_PROFILE_INCOMPLETE`, `SOCIAL_EMAIL_ALREADY_REGISTERED`이며 공급자 원문 오류·인가 코드·Token은 전달하지 않습니다.
+- `OAuthAttemptRequest.returnRoute`는 `DEFAULT`, `INVITATION`만 허용합니다. `INVITATION`은 서버 세션에 수락한 초대 문맥이 있을 때만 사용하며 임의 URL은 받을 수 없습니다.
 - `signup-context`와 가입 대기 세션은 OAuth 시도가 성공한 사용자에게만 제공하고 다른 브라우저에서 재사용할 수 없습니다. 가입 대기 세션은 OAuth 콜백 완료 시점부터 고정 30분 동안 유효하며 조회나 입력 활동으로 만료 시각을 연장하지 않습니다.
 - 만료된 가입 대기 세션으로 `signup-context` 또는 `signup`을 요청하면 서버는 대기 정보를 제거하고 `SIGNUP_CONTEXT_EXPIRED`를 반환합니다. 계정은 생성하지 않으며 CSR은 안내 후 `/login`으로 이동시켜 소셜 인증을 다시 시작합니다. 이후 `/api/v1/me`는 `ANONYMOUS + NOT_STARTED`를 반환합니다.
 - OAuth Callback은 신규 사용자의 `users`, `social_accounts`, `user_profiles`를 생성하지 않습니다. 이 행들은 `POST /api/v1/auth/signup`에서 닉네임을 확정할 때 생성합니다.
+- `POST /api/v1/auth/signup`은 공개 역할 입력을 받지 않습니다. 신규 계정의 공급자와 검증된 이메일이 `INITIAL_SUPER_ADMIN_PROVIDER`, `INITIAL_SUPER_ADMIN_EMAIL`에 모두 정확히 일치할 때만 `SUPER_ADMIN`을 부여하며 이외에는 `USER`로 생성합니다.
+- 기존 전체 관리자가 있으면 환경변수는 기존 계정을 승격·강등하지 않습니다. 전체 관리자가 없고 두 환경변수가 모두 준비되지 않은 실행환경은 시작 검증에서 설정 오류로 처리합니다.
 - 초대 조건이 유효하면 계정·프로필·소셜 계정·그룹 멤버십을 하나의 트랜잭션으로 생성합니다. 초대 조건이 실패하면 계정 관련 행만 생성하고 실패 이유와 그룹 선택 경로를 반환합니다.
 - 초대 수락은 정원을 예약하지 않습니다. 최종 가입 시점에 링크, 정원, 기존 소속과 24시간 제한을 다시 검사합니다.
 - 인증된 기존 회원이 그룹 없이 초대를 수락하면 같은 Endpoint가 공통 그룹 가입 트랜잭션을 실행하고 성공 시 `NavigationResponse.nextRoute=/creature`를 반환합니다. 같은 초대 그룹에 이미 가입된 재요청은 기존 성공 이동 결과를 반환합니다.
@@ -201,6 +276,8 @@ Full CSR이지만 브라우저가 구글·네이버 액세스 토큰을 직접 �
 - 그룹 실시간 구독 목적지는 `/topic/groups/{groupId}/live` 하나로 통합합니다.
 - 클라이언트는 애플리케이션 메시지를 전송하지 않고 STOMP Heartbeat만 사용합니다. 퀘스트 완료, 장착 변경과 같은 명령은 REST API로 처리합니다.
 - 구독 시 애플리케이션 세션, Origin과 현재 활성 그룹을 검사하고 탈퇴·강퇴·세션 무효화 후에는 구독을 종료합니다.
+- STOMP `CONNECT` Native Header의 `X-CSRF-TOKEN`을 현재 세션의 Token과 비교합니다. 세션·허용 Origin·CSRF 중 하나라도 실패하면 연결을 거부합니다.
+- 인바운드 권한은 기본 거부입니다. 인증된 연결의 `DISCONNECT`와 현재 활성 그룹에 대한 정확한 `SUBSCRIBE /topic/groups/{groupId}/live`만 허용하고 클라이언트의 모든 애플리케이션 `SEND`·`MESSAGE` 및 다른 목적지 구독을 거부합니다.
 
 | 이벤트 | 책임 |
 |---|---|
@@ -254,7 +331,8 @@ Full CSR이지만 브라우저가 구글·네이버 액세스 토큰을 직접 �
 - 가입·생성은 현재 소속, 제한 종료 시각과 정원을 같은 트랜잭션 안에서 다시 검사합니다.
 - 가입·탈퇴·강퇴·권한 변경·주 관리자 이전은 사용자 ID 오름차순 → 그룹 → 멤버십 ID 오름차순 → 가입 제한의 공통 잠금 순서를 사용합니다.
 - 강퇴 요청은 `reason`을 필수로 받고 주·부 관리자에게는 확정된 미접속·역할 조건을 적용합니다. 전체 관리자의 신고 기반 처리는 신고 Endpoint와 연결합니다.
-- 미접속 강퇴의 72시간은 `lastActiveAt`을 기준으로 계산하고, 강퇴 트랜잭션에서 대상 사용자의 최신 활동 시각을 다시 검사합니다.
+- 미접속 강퇴는 최대 10분의 활동 시각 영속화 지연을 고려해 저장된 `lastActiveAt`에서 72시간 10분이 지난 경우에만 허용하고 강퇴 트랜잭션에서 다시 검사합니다. 화면 문구는 72시간 기준을 사용합니다.
+- 주 관리자가 유일한 활성 구성원이면 `leaveMyGroup`이 별도 Endpoint 없이 그룹·초대 링크·현재 시즌 참여를 함께 종료하고 `groupDeactivated=true`를 반환합니다.
 - 주 관리자 이전은 대상의 활성 멤버십과 역할을 검사하고 그룹·두 멤버십·변경 이력을 하나의 트랜잭션으로 반영합니다. 대상은 `PRIMARY`, 기존 주 관리자는 `MEMBER`로 변경하며 성공 응답은 변경된 두 역할을 반영합니다.
 - 초대 링크 재발급 응답에서만 새 원문 Token을 반환하며 DB에는 Hash만 저장합니다.
 
@@ -295,7 +373,11 @@ Full CSR이지만 브라우저가 구글·네이버 액세스 토큰을 직접 �
 - 퀘스트 완료 요청은 보상값·난이도·합계값을 받지 않고 배정 Snapshot으로 계산합니다.
 - 이미 완료된 배정은 새 보상을 지급하지 않고 기존 완료 결과를 반환합니다.
 - 체크인은 서버가 KST 기준일과 오전 시간 여부를 계산하고 날짜별 UNIQUE로 중복 기록을 막습니다.
-- 사진 제출은 활성 `PHOTO_EXIF` 배정에만 Multipart 요청을 허용합니다. 서버는 GPS 존재·좌표 범위와 촬영 시각이 배정의 `[startsAt, endsAt)`에 포함되는지만 검증하며 실외·현재 위치·장소·거리·위변조는 판정하지 않습니다.
+- 사진 제출은 활성 `PHOTO_EXIF` 배정에만 Multipart 요청을 허용합니다. 서버는 POST 요청 안에서 JPEG·EXIF 판정을 끝내고 외부 응답은 최종 `VALID` 또는 `INVALID`만 반환합니다. DB의 `PENDING`은 파일 저장 후 판정 완료 전까지의 내부 상태이며 API 응답으로 노출하지 않습니다.
+- 사용자·퀘스트 배정별 판정 제출은 최대 5건이고 사용자별 사진 요청은 1분에 최대 5회입니다. EXIF APP1 메타데이터는 최대 1 MiB이며 픽셀 전체를 디코딩하지 않습니다.
+- EXIF 판정은 최대 4개의 전용 Worker에서 수행하고 5초 안에 끝내야 합니다. Worker 포화·Timeout은 제출 성공으로 간주하지 않고 각각 `PHOTO_PROCESSING_BUSY`, `PHOTO_PROCESSING_TIMEOUT`으로 반환합니다.
+- Worker 포화는 제출 행을 만들기 전에 거절합니다. Worker를 얻은 뒤 생성한 제출이 5초를 넘으면 `INVALID`·`PHOTO_PROCESSING_TIMEOUT`으로 기록하고 배정별 5회 시도에 포함한 뒤 `503`을 반환합니다.
+- 서버는 GPS 존재·좌표 범위와 촬영 시각이 배정의 `[startsAt, endsAt)`에 포함되는지 검증하고, 서버 업로드 접수 시각도 같은 기간 안이어야 합니다. 판정·보상 트랜잭션이 배정 종료와 시즌 `CLOSING` 전에 Commit되지 않으면 제출 이력만 `INVALID`·`QUEST_PERIOD_ENDED`로 남기고 `409 QUEST_PERIOD_ENDED`를 반환합니다. 마감 유예와 이월은 없습니다.
 - EXIF 촬영 시각에 Offset이 없으면 `Asia/Seoul`로 해석합니다. 메타데이터 판정 실패도 제출 이력은 `INVALID`로 저장하고 `failureReason`으로 `EXIF_GPS_MISSING`, `EXIF_GPS_OUT_OF_RANGE`, `EXIF_CAPTURED_AT_MISSING`, `PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD` 중 하나를 반환합니다.
 
 ### 6.4. 랭킹
@@ -321,7 +403,7 @@ Full CSR이지만 브라우저가 구글·네이버 액세스 토큰을 직접 �
 - 결제 채널은 카카오페이로 고정하고 브라우저는 `payMethod=EASY_PAY`, `currency=KRW`를 사용합니다. 카카오페이 채널 자체가 간편결제사이므로 `easyPayProvider`는 전달하지 않습니다.
 - `windowType`은 PC `IFRAME`, 모바일 `REDIRECTION`이며 모바일 Redirect URL은 서버가 허용한 CSR 결제 복귀 경로만 사용합니다.
 
-내부 Port의 권장 결과는 공급자와 무관하게 `PAID`, `READY`, `CANCELLED`, `DEFINITIVE_FAILURE`, `UNKNOWN`으로 제한하고 공급자 원문 코드는 거래 이력의 정제된 필드에만 저장합니다.
+내부 Port의 권장 결과는 공급자와 무관하게 결제 조회의 `PAID`, `READY`, `CANCELLED`, `DEFINITIVE_FAILURE`, `UNKNOWN`과 취소 요청의 `SUCCEEDED`, `REQUESTED`, `DEFINITIVE_FAILURE`, `UNKNOWN`으로 제한하고 공급자 원문 코드는 거래 이력의 정제된 필드에만 저장합니다.
 
 ### 7.2. 상점과 아바타
 
@@ -352,6 +434,7 @@ Full CSR이지만 브라우저가 구글·네이버 액세스 토큰을 직접 �
 - Webhook은 `2024-04-25` JSON 형식과 Standard Webhooks Signature를 검증하고, 검증 후에도 `paymentId`로 포트원 최신 결제를 조회합니다.
 - 내부 주문번호 `paymentId`는 `purchases.order_number`에만 유지하고 승인 거래 이력의 공급자 식별자는 포트원 거래 객체 ID를 저장합니다.
 - 알 수 없는 Webhook Event·필드는 실패시키지 않고 무시하며, 같은 Webhook ID는 UNIQUE로 중복 처리를 막습니다.
+- 같은 Webhook ID가 `PROCESSED`, `IGNORED`이거나 처리 시작 후 5분 미만의 `PENDING`이면 중복 처리 없이 `202`를 반환합니다. 5분 이상 지난 `PENDING`과 `FAILED`는 `PAYMENT_RECONCILIATION`이 PortOne 최신 결제를 조회해 같은 `PaymentReconciliationService`로 복구합니다.
 - Webhook Endpoint는 CSRF 검사 대상에서 제외하지만 Signature 검증 전에는 어떤 업무 상태도 변경하지 않습니다.
 
 ### 7.4. 환불과 포트원 취소
@@ -367,10 +450,12 @@ Full CSR이지만 브라우저가 구글·네이버 액세스 토큰을 직접 �
 | `POST` | `/api/v1/admin/refund-requests/{requestId}/reconciliations` | 전체 관리자 | 결과 불명 결제 단건 조회와 복구 |
 
 - 취소 Adapter는 포트원 V2 `POST /payments/{paymentId}/cancel`을 사용하고 동일 취소 재시도에는 같은 포트원 `Idempotency-Key`를 전달합니다.
+- 포트원 취소 응답의 `SUCCEEDED`는 내부 성공, `FAILED`는 명확한 실패, `REQUESTED`는 비동기 처리 중으로 변환합니다. `REQUESTED`에서는 환불을 `CANCEL_PENDING`으로 유지하고 Webhook 또는 최신 결제 조회 전에는 `COMPLETED`·아이템 회수를 확정하지 않습니다.
 - 취소 성공 응답의 `cancellation.id`를 취소 거래 행의 공급자 식별자로 저장하고, 승인 거래의 공급자 식별자와 혼용하지 않습니다.
 - 포트원의 멱등 보장 기간과 별개로 애플리케이션 DB의 환불 상태·시도 이력이 장기 중복 취소를 차단합니다.
 - 포트원 외부 호출의 읽기 Timeout은 최소 60초로 설정하고 Timeout·연결 단절은 성공·실패로 추정하지 않고 `CANCEL_UNKNOWN`으로 처리합니다.
 - 결과 불명 상태에서는 포트원 결제 단건 조회로 `CANCELLED` 여부를 확인한 뒤에만 재시도 여부를 결정합니다.
+- `cancel_claimed_at`부터 5분 이상 지난 `CANCEL_PENDING`은 5분 주기 복구 작업이 PortOne 조회부터 수행합니다. 취소 완료는 `COMPLETED`, 미취소는 기존 멱등 키 재시도, 취소 불가는 `FAILED`, 조회 결과 불명은 `CANCEL_UNKNOWN`으로 확정합니다.
 
 ### 7.5. 신고와 전체 관리자
 
@@ -441,20 +526,25 @@ Full CSR이지만 브라우저가 구글·네이버 액세스 토큰을 직접 �
 | `401` | `AUTH_REQUIRED`, `SESSION_EXPIRED` | 로그인 필요·세션 만료 |
 | `403` | `CSRF_INVALID`, `ROLE_FORBIDDEN` | CSRF 또는 역할 권한 부족 |
 | `404` | `RESOURCE_NOT_FOUND` | 존재하지 않거나 요청자에게 노출할 수 없는 리소스 |
-| `404` | `ITEM_NOT_OWNED` | 현재 사용자에게 노출할 수 없는 보유 아이템 |
 | `409` | `NICKNAME_ALREADY_USED`, `GROUP_NAME_ALREADY_USED` | 정규화한 이름 중복 |
 | `409` | `SIGNUP_CONTEXT_EXPIRED` | OAuth 콜백 완료 후 30분이 지나 가입 대기 문맥 만료. 대기 정보를 제거하고 `/login`에서 재인증 필요 |
 | `409` | `GROUP_FULL`, `ALREADY_IN_GROUP`, `JOIN_COOLDOWN_ACTIVE`, `INVITE_INVALID` | 그룹 가입 조건 충돌 |
 | `409` | `INACTIVITY_REQUIREMENT_NOT_MET`, `PRIMARY_TRANSFER_REQUIRED` | 강퇴·주 관리자 보호 조건 미충족 |
-| `409` | `CREATURE_SELECTION_CLOSED`, `QUEST_PERIOD_ENDED` | 시즌·퀘스트 수행 불가 |
+| `409` | `CREATURE_SELECTION_CLOSED`, `QUEST_PERIOD_ENDED`, `QUEST_COMPLETION_NOT_ALLOWED` | 시즌·퀘스트 수행 불가 또는 검증 방식이 맞지 않음 |
+| `409` | `PHOTO_ATTEMPT_LIMIT_EXCEEDED` | 같은 사용자·퀘스트 배정의 판정 제출 5회 소진 |
 | `409` | `FIRST_USE_CONFIRMATION_REQUIRED` | 최초 사용 확인 필요 |
 | `409` | `PAYMENT_AMOUNT_MISMATCH`, `PAYMENT_PENDING`, `PAYMENT_RESULT_UNKNOWN` | 결제 검증·확정 불가 |
 | `409` | `REFUND_NOT_ALLOWED_USED_ITEM`, `REFUND_ALREADY_ACTIVE`, `PG_CANCEL_RESULT_UNKNOWN` | 환불 조건·결과 충돌 |
 | `409` | `CONCURRENT_MODIFICATION`, `IDEMPOTENCY_KEY_REUSED`, `IDEMPOTENCY_REQUEST_IN_PROGRESS` | 동시 수정, 멱등 키 오용 또는 동일 요청 처리 중 |
 | `413` | `FILE_TOO_LARGE` | 사진 파일 10 MiB 초과 |
+| `413` | `PHOTO_METADATA_TOO_LARGE` | EXIF APP1 메타데이터 1 MiB 초과 |
 | `415` | `PHOTO_FORMAT_UNSUPPORTED` | JPEG가 아니거나 MIME 형식과 JPEG Signature가 일치하지 않는 사진. HEIC·HEIF 포함 |
+| `429` | `RATE_LIMIT_EXCEEDED` | OAuth·Gemini·사진 제출의 사용자·세션·IP 호출량 제한 초과 |
 | `503` | `PAYMENT_PROVIDER_UNAVAILABLE` | 포트원 일시 장애 |
+| `503` | `OAUTH_PROVIDER_UNAVAILABLE` | Google·Naver 인가 또는 프로필 조회 일시 장애 |
 | `503` | `AI_PROOFREAD_UNAVAILABLE` | Gemini Timeout·안전 차단·응답 형식 오류 또는 일시 장애 |
+| `503` | `AI_BUSY` | Gemini 서버 전체 동시 호출 2건 초과 |
+| `503` | `PHOTO_PROCESSING_BUSY`, `PHOTO_PROCESSING_TIMEOUT` | EXIF 전용 Worker 4건 포화 또는 5초 처리시간 초과 |
 
 - 같은 업무 오류는 Endpoint와 화면에 관계없이 같은 HTTP 상태와 의미를 유지합니다.
 - `code`는 프론트엔드 분기용 불변 식별자이고 `message`는 사용자에게 표시 가능한 변경 가능 문구입니다.
@@ -464,6 +554,17 @@ Full CSR이지만 브라우저가 구글·네이버 액세스 토큰을 직접 �
 ## 9. Endpoint별 요청·응답 계약
 
 Operation ID는 구현 메서드명과 API 테스트 식별자로 사용합니다. `요청 ID`는 [사용자 시나리오 및 업무 규칙](business-rules.md#0-요청-식별-번호와-추적-기준)의 추적 번호입니다. `-`는 Request Body가 없다는 뜻이며, 모든 JSON 요청은 `Content-Type: application/json`을 사용합니다.
+
+요청 형식은 아래 네 가지뿐입니다. 브라우저와 백엔드가 서로 다른 형식으로 해석하지 않도록 Operation 표의 입력 위치를 그대로 따릅니다.
+
+| 요청 종류 | `Content-Type` | Body 작성 방법 |
+|---|---|---|
+| 일반 JSON 명령 | `application/json` | 10.2절 Request DTO와 같은 필드명으로 JSON 작성 |
+| 사진 제출 | 브라우저가 생성한 `multipart/form-data; boundary=...` | `FormData`에 `assignmentId`, `file` 추가. `Content-Type` 직접 지정 금지 |
+| PortOne Webhook | PortOne이 전송한 `application/json` | 브라우저가 호출하지 않으며 원문 Body와 서명 Header를 서버가 검증 |
+| GET·DELETE Body 없음 | 없음 | Path·Query·Header만 사용하고 빈 JSON `{}`도 보내지 않음 |
+
+모든 브라우저 요청은 `Accept: application/json`, `credentials: 'include'`를 사용합니다. 상태 변경 요청은 `getCsrfToken`으로 받은 값을 `X-CSRF-TOKEN`에 넣되 OAuth Callback과 PortOne Webhook에는 넣지 않습니다.
 
 ### 9.1. 인증·초대
 
@@ -484,12 +585,12 @@ Operation ID는 구현 메서드명과 API 테스트 식별자로 사용합니�
 
 | Operation ID | 요청 ID | Method·경로 | 입력 | 성공 `data` |
 |---|---|---|---|---|
-| `listPublicGroups` | `REQ-GRP-001` | `GET /api/v1/groups` | Query `q`, `page`, `size` | `GroupSummaryResponse[]` + Page `meta` |
+| `listPublicGroups` | `REQ-GRP-001` | `GET /api/v1/groups` | Query `PublicGroupsQuery` | `GroupSummaryResponse[]` + Page `meta` |
 | `createGroup` | `REQ-GRP-001` | `POST /api/v1/groups` | Body `CreateGroupRequest` | `CreateGroupResponse` |
 | `proofreadGroupDescription` | `REQ-AI-001` | `POST /api/v1/ai/proofreads` | Body `ProofreadTextRequest` | `ProofreadTextResponse` |
 | `joinGroup` | `REQ-GRP-001`, `REQ-GRP-002` | `POST /api/v1/groups/{groupId}/memberships` | Path `groupId` | `MembershipResponse` |
 | `getMyGroup` | `REQ-GRP-002`, `REQ-GRP-003` | `GET /api/v1/groups/me` | - | `GroupDetailResponse` |
-| `listMyGroupMembers` | `REQ-GRP-003`, `REQ-GRP-004`, `REQ-GRP-005` | `GET /api/v1/groups/me/members` | Query `page`, `size` | `GroupMemberResponse[]` + Page `meta` |
+| `listMyGroupMembers` | `REQ-GRP-003`, `REQ-GRP-004`, `REQ-GRP-005` | `GET /api/v1/groups/me/members` | Query `GroupMembersQuery` | `GroupMemberResponse[]` + Page `meta` |
 | `leaveMyGroup` | `REQ-GRP-003` | `DELETE /api/v1/groups/me/membership` | - | `MembershipExitResponse` |
 | `changeMemberRole` | `REQ-GRP-004` | `PATCH /api/v1/groups/me/members/{userId}/role` | Path `userId`, Body `ChangeMemberRoleRequest` | `GroupMemberResponse` |
 | `removeGroupMember` | `REQ-GRP-005` | `POST /api/v1/groups/me/members/{userId}/removals` | Path `userId`, Body `RemoveMemberRequest` | `MembershipExitResponse` |
@@ -500,31 +601,31 @@ Operation ID는 구현 메서드명과 API 테스트 식별자로 사용합니�
 | `getCreatureHome` | `REQ-SEA-001`, `REQ-SEA-002`, `REQ-SEA-003`, `REQ-AVA-002`, `REQ-RT-001` | `GET /api/v1/groups/me/creature-home` | - | `CreatureHomeResponse` |
 | `listActiveCreatureSpecies` | `REQ-SEA-002` | `GET /api/v1/creature-species` | - | `CreatureSpeciesResponse[]` |
 | `selectCreatureSpecies` | `REQ-SEA-002` | `PUT /api/v1/groups/me/seasons/current/creature-selection` | Body `SelectCreatureRequest` | `CreatureSelectionResponse` |
-| `listCurrentQuests` | `REQ-QST-001`, `REQ-QST-002` | `GET /api/v1/quests/current` | Query `periodType` | `QuestAssignmentResponse[]` |
+| `listCurrentQuests` | `REQ-QST-001`, `REQ-QST-002` | `GET /api/v1/quests/current` | Query `CurrentQuestsQuery` | `QuestAssignmentResponse[]` |
 | `completeQuestAssignment` | `REQ-QST-002` | `POST /api/v1/quest-assignments/{assignmentId}/completions` | Path `assignmentId` | `QuestCompletionResponse` |
 | `createCheckIn` | `REQ-QST-003` | `POST /api/v1/check-ins` | - | `CheckInResponse` |
 | `submitQuestPhoto` | `REQ-QST-004` | `POST /api/v1/photo-submissions` | Multipart `assignmentId`, `file` | `PhotoSubmissionResponse` |
-| `getMemberRanking` | `REQ-RNK-001` | `GET /api/v1/rankings/members` | Query `seasonId`, `page`, `size` | `MemberRankResponse[]` + Rank `meta` |
-| `getGroupRanking` | `REQ-RNK-002` | `GET /api/v1/rankings/groups` | Query `seasonId`, `page`, `size` | `GroupRankResponse[]` + Rank `meta` |
+| `getMemberRanking` | `REQ-RNK-001` | `GET /api/v1/rankings/members` | Query `MemberRankingQuery` | `MemberRankResponse[]` + Rank `meta` |
+| `getGroupRanking` | `REQ-RNK-002` | `GET /api/v1/rankings/groups` | Query `GroupRankingQuery` | `GroupRankResponse[]` + Rank `meta` |
 
 ### 9.3. 상점·아바타·결제·환불
 
 | Operation ID | 요청 ID | Method·경로 | 입력 | 성공 `data` |
 |---|---|---|---|---|
-| `listShopItems` | `REQ-AVA-001` | `GET /api/v1/shop-items` | Query `slot`, `page`, `size` | `ShopItemResponse[]` + Page `meta` |
+| `listShopItems` | `REQ-AVA-001` | `GET /api/v1/shop-items` | Query `ShopItemsQuery` | `ShopItemResponse[]` + Page `meta` |
 | `getShopItem` | `REQ-AVA-001` | `GET /api/v1/shop-items/{itemId}` | Path `itemId` | `ShopItemResponse` |
-| `listOwnedItems` | `REQ-AVA-001` | `GET /api/v1/owned-items` | Query `status`, `slot`, `page`, `size` | `OwnedItemResponse[]` + Page `meta` |
+| `listOwnedItems` | `REQ-AVA-001` | `GET /api/v1/owned-items` | Query `OwnedItemsQuery` | `OwnedItemResponse[]` + Page `meta` |
 | `getAvatar` | `REQ-AVA-001` | `GET /api/v1/avatar` | - | `AvatarResponse` |
 | `equipAvatarItem` | `REQ-AVA-001` | `PUT /api/v1/avatar/equipments/{slot}` | Path `slot`, Body `EquipAvatarItemRequest` | `AvatarResponse` |
 | `unequipAvatarItem` | `REQ-AVA-001` | `DELETE /api/v1/avatar/equipments/{slot}` | Path `slot` | `AvatarResponse` |
 | `createPurchase` | `REQ-PAY-001` | `POST /api/v1/purchases` | Header `Idempotency-Key`, Body `CreatePurchaseRequest` | `PurchaseCheckoutResponse` |
 | `verifyPurchasePayment` | `REQ-PAY-001` | `POST /api/v1/purchases/{purchaseId}/payment-verifications` | Path `purchaseId`, Body `VerifyPaymentRequest` | `PurchaseTimelineResponse` |
-| `listPurchases` | `REQ-PAY-001`, `REQ-PAY-002` | `GET /api/v1/purchases` | Query `status`, `page`, `size` | `PurchaseSummaryResponse[]` + Page `meta` |
+| `listPurchases` | `REQ-PAY-001`, `REQ-PAY-002` | `GET /api/v1/purchases` | Query `PurchasesQuery` | `PurchaseSummaryResponse[]` + Page `meta` |
 | `getPurchase` | `REQ-PAY-001`, `REQ-PAY-002` | `GET /api/v1/purchases/{purchaseId}` | Path `purchaseId` | `PurchaseTimelineResponse` |
 | `receivePortOneWebhook` | `REQ-PAY-001`, `REQ-PAY-002` | `POST /api/v1/payments/webhooks/portone` | PortOne 서명 Header와 V2 Webhook Body | `202 Accepted`, `EmptyResponse` |
 | `createRefundRequest` | `REQ-PAY-002` | `POST /api/v1/purchases/{purchaseId}/refund-requests` | Header `Idempotency-Key`, Path `purchaseId`, Body `CreateRefundRequest` | `RefundResponse` |
-| `listMyRefundRequests` | `REQ-PAY-002` | `GET /api/v1/refund-requests` | Query `status`, `page`, `size` | `RefundResponse[]` + Page `meta` |
-| `listAdminRefundRequests` | `REQ-ADM-003` | `GET /api/v1/admin/refund-requests` | Query `status`, `page`, `size` | `RefundResponse[]` + Page `meta` |
+| `listMyRefundRequests` | `REQ-PAY-002` | `GET /api/v1/refund-requests` | Query `RefundRequestsQuery` | `RefundResponse[]` + Page `meta` |
+| `listAdminRefundRequests` | `REQ-ADM-003` | `GET /api/v1/admin/refund-requests` | Query `RefundRequestsQuery` | `RefundResponse[]` + Page `meta` |
 | `getAdminRefundRequest` | `REQ-ADM-003` | `GET /api/v1/admin/refund-requests/{requestId}` | Path `requestId` | `RefundDetailResponse` |
 | `approveRefund` | `REQ-ADM-003` | `POST /api/v1/admin/refund-requests/{requestId}/approvals` | Header `Idempotency-Key`, Path `requestId`, Body `ApproveRefundRequest` | `RefundDetailResponse` |
 | `rejectRefund` | `REQ-ADM-003` | `POST /api/v1/admin/refund-requests/{requestId}/rejections` | Path `requestId`, Body `RejectRefundRequest` | `RefundDetailResponse` |
@@ -535,13 +636,65 @@ Operation ID는 구현 메서드명과 API 테스트 식별자로 사용합니�
 | Operation ID | 요청 ID | Method·경로 | 입력 | 성공 `data` |
 |---|---|---|---|---|
 | `createUserReport` | `REQ-GRP-006` | `POST /api/v1/reports` | Body `CreateReportRequest` | `ReportResponse` |
-| `listAdminReports` | `REQ-ADM-002` | `GET /api/v1/admin/reports` | Query `status`, `page`, `size` | `ReportResponse[]` + Page `meta` |
+| `listAdminReports` | `REQ-ADM-002` | `GET /api/v1/admin/reports` | Query `AdminReportsQuery` | `ReportResponse[]` + Page `meta` |
 | `getAdminReport` | `REQ-ADM-002` | `GET /api/v1/admin/reports/{reportId}` | Path `reportId` | `ReportDetailResponse` |
 | `dismissReport` | `REQ-ADM-002` | `POST /api/v1/admin/reports/{reportId}/dismissals` | Path `reportId`, Body `DismissReportRequest` | `ReportDetailResponse` |
 | `removeReportedMember` | `REQ-GRP-006`, `REQ-ADM-002` | `POST /api/v1/admin/reports/{reportId}/removals` | Path `reportId`, Body `RemoveReportedMemberRequest` | `ReportDetailResponse` |
 | `transferPrimaryAdminAsSuperAdmin` | `REQ-GRP-004`, `REQ-ADM-004` | `POST /api/v1/admin/groups/{groupId}/primary-transfer` | Path `groupId`, Body `TransferPrimaryRequest` | `GroupDetailResponse` |
-| `getAdminDashboard` | `REQ-ADM-001` | `GET /api/v1/admin/dashboard` | Query `range`, `groupId` | `AdminDashboardResponse` |
-| `listOperationalWarnings` | `REQ-ADM-004` | `GET /api/v1/admin/operations/warnings` | Query `type`, `page`, `size` | `OperationalWarningResponse[]` + Page `meta` |
+| `getAdminDashboard` | `REQ-ADM-001` | `GET /api/v1/admin/dashboard` | Query `AdminDashboardQuery` | `AdminDashboardResponse` |
+| `listOperationalWarnings` | `REQ-ADM-004` | `GET /api/v1/admin/operations/warnings` | Query `OperationalWarningsQuery` | `OperationalWarningResponse[]` + Page `meta` |
+
+### 9.5. Operation별 성공 상태와 오류
+
+#### 성공 HTTP 상태
+
+| HTTP | Operation ID |
+|---|---|
+| `302 Found` | `handleOAuthCallback` |
+| `202 Accepted` | `receivePortOneWebhook` |
+| `201 Created` | `createOAuthAttempt`, `completeSignup`, `createGroup`, `joinGroup`, `createPurchase`, `createRefundRequest`, `createUserReport` |
+| `200 OK` | 위 Operation을 제외한 9절의 모든 Operation |
+
+`DELETE`도 결과 DTO를 반환하므로 `204`를 사용하지 않습니다. 멱등 재요청은 최초 성공 응답의 HTTP 상태와 Body를 그대로 반환합니다.
+
+#### 모든 Operation에 적용하는 공통 오류
+
+- JSON·Query·Path·Header 형식이 틀리면 `400 INVALID_REQUEST` 또는 `400 INVALID_FIELD_VALUE`입니다.
+- 로그인 또는 가입 대기 세션이 필요한데 없으면 `401 AUTH_REQUIRED`, 만료됐으면 `401 SESSION_EXPIRED`입니다.
+- 역할이 부족하면 `403 ROLE_FORBIDDEN`, 상태 변경 요청의 CSRF가 틀리면 `403 CSRF_INVALID`입니다.
+- 다른 사용자의 구매·보유 아이템·환불처럼 소유권이 없는 개별 자원은 존재 여부를 숨기고 `404 RESOURCE_NOT_FOUND`를 반환합니다. 존재하는 그룹 관리·전체 관리자 기능에서 역할만 부족하면 `403 ROLE_FORBIDDEN`입니다.
+- `Idempotency-Key` 명령은 Key 재사용·처리 중 상태에 따라 `409 IDEMPOTENCY_KEY_REUSED`, `409 IDEMPOTENCY_REQUEST_IN_PROGRESS`를 사용합니다.
+
+아래 표는 공통 오류 외에 Operation별로 추가되는 업무 오류입니다. 표에 없는 읽기 Operation은 공통 오류만 사용합니다.
+
+| Operation ID | 추가 오류 코드 |
+|---|---|
+| `createOAuthAttempt` | `429 RATE_LIMIT_EXCEEDED`; `503 OAUTH_PROVIDER_UNAVAILABLE` |
+| `handleOAuthCallback` | JSON 오류 대신 2.7절의 `oauthError` 코드로 `/login` Redirect. 시작 세션 불일치는 `OAUTH_SESSION_MISMATCH` |
+| `getSignupContext`, `completeSignup` | `409 SIGNUP_CONTEXT_EXPIRED`; 가입 완료는 `409 NICKNAME_ALREADY_USED` 추가 |
+| `getPublicInvitation` | 잘못되거나 폐기된 Token은 `404 RESOURCE_NOT_FOUND` |
+| `acceptInvitation` | `409 INVITE_INVALID`, `GROUP_FULL`, `ALREADY_IN_GROUP`, `JOIN_COOLDOWN_ACTIVE` |
+| `createGroup` | `409 GROUP_NAME_ALREADY_USED`, `ALREADY_IN_GROUP`, `JOIN_COOLDOWN_ACTIVE` |
+| `joinGroup` | `409 GROUP_FULL`, `ALREADY_IN_GROUP`, `JOIN_COOLDOWN_ACTIVE` |
+| `leaveMyGroup` | 활성 구성원이 2명 이상인 마지막 주 관리자는 `409 PRIMARY_TRANSFER_REQUIRED`. 주 관리자가 유일한 구성원이면 성공과 함께 그룹 비활성화 |
+| `changeMemberRole`, `transferPrimaryAdmin`, `transferPrimaryAdminAsSuperAdmin` | `409 PRIMARY_TRANSFER_REQUIRED`, `CONCURRENT_MODIFICATION` |
+| `removeGroupMember` | `409 INACTIVITY_REQUIREMENT_NOT_MET`, `PRIMARY_TRANSFER_REQUIRED`, `CONCURRENT_MODIFICATION` |
+| `rotateInvitation` | 동시 재발급은 `409 CONCURRENT_MODIFICATION` |
+| `proofreadGroupDescription` | `429 RATE_LIMIT_EXCEEDED`; `503 AI_BUSY`, `AI_PROOFREAD_UNAVAILABLE` |
+| `selectCreatureSpecies` | `409 CREATURE_SELECTION_CLOSED`, `CONCURRENT_MODIFICATION` |
+| `completeQuestAssignment` | `409 QUEST_PERIOD_ENDED`, `QUEST_COMPLETION_NOT_ALLOWED`, `CONCURRENT_MODIFICATION` |
+| `createCheckIn` | 같은 KST 날짜 재요청은 오류가 아니라 기존 `CheckInResponse` 반환 |
+| `submitQuestPhoto` | `409 QUEST_PERIOD_ENDED`, `QUEST_COMPLETION_NOT_ALLOWED`, `PHOTO_ATTEMPT_LIMIT_EXCEEDED`; `413 FILE_TOO_LARGE`, `PHOTO_METADATA_TOO_LARGE`; `415 PHOTO_FORMAT_UNSUPPORTED`; `429 RATE_LIMIT_EXCEEDED`; `503 PHOTO_PROCESSING_BUSY`, `PHOTO_PROCESSING_TIMEOUT`. EXIF 내용 실패는 `200`과 `status=INVALID` |
+| `equipAvatarItem` | `404 RESOURCE_NOT_FOUND`; `400 SLOT_MISMATCH`; `409 FIRST_USE_CONFIRMATION_REQUIRED`, `CONCURRENT_MODIFICATION` |
+| `unequipAvatarItem` | `409 CONCURRENT_MODIFICATION` |
+| `createPurchase` | 판매 중이 아닌 상품은 `404 RESOURCE_NOT_FOUND`; `503 PAYMENT_PROVIDER_UNAVAILABLE` |
+| `verifyPurchasePayment` | `409 PAYMENT_AMOUNT_MISMATCH`, `PAYMENT_PENDING`, `PAYMENT_RESULT_UNKNOWN`; `503 PAYMENT_PROVIDER_UNAVAILABLE` |
+| `receivePortOneWebhook` | 서명·형식 실패는 `400` 빈 Body, 정상 수신은 처리 결과와 무관하게 `202` |
+| `createRefundRequest` | `409 REFUND_NOT_ALLOWED_USED_ITEM`, `REFUND_ALREADY_ACTIVE` |
+| `approveRefund`, `reconcileRefund` | `409 REFUND_NOT_ALLOWED_USED_ITEM`, `REFUND_ALREADY_ACTIVE`, `PG_CANCEL_RESULT_UNKNOWN`, `CONCURRENT_MODIFICATION`; `503 PAYMENT_PROVIDER_UNAVAILABLE` |
+| `rejectRefund` | `409 CONCURRENT_MODIFICATION` |
+| `dismissReport`, `removeReportedMember` | 이미 처리됐으면 `409 CONCURRENT_MODIFICATION` |
+| `removeReportedMember` | 마지막 주 관리자 대상이면 `409 PRIMARY_TRANSFER_REQUIRED` |
 
 ## 10. 요청 필드 상세 정의
 
@@ -560,20 +713,60 @@ Operation ID는 구현 메서드명과 API 테스트 식별자로 사용합니�
 | `q` | `string` | 선택 | NFKC·Trim 후 0~30자. 빈 문자열은 검색 조건 없음 |
 | `periodType` | `enum` | 필수 | `DAILY`, `WEEKLY` |
 | `seasonId` | `int64` | 선택 | 생략하면 현재 시즌, 1 이상 |
-| `slot` | `enum` | 해당 API 필수 | `HEAD`, `FACE`, `BODY`, `ACCESSORY` |
+| `slot` Path | `enum` | 장착·해제 API 필수 | `HEAD`, `FACE`, `BODY`, `ACCESSORY` |
 | `range` | `enum` | 선택 | `7_DAYS`, `30_DAYS`, `CURRENT_SEASON`; 기본 `7_DAYS` |
 | `Idempotency-Key` | UUID 문자열 | 해당 명령 필수 | RFC 4122 UUID, 최대 36자. 같은 Key·Payload만 재사용 가능 |
 | `X-CSRF-TOKEN` | `string` | 상태 변경 요청 필수 | 현재 세션에서 발급된 Token과 일치. Webhook 제외 |
 | `X-Request-Id` | `string` | 선택 | 영문·숫자·`-`·`_`, 1~64자. 없으면 서버 생성 |
 
-목록의 `status`, `type`, `slot`은 각 응답 DTO에 정의된 Enum 값만 허용합니다. 알 수 없는 값은 무시하지 않고 `400 INVALID_FIELD_VALUE`로 반환합니다.
+알 수 없는 Query 값과 같은 Query의 중복·쉼표 구분 입력은 무시하지 않고 `400 INVALID_FIELD_VALUE`로 반환합니다.
+
+#### 10.1.1. Endpoint별 Query DTO
+
+| Query DTO.field | 타입 | 필수 | 기본값·허용값 | 고정 정렬 |
+|---|---|---|---|---|
+| `PublicGroupsQuery.q` | string | 선택 | NFKC·Trim 후 0~30자, 빈 값은 전체 | - |
+| `PublicGroupsQuery.page` | int32 | 선택 | 기본 0, 0 이상 | - |
+| `PublicGroupsQuery.size` | int32 | 선택 | 기본 20, 1~50 | `name ASC, groupId ASC` |
+| `GroupMembersQuery.page` | int32 | 선택 | 기본 0, 0 이상 | - |
+| `GroupMembersQuery.size` | int32 | 선택 | 기본 20, 1~50 | `role PRIMARY→DEPUTY→MEMBER, joinedAt ASC, userId ASC` |
+| `CurrentQuestsQuery.periodType` | enum | 필수 | `DAILY`, `WEEKLY` | `slotNumber ASC` |
+| `MemberRankingQuery.seasonId` | int64 | 선택 | 생략 시 현재 시즌, 1 이상 | - |
+| `MemberRankingQuery.page` | int32 | 선택 | 기본 0, 0 이상 | - |
+| `MemberRankingQuery.size` | int32 | 선택 | 기본 20, 1~50 | `rank ASC` |
+| `GroupRankingQuery.seasonId` | int64 | 선택 | 생략 시 현재 시즌, 1 이상 | - |
+| `GroupRankingQuery.page` | int32 | 선택 | 기본 0, 0 이상 | - |
+| `GroupRankingQuery.size` | int32 | 선택 | 기본 20, 1~50 | `rank ASC` |
+| `ShopItemsQuery.slot` | enum | 선택 | `HEAD`, `FACE`, `BODY`, `ACCESSORY`; 생략 시 전체 | - |
+| `ShopItemsQuery.page` | int32 | 선택 | 기본 0, 0 이상 | - |
+| `ShopItemsQuery.size` | int32 | 선택 | 기본 20, 1~50 | `displayOrder ASC, itemId ASC` |
+| `OwnedItemsQuery.status` | enum | 선택 | `OWNED_UNUSED`, `OWNED_USED`, `REVOKED`; 생략 시 전체 | - |
+| `OwnedItemsQuery.slot` | enum | 선택 | 아바타 슬롯, 생략 시 전체 | - |
+| `OwnedItemsQuery.page` | int32 | 선택 | 기본 0, 0 이상 | - |
+| `OwnedItemsQuery.size` | int32 | 선택 | 기본 20, 1~50 | `ownedItemId DESC` |
+| `PurchasesQuery.status` | enum | 선택 | `READY`, `PAID`, `FAILED`, `CANCELLED`; 생략 시 전체 | - |
+| `PurchasesQuery.page` | int32 | 선택 | 기본 0, 0 이상 | - |
+| `PurchasesQuery.size` | int32 | 선택 | 기본 20, 1~50 | `createdAt DESC, purchaseId DESC` |
+| `RefundRequestsQuery.status` | enum | 선택 | `REQUESTED`, `REJECTED`, `CANCEL_PENDING`, `CANCEL_UNKNOWN`, `COMPLETED`, `FAILED`; 생략 시 전체 | - |
+| `RefundRequestsQuery.page` | int32 | 선택 | 기본 0, 0 이상 | - |
+| `RefundRequestsQuery.size` | int32 | 선택 | 기본 20, 1~50 | `requestedAt DESC, refundRequestId DESC` |
+| `AdminReportsQuery.status` | enum | 선택 | `RECEIVED`, `RESOLVED`, `REJECTED`; 생략 시 전체 | - |
+| `AdminReportsQuery.page` | int32 | 선택 | 기본 0, 0 이상 | - |
+| `AdminReportsQuery.size` | int32 | 선택 | 기본 20, 1~50 | `createdAt DESC, reportId DESC` |
+| `AdminDashboardQuery.range` | enum | 선택 | `7_DAYS`, `30_DAYS`, `CURRENT_SEASON`; 기본 `7_DAYS` | KST 날짜 오름차순 |
+| `AdminDashboardQuery.groupId` | int64 | 선택 | 생략 시 전체 그룹, 지정 시 1 이상이며 존재하는 그룹 | - |
+| `OperationalWarningsQuery.type` | enum | 선택 | `SCHEDULER_FAILED`, `QUEST_TEMPLATE_SHORTAGE`, `CAPACITY_MISMATCH`, `PAYMENT_UNKNOWN`, `REFUND_UNKNOWN`, `PHOTO_DELETE_FAILED`; 생략 시 전체 | - |
+| `OperationalWarningsQuery.page` | int32 | 선택 | 기본 0, 0 이상 | - |
+| `OperationalWarningsQuery.size` | int32 | 선택 | 기본 20, 1~50 | `detectedAt DESC, warningId ASC` |
+
+`listMyRefundRequests`와 `listAdminRefundRequests`는 같은 `RefundRequestsQuery`를 사용합니다. 정렬용 필드는 클라이언트 입력으로 받지 않고 표의 고정 정렬만 사용합니다.
 
 ### 10.2. 인증·그룹 요청 Body
 
 | DTO.field | 타입 | 필수 | 제한과 의미 |
 |---|---|---|---|
 | `OAuthAttemptRequest.provider` | `enum` | 필수 | `GOOGLE`, `NAVER` |
-| `OAuthAttemptRequest.returnRoute` | `string` | 선택 | 서버 허용 목록의 Route ID, 기본 `DEFAULT`; URL 원문 불가 |
+| `OAuthAttemptRequest.returnRoute` | `enum` | 선택 | `DEFAULT`, `INVITATION`; 기본 `DEFAULT`. URL 원문 불가, `INVITATION`은 서버 초대 문맥이 있을 때만 허용 |
 | `SignupRequest.nickname` | `string` | 필수 | NFKC·Trim 후 2~20자, 제어문자 금지, 정규화 닉네임 전역 UNIQUE |
 | `CreateGroupRequest.name` | `string` | 필수 | NFKC·Trim 후 2~30자, 제어문자 금지, 정규화 그룹명 전역 UNIQUE |
 | `CreateGroupRequest.description` | `string` | 선택 | Trim 후 0~500자, 제어문자 금지. Gemini 결과도 동일 검증 |
@@ -609,10 +802,21 @@ Operation ID는 구현 메서드명과 API 테스트 식별자로 사용합니�
 
 ### 10.4. Webhook 입력
 
-- PortOne Webhook은 공급자의 `2024-04-25` V2 JSON 형식을 그대로 수신하며 애플리케이션 DTO로 공개하지 않습니다.
-- Standard Webhooks의 `webhook-id`, `webhook-timestamp`, `webhook-signature` Header가 모두 필요합니다.
+- PortOne Webhook은 공급자의 `2024-04-25` V2 JSON 형식을 그대로 수신하며 아래 필드만 읽습니다. 알 수 없는 추가 필드는 무시합니다.
+- Standard Webhooks의 `webhook-id`, `webhook-timestamp`, `webhook-signature` Header가 모두 필요합니다. 각 값은 비어 있을 수 없고 최대 500자이며 원문 Body와 함께 PortOne JVM SDK 또는 Standard Webhooks 호환 검증기로 검증합니다.
 - 서명 검증 전 Body 최대 크기는 256 KiB로 제한하고 Content Type은 `application/json`만 허용합니다.
 - 허용 시각 편차와 재전송 검증 후 `paymentId`를 추출하며, 알 수 없는 Event Type은 `202`로 수신 처리하되 업무 상태를 변경하지 않습니다.
+
+| Body 필드 | 타입 | 필수 | 제한·처리 |
+|---|---|---|---|
+| `type` | string | 필수 | 최대 100자. 처리 대상은 `Transaction.Ready`, `Transaction.Paid`, `Transaction.Cancelled`, `Transaction.Failed`, `Transaction.PayPending`, `Transaction.CancelPending`; 다른 값은 상태 변경 없이 `202` |
+| `timestamp` | datetime | 필수 | RFC 3339. 재전송되어도 같은 이벤트 시각 |
+| `data.storeId` | string | 필수 | 설정된 `PORTONE_STORE_ID`와 일치해야 함, 최대 100자 |
+| `data.paymentId` | string | 결제 이벤트 필수 | 내부 `purchases.order_number`와 연결, 1~100자 |
+| `data.transactionId` | string | 결제 이벤트 필수 | PortOne 결제 시도 ID, 1~255자 |
+| `data.cancellationId` | string | 취소 이벤트 조건부 | 취소 관련 Event에서만 제공, 1~255자 |
+
+서명 검증 실패는 JSON 오류 Body 대신 `400` 빈 Body를 반환합니다. 서명은 유효하지만 알 수 없는 Event이거나 내부 주문이 없으면 재전송을 막기 위해 `202`와 `EmptyResponse`를 반환하고 업무 상태는 변경하지 않습니다. 알려진 결제 Event는 `paymentId`로 PortOne 결제 단건 조회를 수행한 뒤 같은 `202` 응답을 반환합니다.
 
 ## 11. 응답 필드 상세 정의
 
@@ -639,18 +843,19 @@ Operation ID는 구현 메서드명과 API 테스트 식별자로 사용합니�
 | `CurrentUserResponse.roles` | string[] | 아니요 | `SUPER_ADMIN`, `PRIMARY`, `DEPUTY`, `MEMBER` 중 현재 역할 |
 | `CurrentUserResponse.restrictionUntil` | datetime | 예 | 활성 24시간 가입 제한 종료 UTC 시각 |
 | `CurrentUserResponse.sessionNotice` | enum | 예 | 가장 오래된 세션 종료 시 `OLDEST_SESSION_EVICTED` |
+| `CurrentUserResponse.onboardingReason` | enum | 예 | 초대 가입 실패로 그룹 선택이 필요하면 `INVITE_INVALID`, `GROUP_FULL`, `ALREADY_IN_GROUP`, `JOIN_COOLDOWN_ACTIVE`; 그 외 `null` |
 | `UserSummaryResponse.userId` | int64 | 아니요 | 내부 사용자 ID |
 | `UserSummaryResponse.nickname` | string | 아니요 | 2~20자 표시 닉네임 |
 | `UserSummaryResponse.provider` | enum | 아니요 | 현재 로그인 공급자 `GOOGLE`, `NAVER` |
-| `UserSummaryResponse.email` | string | 아니요 | 가입 당시 이메일 Snapshot |
+| `UserSummaryResponse.email` | string | 아니요 | 가입 당시 이메일 Snapshot, 최대 320자 |
 | `PublicInvitationResponse.groupId` | int64 | 아니요 | 초대 대상 그룹 ID |
 | `PublicInvitationResponse.groupName` | string | 아니요 | 2~30자 그룹명 |
 | `PublicInvitationResponse.currentMemberCount` | int32 | 아니요 | 0~20 |
 | `PublicInvitationResponse.capacity` | int32 | 아니요 | MVP에서 20 |
 | `PublicInvitationResponse.status` | enum | 아니요 | `ACTIVE`, `INVALIDATED`, `GROUP_UNAVAILABLE` |
 | `PublicInvitationResponse.acceptable` | boolean | 아니요 | 현재 링크 자체를 수락할 수 있는지 여부. 자리 예약 의미 아님 |
-| `NavigationResponse.nextRoute` | string | 아니요 | 허용된 CSR Route ID에 대응하는 내부 경로 |
-| `NavigationResponse.reasonCode` | string | 예 | 가입 실패·기존 회원 안내 등 화면 메시지 분기 코드. 기존 회원 즉시 가입 성공은 `null` |
+| `NavigationResponse.nextRoute` | enum | 아니요 | `/login`, `/signup`, `/groups/select`, `/creature` 중 하나 |
+| `NavigationResponse.reasonCode` | enum | 예 | 초대 거절은 `INVITATION_REJECTED`, 정상 수락·이동은 `null`; 가입 업무 실패는 오류 응답 또는 `CurrentUserResponse.onboardingReason` 사용 |
 
 ### 11.2. 그룹 응답
 
@@ -676,7 +881,7 @@ Operation ID는 구현 메서드명과 API 테스트 식별자로 사용합니�
 | `MembershipResponse.joinedAt` | datetime | 아니요 | 가입 UTC 시각 |
 | `MembershipResponse.status` | enum | 아니요 | 활성 응답에서는 `ACTIVE` |
 | `GroupMemberResponse.userId` | int64 | 아니요 | 구성원 사용자 ID |
-| `GroupMemberResponse.nickname` | string | 아니요 | 현재 표시 닉네임 |
+| `GroupMemberResponse.nickname` | string | 아니요 | 현재 표시 닉네임, 2~20자 |
 | `GroupMemberResponse.role` | enum | 아니요 | `PRIMARY`, `DEPUTY`, `MEMBER` |
 | `GroupMemberResponse.joinedAt` | datetime | 아니요 | 현재 멤버십 가입 시각 |
 | `GroupMemberResponse.lastActiveAt` | datetime | 예 | 마지막 로그인 또는 인증 API 요청 성공 UTC 시각, 활동 이력이 없으면 `null` |
@@ -686,6 +891,7 @@ Operation ID는 구현 메서드명과 API 테스트 식별자로 사용합니�
 | `MembershipExitResponse.exitType` | enum | 아니요 | `LEFT`, `REMOVED_INACTIVE`, `REMOVED_REPORT` |
 | `MembershipExitResponse.exitedAt` | datetime | 아니요 | 종료 UTC 시각 |
 | `MembershipExitResponse.restrictionUntil` | datetime | 아니요 | 가입 가능 UTC 시각, 종료 후 24시간 |
+| `MembershipExitResponse.groupDeactivated` | boolean | 아니요 | 1인 주 관리자 탈퇴로 그룹까지 `INACTIVE`가 됐으면 `true`, 일반 탈퇴·강퇴는 `false` |
 | `InvitationManagementResponse.active` | boolean | 아니요 | 활성 링크 존재 여부 |
 | `InvitationManagementResponse.issuedAt` | datetime | 예 | 활성 링크 발급 시각 |
 | `InvitationManagementResponse.copyable` | boolean | 아니요 | Hash만 저장하므로 조회 응답은 항상 `false` |
@@ -728,12 +934,12 @@ Operation ID는 구현 메서드명과 API 테스트 식별자로 사용합니�
 | `CreatureResponse.currentStageThreshold` | int64 | 아니요 | 현재 단계 시작 경험치 |
 | `CreatureResponse.nextStageThreshold` | int64 | 예 | 완전체이면 `null` |
 | `ContributionActivityResponse.userId` | int64 | 아니요 | 기여 사용자 ID |
-| `ContributionActivityResponse.nickname` | string | 아니요 | 표시 닉네임 Snapshot |
+| `ContributionActivityResponse.nickname` | string | 아니요 | 표시 닉네임 Snapshot, 2~20자 |
 | `ContributionActivityResponse.experience` | int64 | 아니요 | 해당 완료의 경험치 |
 | `ContributionActivityResponse.contribution` | int64 | 아니요 | 해당 완료의 기여도 |
 | `ContributionActivityResponse.occurredAt` | datetime | 아니요 | 확정 UTC 시각 |
 | `PresentAvatarResponse.userId` | int64 | 아니요 | 그룹 사용자 ID |
-| `PresentAvatarResponse.nickname` | string | 아니요 | 표시 닉네임 |
+| `PresentAvatarResponse.nickname` | string | 아니요 | 표시 닉네임, 2~20자 |
 | `PresentAvatarResponse.contribution` | int64 | 아니요 | 현재 시즌·그룹 기여도 |
 | `PresentAvatarResponse.rank` | int32 | 아니요 | 현재 그룹 내 순위, 1 이상 |
 | `PresentAvatarResponse.me` | boolean | 아니요 | 현재 요청자 여부 |
@@ -761,17 +967,17 @@ Operation ID는 구현 메서드명과 API 테스트 식별자로 사용합니�
 | `CheckInResponse.checkedInAt` | datetime | 아니요 | 서버 기록 UTC 시각 |
 | `CheckInResponse.morningCheckIn` | boolean | 아니요 | KST 05:00 이상 09:00 미만 여부 |
 | `PhotoSubmissionResponse.submissionId` | int64 | 아니요 | 제출 ID |
-| `PhotoSubmissionResponse.status` | enum | 아니요 | `PENDING`, `VALID`, `INVALID` |
-| `PhotoSubmissionResponse.failureReason` | string | 예 | 실패 코드, 성공·처리 중이면 `null` |
+| `PhotoSubmissionResponse.status` | enum | 아니요 | 외부 응답은 `VALID`, `INVALID`만 사용 |
+| `PhotoSubmissionResponse.failureReason` | enum | 예 | 성공이면 `null`; 실패 시 `EXIF_GPS_MISSING`, `EXIF_GPS_OUT_OF_RANGE`, `EXIF_CAPTURED_AT_MISSING`, `PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD` |
 | `PhotoSubmissionResponse.submittedAt` | datetime | 아니요 | 업로드 접수 시각 |
 | `MemberRankResponse.rank` | int32 | 아니요 | 1 이상 |
 | `MemberRankResponse.userId` | int64 | 아니요 | 사용자 ID |
-| `MemberRankResponse.nickname` | string | 아니요 | 현재 시즌은 현재값, 종료 시즌은 Snapshot |
+| `MemberRankResponse.nickname` | string | 아니요 | 현재 시즌은 현재값, 종료 시즌은 Snapshot, 2~20자 |
 | `MemberRankResponse.contribution` | int64 | 아니요 | 시즌 기여도, 0 이상 |
 | `MemberRankResponse.participantStatus` | enum | 아니요 | `ACTIVE`, `LEFT`, `REMOVED` |
 | `GroupRankResponse.rank` | int32 | 아니요 | 1 이상 |
 | `GroupRankResponse.groupId` | int64 | 아니요 | 그룹 ID |
-| `GroupRankResponse.groupName` | string | 아니요 | 현재값 또는 종료 Snapshot |
+| `GroupRankResponse.groupName` | string | 아니요 | 현재값 또는 종료 Snapshot, 2~30자 |
 | `GroupRankResponse.score` | int64 | 아니요 | 시즌 그룹 점수, 0 이상 |
 
 Rank 목록의 `meta.currentSubject`는 `rank`, `score`, `subjectId`를 포함하며 대상이 없으면 `null`입니다. Page `meta`에는 `page`, `size`, `totalElements`, `totalPages`를 포함합니다.
@@ -811,8 +1017,8 @@ Rank 목록의 `meta.currentSubject`는 `rank`, `score`, `subjectId`를 포함�
 | `PurchaseCheckoutResponse.channelKey` | string | 아니요 | 카카오페이 테스트 채널 공개 Key |
 | `PurchaseCheckoutResponse.redirectUrl` | string | 아니요 | 허용된 Same-origin 결제 복귀 URL |
 | `PurchaseSummaryResponse.purchaseId` | int64 | 아니요 | 구매 ID |
-| `PurchaseSummaryResponse.orderNumber` | string | 아니요 | 서버 주문 번호 |
-| `PurchaseSummaryResponse.itemName` | string | 아니요 | 구매 Snapshot 상품명 |
+| `PurchaseSummaryResponse.orderNumber` | string | 아니요 | 서버 주문 번호, 1~100자 |
+| `PurchaseSummaryResponse.itemName` | string | 아니요 | 구매 Snapshot 상품명, 1~100자 |
 | `PurchaseSummaryResponse.amountKrw` | int64 | 아니요 | 구매 Snapshot 금액 |
 | `PurchaseSummaryResponse.status` | enum | 아니요 | `READY`, `PAID`, `FAILED`, `CANCELLED` |
 | `PurchaseSummaryResponse.createdAt` | datetime | 아니요 | 주문 생성 시각 |
@@ -827,8 +1033,8 @@ Rank 목록의 `meta.currentSubject`는 `rank`, `score`, `subjectId`를 포함�
 | `PaymentTransactionResponse.processedAt` | datetime | 예 | 공급자 처리 미확정이면 `null` |
 | `RefundResponse.refundRequestId` | int64 | 아니요 | 환불 요청 ID |
 | `RefundResponse.purchaseId` | int64 | 아니요 | 대상 구매 ID |
-| `RefundResponse.requestReason` | string | 아니요 | 사용자 입력 사유 |
-| `RefundResponse.decisionReason` | string | 예 | 관리자 판단 전이면 `null` |
+| `RefundResponse.requestReason` | string | 아니요 | 사용자 입력 사유, 1~500자 |
+| `RefundResponse.decisionReason` | string | 예 | 관리자 판단 전이면 `null`, 값이 있으면 1~500자 |
 | `RefundResponse.status` | enum | 아니요 | `REQUESTED`, `REJECTED`, `CANCEL_PENDING`, `CANCEL_UNKNOWN`, `COMPLETED`, `FAILED` |
 | `RefundResponse.requestedAt` | datetime | 아니요 | 요청 시각 |
 | `RefundResponse.reviewedAt` | datetime | 예 | 판단 전이면 `null` |
@@ -857,18 +1063,18 @@ Rank 목록의 `meta.currentSubject`는 `rank`, `score`, `subjectId`를 포함�
 | `ReportDetailResponse.handledAt` | datetime | 예 | 미처리면 `null` |
 | `ReportDetailResponse.moderationAction` | `ModerationActionResponse` | 예 | 강퇴하지 않았으면 `null` |
 | `ModerationActionResponse.actionType` | enum | 아니요 | `REMOVE_INACTIVE`, `REMOVE_REPORTED` |
-| `ModerationActionResponse.reason` | string | 아니요 | 최종 실행 근거 |
+| `ModerationActionResponse.reason` | string | 아니요 | 최종 실행 근거, 1~1000자 |
 | `ModerationActionResponse.executedAt` | datetime | 아니요 | 실행 시각 |
 | `UserDisplayResponse.userId` | int64 | 아니요 | 사용자 ID |
-| `UserDisplayResponse.nickname` | string | 아니요 | 표시 닉네임 |
+| `UserDisplayResponse.nickname` | string | 아니요 | 표시 닉네임, 2~20자 |
 | `AdminDashboardResponse.range` | enum | 아니요 | 적용된 기간 |
 | `AdminDashboardResponse.groupId` | int64 | 예 | 전체 조회면 `null` |
 | `AdminDashboardResponse.aggregatedAt` | datetime | 아니요 | 집계 기준 시각 |
 | `AdminDashboardResponse.summary` | `DashboardSummaryResponse` | 아니요 | 요약 카드 값 |
-| `AdminDashboardResponse.activityTrend` | `TimeSeriesPointResponse[]` | 아니요 | 날짜별 활동 사용자·완료 건수 |
+| `AdminDashboardResponse.activityTrend` | `ActivityTrendPointResponse[]` | 아니요 | 날짜별 활동 사용자·완료 건수 |
 | `AdminDashboardResponse.stageDistribution` | `CategoryValueResponse[]` | 아니요 | 성장 단계별 그룹 수 |
 | `AdminDashboardResponse.topGroupScores` | `CategoryValueResponse[]` | 아니요 | 점수 상위 최대 10개 그룹 |
-| `AdminDashboardResponse.paymentRefundTrend` | `TimeSeriesPointResponse[]` | 아니요 | 날짜별 결제·환불 금액 |
+| `AdminDashboardResponse.paymentRefundTrend` | `PaymentRefundTrendPointResponse[]` | 아니요 | 날짜별 결제·환불 금액 |
 | `AdminDashboardResponse.capacityDistribution` | `CategoryValueResponse[]` | 아니요 | 정원 사용률 구간별 그룹 수 |
 | `AdminDashboardResponse.recentReports` | `ReportResponse[]` | 아니요 | 최근 미처리 최대 5건 |
 | `AdminDashboardResponse.recentRefunds` | `RefundResponse[]` | 아니요 | 최근 처리 대기 최대 5건 |
@@ -881,9 +1087,13 @@ Rank 목록의 `meta.currentSubject`는 `rank`, `score`, `subjectId`를 포함�
 | `DashboardSummaryResponse.pendingRefunds` | int64 | 아니요 | 0 이상 |
 | `DashboardSummaryResponse.unresolvedReports` | int64 | 아니요 | 0 이상 |
 | `DashboardSummaryResponse.operationalWarnings` | int64 | 아니요 | 0 이상 |
-| `TimeSeriesPointResponse.businessDate` | date | 아니요 | KST 기준일 |
-| `TimeSeriesPointResponse.values` | object | 아니요 | 차트가 정의한 수치 Key와 0 이상의 숫자만 포함 |
-| `CategoryValueResponse.category` | string | 아니요 | 단계·그룹명·사용률 구간 |
+| `ActivityTrendPointResponse.businessDate` | date | 아니요 | KST 기준일 |
+| `ActivityTrendPointResponse.activeUsers` | int64 | 아니요 | 해당 날짜 인증 활동 사용자 수, 0 이상 |
+| `ActivityTrendPointResponse.questCompletions` | int64 | 아니요 | 해당 날짜 퀘스트 완료 수, 0 이상 |
+| `PaymentRefundTrendPointResponse.businessDate` | date | 아니요 | KST 기준일 |
+| `PaymentRefundTrendPointResponse.paidAmountKrw` | int64 | 아니요 | 해당 날짜 테스트 결제 완료 금액, 0 이상 |
+| `PaymentRefundTrendPointResponse.refundedAmountKrw` | int64 | 아니요 | 해당 날짜 환불 완료 금액, 0 이상 |
+| `CategoryValueResponse.category` | string | 아니요 | 단계 Enum, 2~30자 그룹명 또는 `0_25`, `26_50`, `51_75`, `76_99`, `100` |
 | `CategoryValueResponse.value` | number | 아니요 | 0 이상의 집계값 |
 | `OperationalWarningResponse.warningId` | string | 아니요 | `{type}:{sourceId}` 형태, 최대 100자 |
 | `OperationalWarningResponse.type` | enum | 아니요 | `SCHEDULER_FAILED`, `QUEST_TEMPLATE_SHORTAGE`, `CAPACITY_MISMATCH`, `PAYMENT_UNKNOWN`, `REFUND_UNKNOWN`, `PHOTO_DELETE_FAILED` |
@@ -891,7 +1101,7 @@ Rank 목록의 `meta.currentSubject`는 `rank`, `score`, `subjectId`를 포함�
 | `OperationalWarningResponse.detectedAt` | datetime | 아니요 | 최초 감지 시각 |
 | `OperationalWarningResponse.sourceId` | int64 | 예 | 연결할 내부 대상이 없으면 `null` |
 
-`activityTrend.values`는 `activeUsers`, `questCompletions`, `paymentRefundTrend.values`는 `paidAmountKrw`, `refundedAmountKrw`를 정확한 Key로 사용합니다. `stageDistribution.category`는 크리처 단계 Enum, `topGroupScores.category`는 그룹명, `capacityDistribution.category`는 `0_25`, `26_50`, `51_75`, `76_99`, `100`을 사용합니다. Google Charts는 이 서버 집계 배열을 표시 형식으로만 변환하고 브라우저에서 원본 행을 다시 집계하지 않습니다.
+`stageDistribution.category`는 크리처 단계 Enum, `topGroupScores.category`는 그룹명, `capacityDistribution.category`는 `0_25`, `26_50`, `51_75`, `76_99`, `100`을 사용합니다. Google Charts는 이 서버 집계 배열을 표시 형식으로만 변환하고 브라우저에서 원본 행을 다시 집계하지 않습니다.
 
 운영 경고 응답은 현재 미해결 원본 상태만 투영하므로 `status` 필드와 해결된 경고 조회 Filter를 제공하지 않습니다.
 
@@ -943,3 +1153,77 @@ Rank 목록의 `meta.currentSubject`는 `rank`, `score`, `subjectId`를 포함�
 ```
 
 `rejectedValue`는 비밀번호·Token·파일·긴 본문·개인정보를 반환하지 않으며, 일반 필드도 최대 100자로 잘라서 반환합니다. 주요 `reason`은 `REQUIRED`, `INVALID_FORMAT`, `INVALID_ENUM`, `LENGTH_OUT_OF_RANGE`, `OUT_OF_RANGE`, `FILE_TOO_LARGE`, `UNSUPPORTED_MEDIA_TYPE`입니다.
+
+## 13. 초보 구현 체크리스트와 예시
+
+### 13.1. 백엔드 구현 순서
+
+1. 9절의 Operation ID와 같은 이름으로 Controller 메서드를 만듭니다.
+2. Path·Query·Header·Body를 10절의 DTO로 변환합니다. Controller에서 Entity를 직접 만들지 않습니다.
+3. 형식 검증이 끝나면 Service가 로그인 사용자, 최신 DB 상태와 업무 조건을 검사합니다.
+4. Service는 Entity가 아닌 11절 Response DTO를 반환합니다.
+5. Controller는 9.5절의 HTTP 상태와 2절 Envelope를 적용합니다.
+6. Controller 테스트는 정상 응답, 필드 제한 위반, 권한 부족과 9.5절의 Operation별 업무 오류를 최소 한 번씩 확인합니다.
+
+Java DTO는 팀이 읽기 쉬운 `class` 또는 `record`를 선택할 수 있지만 JSON 필드명과 타입은 문서 표와 같아야 합니다. Query DTO의 고정 정렬은 Repository 또는 Query Service에서 적용하고 클라이언트가 임의 정렬식을 전달하지 못하게 합니다.
+
+### 13.2. JSON 명령 프론트엔드 예시
+
+```javascript
+/** 그룹 생성 API를 호출하고 성공 data만 반환합니다. */
+export async function createGroup(input, csrfToken) {
+  const response = await fetch('/api/v1/groups', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-CSRF-TOKEN': csrfToken,
+    },
+    body: JSON.stringify({
+      name: input.name,
+      description: input.description || '',
+    }),
+  });
+
+  const body = await response.json();
+  if (!response.ok) {
+    // 화면은 body.message를 표시하고 분기는 body.code로 처리합니다.
+    throw body;
+  }
+  return body.data;
+}
+```
+
+### 13.3. Multipart 사진 제출 예시
+
+```javascript
+/** JPEG 사진을 제출합니다. 브라우저가 boundary를 만들도록 Content-Type을 직접 넣지 않습니다. */
+export async function submitQuestPhoto(assignmentId, file, csrfToken) {
+  const form = new FormData();
+  form.append('assignmentId', String(assignmentId));
+  form.append('file', file);
+
+  const response = await fetch('/api/v1/photo-submissions', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'X-CSRF-TOKEN': csrfToken,
+    },
+    body: form,
+  });
+  const body = await response.json();
+  if (!response.ok) throw body;
+  return body.data; // status는 VALID 또는 INVALID
+}
+```
+
+### 13.4. 프론트엔드 오류 표시 규칙
+
+- `fieldErrors`가 있으면 `field`와 같은 입력 요소 아래에 오류를 표시합니다.
+- `401`이면 현재 화면 동작을 중단하고 `/login`으로 이동합니다.
+- `403 CSRF_INVALID`이면 CSRF Token을 한 번 새로 받은 뒤 사용자가 같은 동작을 다시 실행하게 합니다. 자동 무한 재시도는 하지 않습니다.
+- `409`는 `code`별 안내를 표시하고 최신 화면 Snapshot을 다시 조회합니다.
+- `503`은 외부 시스템 장애 안내와 수동 재시도 버튼을 표시합니다.
+- 알 수 없는 `code`도 화면이 깨지지 않게 공통 오류 안내와 `traceId`를 표시합니다.
