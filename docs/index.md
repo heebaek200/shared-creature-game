@@ -4,6 +4,7 @@ title: 공동 육성 게임 — 다 같이 키우는 생명체
 
 # 공동 육성 게임 — 다 같이 키우는 생명체
 
+- [기획안](project_plan.md)
 - [요구사항](requirements.md)
 - [사용자 시나리오 및 업무 규칙](business-rules.md)
 - [데이터베이스 설계서 및 ERD](database-design.md)
