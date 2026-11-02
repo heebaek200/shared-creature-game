@@ -41,13 +41,13 @@
 
 1. 비로그인 사용자가 보호 경로에 접근하면 안전하게 검증된 내부 `returnUrl`을 유지하고 `/login`으로 이동합니다.
 2. 소셜 인증을 마쳤지만 계정 생성이 끝나지 않은 사용자는 `/signup`으로 이동합니다.
-3. 일반 계정 생성 후 활성 그룹이 없으면 `/groups/select`로 이동합니다.
+3. 일반 계정 생성 후 활성 그룹이 없을 때 기본 이동은 `/groups/select`입니다. 단, 로그인만 요구하는 `/shop`, `/avatar`, `/payments`에 직접 접근한 경우에는 그룹이 없어도 해당 경로를 유지합니다.
 4. 탈퇴·강퇴 후 24시간 제한 중에도 `/groups/select`는 표시하지만 가입·생성 동작을 비활성화하고 서버 시각 기준 제한 종료 시각과 남은 시간을 표시합니다.
 5. 활성 그룹이 있는 일반 사용자가 로그인·가입 전용 화면에 접근하면 `/creature`로 이동합니다.
-6. `/group-admin`은 현재 그룹의 `PRIMARY` 또는 `DEPUTY`, `/admin/**`는 `SUPER_ADMIN`만 접근할 수 있습니다.
+6. 경로 접근 등급은 `PUBLIC`, `AUTHENTICATED`, `GROUP_MEMBER`, `GROUP_ADMIN`, `SUPER_ADMIN`으로 구분합니다. `/group-admin`은 현재 그룹의 `PRIMARY` 또는 `DEPUTY`, `/admin/**`는 그룹 소속과 무관하게 `SUPER_ADMIN`만 접근할 수 있습니다.
 7. 인증됐지만 역할이 부족하면 `/403`, 매칭되지 않는 경로는 404 화면을 표시합니다.
 
-Route Guard는 `/api/v1/me`의 조합을 고정 매핑합니다. `ANONYMOUS + NOT_STARTED`는 `/login`, `SIGNUP_PENDING + SIGNUP_REQUIRED`는 `/signup`, `AUTHENTICATED + GROUP_REQUIRED`는 `/groups/select`, `AUTHENTICATED + COMPLETED`는 역할별 기본 화면으로 이동합니다.
+Route Guard는 `/api/v1/me`의 상태와 대상 경로의 접근 등급을 함께 평가합니다. `ANONYMOUS + NOT_STARTED`는 보호 경로에서 `/login`, `SIGNUP_PENDING + SIGNUP_REQUIRED`는 `/signup`으로 이동합니다. `AUTHENTICATED + GROUP_REQUIRED`는 `GROUP_MEMBER`·`GROUP_ADMIN` 경로에서만 `/groups/select`로 이동하고 `AUTHENTICATED` 경로는 허용합니다. 그룹 없는 전체 관리자는 `AUTHENTICATED + COMPLETED`, `membership=null`, `roles=[SUPER_ADMIN]`이며 `/admin/**`에 접근할 수 있습니다. 완료 상태의 기본 이동은 그룹 회원 `/creature`, 전체 관리자 `/admin`입니다.
 
 `returnUrl`은 같은 Origin의 사전 정의된 CSR 경로만 허용해 외부 Redirect에 사용하지 않습니다. 초대 토큰과 OAuth 진행 문맥은 `localStorage`나 URL Query로 복제하지 않고 서버 측 임시 상태에서 유지합니다.
 

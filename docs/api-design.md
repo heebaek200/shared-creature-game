@@ -120,9 +120,9 @@ Full CSR이지만 브라우저가 구글·네이버 액세스 토큰을 직접 �
 | `meta.size` | int32 | 조건부 | Page 목록에서만 제공, 1~50 |
 | `meta.totalElements` | int64 | 조건부 | Page 목록에서만 제공, 전체 행 수, 0 이상 |
 | `meta.totalPages` | int32 | 조건부 | Page 목록에서만 제공, 전체 Page 수, 빈 목록이면 0 |
-| `meta.currentSubject` | `RankSubjectMeta` | 조건부 | 랭킹 목록에서만 제공 |
+| `meta.currentSubject` | `RankSubjectMeta` | 예 | 랭킹 목록에서는 키를 항상 제공하고 현재 대상이 없으면 객체 전체가 `null`; 일반 목록·단건에서는 키 생략 |
 
-Page 필드 네 개는 Page 목록에서 항상 함께 제공하고 일반 단건·일반 목록에서는 모두 생략합니다. 랭킹 목록은 Page 필드와 `currentSubject`를 함께 제공합니다.
+Page 필드 네 개는 Page 목록에서 항상 함께 제공하고 일반 단건·일반 목록에서는 모두 생략합니다. 랭킹 목록은 `currentSubject` 키를 항상 제공하되 현재 대상이 없으면 `null`로 반환합니다.
 
 | `RankSubjectMeta` 필드 | 타입 | null 가능 | 규칙 |
 |---|---|---|---|
@@ -234,14 +234,14 @@ Page 필드 네 개는 Page 목록에서 항상 함께 제공하고 일반 단�
 - `signup-context`와 가입 대기 세션은 OAuth 시도가 성공한 사용자에게만 제공하고 다른 브라우저에서 재사용할 수 없습니다. 가입 대기 세션은 OAuth 콜백 완료 시점부터 고정 30분 동안 유효하며 조회나 입력 활동으로 만료 시각을 연장하지 않습니다.
 - 만료된 가입 대기 세션으로 `signup-context` 또는 `signup`을 요청하면 서버는 대기 정보를 제거하고 `SIGNUP_CONTEXT_EXPIRED`를 반환합니다. 계정은 생성하지 않으며 CSR은 안내 후 `/login`으로 이동시켜 소셜 인증을 다시 시작합니다. 이후 `/api/v1/me`는 `ANONYMOUS + NOT_STARTED`를 반환합니다.
 - OAuth Callback은 신규 사용자의 `users`, `social_accounts`, `user_profiles`를 생성하지 않습니다. 이 행들은 `POST /api/v1/auth/signup`에서 닉네임을 확정할 때 생성합니다.
-- `POST /api/v1/auth/signup`은 공개 역할 입력을 받지 않습니다. 신규 계정의 공급자와 검증된 이메일이 `INITIAL_SUPER_ADMIN_PROVIDER`, `INITIAL_SUPER_ADMIN_EMAIL`에 모두 정확히 일치할 때만 `SUPER_ADMIN`을 부여하며 이외에는 `USER`로 생성합니다.
-- 기존 전체 관리자가 있으면 환경변수는 기존 계정을 승격·강등하지 않습니다. 전체 관리자가 없고 두 환경변수가 모두 준비되지 않은 실행환경은 시작 검증에서 설정 오류로 처리합니다.
+- `POST /api/v1/auth/signup`은 공개 역할 입력을 받지 않습니다. 활성 전체 관리자가 없고 신규 계정의 공급자와 불변 사용자 ID가 `INITIAL_SUPER_ADMIN_PROVIDER`, `INITIAL_SUPER_ADMIN_PROVIDER_USER_ID`에 모두 정확히 일치할 때만 `SUPER_ADMIN`을 부여하며 이외에는 `USER`로 생성합니다.
+- 기존 활성 전체 관리자가 있으면 환경변수는 기존 계정을 승격·강등하지 않습니다. 전체 관리자가 없고 두 환경변수가 모두 준비되지 않은 실행환경은 시작 검증에서 설정 오류로 처리합니다. 일치하는 소셜 계정이 이미 일반 사용자로 존재하면 자동 승격하지 않고 설정 오류로 처리합니다.
 - 초대 조건이 유효하면 계정·프로필·소셜 계정·그룹 멤버십을 하나의 트랜잭션으로 생성합니다. 초대 조건이 실패하면 계정 관련 행만 생성하고 실패 이유와 그룹 선택 경로를 반환합니다.
 - 초대 수락은 정원을 예약하지 않습니다. 최종 가입 시점에 링크, 정원, 기존 소속과 24시간 제한을 다시 검사합니다.
 - 인증된 기존 회원이 그룹 없이 초대를 수락하면 같은 Endpoint가 공통 그룹 가입 트랜잭션을 실행하고 성공 시 `NavigationResponse.nextRoute=/creature`를 반환합니다. 같은 초대 그룹에 이미 가입된 재요청은 기존 성공 이동 결과를 반환합니다.
 - 기존 회원의 초대 가입이 정원·소속·24시간 제한 때문에 실패하면 멤버십을 만들지 않고 해당 표준 업무 오류를 반환하며 계정과 현재 세션은 유지합니다.
 - `/api/v1/me`는 비로그인·가입 대기·그룹 없음·그룹 회원·전체 관리자 상태를 구분할 수 있는 `authenticationState`, `onboardingState`, `membership`, `roles`, `restrictionUntil`을 반환합니다.
-- 상태 조합은 `ANONYMOUS + NOT_STARTED`, `SIGNUP_PENDING + SIGNUP_REQUIRED`, `AUTHENTICATED + GROUP_REQUIRED`, `AUTHENTICATED + COMPLETED`만 허용합니다.
+- 상태 조합은 `ANONYMOUS + NOT_STARTED`, `SIGNUP_PENDING + SIGNUP_REQUIRED`, `AUTHENTICATED + GROUP_REQUIRED`, `AUTHENTICATED + COMPLETED`만 허용합니다. 그룹 없는 일반 회원은 `GROUP_REQUIRED`, 그룹 없는 전체 관리자는 `COMPLETED`와 `membership=null`, `roles=[SUPER_ADMIN]`을 반환합니다.
 - 로그아웃 성공은 현재 세션만 무효화하고 구글·네이버 계정의 공급자 세션과 연결 상태는 변경하지 않습니다.
 
 ## 3. PG 취소 결과 처리
@@ -277,7 +277,7 @@ Page 필드 네 개는 Page 목록에서 항상 함께 제공하고 일반 단�
 - 클라이언트는 애플리케이션 메시지를 전송하지 않고 STOMP Heartbeat만 사용합니다. 퀘스트 완료, 장착 변경과 같은 명령은 REST API로 처리합니다.
 - 구독 시 애플리케이션 세션, Origin과 현재 활성 그룹을 검사하고 탈퇴·강퇴·세션 무효화 후에는 구독을 종료합니다.
 - STOMP `CONNECT` Native Header의 `X-CSRF-TOKEN`을 현재 세션의 Token과 비교합니다. 세션·허용 Origin·CSRF 중 하나라도 실패하면 연결을 거부합니다.
-- 인바운드 권한은 기본 거부입니다. 인증된 연결의 `DISCONNECT`와 현재 활성 그룹에 대한 정확한 `SUBSCRIBE /topic/groups/{groupId}/live`만 허용하고 클라이언트의 모든 애플리케이션 `SEND`·`MESSAGE` 및 다른 목적지 구독을 거부합니다.
+- 인바운드 권한은 기본 거부입니다. 세션·Origin·CSRF 검증을 통과한 `CONNECT`, 현재 활성 그룹에 대한 정확한 `SUBSCRIBE /topic/groups/{groupId}/live`, 현재 연결이 생성한 구독 ID의 `UNSUBSCRIBE`, 정상 `DISCONNECT`만 허용합니다. 클라이언트의 모든 애플리케이션 `SEND`·`MESSAGE`와 다른 목적지·그룹 구독은 거부합니다.
 
 | 이벤트 | 책임 |
 |---|---|
@@ -320,7 +320,7 @@ Page 필드 네 개는 Page 목록에서 항상 함께 제공하고 일반 단�
 | `POST` | `/api/v1/groups/{groupId}/memberships` | 로그인·그룹 없음 | 현재 사용자의 공개 그룹 가입 |
 | `GET` | `/api/v1/groups/me` | 그룹 회원 | 현재 그룹 상세 조회 |
 | `GET` | `/api/v1/groups/me/members` | 그룹 회원 | 현재 구성원과 역할·마지막 인증 활동 조회 |
-| `DELETE` | `/api/v1/groups/me/membership` | 일반·부 관리자 | 현재 사용자의 자진 탈퇴 |
+| `DELETE` | `/api/v1/groups/me/membership` | 그룹 회원 | 현재 사용자의 자진 탈퇴. 주 관리자는 유일한 활성 구성원일 때만 허용 |
 | `PATCH` | `/api/v1/groups/me/members/{userId}/role` | 주 관리자 | 부 관리자 부여·회수 |
 | `POST` | `/api/v1/groups/me/members/{userId}/removals` | 주·부 관리자 | 권한별 미접속 강퇴 조건 검사와 제재 이력 생성 |
 | `POST` | `/api/v1/groups/me/primary-transfer` | 주 관리자 | 현재 그룹 주 관리자 이전 |
@@ -806,6 +806,7 @@ Operation ID는 구현 메서드명과 API 테스트 식별자로 사용합니�
 - Standard Webhooks의 `webhook-id`, `webhook-timestamp`, `webhook-signature` Header가 모두 필요합니다. 각 값은 비어 있을 수 없고 최대 500자이며 원문 Body와 함께 PortOne JVM SDK 또는 Standard Webhooks 호환 검증기로 검증합니다.
 - 서명 검증 전 Body 최대 크기는 256 KiB로 제한하고 Content Type은 `application/json`만 허용합니다.
 - 허용 시각 편차와 재전송 검증 후 `paymentId`를 추출하며, 알 수 없는 Event Type은 `202`로 수신 처리하되 업무 상태를 변경하지 않습니다.
+- 알려진 결제·취소 Event는 서명 검증 직후 `data.paymentId`를 `payment_webhook_events.provider_payment_id`에 먼저 저장합니다. 내부 주문을 아직 찾지 못해 `purchase_id=null`이어도 복구 작업이 이 값으로 PortOne을 조회할 수 있어야 합니다.
 
 | Body 필드 | 타입 | 필수 | 제한·처리 |
 |---|---|---|---|
@@ -816,7 +817,7 @@ Operation ID는 구현 메서드명과 API 테스트 식별자로 사용합니�
 | `data.transactionId` | string | 결제 이벤트 필수 | PortOne 결제 시도 ID, 1~255자 |
 | `data.cancellationId` | string | 취소 이벤트 조건부 | 취소 관련 Event에서만 제공, 1~255자 |
 
-서명 검증 실패는 JSON 오류 Body 대신 `400` 빈 Body를 반환합니다. 서명은 유효하지만 알 수 없는 Event이거나 내부 주문이 없으면 재전송을 막기 위해 `202`와 `EmptyResponse`를 반환하고 업무 상태는 변경하지 않습니다. 알려진 결제 Event는 `paymentId`로 PortOne 결제 단건 조회를 수행한 뒤 같은 `202` 응답을 반환합니다.
+서명 검증 실패는 JSON 오류 Body 대신 `400` 빈 Body를 반환합니다. 서명은 유효하지만 알 수 없는 Event이거나 내부 주문이 없으면 재전송을 막기 위해 `202`와 `EmptyResponse`를 반환하고 업무 상태는 변경하지 않습니다. 알려진 결제 Event는 저장한 `provider_payment_id`로 PortOne 결제 단건 조회를 수행한 뒤 같은 `202` 응답을 반환합니다. `payload_summary`에는 `timestamp`, `storeId`, `transactionId`, `cancellationId`만 저장하고 전체 원문 Payload는 저장하지 않습니다.
 
 ## 11. 응답 필드 상세 정의
 
@@ -837,7 +838,7 @@ Operation ID는 구현 메서드명과 API 테스트 식별자로 사용합니�
 | `SignupContextResponse.invitation` | `PublicInvitationResponse` | 예 | 초대 문맥이 있을 때만 제공 |
 | `SignupContextResponse.expiresAt` | datetime | 아니요 | 가입 대기 세션 만료 UTC 시각, OAuth 콜백 완료 후 30분 |
 | `CurrentUserResponse.authenticationState` | enum | 아니요 | `ANONYMOUS`, `SIGNUP_PENDING`, `AUTHENTICATED` |
-| `CurrentUserResponse.onboardingState` | enum | 아니요 | `NOT_STARTED`, `SIGNUP_REQUIRED`, `GROUP_REQUIRED`, `COMPLETED` |
+| `CurrentUserResponse.onboardingState` | enum | 아니요 | `NOT_STARTED`, `SIGNUP_REQUIRED`, `GROUP_REQUIRED`, `COMPLETED`; 그룹 없는 전체 관리자는 `COMPLETED` |
 | `CurrentUserResponse.user` | `UserSummaryResponse` | 예 | 계정 생성 전에는 `null` |
 | `CurrentUserResponse.membership` | `MembershipResponse` | 예 | 활성 그룹이 없으면 `null` |
 | `CurrentUserResponse.roles` | string[] | 아니요 | `SUPER_ADMIN`, `PRIMARY`, `DEPUTY`, `MEMBER` 중 현재 역할 |
@@ -980,7 +981,7 @@ Operation ID는 구현 메서드명과 API 테스트 식별자로 사용합니�
 | `GroupRankResponse.groupName` | string | 아니요 | 현재값 또는 종료 Snapshot, 2~30자 |
 | `GroupRankResponse.score` | int64 | 아니요 | 시즌 그룹 점수, 0 이상 |
 
-Rank 목록의 `meta.currentSubject`는 `rank`, `score`, `subjectId`를 포함하며 대상이 없으면 `null`입니다. Page `meta`에는 `page`, `size`, `totalElements`, `totalPages`를 포함합니다.
+Rank 목록은 `meta.currentSubject` 키를 항상 포함합니다. 객체가 존재하면 `subjectType`, `subjectId`, `score`는 필수이고 `rank`만 참여 기록이 없을 때 `null`입니다. 현재 사용자 또는 현재 그룹이 없으면 객체 전체를 `null`로 반환합니다. 일반 목록·단건 응답에는 이 키를 포함하지 않습니다. Page `meta`에는 `page`, `size`, `totalElements`, `totalPages`를 포함합니다.
 
 ### 11.4. 상점·아바타·결제·환불 응답
 

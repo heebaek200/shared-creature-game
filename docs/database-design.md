@@ -410,6 +410,7 @@ erDiagram
         BIGINT id PK
         BIGINT purchase_id FK
         VARCHAR provider_event_id UK
+        VARCHAR provider_payment_id
         VARCHAR processing_status
         DATETIME processing_started_at
         INT attempt_count
@@ -1316,11 +1317,12 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 | `id` | BIGINT | PK, AUTO_INCREMENT |
 | `provider` | VARCHAR(30) | 현재 `PORTONE`, Adapter 확장용 공급자 코드 |
 | `provider_event_id` | VARCHAR(255) | Standard Webhooks의 Webhook ID |
+| `provider_payment_id` | VARCHAR(100) | 서명 검증된 결제·취소 이벤트의 PortOne `paymentId`, 알 수 없는 이벤트나 필드 누락이면 NULL |
 | `purchase_id` | BIGINT | FK → `purchases.id`, 식별 후 설정 |
 | `payment_transaction_id` | BIGINT | FK → `payment_transactions.id`, 선택 |
 | `event_type` | VARCHAR(100) | 공급자 이벤트 유형 |
 | `payload_hash` | CHAR(64) | 수신 Payload SHA-256 Hash |
-| `payload_summary` | JSON | 비밀·개인정보를 제거한 최소 필드 |
+| `payload_summary` | JSON | 비밀·개인정보를 제거한 `timestamp`, `storeId`, `transactionId`, `cancellationId` 최소 필드 |
 | `processing_status` | VARCHAR(30) | `PENDING`, `PROCESSED`, `IGNORED`, `FAILED` |
 | `failure_detail` | VARCHAR(1000) | 처리 실패 원인 |
 | `received_at` | DATETIME(6) | 수신 시각 |
@@ -1330,7 +1332,7 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 | `created_at` | DATETIME(6) | 기록 시각 |
 | `updated_at` | DATETIME(6) | 처리 상태·시도 변경 시각 |
 
-`(provider, provider_event_id)` UNIQUE를 적용합니다. `(processing_status, processing_started_at)` 인덱스로 미처리·실패 이벤트를 조회합니다. `PROCESSED`, `IGNORED` 재수신과 5분 미만의 `PENDING`은 다시 실행하지 않습니다. 5분 이상 지난 `PENDING`과 `FAILED`는 `PAYMENT_RECONCILIATION`이 처리 시작 시각·시도 횟수를 원자적으로 갱신해 선점하고 PortOne 최신 상태 조회 후 같은 결제 정합성 Service로 복구합니다. 포트원 V2 Webhook `2024-04-25`의 Signature를 원문 Body로 검증하되 전체 원문 Payload와 카드번호·인증정보는 저장하지 않습니다.
+`(provider, provider_event_id)` UNIQUE와 `(provider, provider_payment_id)` 인덱스를 적용합니다. 알려진 결제·취소 이벤트는 서명 검증 직후 내부 주문 식별보다 먼저 `provider_payment_id`를 저장하므로 `purchase_id`가 `NULL`인 실패도 복구할 수 있습니다. `(processing_status, processing_started_at)` 인덱스로 미처리·실패 이벤트를 조회합니다. `PROCESSED`, `IGNORED` 재수신과 5분 미만의 `PENDING`은 다시 실행하지 않습니다. 5분 이상 지난 `PENDING`과 `FAILED`는 `PAYMENT_RECONCILIATION`이 처리 시작 시각·시도 횟수를 원자적으로 갱신해 선점하고 PortOne 최신 상태 조회 후 같은 결제 정합성 Service로 복구합니다. 포트원 V2 Webhook `2024-04-25`의 Signature를 원문 Body로 검증하되 전체 원문 Payload와 카드번호·인증정보는 저장하지 않습니다.
 
 ## 14. 운영 공통 상세 컬럼과 보존 정책
 

@@ -479,6 +479,7 @@ classDiagram
     class PaymentWebhookEvent {
         <<Entity>>
         +webhookId: String
+        +providerPaymentId: String
         +status: WebhookStatus
     }
     class PurchaseRepository {

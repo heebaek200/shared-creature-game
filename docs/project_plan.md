@@ -296,13 +296,17 @@
 128. **미접속 강퇴 안전 여유:** 활동 시각의 최대 10분 영속화 지연을 고려해 저장값 기준 72시간 10분 경과 후 강퇴를 허용한다.
 129. **주간 활동 귀속:** 기간 집계는 완료 시점과 같은 멤버십·그룹 시즌에서 발생한 활동만 사용하고 이전 그룹 활동을 새 그룹 보상으로 이전하지 않는다.
 130. **OAuth 시작 세션 귀속:** OAuth 시도에 시작 익명 세션 ID의 Hash를 보관하고 Callback 세션이 다르면 `OAUTH_SESSION_MISMATCH`로 중단한다. 성공 후에는 인증 세션 ID를 교체한다.
-131. **WebSocket 인바운드 기본 거부:** STOMP `CONNECT`는 세션·Origin·CSRF를 확인하고 현재 활성 그룹 구독과 정상 종료만 허용한다. 클라이언트 애플리케이션 `SEND`·`MESSAGE`는 모두 거부한다.
+131. **WebSocket 인바운드 기본 거부:** 세션·Origin·CSRF를 확인한 STOMP `CONNECT`, 현재 활성 그룹의 `SUBSCRIBE`, 현재 연결 구독의 `UNSUBSCRIBE`, 정상 `DISCONNECT`만 허용한다. 클라이언트 애플리케이션 `SEND`·`MESSAGE`는 모두 거부한다.
 132. **외부 요청 호출량:** OAuth 시작은 세션당 10분 5회·IP당 10분 30회, Gemini는 사용자당 1분 5회·KST 하루 30회·전체 동시 2건으로 제한한다. 단일 인스턴스 메모리 제한은 재시작 시 초기화를 허용한다.
 133. **사진 처리 자원:** 사진은 사용자·배정당 5회, 사용자당 1분 5회로 제한하고 EXIF는 최대 1 MiB·동시 4건·5초 Timeout으로 메타데이터만 읽는다.
 134. **통합 HTTPS 검증:** 평상시는 localhost HTTP와 `local` Profile을 사용한다. 모바일 OAuth·결제 Redirect·Webhook·실기기 사진 통합 검증 때만 제품을 고정하지 않은 임시 HTTPS 터널과 `integration` Profile을 사용하며 운영 HTTPS 구축은 범위에서 제외한다.
 135. **포트원 취소 매핑:** `SUCCEEDED → COMPLETED`, `FAILED → FAILED`, `REQUESTED → CANCEL_PENDING`으로 변환하고 `REQUESTED`는 Webhook 또는 재조회 전까지 완료로 간주하지 않는다.
-136. **최초 전체 관리자:** 공개 생성 API나 역할 입력 필드를 두지 않고 환경변수의 공급자·검증 이메일과 정확히 일치하는 신규 계정만 `SUPER_ADMIN`으로 생성한다.
+136. **최초 전체 관리자:** 공개 생성 API나 역할 입력 필드를 두지 않고 활성 전체 관리자가 없을 때 환경변수의 공급자·불변 공급자 사용자 ID와 정확히 일치하는 신규 계정만 `SUPER_ADMIN`으로 생성한다. 기존 일반 회원은 자동 승격하지 않는다.
 137. **자원 인가 응답:** 다른 사용자의 구매·보유 아이템·환불 개별 자원은 `404`로 존재를 숨기고, 존재하는 그룹·전체 관리자 기능의 역할 부족은 `403`으로 응답한다.
+138. **경로 접근 등급:** Route Guard는 사용자 상태와 `PUBLIC`, `AUTHENTICATED`, `GROUP_MEMBER`, `GROUP_ADMIN`, `SUPER_ADMIN` 경로 등급을 함께 평가한다. 그룹 없는 일반 회원도 로그인 전용 화면은 사용할 수 있고 그룹 없는 전체 관리자는 `COMPLETED` 상태로 관리자 화면에 접근한다.
+139. **Webhook 복구 식별자:** 서명 검증된 결제·취소 이벤트의 `paymentId`를 별도 컬럼에 먼저 보존해 내부 주문 식별 전에 실패해도 복구할 수 있게 한다.
+140. **랭킹 현재 대상:** 랭킹 응답은 `meta.currentSubject` 키를 항상 제공하고 대상이 없으면 객체 전체를 `null`로 반환한다.
+141. **로컬 DB 전환:** 스피어 실행에서 H2 기반 `local` 설정을 MySQL·`ddl-auto=update`로 바꾸고 별도 MySQL 테스트 DB는 `create-drop`으로 사용한다.
 
 ### 구현 단계에서 확인할 사항
 

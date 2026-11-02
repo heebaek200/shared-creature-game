@@ -71,9 +71,9 @@
 - 가입 대기 세션의 유효시간은 OAuth 콜백 완료 시점부터 30분이며 조회나 입력 활동으로 연장하지 않습니다.
 - 30분이 지나면 검증된 공급자 정보와 초대 문맥을 세션에서 제거하고 계정을 생성하지 않습니다. 사용자는 로그인 페이지에서 소셜 인증을 다시 시작해야 합니다.
 - 신규 사용자의 `users`, `social_accounts`, `user_profiles` 행은 `/signup`에서 닉네임을 확정할 때 생성합니다.
-- 현재 사용자 상태는 비로그인 `ANONYMOUS + NOT_STARTED`, OAuth 완료·계정 생성 전 `SIGNUP_PENDING + SIGNUP_REQUIRED`, 계정 생성·그룹 없음 `AUTHENTICATED + GROUP_REQUIRED`, 온보딩 완료 `AUTHENTICATED + COMPLETED` 조합만 사용합니다.
-- 공개 관리자 생성 API는 제공하지 않습니다. `INITIAL_SUPER_ADMIN_PROVIDER`, `INITIAL_SUPER_ADMIN_EMAIL`과 신규 가입 계정의 공급자·검증된 이메일이 모두 정확히 일치할 때만 최초 전체 관리자 역할을 부여합니다.
-- 이미 전체 관리자가 존재하면 환경변수는 기존 계정의 역할을 자동 변경하지 않습니다. 전체 관리자가 없는데 두 환경변수가 누락되거나 한쪽만 설정되면 애플리케이션을 준비 완료로 보지 않고 설정 오류를 표시합니다.
+- 현재 사용자 상태는 비로그인 `ANONYMOUS + NOT_STARTED`, OAuth 완료·계정 생성 전 `SIGNUP_PENDING + SIGNUP_REQUIRED`, 계정 생성·그룹 없음 `AUTHENTICATED + GROUP_REQUIRED`, 온보딩 완료 `AUTHENTICATED + COMPLETED` 조합만 사용합니다. 그룹 없는 전체 관리자는 예외적으로 `AUTHENTICATED + COMPLETED`, `membership=null`, `roles=[SUPER_ADMIN]`을 사용합니다.
+- 공개 관리자 생성 API는 제공하지 않습니다. 활성 전체 관리자가 없고 `INITIAL_SUPER_ADMIN_PROVIDER`, `INITIAL_SUPER_ADMIN_PROVIDER_USER_ID`가 신규 가입 계정의 공급자·불변 사용자 ID와 모두 정확히 일치할 때만 최초 전체 관리자 역할을 부여합니다.
+- 이미 활성 전체 관리자가 존재하면 환경변수는 기존 계정의 역할을 자동 변경하지 않습니다. 전체 관리자가 없는데 두 환경변수가 누락되거나 한쪽만 설정되면 애플리케이션을 준비 완료로 보지 않고 설정 오류를 표시합니다. 환경변수와 일치하는 소셜 계정이 이미 일반 사용자로 존재해도 자동 승격하지 않고 설정 오류로 처리합니다.
 
 그룹 없는 사용자는 그룹을 생성할 수 있고 생성과 동시에 주 관리자가 됩니다. 주·부 관리자의 상세 권한은 아래 역할 규칙과 화면·API 권한표를 따릅니다.
 
@@ -349,7 +349,7 @@ stateDiagram-v2
 - 여러 세션으로 접속한 같은 사용자는 아바타 한 명으로 표시하고 마지막 연결이 종료된 뒤 15초 유예시간이 지나야 퇴장 처리합니다.
 - 영구 접속 이력 테이블은 만들지 않으며 MVP는 단일 애플리케이션 인스턴스의 메모리 Presence를 사용합니다. 다중 인스턴스 확장 시 Redis Presence와 Message Broker를 도입합니다.
 - 위치정보, 이메일과 소셜 공급자는 노출하지 않고 같은 그룹의 인증된 사용자만 Presence와 아바타 정보를 조회할 수 있습니다.
-- STOMP `CONNECT`는 기존 애플리케이션 세션, 허용 Origin과 REST에서 발급한 CSRF Token을 모두 검증합니다. `/topic/groups/{groupId}/live`의 현재 활성 그룹 `SUBSCRIBE`와 정상 `DISCONNECT`만 허용하며 클라이언트의 모든 애플리케이션 `SEND`·`MESSAGE` 목적지는 기본 거부합니다.
+- STOMP 인바운드는 기본 거부합니다. 기존 애플리케이션 세션, 허용 Origin과 REST에서 발급한 CSRF Token을 검증한 `CONNECT`, `/topic/groups/{groupId}/live`의 현재 활성 그룹 `SUBSCRIBE`, 현재 연결이 생성한 구독 ID의 `UNSUBSCRIBE`, 정상 `DISCONNECT`만 허용하며 클라이언트의 모든 애플리케이션 `SEND`·`MESSAGE` 목적지는 거부합니다.
 - 채팅, 사용자의 직접 이동, 충돌 물리와 자유 Emote는 MVP 범위에서 제외합니다.
 
 ## 7. 동시성 제어
@@ -419,9 +419,10 @@ stateDiagram-v2
 ### 7.7. Webhook 처리 복구
 
 - 서명 검증을 통과한 Webhook은 처리 시작 시각과 시도 횟수를 기록합니다.
+- 알려진 결제·취소 이벤트는 서명 검증 직후 내부 주문 식별보다 먼저 공급자 `paymentId`를 `payment_webhook_events.provider_payment_id`에 보존합니다. 내부 주문을 아직 찾지 못해 `purchase_id`가 `NULL`이어도 이 값으로 복구할 수 있어야 합니다.
 - 같은 Webhook ID의 `PROCESSED`, `IGNORED` 재수신은 상태를 바꾸지 않고 `202`를 반환합니다. 처리 시작 후 5분이 지나지 않은 `PENDING`도 중복 실행하지 않고 `202`를 반환합니다.
 - 처리 시작 후 5분이 지난 `PENDING`과 `FAILED`는 5분 주기의 `PAYMENT_RECONCILIATION`이 복구 대상으로 선점합니다.
-- 복구는 저장한 Payload를 다시 신뢰해 지급하지 않고 `paymentId`로 PortOne 최신 결제를 조회한 뒤 기존 `PaymentReconciliationService`를 호출합니다.
+- 복구는 저장한 Payload를 다시 신뢰해 지급하지 않고 저장된 `provider_payment_id`로 PortOne 최신 결제를 조회한 뒤 기존 `PaymentReconciliationService`를 호출합니다.
 - 결제·아이템 지급 UNIQUE와 상태 조건을 그대로 사용해 Webhook 재수신·복구와 브라우저 검증이 경합해도 한 번만 확정합니다.
 
 ## 8. 관리자 운영

@@ -203,14 +203,15 @@ export const groupFullError = {
 - [ ] DB UNIQUE·FK·잠금·멱등성 규칙을 지킵니다.
 - [ ] 정상, 입력 오류, 권한 오류, 대표 업무 오류 테스트가 있습니다.
 - [ ] ID로 자원을 조회할 때 현재 사용자 소유권을 Service에서 검사하고, 다른 사용자의 구매·아이템·환불은 `404`로 숨깁니다.
-- [ ] OAuth Callback 세션 귀속, STOMP 인바운드 기본 거부와 적용되는 호출량·동시 처리 제한을 테스트했습니다.
+- [ ] OAuth Callback 세션 귀속, STOMP `CONNECT`·`SUBSCRIBE`·`UNSUBSCRIBE`·`DISCONNECT` 허용 목록과 적용되는 호출량·동시 처리 제한을 테스트했습니다.
+- [ ] Webhook은 서명 검증 직후 `provider_payment_id`를 저장하고 `purchase_id=null`인 실패도 최신 결제 조회로 복구할 수 있습니다.
 
 ### 프론트엔드
 
-- [ ] 화면 설계서의 Route, 입력, 버튼, 빈 상태와 성공 이동을 구현했습니다.
+- [ ] 화면 설계서의 접근 등급별 Route Guard, 입력, 버튼, 빈 상태와 성공 이동을 구현했습니다. 그룹 없음만으로 로그인 전용 화면이나 전체 관리자 화면을 차단하지 않습니다.
 - [ ] Operation ID와 같은 `api` 함수를 통해서만 서버를 호출합니다.
 - [ ] `credentials`, CSRF, JSON 또는 Multipart 형식을 지킵니다.
-- [ ] STOMP 연결 시 메모리에 있는 `X-CSRF-TOKEN`을 CONNECT Native Header로 전달하고 애플리케이션 메시지를 서버로 보내지 않습니다.
+- [ ] STOMP 연결 시 메모리에 있는 `X-CSRF-TOKEN`을 CONNECT Native Header로 전달하고 화면 정리 때 현재 구독을 `UNSUBSCRIBE`하며 애플리케이션 메시지를 서버로 보내지 않습니다.
 - [ ] `fieldErrors`, `401`, `403`, `409`, 외부 장애와 알 수 없는 오류를 처리합니다.
 - [ ] 정상·빈 목록·대표 오류 목 데이터로 화면을 확인했습니다.
 - [ ] 모바일 크기, 라이트·다크 모드와 키보드 Focus를 확인했습니다.

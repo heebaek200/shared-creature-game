@@ -641,6 +641,21 @@
 - 영향 문서: requirements.md, business-rules.md, api-design.md, convention.md, implementation-guide.md, project_plan.md, common-foundation.yaml
 - 대체한 결정: 모든 Profile의 세션 쿠키에 `Secure`를 일괄 적용하는 규칙. localhost 전용 `local`만 예외로 하고 `integration`·`prod`에는 계속 필수 적용합니다.
 
+## 2026-11-03 Route·실시간·복구 식별자 계약 보완
+
+- 결정: Route Guard는 사용자 상태와 경로 접근 등급을 함께 평가해 그룹 없는 일반 회원의 로그인 전용 화면과 그룹 없는 전체 관리자의 관리자 화면을 허용합니다. STOMP는 검증된 `CONNECT`, 현재 그룹 `SUBSCRIBE`, 현재 연결 구독의 `UNSUBSCRIBE`, 정상 `DISCONNECT`만 허용합니다. 서명 검증된 결제·취소 Webhook의 `paymentId`는 내부 주문 식별보다 먼저 별도 컬럼에 보존합니다.
+- 상태: confirmed
+- 근거: 그룹 소속 여부가 상점·결제·전체 관리자 권한을 잘못 차단하는 문제, 기본 거부 정책이 정상 구독 해제를 막는 문제와 `purchase_id` 식별 전 Webhook 실패를 복구하지 못하는 문제를 방지하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, screen-design.md, convention.md, class-diagram.md, implementation-guide.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-03 최초 관리자·탈퇴·랭킹·로컬 DB 계약 보완
+
+- 결정: 최초 전체 관리자는 이메일이 아니라 환경변수의 공급자·불변 공급자 사용자 ID와 일치하는 신규 계정에만 부여하며 기존 일반 회원은 자동 승격하지 않습니다. 자기 탈퇴 Endpoint는 모든 그룹 회원에게 열되 주 관리자는 유일한 활성 구성원일 때만 성공합니다. 랭킹 응답은 `meta.currentSubject` 키를 항상 제공하고 대상이 없으면 객체 전체를 `null`로 반환합니다. 스피어 실행에서는 H2 기반 `local` 설정을 MySQL `ddl-auto=update`, 별도 MySQL `test` DB를 `create-drop`으로 전환합니다.
+- 상태: confirmed
+- 근거: Naver 이메일에는 별도 검증 상태가 없으므로 관리자 신원은 불변 공급자 식별자를 사용하고, 권한표·응답 Null 계약·실행 DB를 확정된 업무 규칙과 맞추기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, screen-design.md, convention.md, implementation-guide.md, project_plan.md, common-foundation.yaml
+- 대체한 결정: `INITIAL_SUPER_ADMIN_EMAIL`과 검증 이메일로 최초 관리자를 식별하는 규칙.
+
 ## 2026-11-02 Java 기준 버전 확정
 
 - 결정: 백엔드의 로컬 개발, Gradle Toolchain과 CI 실행 환경은 Java 21 LTS로 통일합니다. 기준 Package는 `com.team.sharedcreature`를 사용하며 현재 초기 생성 소스와 일치합니다.
