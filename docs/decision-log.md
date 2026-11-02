@@ -500,3 +500,236 @@
 - 상태: confirmed
 - 근거: 장착·환불 경합과 PG 중복 요청을 재현 가능하게 관리하면서 카드정보·인증정보와 불필요한 외부 Payload 보관을 방지하기 위함입니다.
 - 영향 문서: database-design.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-02 미접속 강퇴의 마지막 인증 활동 기준 확정
+
+- 결정: 일반 회원의 72시간 미접속 강퇴는 마지막 로그인 시각이 아니라 마지막 인증 활동 시각 `last_active_at`을 기준으로 판정합니다. 로그인 성공 시 `last_login_at`과 `last_active_at`을 함께 기록하고, 이후 성공한 인증 API 요청으로 `last_active_at`을 갱신합니다. 요청이 잦을 때의 DB 쓰기를 줄이기 위해 활동 시각은 최대 10분에 한 번 영속화하며 강퇴 처리 시 최신 값을 다시 검사합니다.
+- 상태: confirmed
+- 근거: 7일 유지 세션에서 재로그인 없이 계속 활동하는 사용자가 `last_login_at`만으로 72시간 미접속자로 잘못 판정되는 것을 방지하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, screen-design.md, class-diagram.md, project_plan.md, common-foundation.yaml
+- 대체한 결정: `last_login_at`을 72시간 미접속 강퇴의 직접 기준으로 사용하는 규칙
+
+## 2026-11-02 OAuth 신규 회원 계정 생성 시점 확정
+
+- 결정: OAuth 콜백은 기존 회원의 로그인만 완료하며 신규 사용자는 계정을 생성하지 않고 검증된 소셜 정보와 초대 문맥을 서버의 가입 대기 세션에 저장합니다. 신규 계정은 사용자가 `/signup`에서 닉네임을 확정할 때 생성합니다. 초대 조건이 유효하면 계정과 그룹 멤버십을 같은 트랜잭션으로 만들고, 조건이 실패하면 계정만 생성한 뒤 실패 이유와 그룹 선택 경로를 반환합니다.
+- 상태: confirmed
+- 근거: Full CSR 회원가입 화면에서 닉네임을 확정하기 전에 불완전한 계정을 생성하지 않고, 초대 링크 재발급·정원 경쟁은 실제 가입 제출 시점에 다시 검사하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, screen-design.md, class-diagram.md, project_plan.md, common-foundation.yaml
+- 대체한 결정: 신규 사용자의 OAuth 콜백 처리 중 계정을 생성하는 흐름
+
+## 2026-11-02 외부 효과 API의 공통 멱등 레코드 확정
+
+- 결정: 결제 시작, 환불 요청, 환불 승인과 결과 재처리는 `api_idempotency_records`에서 사용자·Operation·멱등 키·요청 Hash·처리 상태·최초 결과를 관리합니다. 같은 Key와 같은 Hash는 최초 결과를 반환하고 다른 Hash는 거절하며, 처리 중인 동일 요청은 중복 실행하지 않습니다. 멱등 레코드는 연결된 결제·환불 이력과 함께 프로젝트 범위에서 자동 삭제하지 않습니다.
+- 상태: confirmed
+- 근거: 애플리케이션 재시작과 네트워크 재전송 후에도 클라이언트 명령의 중복 주문·환불·PG 취소를 DB에서 일관되게 차단하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, class-diagram.md, project_plan.md, common-foundation.yaml
+- 대체한 결정: 알림 기능을 제외한 39개 업무 테이블 구성. 알림은 계속 보류하고 공통 멱등 레코드를 추가해 40개로 조정합니다.
+
+## 2026-11-02 시즌 중 생성 그룹의 그룹별 72시간 부화 확정
+
+- 결정: 그룹은 시즌 중에도 생성할 수 있고 생성 즉시 현재 시즌의 알 상태 공동 크리처와 0점 시즌 점수로 참가합니다. 기존 그룹은 시즌 시작 시각, 시즌 중 생성된 그룹은 그룹 생성 시각부터 정확히 `3 × 24시간` 동안 알 상태이며 주·부 관리자가 종을 선택할 수 있습니다. 기한까지 선택하지 않으면 무작위 부화합니다. 시즌 종료가 부화 기한보다 먼저 오면 알 상태를 최종 상태로 보존하고 종료 후 부화시키지 않습니다.
+- 상태: confirmed
+- 근거: 별도 중간 참가 기능이나 화면을 추가하지 않고 기존 그룹 생성 트랜잭션과 그룹별 `selection_deadline_at`, 부화 Scheduler를 재사용하면서 시즌 중 언제든 그룹을 시작할 수 있게 하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, screen-design.md, class-diagram.md, project_plan.md, common-foundation.yaml
+- 대체한 결정: 모든 그룹의 알 기간과 부화 기한을 전역 시즌 시작 후 72시간으로 고정하는 규칙
+
+## 2026-11-02 서비스 공개와 첫 시즌 동시 시작 확정
+
+- 결정: 서비스의 실제 공개 시각과 첫 시즌 시작 시각을 `Asia/Seoul` 기준 같은 월요일 0시로 맞춥니다. 운영 배포와 비공개 점검은 이전에 할 수 있지만 공개 사용자를 위한 프리시즌 화면·API·게임 상태는 구현하지 않습니다.
+- 상태: confirmed
+- 근거: 첫 시즌 전 공백 상태를 위한 별도 기능을 추가하지 않으면서 공개 사용자가 항상 활성 시즌 안에서 온보딩과 그룹 활동을 시작하도록 하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, project_plan.md, api-design.md, screen-design.md, common-foundation.yaml
+- 대체한 결정: 서비스 개시 후 처음 도래하는 월요일 0시에 첫 시즌을 시작하는 규칙
+
+## 2026-11-02 활성 크리처 종 목록 API 추가 확정
+
+- 결정: 주·부 관리자의 기존 크리처 선택 탭에서 사용할 `GET /api/v1/creature-species`를 추가합니다. 활성 종의 ID, 불변 코드, 이름, 이미지 리소스 Key와 표시 순서만 반환하며 별도 화면은 만들지 않습니다.
+- 상태: confirmed
+- 근거: 클라이언트가 DB 식별자와 활성 상태를 하드코딩하지 않고 서버가 허용한 종만 선택 요청에 사용할 수 있게 하기 위함입니다.
+- 영향 문서: api-design.md, screen-design.md, class-diagram.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-02 시즌 종료 Scheduler와 Snapshot 확정
+
+- 결정: 시즌 종료 시각에 `SEASON_CLOSE` Scheduler가 시즌을 `CLOSING`으로 선점하고 크리처 최종 상태를 보관하며 개인·그룹 최종 랭킹 Snapshot을 멱등 생성한 뒤 `ENDED`로 확정합니다. 같은 시각의 `SEASON_START`는 이전 시즌 종료가 완료된 뒤 실행합니다.
+- 상태: confirmed
+- 근거: 중복 실행이나 프로세스 중단에도 종료 랭킹과 크리처 상태가 한 번만 보존되고 새 시즌 초기화가 이전 시즌 결과를 앞지르지 않게 하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, class-diagram.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-02 부 관리자 강퇴의 72시간 조건 통일
+
+- 결정: 부 관리자도 일반 회원의 한 종류로 보고, 주 관리자가 부 관리자를 강퇴할 때도 `last_active_at` 기준 72시간 미활동 조건을 적용합니다. 별도 강퇴 사유나 처리 흐름을 만들지 않고 기존 미접속 강퇴와 `INACTIVE`, `REMOVED_INACTIVE`, `REMOVE_INACTIVE` 기록을 재사용합니다. 주 관리자의 부 관리자 권한 회수에는 활동 조건을 적용하지 않습니다.
+- 상태: confirmed
+- 근거: 역할은 관리 권한의 차이일 뿐 그룹 강퇴 기준을 다르게 만드는 회원 유형이 아니며, 불필요한 상태와 제재 유형을 추가하지 않기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, screen-design.md, class-diagram.md, project_plan.md, common-foundation.yaml
+- 대체한 결정: 주 관리자가 부 관리자를 활동 시각과 관계없이 강퇴할 수 있는 예외
+
+## 2026-11-02 Gemini 그룹 소개 교정 최소 기능 확정
+
+- 결정: LLM 연동은 새 그룹 소개 최대 500자의 맞춤법·띄어쓰기·어색한 표현을 Gemini로 교정하는 단일 기능으로 제한합니다. 사용자가 버튼을 눌렀을 때만 서버가 호출하고, 구조화된 `correctedText` 제안을 사용자가 선택적으로 적용합니다. 자동 저장·자동 게시·대화·요약·판정 기능은 만들지 않습니다.
+- 상태: confirmed
+- 근거: 서버 간 LLM 요청을 시연하면서 기존 그룹 생성 화면과 `groups.description`을 재사용해 프로젝트 범위 증가를 최소화하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, screen-design.md, class-diagram.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-02 주 관리자 이전 후 기존 관리자 역할 확정
+
+- 결정: 주 관리자 권한을 다른 활성 회원에게 이전하면 대상 회원은 `PRIMARY`, 기존 주 관리자는 `MEMBER`가 됩니다. 기존 주 관리자가 이전에 부 관리자였더라도 별도 부 관리자 권한을 유지하지 않습니다.
+- 상태: confirmed
+- 근거: 그룹당 주 관리자 한 명 제약을 유지하고 이전 후 기존 관리자의 권한을 예측 가능하게 제거하면서 일반 회원으로 잔류하거나 자진 탈퇴할 수 있게 하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, screen-design.md, class-diagram.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-02 익명 사용자의 온보딩 상태 확정
+
+- 결정: `/api/v1/me`의 비로그인 상태를 `authenticationState=ANONYMOUS`, `onboardingState=NOT_STARTED`로 반환합니다. 가입 대기, 그룹 선택 필요와 완료 상태도 허용 조합을 고정하고 바닐라 JS Route Guard가 조합별 경로를 직접 매핑합니다.
+- 상태: confirmed
+- 근거: 가입 대기 세션이 없는 익명 사용자를 `/signup`으로 잘못 보내지 않고 nullable 상태 분기를 피하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, api-design.md, screen-design.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-02 운영 경고를 현재 미해결 상태로 제한
+
+- 결정: 관리자 운영 경고는 별도 경고 이력 테이블 없이 원본 업무 상태에서 현재 미해결 항목만 조회합니다. API에서 `RESOLVED` 조회 Filter와 응답 `status`를 제거하고 원본이 정상화되면 목록에서 제외합니다. 사진 삭제 실패도 경고 원본에 포함합니다.
+- 상태: confirmed
+- 근거: 알림·경고 이력 기능을 추가하지 않고 현재 운영자가 조치해야 할 이상 상태만 단순하게 제공하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, screen-design.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-02 PG 거래 식별자 저장 기준 확정
+
+- 결정: 내부 주문번호이자 포트원 `paymentId`는 `purchases.order_number`에만 저장합니다. `payment_transactions.provider_transaction_id`에는 승인 행이면 포트원 거래 객체 ID, 취소 행이면 `cancellation.id`를 저장하며 `(provider, provider_transaction_id)` 복합 UNIQUE를 적용합니다.
+- 상태: confirmed
+- 근거: 승인과 취소의 서로 다른 공급자 식별자를 혼용하지 않고 이후 다른 PG Adapter에서도 공급자별 거래 중복을 안전하게 차단하기 위함입니다.
+- 영향 문서: business-rules.md, database-design.md, api-design.md, class-diagram.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-02 멤버십 변경의 공통 잠금 순서 확정
+
+- 결정: 가입·탈퇴·강퇴·역할 변경·주 관리자 이전은 영향받는 사용자 행을 사용자 ID 오름차순으로 잠근 뒤 그룹, 관련 멤버십 ID 오름차순, 가입 제한 순으로 잠급니다. 종료 흐름은 멤버십 종료, 인원 감소와 가입 제한 생성을 같은 트랜잭션에서 처리합니다.
+- 상태: confirmed
+- 근거: 가입과 종료 또는 역할 이전이 동시에 실행될 때 제한 생성 전 재가입과 서로 다른 잠금 순서로 인한 교착을 방지하기 위함입니다.
+- 영향 문서: business-rules.md, database-design.md, api-design.md, class-diagram.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-02 그룹 없는 기존 회원의 초대 즉시 가입 확정
+
+- 결정: 이미 가입된 계정이 그룹 없이 초대 링크를 수락하면 링크·정원·현재 소속·24시간 제한을 재검사하고 공통 가입 트랜잭션으로 초대 대상 그룹에 즉시 가입합니다. 성공하면 크리처 홈으로 이동하고 실패하면 그룹 없는 상태와 세션을 유지한 채 실패 이유를 표시합니다.
+- 상태: confirmed
+- 근거: 초대 수락 의도를 유지하면서 기존 회원에게 다시 일반 그룹 선택을 요구하지 않고 신규·기존 회원 모두 같은 가입 정합성 규칙을 사용하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, api-design.md, screen-design.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-02 회원가입 대기 세션 유효시간 확정
+
+- 결정: 신규 사용자의 가입 대기 세션은 OAuth 콜백 완료 시점부터 고정 30분 동안 유효하며 조회나 입력 활동으로 연장하지 않습니다. 만료되면 검증된 공급자 정보와 초대 문맥을 제거하고 계정을 생성하지 않으며, 로그인 페이지에서 소셜 인증을 다시 시작하게 합니다.
+- 상태: confirmed
+- 근거: 오래된 소셜 인증 결과와 초대 문맥이 뒤늦게 회원가입에 사용되는 것을 막고 임시 개인정보의 보관 시간을 제한하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, screen-design.md, design/wireframes/signup.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-03 OAuth·WebSocket 보안 경계 확정
+
+- 결정: OAuth 로그인 시도를 시작 익명 세션 Hash에 귀속하고 다른 세션의 Callback을 거부합니다. STOMP 연결은 세션·허용 Origin·CSRF를 확인하며 현재 활성 그룹 구독과 정상 종료 외의 클라이언트 `SEND`·`MESSAGE`를 기본 거부합니다.
+- 상태: confirmed
+- 근거: 로그인 CSRF와 조작된 WebSocket 클라이언트가 다른 사용자 세션이나 그룹 이벤트 경계에 접근하는 문제를 서버에서 차단하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, convention.md, class-diagram.md, implementation-guide.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-03 호출량·사진 처리 자원 한도 확정
+
+- 결정: OAuth는 세션당 10분 5회·IP당 10분 30회, Gemini는 사용자당 1분 5회·KST 하루 30회·전체 동시 2건으로 제한합니다. 사진은 사용자·배정당 5회·사용자당 1분 5회, EXIF 1 MiB·동시 4건·5초 Timeout으로 제한하고 메타데이터만 읽습니다. 단일 인스턴스 메모리 제한은 재시작 시 초기화를 허용합니다.
+- 상태: confirmed
+- 근거: 2주 단일 인스턴스 MVP에 별도 분산 인프라를 추가하지 않으면서 외부 비용과 비정상 반복 요청·파일 파싱의 자원 고갈을 제한하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, convention.md, class-diagram.md, implementation-guide.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-03 통합 HTTPS·관리자 초기화·외부 상태 매핑 확정
+
+- 결정: 평상시는 localhost HTTP를 사용하고 통합 검증 때만 임시 HTTPS 터널과 `integration` Profile을 사용합니다. 최초 전체 관리자는 환경변수의 공급자·검증 이메일과 일치하는 신규 계정에만 부여합니다. 포트원 취소 상태는 `SUCCEEDED`, `FAILED`, `REQUESTED`를 각각 완료·실패·대기로 변환하며, 타인 소유 개별 자원은 `404`, 관리 기능 역할 부족은 `403`으로 응답합니다.
+- 상태: confirmed
+- 근거: HTTPS 서버 구축 학습을 프로젝트 범위에 추가하지 않고 모바일·OAuth·Webhook을 실제 검증하며, 관리자 권한 주입·비동기 취소 오판·자원 존재 노출을 방지하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, api-design.md, convention.md, implementation-guide.md, project_plan.md, common-foundation.yaml
+- 대체한 결정: 모든 Profile의 세션 쿠키에 `Secure`를 일괄 적용하는 규칙. localhost 전용 `local`만 예외로 하고 `integration`·`prod`에는 계속 필수 적용합니다.
+
+## 2026-11-03 Route·실시간·복구 식별자 계약 보완
+
+- 결정: Route Guard는 사용자 상태와 경로 접근 등급을 함께 평가해 그룹 없는 일반 회원의 로그인 전용 화면과 그룹 없는 전체 관리자의 관리자 화면을 허용합니다. STOMP는 검증된 `CONNECT`, 현재 그룹 `SUBSCRIBE`, 현재 연결 구독의 `UNSUBSCRIBE`, 정상 `DISCONNECT`만 허용합니다. 서명 검증된 결제·취소 Webhook의 `paymentId`는 내부 주문 식별보다 먼저 별도 컬럼에 보존합니다.
+- 상태: confirmed
+- 근거: 그룹 소속 여부가 상점·결제·전체 관리자 권한을 잘못 차단하는 문제, 기본 거부 정책이 정상 구독 해제를 막는 문제와 `purchase_id` 식별 전 Webhook 실패를 복구하지 못하는 문제를 방지하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, screen-design.md, convention.md, class-diagram.md, implementation-guide.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-03 최초 관리자·탈퇴·랭킹·로컬 DB 계약 보완
+
+- 결정: 최초 전체 관리자는 이메일이 아니라 환경변수의 공급자·불변 공급자 사용자 ID와 일치하는 신규 계정에만 부여하며 기존 일반 회원은 자동 승격하지 않습니다. 자기 탈퇴 Endpoint는 모든 그룹 회원에게 열되 주 관리자는 유일한 활성 구성원일 때만 성공합니다. 랭킹 응답은 `meta.currentSubject` 키를 항상 제공하고 대상이 없으면 객체 전체를 `null`로 반환합니다. 스피어 실행에서는 H2 기반 `local` 설정을 MySQL `ddl-auto=update`, 별도 MySQL `test` DB를 `create-drop`으로 전환합니다.
+- 상태: confirmed
+- 근거: Naver 이메일에는 별도 검증 상태가 없으므로 관리자 신원은 불변 공급자 식별자를 사용하고, 권한표·응답 Null 계약·실행 DB를 확정된 업무 규칙과 맞추기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, screen-design.md, convention.md, implementation-guide.md, project_plan.md, common-foundation.yaml
+- 대체한 결정: `INITIAL_SUPER_ADMIN_EMAIL`과 검증 이메일로 최초 관리자를 식별하는 규칙.
+
+## 2026-11-02 Java 기준 버전 확정
+
+- 결정: 백엔드의 로컬 개발, Gradle Toolchain과 CI 실행 환경은 Java 21 LTS로 통일합니다. 기준 Package는 `com.team.sharedcreature`를 사용하며 현재 초기 생성 소스와 일치합니다.
+- 상태: confirmed
+- 근거: 팀원별 JDK 차이로 인한 빌드 편차를 방지하고 설계 식별자와 실제 구현 Package를 일치시키기 위함입니다.
+- 영향 문서: requirements.md, convention.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-02 기준 Package 정정
+
+- 결정: 설계 기준 Package를 `com.team.sharedcreature`로 정정하고 모든 설계·실행 계약 표기를 이 값으로 통일합니다.
+- 상태: confirmed
+- 근거: 사용자가 기준 Package를 바로잡았으며 현재 초기 Java 소스와 설정도 `com.team.sharedcreature`를 사용하고 있습니다.
+- 영향 문서: requirements.md, convention.md, project_plan.md, decision-log.md, common-foundation.yaml
+
+## 2026-11-02 서비스 표시명 확정
+
+- 결정: 사용자 화면, 브라우저 제목과 OAuth 애플리케이션 표시명은 `다 같이 키우는 생명체`를 사용합니다. `공동 육성 게임`은 서비스 유형 설명으로 사용하고 저장소·Artifact·프로젝트 Name은 `shared-creature-game`으로 유지합니다.
+- 상태: confirmed
+- 근거: 사용자용 제품명과 개발·배포 식별자를 구분해 UI와 외부 인증 설정의 명칭을 일관되게 유지하기 위함입니다.
+- 영향 문서: index.md, requirements.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-02 포트원 V2 카카오페이 단일 채널 확정
+
+- 결정: 테스트 결제는 포트원 V2의 카카오페이 PG 채널 하나만 지원합니다. 결제 요청은 `payMethod=EASY_PAY`, `currency=KRW`로 고정하고 PC는 `IFRAME`, 모바일은 `REDIRECTION`을 사용하며 전체 취소만 제공합니다.
+- 상태: confirmed
+- 근거: 프로젝트 결제 시연 범위를 하나의 간편결제 채널로 제한하면서 포트원 V2의 결제 조회·Webhook·취소 정합성 흐름에 집중하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, api-design.md, screen-design.md, design/wireframes/shop.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-02 EXIF 위치 인증을 MVP 핵심 기능으로 확정
+
+- 결정: `PHOTO_EXIF` 위치·촬영 시각 인증과 `photo_submissions`는 조건부 후보가 아니라 MVP 핵심 필수 기능입니다. Android Chrome과 iOS Safari 실기기 검증 실패는 기능 제외 사유가 아니라 MVP 미완료로 처리하며, 일일·주간 사진 템플릿은 중 난이도 활성 순회에 포함합니다.
+- 상태: confirmed
+- 대체한 결정: EXIF 실기기 기술 검증 실패 시 사진 퀘스트와 `photo_submissions`를 제외할 수 있다는 조건부 구현 정책
+- 근거: 야외 활동과 공동 육성 경험을 연결하는 사진 위치 인증이 서비스의 핵심 차별 기능이기 때문입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, screen-design.md, design/wireframes/quests.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-02 EXIF 업로드 형식을 JPEG로 제한
+
+- 결정: MVP의 EXIF 사진 업로드는 최대 10 MiB의 JPEG만 지원합니다. 서버는 `image/jpeg` MIME 형식과 JPEG SOI Signature `FF D8 FF`를 함께 확인하고 HEIC·HEIF를 포함한 다른 형식은 `PHOTO_FORMAT_UNSUPPORTED`로 거절합니다.
+- 상태: confirmed
+- 근거: Docker와 네이티브 이미지 변환 의존성 없이 Android Chrome과 iOS Safari의 핵심 EXIF 판정 흐름을 2주 안에 안정적으로 검증하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, api-design.md, screen-design.md, design/wireframes/quests.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-02 EXIF 판정을 최소 검증으로 제한
+
+- 결정: 사진 판정은 GPS 존재, 위도·경도 유효 범위와 촬영 시각이 배정의 시작 이상·종료 미만인지까지만 확인합니다. EXIF Offset이 없으면 `Asia/Seoul`로 해석하며 실외 여부, 현재 위치, 목표 장소·반경, 사진 간 거리, 위변조와 동일 사진 재사용은 판정하지 않습니다.
+- 상태: confirmed
+- 근거: EXIF로 실제 야외 활동을 과도하게 단정하지 않고 프로젝트의 핵심 메타데이터 추출·서버 판정 흐름만 구현하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, api-design.md, database-design.md, screen-design.md, design/wireframes/quests.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-02 초보 개발자 기준 REST API 계약 완성도 보강
+
+- 결정: 설계 문서만으로 백엔드와 Vanilla JavaScript 프론트엔드를 구현할 수 있도록 58개 Operation에 성공 HTTP 상태와 Operation별 업무 오류를 연결하고, Endpoint별 Query DTO·고정 정렬·공통 Envelope·Page·Rank Meta·오류 필드·OAuth Redirect·PortOne Webhook 소비 필드를 상세 정의합니다. 임의 `object` 차트 응답은 강타입 DTO로 교체하고 JSON·Multipart 호출 예시를 제공합니다.
+- 상태: confirmed
+- 결정: EXIF 사진 제출은 POST 안에서 최종 판정을 끝내 외부 응답을 `VALID`, `INVALID`로 제한하며 `PENDING`은 내부 DB 처리 상태로만 사용합니다. 별도 상태 조회 API는 추가하지 않습니다.
+- 결정: 요청 ID에서 화면·Operation·DTO·Service·테이블까지 따라가는 구현 시작 안내서와 화면별 API 연결표를 제공하고, 백엔드·프론트엔드 구현 및 목 데이터 완료 체크리스트를 같은 진입점에 둡니다.
+- 근거: 초보 팀원이 Endpoint 목록과 여러 절 사이의 암묵적 규칙을 추론하지 않고 표와 예시를 그대로 구현하고 테스트할 수 있게 하기 위함입니다.
+- 영향 문서: index.md, requirements.md, screen-design.md, api-design.md, class-diagram.md, implementation-guide.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-02 시즌·멤버십·퀘스트 완료 공통 직렬화 확정
+
+- 결정: 퀘스트 완료는 시즌 공유 잠금 → 사용자 → 그룹 → 활성 멤버십 → 그룹 시즌 → 완료 UNIQUE → 개인 기여도 → 그룹 점수 → 활성 크리처 순으로 잠그고 시즌·멤버십·배정 귀속을 잠금 아래 재검사합니다.
+- 결정: 시즌 종료는 같은 시즌 행의 배타 잠금으로 진행 중 완료의 종료를 기다린 뒤 `CLOSING`으로 전환합니다. 탈퇴·강퇴와 완료는 사용자·멤버십 잠금을 먼저 얻은 흐름을 선행시킵니다.
+- 상태: confirmed
+- 근거: 시즌 최종 Snapshot 뒤 보상이 추가되거나 멤버십 종료 뒤 이전 그룹에 보상이 반영되는 경합을 제거하기 위함입니다.
+- 영향 문서: business-rules.md, database-design.md, class-diagram.md, common-foundation.yaml
+
+## 2026-11-03 비즈니스 경계·장애 복구 정책 확정
+
+- 결정: 유일한 구성원인 주 관리자의 기존 탈퇴 요청은 그룹 `INACTIVE`, 초대 링크 무효화, 현재 그룹 시즌 종료와 크리처 보관을 함께 처리합니다. 기록은 보존하고 별도 해산 API를 추가하지 않습니다.
+- 결정: `CANCEL_PENDING`과 Webhook `PENDING`의 고착 기준은 5분이며 `REFUND_RECONCILIATION`, `PAYMENT_RECONCILIATION`을 5분 주기로 실행합니다. 복구는 PortOne 최신 상태 조회를 먼저 수행하고 기존 멱등·정합성 Service를 재사용합니다.
+- 결정: 사진은 촬영·업로드 접수 시각이 배정 기간 안이고 판정·보상 Commit이 마감과 시즌 `CLOSING` 전에 완료돼야 보상합니다. 마감 유예와 이월은 제공하지 않습니다.
+- 결정: 최대 10분의 활동 시각 저장 지연을 고려해 저장값 기준 72시간 10분 경과 후 미접속 강퇴를 허용합니다. 사용자 안내는 72시간을 유지합니다.
+- 결정: 활동 Event에 발생 당시 멤버십·그룹 시즌을 저장하고 `AGGREGATE`는 완료 시점과 같은 귀속의 Event만 집계합니다. 이전 그룹 활동 이력은 보존하지만 새 그룹 보상에는 사용하지 않습니다.
+- 상태: confirmed
+- 근거: 1인 그룹의 종료 불가 상태를 해소하고 외부 시스템 중단·기간 경계·활동 저장 지연·그룹 이동에서도 보상과 결제 상태를 일관되게 유지하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, screen-design.md, api-design.md, convention.md, class-diagram.md, implementation-guide.md, project_plan.md, common-foundation.yaml
