@@ -1,4 +1,4 @@
-# Daily Report — YYYY-MM-DD
+# 일일 리포트 — YYYY-MM-DD
 
 오늘 하루의 작업 내용과 현재 상태를 공유합니다.
 
