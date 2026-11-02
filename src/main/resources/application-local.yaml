@@ -1,0 +1,39 @@
+server:
+  port: 8080
+
+logging:
+  level:
+    root: INFO                  # 스프링과 라이브러리는 INFO 이상만 콘솔에 출력
+    com.team.sharedcreature: DEBUG    # 내가 작성한 코드는 DEBUG 이상까지 출력
+
+spring:
+  # 데이터베이스 연결 (H2 메모리 DB 사용)
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:localdb
+    username: sa
+    password:
+
+  # H2 콘솔 화면 켜기 (http://localhost:8080/h2-console)
+  h2:
+    console:
+      enabled: true
+
+  # JPA 설정
+  jpa:
+    hibernate:
+      # 시작할 때마다 테이블을 새로 만든다. 기존 데이터는 사라진다. (개발용)
+      ddl-auto: create
+    # 실행되는 SQL을 콘솔에 출력한다.
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true    # 출력되는 SQL을 콘솔창에 줄바꿈해 보기 좋게 표시
+    # data.sql을 테이블 생성 후에 실행한다.
+    defer-datasource-initialization: true
+
+  sql:
+    init:
+      mode: always
+      data-locations:
+        - classpath:db/data.sql # 서버 시작 시 이 파일 실행

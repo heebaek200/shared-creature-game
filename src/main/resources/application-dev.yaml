@@ -1,0 +1,33 @@
+server:
+  port: 8080
+
+logging:
+  level:
+    root: INFO
+    com.team.sharedcreature: DEBUG
+
+spring:
+  # 데이터베이스 연결 (MySQL)
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${DEV_DB_URL:jdbc:mysql://localhost:3306/shared_creature_game?serverTimezone=Asia/Seoul}
+    username: ${DEV_DB_USERNAME}
+    password: ${DEV_DB_PASSWORD}
+
+  # JPA 설정
+  jpa:
+    hibernate:
+      # 개발 환경에서는 없는 테이블과 컬럼만 추가한다.
+      ddl-auto: update
+    # 실행되는 SQL을 콘솔에 출력한다.
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true    # 출력되는 SQL을 콘솔창에 줄바꿈해 보기 좋게 표시
+    # data.sql을 테이블 생성 후에 실행한다.
+    defer-datasource-initialization: true
+
+  sql:
+    init:
+      data-locations:
+        - classpath:db/data.sql
