@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Canvas 2D 크리처·아바타 프로토타입</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 40px;
+        }
+
+        h2 { color: #1e293b; margin-bottom: 5px; }
+        p { color: #64748b; font-size: 14px; margin-bottom: 20px; }
+
+        #canvas-stage {
+            background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+            border: 3px solid #94a3b8;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<h2>🎨 [기술 검증] Canvas 2D 기반 표현 프로토타입</h2>
+<p>단일 Canvas 내부에 렌더링 루프를 통해 크리처와 20명의 아바타를 그리고, 좌표 계산으로 클릭을 감지합니다[cite: 1, 2, 4, 6].</p>
+
+<canvas id="canvas-stage" width="600" height="600"></canvas>
+
+<script>
+    const canvas = document.getElementById('canvas-stage');
+    const ctx = canvas.getContext('2d');
+
+    const centerX = 300;
+    const centerY = 300;
+    const radius = 160;
+
+    // 20명의 아바타 더미 데이터 생성
+    const totalAvatars = 20;
+    const avatars = Array.from({ length: totalAvatars }, (_, i) => ({
+        id: i + 1,
+        name: `유저_${i + 1}`,
+        angle: (i / totalAvatars) * Math.PI * 2,
+        radius: 18 // 클릭 충돌 판정용 반지름
+    }));
+
+    // 아바타 좌표 미리 계산
+    const calculatedAvatars = avatars.map(avatar => ({
+        ...avatar,
+        x: centerX + Math.cos(avatar.angle) * radius,
+        y: centerY + Math.sin(avatar.angle) * radius
+    }));
+
+    function drawScene() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. 중앙 공동 크리처 렌더링
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, 45, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.stroke();
+
+        ctx.font = '28px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🐉', centerX, centerY - 8);
+
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillStyle = '#334155';
+        ctx.fillText('공동 크리처', centerX, centerY + 22);
+
+        // 2. 20명 아바타 렌더링 (본체 및 아이템, 텍스트)
+        calculatedAvatars.forEach(avatar => {
+            // 본체 원
+            ctx.fillStyle = '#3b82f6';
+            ctx.beginPath();
+            ctx.arc(avatar.x, avatar.y, avatar.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#ffffff';
+            ctx.stroke();
+
+            // ID 번호 표시
+            ctx.font = 'bold 10px sans-serif';
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(avatar.id, avatar.x, avatar.y);
+
+            // 꾸미기 아이템 레이어 (우측 상단 작은 원)
+            ctx.fillStyle = '#f59e0b';
+            ctx.beginPath();
+            ctx.arc(avatar.x + 10, avatar.y - 10, 7, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // 유저 이름 라벨
+            ctx.font = '10px sans-serif';
+            ctx.fillStyle = '#334155';
+            ctx.fillText(avatar.name, avatar.x, avatar.y + 26);
+        });
+    }
+
+    // Canvas 클릭 이벤트: 마우스 좌표와 각 아바타 간의 거리를 계산하여 클릭 판정
+    canvas.addEventListener('click', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        calculatedAvatars.forEach(avatar => {
+            const dist = Math.hypot(avatar.x - mouseX, avatar.y - mouseY);
+            if (dist <= avatar.radius) {
+                alert(`👤 [Canvas 방식] 선택된 사용자\n- 이름: ${avatar.name}\n- 고유 ID: ${avatar.id}번`);
+            }
+        });
+    });
+
+    // 초기 화면 그리기 실행
+    drawScene();
+</script>
+
+</body>
+</html>

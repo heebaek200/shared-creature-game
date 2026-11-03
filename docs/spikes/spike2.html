@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>크리처·아바타 DOM/CSS 검증 프로토타입</title>
+    <style>
+        body {
+            font-family: 'Malgun Gothic', sans-serif;
+            background-color: #f4f6f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        /* 아레나(무대) 박스 */
+        .creature-arena {
+            position: relative;
+            width: 600px;
+            height: 500px;
+            background: #ffffff;
+            border: 2px solid #ddd;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+        /* 중앙 공동 크리처 */
+        .central-creature {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        .creature-img {
+            width: 100px;
+            height: 100px;
+            background: #a8dadc;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #1d3557;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        /* 개별 사용자 아바타 (원형 배치용 컨테이너) */
+        .avatar-node {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+        }
+        /* 아바타 레이어 합성 (본체 + 아이템) */
+        .avatar-layer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: #457b9d;
+            border: 2px solid #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: white;
+        }
+        .avatar-item-head {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+        }
+        /* 클릭 툴팁 */
+        #tooltip {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: none;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="creature-arena" id="arena">
+    <!-- 중앙 공동 크리처 -->
+    <div class="central-creature">
+        <div class="creature-img">새싹이 Lv.3</div>
+        <div style="font-size: 12px; margin-top: 5px; font-weight: bold;">공동 크리처</div>
+    </div>
+
+    <!-- 하단 툴팁 영역 -->
+    <div id="tooltip">아바타를 클릭하세요</div>
+</div>
+
+<script>
+    const arena = document.getElementById('arena');
+    const tooltip = document.getElementById('tooltip');
+
+    // 최대 20명의 가상 사용자 데이터 생성 (기술 검증용 정적 데이터)
+    const mockUsers = Array.from({ length: 20 }, (_, i) => ({
+        id: i + 1,
+        nickname: `용사${i + 1}`,
+        headItem: i % 2 === 0 ? '👑' : '👒',
+        contribution: (i + 1) * 150
+    }));
+
+    const centerX = 300;
+    const centerY = 250;
+    const radius = 160; // 크리처 주변 배치 반지름
+
+    // 20명의 아바타를 원형으로 배치
+    mockUsers.forEach((user, index) => {
+        const angle = (index / mockUsers.length) * (2 * Math.PI);
+        const x = centerX + radius * Math.cos(angle);
+        const y = centerY + radius * Math.sin(angle);
+
+        const node = document.createElement('div');
+        node.className = 'avatar-node';
+        node.style.left = `${x}px`;
+        node.style.top = `${y}px`;
+
+        // 레이어 합성 구조 (본체 + 모자 아이템)
+        node.innerHTML = `
+            <div class="avatar-item-head">${user.headItem}</div>
+            <div class="avatar-layer">${user.nickname.slice(-2)}</div>
+        `;
+
+        // 클릭 이벤트 (사용자 정보 표시)
+        node.addEventListener('click', (e) => {
+            e.stopPropagation();
+            tooltip.style.display = 'block';
+            tooltip.innerText = `닉네임: ${user.nickname} | 기여도: ${user.contribution} XP`;
+        });
+
+        arena.appendChild(node);
+    });
+
+    // 아레나 빈 곳 클릭 시 툴팁 숨김
+    arena.addEventListener('click', () => {
+        tooltip.style.display = 'none';
+    });
+</script>
+
+</body>
+</html>
