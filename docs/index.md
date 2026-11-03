@@ -16,6 +16,7 @@ title: 다 같이 키우는 생명체
 - [REST API 설계서](api-design.md)
 - [코드 컨벤션](convention.md)
 - [클래스 다이어그램](class-diagram.md)
+- [작업 간트 차트(Draft)](shared-creature-game_day1-10_schedule.md)
 
 ## 선행 기술 검증 결과 문서
 
