@@ -56,6 +56,10 @@ public class SecurityConfiguration {
                         .requestMatchers("/oauth2/callback/**").permitAll()
                         .requestMatchers("/api/v1/invitations/**").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/creature-species")
+                        .hasAnyRole("PRIMARY", "DEPUTY")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/groups/me/seasons/current/creature-selection")
+                        .hasAnyRole("PRIMARY", "DEPUTY")
                         .requestMatchers(
                                 "/api/v1/groups/me/members/*/role",
                                 "/api/v1/groups/me/primary-transfer",

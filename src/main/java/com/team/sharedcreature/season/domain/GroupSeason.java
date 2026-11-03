@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.Objects;
 
 /**
  * group_seasons 테이블의 상태와 이력을 보존하는 JPA 엔티티입니다.
@@ -66,7 +67,7 @@ public class GroupSeason {
         this.group = group;
         this.season = season;
         this.selectionDeadlineAt = now.plusSeconds(72L * 60 * 60);
-        this.status = "ACTIVE";
+        this.status = "PREPARING";
         this.createdAt = now;
         this.updatedAt = now;
     }
@@ -74,5 +75,54 @@ public class GroupSeason {
     /** 시즌 중 생성된 그룹의 현재 시즌 참여를 시작합니다. */
     public static GroupSeason start(Group group, Season season, Instant now) {
         return new GroupSeason(group, season, now);
+    }
+
+    /**
+     * 부화 기한 전 관리자의 최종 크리처 종 선택을 반영합니다.
+     *
+     * @param species 선택한 활성 종
+     * @param selectedBy 선택한 주·부 관리자
+     * @param now 선택 시각
+     * @return 기존 선택과 달라 상태를 변경했으면 {@code true}
+     */
+    public boolean selectSpecies(CreatureSpecies species, User selectedBy, Instant now) {
+        if (!isSelectionOpenAt(now)) {
+            throw new IllegalStateException("Creature selection is closed.");
+        }
+        if (this.selectedSpecies != null && Objects.equals(this.selectedSpecies.getId(), species.getId())) {
+            return false;
+        }
+        this.selectedSpecies = species;
+        this.selectedByUser = selectedBy;
+        this.selectionSource = "ADMIN";
+        this.selectedAt = now;
+        this.updatedAt = now;
+        return true;
+    }
+
+    /** 선택되지 않은 종을 부화 시점에 무작위 종으로 확정합니다. */
+    public void selectRandomSpecies(CreatureSpecies species, Instant now) {
+        if (selectedSpecies != null) {
+            return;
+        }
+        this.selectedSpecies = species;
+        this.selectedByUser = null;
+        this.selectionSource = "RANDOM";
+        this.selectedAt = now;
+        this.updatedAt = now;
+    }
+
+    /** 알 준비 상태를 종료하고 현재 시즌의 활성 크리처 상태로 전환합니다. */
+    public void activate(Instant now) {
+        if (!"PREPARING".equals(status) || selectedSpecies == null) {
+            throw new IllegalStateException("Only a selected preparing group season can be activated.");
+        }
+        this.status = "ACTIVE";
+        this.updatedAt = now;
+    }
+
+    /** 현재 시각에 관리자 종 선택이 가능한지 반환합니다. */
+    public boolean isSelectionOpenAt(Instant now) {
+        return "PREPARING".equals(status) && now.isBefore(selectionDeadlineAt);
     }
 }
