@@ -10,6 +10,12 @@ import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.UserProfile;
 import com.team.sharedcreature.auth.infrastructure.*;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
+import com.team.sharedcreature.group.application.GroupMembershipService;
+import com.team.sharedcreature.group.application.InvitationSessionContext;
+import com.team.sharedcreature.group.api.PublicInvitationResponse;
+import com.team.sharedcreature.group.domain.GroupInviteLink;
+import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
+import com.team.sharedcreature.group.infrastructure.GroupJoinRestrictionRepository;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -32,6 +38,7 @@ import java.util.Set;
 public class AuthService {
 
     public static final String PENDING_SIGNUP = "PENDING_SIGNUP";
+    public static final String ONBOARDING_REASON = "ONBOARDING_REASON";
     private static final String OAUTH_NONCE = "OAUTH_NONCE";
 
     private final OauthLoginAttemptRepository attemptRepository;
@@ -39,6 +46,9 @@ public class AuthService {
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
     private final GroupMembershipRepository membershipRepository;
+    private final GroupInviteLinkRepository inviteLinkRepository;
+    private final GroupJoinRestrictionRepository restrictionRepository;
+    private final GroupMembershipService groupMembershipService;
     private final SocialLoginClient socialLoginClient;
     private final InitialSuperAdminProperties initialSuperAdmin;
     private final TransactionTemplate transactionTemplate;
@@ -52,6 +62,9 @@ public class AuthService {
             UserRepository userRepository,
             UserProfileRepository userProfileRepository,
             GroupMembershipRepository membershipRepository,
+            GroupInviteLinkRepository inviteLinkRepository,
+            GroupJoinRestrictionRepository restrictionRepository,
+            GroupMembershipService groupMembershipService,
             SocialLoginClient socialLoginClient,
             InitialSuperAdminProperties initialSuperAdmin,
             TransactionTemplate transactionTemplate,
@@ -62,6 +75,9 @@ public class AuthService {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.membershipRepository = membershipRepository;
+        this.inviteLinkRepository = inviteLinkRepository;
+        this.restrictionRepository = restrictionRepository;
+        this.groupMembershipService = groupMembershipService;
         this.socialLoginClient = socialLoginClient;
         this.initialSuperAdmin = initialSuperAdmin;
         this.transactionTemplate = transactionTemplate;
@@ -77,12 +93,29 @@ public class AuthService {
         Instant now = Instant.now(clock);
         String state = token();
         String nonce = token();
+        GroupInviteLink invitation = null;
+        String intent = "LOGIN";
+        String resolvedRoute = returnRoute == null ? "DEFAULT" : returnRoute;
+        if ("INVITE".equals(resolvedRoute)) {
+            Object context = session.getAttribute(InvitationSessionContext.SESSION_KEY);
+            if (!(context instanceof InvitationSessionContext invitationContext)) {
+                throw new BusinessException(
+                        HttpStatus.BAD_REQUEST,
+                        "INVALID_FIELD_VALUE",
+                        "수락한 초대 문맥이 필요합니다."
+                );
+            }
+            invitation = inviteLinkRepository.findByIdAndStatus(invitationContext.inviteLinkId(), "ACTIVE")
+                    .orElseThrow(() -> conflict("INVITE_INVALID", "현재 사용할 수 없는 초대입니다."));
+            intent = "INVITE";
+        }
         attemptRepository.save(OauthLoginAttempt.start(
                 Hashing.sha256(state),
                 Hashing.sha256(session.getId()),
                 provider,
-                "LOGIN",
-                returnRoute == null ? "DEFAULT" : returnRoute,
+                intent,
+                invitation,
+                resolvedRoute,
                 now
         ));
         session.setAttribute(OAUTH_NONCE, nonce);
@@ -128,7 +161,15 @@ public class AuthService {
         OauthLoginAttempt attempt = attemptRepository.findByStateHashForUpdate(stateHash)
                 .orElseThrow(() -> conflict("OAUTH_STATE_INVALID", "유효하지 않은 로그인 요청입니다."));
         validateAttempt(attempt, sessionHash, now);
+        Long invitationId = "INVITE".equals(attempt.getIntent()) ? currentInvitationId(session) : null;
+        GroupInviteLink latestInvitation = invitationId == null
+                ? null
+                : inviteLinkRepository.findById(invitationId).orElse(null);
+        attempt.replaceInviteLink(latestInvitation);
         attempt.consume(now);
+        if (invitationId == null) {
+            session.removeAttribute(ONBOARDING_REASON);
+        }
 
         var account = socialAccountRepository.findByProviderAndProviderUserId("GOOGLE", profile.providerUserId());
         if (account.isPresent()) {
@@ -137,6 +178,7 @@ public class AuthService {
                 throw new BusinessException(HttpStatus.FORBIDDEN, "ACCOUNT_NOT_ACTIVE", "사용할 수 없는 계정입니다.");
             }
             String nickname = userProfileRepository.findByUserId(user.getId()).map(UserProfile::getNickname).orElse("회원");
+            joinExistingInvitation(invitationId, user, nickname, session);
             Set<String> roles = currentRoles(user);
             session.setAttribute(SessionAuthenticationFilter.LOGIN_USER, new LoginUser(user.getId(), nickname, roles));
             session.removeAttribute(OAUTH_NONCE);
@@ -149,7 +191,9 @@ public class AuthService {
         }
         session.setAttribute(PENDING_SIGNUP, new PendingSignup(
                 "GOOGLE", profile.providerUserId(), profile.email(), profile.emailVerified(),
-                profile.suggestedNickname(), now.plusSeconds(1800)));
+                profile.suggestedNickname(),
+                invitationId,
+                now.plusSeconds(1800)));
         session.removeAttribute(OAUTH_NONCE);
         return "/";
     }
@@ -175,10 +219,54 @@ public class AuthService {
         socialAccountRepository.save(SocialAccount.link(
                 user, pending.provider(), pending.providerUserId(), pending.email(), pending.emailVerified(), now));
         userProfileRepository.save(UserProfile.create(user, nickname.strip(), normalizedNickname, now));
+        if (pending.inviteLinkId() != null) {
+            GroupMembershipService.InvitationJoinResult result =
+                    groupMembershipService.tryJoinInvitation(user.getId(), nickname.strip(), pending.inviteLinkId());
+            if (result.joined()) {
+                session.removeAttribute(ONBOARDING_REASON);
+            } else {
+                session.setAttribute(ONBOARDING_REASON, result.failureCode());
+            }
+        }
         LoginUser loginUser = new LoginUser(user.getId(), nickname.strip(), currentRoles(user));
         session.setAttribute(SessionAuthenticationFilter.LOGIN_USER, loginUser);
         session.removeAttribute(PENDING_SIGNUP);
+        session.removeAttribute(InvitationSessionContext.SESSION_KEY);
         return loginUser;
+    }
+
+    /** 가입 대기 세션에 연결된 현재 초대 표시 정보를 반환합니다. */
+    @Transactional(readOnly = true)
+    public Optional<PublicInvitationResponse> signupInvitation(PendingSignup pending) {
+        if (pending.inviteLinkId() == null) {
+            return Optional.empty();
+        }
+        return groupMembershipService.findInvitation(pending.inviteLinkId());
+    }
+
+    private void joinExistingInvitation(Long invitationId, User user, String nickname, HttpSession session) {
+        if (invitationId == null) {
+            return;
+        }
+        GroupInviteLink invitation = inviteLinkRepository.findById(invitationId).orElse(null);
+        if (invitation == null) {
+            session.setAttribute(ONBOARDING_REASON, "INVITE_INVALID");
+            return;
+        }
+        var current = membershipRepository.findActiveWithGroupByUserId(user.getId());
+        if (current.isPresent() && current.get().getGroup().getId().equals(invitation.getGroup().getId())) {
+            session.removeAttribute(ONBOARDING_REASON);
+            session.removeAttribute(InvitationSessionContext.SESSION_KEY);
+            return;
+        }
+        GroupMembershipService.InvitationJoinResult result =
+                groupMembershipService.tryJoinInvitation(user.getId(), nickname, invitationId);
+        if (result.joined()) {
+            session.removeAttribute(ONBOARDING_REASON);
+        } else {
+            session.setAttribute(ONBOARDING_REASON, result.failureCode());
+        }
+        session.removeAttribute(InvitationSessionContext.SESSION_KEY);
     }
 
     private String normalize(String value) {
@@ -186,12 +274,20 @@ public class AuthService {
     }
 
     private Set<String> currentRoles(User user) {
+        var roles = new java.util.HashSet<String>();
         if ("SUPER_ADMIN".equals(user.getGlobalRole())) {
-            return Set.of("SUPER_ADMIN");
+            roles.add("SUPER_ADMIN");
         }
-        return membershipRepository.findByUserIdAndStatus(user.getId(), "ACTIVE")
-                .map(membership -> Set.of(membership.getRole()))
-                .orElseGet(Set::of);
+        membershipRepository.findByUserIdAndStatus(user.getId(), "ACTIVE")
+                .ifPresent(membership -> roles.add(membership.getRole()));
+        return Set.copyOf(roles);
+    }
+
+    private Long currentInvitationId(HttpSession session) {
+        Object context = session.getAttribute(InvitationSessionContext.SESSION_KEY);
+        return context instanceof InvitationSessionContext invitationContext
+                ? invitationContext.inviteLinkId()
+                : null;
     }
 
     /** 현재 사용자의 활성 그룹 멤버십을 Route Guard 응답용으로 조회합니다. */
@@ -205,6 +301,22 @@ public class AuthService {
                         membership.getStatus(),
                         membership.getJoinedAt()
                 ));
+    }
+
+    /** 현재 사용자의 활성 그룹 재가입 제한 종료 시각을 조회합니다. */
+    @Transactional(readOnly = true)
+    public Optional<Instant> currentRestrictionUntil(Long userId) {
+        return restrictionRepository.findFirstByUserIdAndRestrictedUntilAfterOrderByRestrictedUntilDesc(
+                userId,
+                Instant.now(clock)
+        ).map(com.team.sharedcreature.group.domain.GroupJoinRestriction::getRestrictedUntil);
+    }
+
+    /** 초대 가입 실패 사유를 다음 인증 응답에서 한 번 반환하도록 소비합니다. */
+    public String consumeOnboardingReason(HttpSession session) {
+        Object reason = session.getAttribute(ONBOARDING_REASON);
+        session.removeAttribute(ONBOARDING_REASON);
+        return reason instanceof String value ? value : null;
     }
 
     private String token() {

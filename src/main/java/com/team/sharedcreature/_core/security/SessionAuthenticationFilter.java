@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -55,11 +56,13 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            Set<String> roles = "SUPER_ADMIN".equals(user.getGlobalRole())
-                    ? Set.of("SUPER_ADMIN")
-                    : membershipRepository.findByUserIdAndStatus(user.getId(), "ACTIVE")
-                            .map(membership -> Set.of(membership.getRole()))
-                            .orElseGet(Set::of);
+            var currentRoles = new HashSet<String>();
+            if ("SUPER_ADMIN".equals(user.getGlobalRole())) {
+                currentRoles.add("SUPER_ADMIN");
+            }
+            membershipRepository.findByUserIdAndStatus(user.getId(), "ACTIVE")
+                    .ifPresent(membership -> currentRoles.add(membership.getRole()));
+            Set<String> roles = Set.copyOf(currentRoles);
             LoginUser loginUser = new LoginUser(user.getId(), sessionUser.nickname(), roles);
             if (!loginUser.equals(sessionUser)) {
                 request.getSession(false).setAttribute(LOGIN_USER, loginUser);

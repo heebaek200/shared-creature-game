@@ -269,7 +269,7 @@
 ### completeSignup — `POST /api/v1/auth/signup`
 
 - **Operation ID:** `completeSignup` · **요구사항:** `REQ-AUTH-002, REQ-INV-001` · **인증·권한:** `SIGNUP_PENDING` · **성공 HTTP:** `201`
-- **엔드포인트 조건:** 초대 가입이 실패해도 계정 생성은 유지한다. 그 경우 data.onboardingState=GROUP_REQUIRED.
+- **엔드포인트 조건:** 초대 가입이 실패해도 계정 생성은 유지하고 `201`을 반환한다. 그 경우 data.onboardingState=GROUP_REQUIRED이며 실패 원인은 data.onboardingReason으로 제공한다.
 
 **요청 필드**
 
@@ -298,6 +298,7 @@
 | data.membership.joinedAt | string(date-time) | C | N | UTC ISO 8601 |  |
 | data.roles | array<string(enum)> | Y | N | 요소: SUPER_ADMIN, PRIMARY, DEPUTY, MEMBER; 없으면 [] |  |
 | data.restrictionUntil | string(date-time) | Y | Y | UTC ISO 8601 | 그룹 가입 제한 없으면 null |
+| data.onboardingReason | string(enum) | Y | Y | INVITE_INVALID \| GROUP_FULL \| JOIN_COOLDOWN_ACTIVE \| ALREADY_IN_GROUP; 없으면 null | 초대 가입 실패 원인, 응답 후 세션에서 제거 |
 
 **오류 응답**
 
@@ -311,14 +312,11 @@
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
 | 409 | `SIGNUP_CONTEXT_EXPIRED` | 가입 대기 30분 만료 또는 소실 |
 | 409 | `NICKNAME_ALREADY_USED` | 정규화된 닉네임 중복 |
-| 409 | `INVITE_INVALID` | 초대 링크 폐기·오류·대상 가입 불가 |
-| 409 | `GROUP_FULL` | 그룹 정원 20명 초과 |
-| 409 | `JOIN_COOLDOWN_ACTIVE` | 탈퇴/강퇴 후 24시간 가입 제한 |
 
 ### getCurrentUser — `GET /api/v1/me`
 
 - **Operation ID:** `getCurrentUser` · **요구사항:** `REQ-AUTH-004` · **인증·권한:** `PUBLIC` · **성공 HTTP:** `200`
-- **엔드포인트 조건:** 익명/가입 대기/그룹 미가입/정상 그룹원/그룹 없는 SUPER_ADMIN까지 동일 응답 구조.
+- **엔드포인트 조건:** 익명/가입 대기/그룹 미가입/정상 그룹원/그룹 없는 SUPER_ADMIN까지 동일 응답 구조. 초대 가입 실패 사유는 멤버십 유무와 관계없이 다음 인증 응답에서 한 번 반환한 뒤 세션에서 제거한다.
 
 **요청 필드**
 
@@ -344,6 +342,7 @@
 | data.membership.joinedAt | string(date-time) | C | N | UTC ISO 8601 |  |
 | data.roles | array<string(enum)> | Y | N | 요소: SUPER_ADMIN, PRIMARY, DEPUTY, MEMBER; 없으면 [] |  |
 | data.restrictionUntil | string(date-time) | Y | Y | UTC ISO 8601 | 그룹 가입 제한 없으면 null |
+| data.onboardingReason | string(enum) | Y | Y | INVITE_INVALID \| GROUP_FULL \| JOIN_COOLDOWN_ACTIVE \| ALREADY_IN_GROUP; 없으면 null | 초대 가입 실패 원인, 응답 후 세션에서 제거 |
 
 **오류 응답**
 
@@ -414,7 +413,7 @@
 ### acceptInvitation — `POST /api/v1/invitations/{token}/accept`
 
 - **Operation ID:** `acceptInvitation` · **요구사항:** `REQ-INV-001` · **인증·권한:** `PUBLIC` · **성공 HTTP:** `200`
-- **엔드포인트 조건:** 인증 전에는 초대 문맥 보존과 로그인/가입 안내; 인증 후에는 조건 재검사 및 그룹 가입.
+- **엔드포인트 조건:** 인증 전에는 초대 문맥 보존과 로그인/가입 안내; 인증 후에는 조건 재검사 및 그룹 가입. 같은 세션에서 다시 수락하면 마지막으로 수락한 초대를 OAuth 콜백과 가입 대기에 동기화한다. 가입 대기가 만료 시각과 같거나 지난 경우 만료된 가입 대기를 제거하고 초대 문맥을 유지한 채 `/login`을 반환한다.
 
 **요청 필드**
 
@@ -448,7 +447,7 @@
 ### rejectInvitation — `POST /api/v1/invitations/{token}/reject`
 
 - **Operation ID:** `rejectInvitation` · **요구사항:** `REQ-INV-001` · **인증·권한:** `PUBLIC` · **성공 HTTP:** `200`
-- **엔드포인트 조건:** 초대 문맥 제거 및 일반 로그인/가입 흐름으로 이동.
+- **엔드포인트 조건:** 초대 문맥과 가입 대기를 먼저 제거하고 일반 로그인/가입 흐름으로 이동한다. 링크가 없거나 무효이면 세션 정리를 마친 뒤 아래 404/409 오류를 반환한다.
 
 **요청 필드**
 

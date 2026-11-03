@@ -58,6 +58,7 @@ public class OauthLoginAttempt {
             String initiatingSessionHash,
             String provider,
             String intent,
+            GroupInviteLink inviteLink,
             String returnRoute,
             Instant now
     ) {
@@ -65,6 +66,7 @@ public class OauthLoginAttempt {
         this.initiatingSessionHash = initiatingSessionHash;
         this.provider = provider;
         this.intent = intent;
+        this.inviteLink = inviteLink;
         this.returnRoute = returnRoute;
         this.status = "PENDING";
         this.expiresAt = now.plusSeconds(600);
@@ -77,10 +79,16 @@ public class OauthLoginAttempt {
             String initiatingSessionHash,
             String provider,
             String intent,
+            GroupInviteLink inviteLink,
             String returnRoute,
             Instant now
     ) {
-        return new OauthLoginAttempt(stateHash, initiatingSessionHash, provider, intent, returnRoute, now);
+        return new OauthLoginAttempt(stateHash, initiatingSessionHash, provider, intent, inviteLink, returnRoute, now);
+    }
+
+    /** 같은 세션에서 마지막으로 수락한 초대 문맥으로 교체합니다. */
+    public void replaceInviteLink(GroupInviteLink latestInviteLink) {
+        this.inviteLink = latestInviteLink;
     }
 
     /** 검증이 끝난 OAuth 시도를 한 번만 소비한 상태로 전환합니다. */

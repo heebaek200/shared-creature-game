@@ -13,6 +13,8 @@ import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.api.CreateGroupRequest;
+import com.team.sharedcreature.group.domain.Group;
+import com.team.sharedcreature.group.domain.GroupInviteLink;
 import com.team.sharedcreature.group.infrastructure.GroupAdminChangeRepository;
 import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
 import com.team.sharedcreature.group.infrastructure.GroupJoinRestrictionRepository;
@@ -31,6 +33,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -73,11 +76,11 @@ class GroupMembershipServiceTest {
                 "http://localhost:5173"
         );
         user = mock(User.class);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
     }
 
     @Test
     void createGroup은_그룹_초대_시즌_알_점수를_같은_업무흐름에서_생성한다() {
+        when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user));
         when(user.getId()).thenReturn(1L);
         when(groupRepository.existsByNormalizedName("새싹모임")).thenReturn(false);
         when(membershipRepository.existsByUserIdAndStatus(1L, "ACTIVE")).thenReturn(false);
@@ -106,6 +109,12 @@ class GroupMembershipServiceTest {
 
     @Test
     void createGroup은_정규화한_이름이_중복이면_거절한다() {
+        Season season = mock(Season.class);
+        when(season.getStatus()).thenReturn("ACTIVE");
+        when(season.getEndAt()).thenReturn(Instant.parse("2026-12-01T00:00:00Z"));
+        when(seasonRepository.findForShareByStatus(org.mockito.ArgumentMatchers.eq("ACTIVE"), any(Pageable.class)))
+                .thenReturn(List.of(season));
+        when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user));
         when(groupRepository.existsByNormalizedName("중복그룹")).thenReturn(true);
 
         assertThatThrownBy(() -> service.createGroup(
@@ -117,9 +126,6 @@ class GroupMembershipServiceTest {
 
     @Test
     void createGroup은_시즌_잠금_대기_중_종료_시각이_지나면_그룹을_생성하지_않는다() {
-        when(user.getId()).thenReturn(1L);
-        when(groupRepository.existsByNormalizedName("경계그룹")).thenReturn(false);
-        when(membershipRepository.existsByUserIdAndStatus(1L, "ACTIVE")).thenReturn(false);
         Season season = mock(Season.class);
         Instant endsAt = Instant.parse("2026-11-03T00:00:01Z");
         when(season.getStatus()).thenReturn("ACTIVE");
@@ -137,6 +143,85 @@ class GroupMembershipServiceTest {
                 assertThat(exception.code()).isEqualTo("RESOURCE_NOT_FOUND"));
         verify(groupRepository, never()).save(any());
         verify(groupSeasonRepository, never()).save(any());
+    }
+
+    @Test
+    void joinGroup은_사용자와_그룹을_잠근_뒤_일반_구성원을_등록한다() {
+        when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user));
+        Group group = mock(Group.class);
+        when(group.getId()).thenReturn(10L);
+        when(group.getStatus()).thenReturn("ACTIVE");
+        when(group.getVisibility()).thenReturn("PUBLIC");
+        when(groupRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(group));
+        when(membershipRepository.existsByUserIdAndStatus(1L, "ACTIVE")).thenReturn(false);
+        when(restrictionRepository.existsByUserIdAndRestrictedUntilAfter(any(), any())).thenReturn(false);
+        when(groupRepository.incrementMemberCountIfAvailable(any(), any())).thenReturn(1);
+        when(membershipRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.joinGroup(new LoginUser(1L, "가입자", Set.of()), 10L);
+
+        assertThat(result.groupId()).isEqualTo(10L);
+        assertThat(result.role()).isEqualTo("MEMBER");
+        assertThat(result.status()).isEqualTo("ACTIVE");
+        assertThat(result.nickname()).isEqualTo("가입자");
+        verify(groupRepository).incrementMemberCountIfAvailable(10L, clock.instant());
+    }
+
+    @Test
+    void joinGroup은_잠금_후_정원이_가득_찬_그룹을_거절한다() {
+        when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user));
+        Group group = mock(Group.class);
+        when(group.getStatus()).thenReturn("ACTIVE");
+        when(group.getVisibility()).thenReturn("PUBLIC");
+        when(groupRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(group));
+        when(membershipRepository.existsByUserIdAndStatus(1L, "ACTIVE")).thenReturn(false);
+        when(restrictionRepository.existsByUserIdAndRestrictedUntilAfter(any(), any())).thenReturn(false);
+
+        assertThatThrownBy(() -> service.joinGroup(new LoginUser(1L, "가입자", Set.of()), 10L))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.code()).isEqualTo("GROUP_FULL"));
+        verify(membershipRepository, never()).save(any());
+    }
+
+    @Test
+    void 초대_가입은_사용자와_그룹_잠금_뒤_초대_유효성을_최종_재검사한다() {
+        when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user));
+        Group group = mock(Group.class);
+        when(group.getId()).thenReturn(10L);
+        when(group.getStatus()).thenReturn("ACTIVE");
+        when(group.getVisibility()).thenReturn("PUBLIC");
+        when(groupRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(group));
+        GroupInviteLink invitation = mock(GroupInviteLink.class);
+        when(invitation.getGroup()).thenReturn(group);
+        when(inviteLinkRepository.findByIdAndStatus(20L, "ACTIVE")).thenReturn(Optional.of(invitation));
+        when(inviteLinkRepository.findActiveForUpdate(20L, 10L)).thenReturn(Optional.empty());
+
+        var result = service.tryJoinInvitation(1L, "가입자", 20L);
+
+        assertThat(result.joined()).isFalse();
+        assertThat(result.failureCode()).isEqualTo("INVITE_INVALID");
+        verify(groupRepository, never()).incrementMemberCountIfAvailable(any(), any());
+    }
+
+    @Test
+    void 공개_그룹_목록은_이미_가입한_사용자도_조회하고_차단_사유를_표시한다() {
+        Group group = mock(Group.class);
+        when(group.getId()).thenReturn(10L);
+        when(group.getName()).thenReturn("공개그룹");
+        when(group.getDescription()).thenReturn("함께 걸어요");
+        when(group.getCurrentMemberCount()).thenReturn(5);
+        when(group.getCapacity()).thenReturn(20);
+        when(membershipRepository.existsByUserIdAndStatus(1L, "ACTIVE")).thenReturn(true);
+        when(restrictionRepository.existsByUserIdAndRestrictedUntilAfter(any(), any())).thenReturn(false);
+        when(groupRepository.findPublicGroups(any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(group)));
+
+        var result = service.listPublicGroups(new LoginUser(1L, "구성원", Set.of("MEMBER")), "공개", 0, 20);
+
+        assertThat(result.getContent()).singleElement().satisfies(summary -> {
+            assertThat(summary.joinable()).isFalse();
+            assertThat(summary.joinBlockedReason()).isEqualTo("ALREADY_IN_GROUP");
+        });
     }
 
     private static class MutableClock extends Clock {

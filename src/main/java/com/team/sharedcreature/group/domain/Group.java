@@ -74,4 +74,5 @@ public class Group {
     public static Group create(String name, String normalizedName, String description, User creator, Instant now) {
         return new Group(name, normalizedName, description, creator, now);
     }
+
 }

@@ -59,6 +59,37 @@ class SessionAuthenticationFilterTest {
     }
 
     @Test
+    void superAdmin은_다음_요청에서도_활성_그룹_역할을_함께_유지한다() throws Exception {
+        UserRepository userRepository = mock(UserRepository.class);
+        GroupMembershipRepository membershipRepository = mock(GroupMembershipRepository.class);
+        User user = mock(User.class);
+        GroupMembership membership = mock(GroupMembership.class);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(user.getId()).thenReturn(1L);
+        when(user.getStatus()).thenReturn("ACTIVE");
+        when(user.getGlobalRole()).thenReturn("SUPER_ADMIN");
+        when(membershipRepository.findByUserIdAndStatus(1L, "ACTIVE")).thenReturn(Optional.of(membership));
+        when(membership.getRole()).thenReturn("MEMBER");
+
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute(
+                SessionAuthenticationFilter.LOGIN_USER,
+                new LoginUser(1L, "전체관리자", Set.of("SUPER_ADMIN", "MEMBER"))
+        );
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setSession(session);
+
+        new SessionAuthenticationFilter(userRepository, membershipRepository)
+                .doFilter(request, new MockHttpServletResponse(), mock(FilterChain.class));
+
+        LoginUser refreshed = (LoginUser) session.getAttribute(SessionAuthenticationFilter.LOGIN_USER);
+        assertThat(refreshed.roles()).containsExactlyInAnyOrder("SUPER_ADMIN", "MEMBER");
+        assertThat(SecurityContextHolder.getContext().getAuthentication().getAuthorities())
+                .extracting("authority")
+                .containsExactlyInAnyOrder("ROLE_SUPER_ADMIN", "ROLE_MEMBER");
+    }
+
+    @Test
     void inactiveAccountRemovesAuthenticatedSessionState() throws Exception {
         UserRepository userRepository = mock(UserRepository.class);
         GroupMembershipRepository membershipRepository = mock(GroupMembershipRepository.class);

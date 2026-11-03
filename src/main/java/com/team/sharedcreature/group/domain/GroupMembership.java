@@ -91,4 +91,9 @@ public class GroupMembership {
     public static GroupMembership primary(Group group, User user, Instant now) {
         return new GroupMembership(group, user, "PRIMARY", now);
     }
+
+    /** 공개 또는 초대 가입자를 활성 일반 구성원으로 등록합니다. */
+    public static GroupMembership member(Group group, User user, Instant now) {
+        return new GroupMembership(group, user, "MEMBER", now);
+    }
 }
