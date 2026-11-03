@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -51,6 +52,15 @@ public class RestApiExceptionHandler {
                 .map(this::toFieldError)
                 .toList();
         return response(HttpStatus.BAD_REQUEST, "FIELD_VALIDATION_FAILED", "입력값을 확인해 주세요.", fields, request);
+    }
+
+    /** 비어 있거나 해석할 수 없는 JSON 본문을 내부 오류가 아닌 입력 오류로 변환합니다. */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadableBody(
+            HttpMessageNotReadableException exception,
+            HttpServletRequest request
+    ) {
+        return response(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "요청 본문을 확인해 주세요.", List.of(), request);
     }
 
     /** 존재하지 않는 API 경로를 안전한 404 응답으로 변환합니다. */

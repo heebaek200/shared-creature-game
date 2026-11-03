@@ -42,4 +42,30 @@ public class CreatureExperienceLedger {
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
+    private CreatureExperienceLedger(
+            GroupCreature groupCreature,
+            QuestCompletion questCompletion,
+            long experienceAmount,
+            long balanceAfter,
+            Instant now
+    ) {
+        this.groupCreature = groupCreature;
+        this.questCompletion = questCompletion;
+        this.experienceAmount = experienceAmount;
+        this.balanceAfter = balanceAfter;
+        this.occurredAt = now;
+        this.createdAt = now;
+    }
+
+    /** 유효한 퀘스트 완료로 확정된 크리처 경험치 원장을 생성합니다. */
+    public static CreatureExperienceLedger grant(
+            GroupCreature groupCreature,
+            QuestCompletion questCompletion,
+            long experienceAmount,
+            long balanceAfter,
+            Instant now
+    ) {
+        return new CreatureExperienceLedger(groupCreature, questCompletion, experienceAmount, balanceAfter, now);
+    }
 }
