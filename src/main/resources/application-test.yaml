@@ -1,0 +1,19 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${TEST_DB_URL:jdbc:mysql://localhost:3306/shared_creature_game_test?serverTimezone=UTC&characterEncoding=UTF-8}
+    username: ${TEST_DB_USERNAME:}
+    password: ${TEST_DB_PASSWORD:}
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+  sql:
+    init:
+      mode: always
+      schema-locations:
+        - classpath:db/special-schema.sql
+      data-locations: []
+  session:
+    jdbc:
+      initialize-schema: never
