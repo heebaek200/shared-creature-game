@@ -765,3 +765,11 @@
 - 대체한 결정: 그룹 기준 테이블명을 `groups`로 사용한 기존 데이터베이스 설계
 - 근거: `GROUPS`가 MySQL 8.0.2부터 예약어이므로 Hibernate `ddl-auto=update`가 생성하는 FK DDL에서 구문 오류가 발생하는 문제를 제거하기 위함입니다.
 - 영향 문서: database-design.md, decision-log.md, implementation-guide.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-03 PHOTO_EXIF 실기기 검증 대상 조정
+
+- 결정: `PHOTO_EXIF`의 MVP 필수 구현 정책은 유지하되, 필수 실기기 검증 대상을 Android Chrome으로 한정합니다. iOS Safari는 MVP 검증 대상에서 제외하며 정상 동작을 보장하지 않습니다. Android Chrome 검증 실패는 MVP 미완료로 처리합니다.
+- 상태: confirmed
+- 대체한 결정: Android Chrome과 iOS Safari 양쪽 실기기 검증을 MVP 완료 조건으로 요구한 정책
+- 근거: 2주 MVP의 검증 범위를 Android 환경으로 제한하면서 EXIF 위치·촬영 시각 인증이라는 핵심 기능은 유지하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, project_plan.md, screen-design.md, docs/spikes/exif-validation.md

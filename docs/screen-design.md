@@ -219,7 +219,7 @@ Vanilla JavaScript ES Module·Vite·Bootstrap v5 기반 Full CSR 화면과 Histo
 
 ### 완료 확인
 
-유효 제출과 GPS·시각 누락, JPEG 외 형식, 기간 종료가 각각 올바르게 안내됩니다. iOS 시연에는 카메라의 `높은 호환성` 설정을 안내합니다.
+유효 제출과 GPS·시각 누락, JPEG 외 형식, 기간 종료가 각각 올바르게 안내됩니다.
 
 ## 10. 랭킹과 그룹 화면
 
