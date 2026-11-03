@@ -73,32 +73,57 @@
 - **원인:** 초기 아바타 생성 시 프롬프트만으로 원하는 디테일을 구현하려 했으나 의도한 디자인이 반영되지 않아 여러 차례 시행착오 발생.
 - **조치:** PixelLab 내 기본 웹 편집 기능을 이용해 수작업으로 직접 디테일을 수정·보정함.
 
-### 3.3 검증용 크리처 및 아바타 샘플 이미지
+### 3.3 크리처 샘플 이미지
 
-> **[참고사항]** 본 검증 단계에서 확보한 샘플 이미지는 기술적 가능성 검증 및 리소스 표준(규격, 비율, 픽셀 감성)을 확립하기 위한 목적입니다. 정식 구현 전 일관된 화풍과 품질을 위한 디테일 정제(Polish) 작업이 진행될 예정입니다.
+> **[참고사항]** 본 검증 단계에서 확보한 샘플 이미지는 기술적 가능성 검증 및 리소스 표준(규격, 비율, 픽셀 감성)을 확립하기 위한 목적입니다. 프로젝트 기간내에 이미지는 계속 추가될 예정입니다.
 
 #### ① 크리처 샘플 이미지 (1~5단계)
 
 | 성장 단계 | 해상도 | 샘플 이미지 |
 | :---: | :---: | :---: | 
-| **1단계 (알)** | $64 \times 64\text{ px}$ | ![1단계 크리처](../images/sample/sample_creature_lv1.png) | 
-| **2단계 (유아기)** | $64 \times 64\text{ px}$ | ![2단계 크리처](../images/sample/sample_creature_lv2.png) | 
-| **3단계 (기준 샘플)** | $64 \times 64\text{ px}$ | ![3단계 크리처](../images/sample/sample_creature_lv3.png) | 
-| **4단계 (성장기)** | $128 \times 128\text{ px}$ | ![4단계 크리처](../images/sample/sample_creature_lv4.png) | 
-| **5단계 (완성체)** | $256 \times 256\text{ px}$ | ![5단계 크리처](../images/sample/sample_creature_lv5.png) | 
+| **1단계 (알)** | $64 \times 64\text{ px}$ | ![1단계 크리처](../images/sample/creature/sample_creature_lv1.png) | 
+| **2단계 (유아기)** | $64 \times 64\text{ px}$ | ![2단계 크리처](../images/sample/creature/sample_creature_lv2.png) | 
+| **3단계 (기준 샘플)** | $64 \times 64\text{ px}$ | ![3단계 크리처](../images/sample/creature/sample_creature_lv3.png) | 
+| **4단계 (성장기)** | $128 \times 128\text{ px}$ | ![4단계 크리처](../images/sample/creature/sample_creature_lv4.png) | 
+| **5단계 (완성체)** | $256 \times 256\text{ px}$ | ![5단계 크리처](../images/sample/creature/sample_creature_lv5.png) | 
 
-#### ② 아바타 샘플 이미지 및 상태별 예시 ($60 \times 60\text{ px}$)
+### 3.4 아바타 규격 및 레이어 구조 ($60 \times 60\text{ px}$)
+- **크기 및 피벗:** 통일 $60 \times 60\text{ px}$ (하단 $10\text{ px}$ 바닥 피벗 기준).
+- **합성 방식:** 기본 바디 위에 독립된 아이템 파츠(의상, 머리장식 등)를 캔버스 렌더링 시 실시간 오버레이 레이어 스태킹(Layer Stacking) 방식으로 결합.
 
-| 상태 / 구분 | 해상도 | 샘플 이미지 | 설명                                               |
-| :--- | :---: | :---: |:---------------------------------------------------|
-| **기본 대기 (좌)** | $60 \times 60\text{ px}$ | ![대기 좌](../images/sample/sample_avatar_left_stop.png) | 기본 바디 상태의 좌측 대기(Idle) 이미지            |
-| **기본 대기 (우)** | $60 \times 60\text{ px}$ | ![대기 우](../images/sample/sample_avatar_right_stop.png) | 기본 바디 상태의 우측 대기(Idle) 이미지            |
-| **이동 프레임 1 (기본)** | $60 \times 60\text{ px}$ | ![이동1](../images/sample/sample_avatar_right_1.png) | 기본 바디 상태의 보행(Walk) 프레임 #1              |
-| **이동 프레임 2 (기본)** | $60 \times 60\text{ px}$ | ![이동2](../images/sample/sample_avatar_right_2.png) | 기본 바디 상태의 보행(Walk) 프레임 #2              |
-| **이동 프레임 1 (파츠 장착)** | $60 \times 60\text{ px}$ | ![장착 이동1](../images/sample/sample_avatar_right_item_1.png) | 장식, 헤어, 얼굴, 의상 파츠 합성 후 보행 프레임 #1 |
-| **이동 프레임 2 (파츠 장착)** | $60 \times 60\text{ px}$ | ![장착 이동2](../images/sample/sample_avatar_right_item_2.png) | 장식, 헤어, 얼굴, 의상 파츠 합성 후 보행 프레임 #2 |
+#### ① 아바타 레이어 구조 (총 5개 레이어 분리):
+1. **Layer 0 (Base):** 기본 캐릭터 바디 (`docs/images/sample/avatar/`)
+2. **Layer 1 (Face Parts):** 얼굴 파츠 (`docs/images/sample/item/`)
+3. **Layer 2 (Clothes):** 의상 파츠 (`docs/images/sample/item/`)
+4. **Layer 3 (Hair):** 헤어 파츠 (`docs/images/sample/item/`)
+5. **Layer 4 (Accessory):** 손/외곽 아이템 파츠 (`docs/images/sample/item/`)
 
----
+#### ② 아바타 베이스 리소스 예시 (`docs/images/sample/avatar/`)
+
+| 구분 | 파일명 | 해상도 | 샘플 이미지 | 설명 |
+| :--- | :--- | :---: | :---: | :--- |
+| **대기 (좌)** | `stop-left-avatar.png` | $60 \times 60\text{ px}$ | ![대기 좌](../images/sample/avatar/stop-left-avatar.png) | 기본 바디 상태의 좌측 대기(Idle) 프레임 |
+| **대기 (우)** | `stop-right-avatar.png` | $60 \times 60\text{ px}$ | ![대기 우](../images/sample/avatar/stop-right-avatar.png) | 기본 바디 상태의 우측 대기(Idle) 프레임 |
+| **보행 (좌) #1** | `walk-left-avatar-1.png` | $60 \times 60\text{ px}$ | ![보행 좌 1](../images/sample/avatar/walk-left-avatar-1.png) | 기본 바디 상태의 좌측 보행(Walk) 첫 번째 프레임 |
+| **보행 (좌) #2** | `walk-left-avatar-2.png` | $60 \times 60\text{ px}$ | ![보행 좌 2](../images/sample/avatar/walk-left-avatar-2.png) | 기본 바디 상태의 좌측 보행(Walk) 두 번째 프레임 |
+| **보행 (우) #1** | `walk-right-avatar-1.png` | $60 \times 60\text{ px}$ | ![보행 우 1](../images/sample/avatar/walk-right-avatar-1.png) | 기본 바디 상태의 우측 보행(Walk) 첫 번째 프레임 |
+| **보행 (우) #2** | `walk-right-avatar-2.png` | $60 \times 60\text{ px}$ | ![보행 우 2](../images/sample/avatar/walk-right-avatar-2.png) | 기본 바디 상태의 우측 보행(Walk) 두 번째 프레임 |
+
+
+#### ③ 아이템 파츠 리소스 예시 (`docs/images/sample/item/`)
+
+| 레이어 | 구분 | 파일명 | 해상도 | 샘플 이미지 | 설명 |
+| :---: | :--- | :--- | :---: | :---: | :--- |
+| **Layer 1** | 얼굴 (정지 좌) | `stop-left-face.png` | $60 \times 60\text{ px}$ | ![얼굴 좌](../images/sample/item/stop-left-face.png) | 좌측 대기 시 눈/입 표정 파츠 |
+| **Layer 1** | 얼굴 (정지 우) | `stop-right-face.png` | $60 \times 60\text{ px}$ | ![얼굴 우](../images/sample/item/stop-right-face.png) | 우측 대기 시 눈/입 표정 파츠 |
+| **Layer 2** | 의상 (정지 좌) | `stop-left-cloth.png` | $60 \times 60\text{ px}$ | ![의상 좌](../images/sample/item/stop-left-cloth.png) | 좌측 대기 시 상하의 및 신발 세트 파츠 |
+| **Layer 2** | 의상 (정지 우) | `stop-right-cloth.png` | $60 \times 60\text{ px}$ | ![의상 우](../images/sample/item/stop-right-cloth.png) | 우측 대기 시 상하의 및 신발 세트 파츠 |
+| **Layer 3** | 헤어 (정지 좌) | `stop-left-hair.png` | $60 \times 60\text{ px}$ | ![헤어 좌](../images/sample/item/stop-left-hair.png) | 좌측 대기 시 헤어스타일 파츠 |
+| **Layer 3** | 헤어 (정지 우) | `stop-right-hair-1.png` | $60 \times 60\text{ px}$ | ![헤어 우](../images/sample/item/stop-right-hair-1.png) | 우측 대기 시 헤어스타일 파츠 |
+| **Layer 3** | 헤어 (이동 우 #1) | `walk-right-hair-1.png` | $60 \times 60\text{ px}$ | ![헤어 이동1](../images/sample/item/walk-right-hair-1.png) | 우측 보행 프레임 #1에 대응하는 헤어 파츠 |
+| **Layer 3** | 헤어 (이동 우 #2) | `walk-right-hair-2.png` | $60 \times 60\text{ px}$ | ![헤어 이동2](../images/sample/item/walk-right-hair-2.png) | 우측 보행 프레임 #2에 대응하는 헤어 파츠 |
+| **Layer 4** | 액세서리 (정지 좌) | `stop-left-ac.png` | $60 \times 60\text{ px}$ | ![액세서리 좌](../images/sample/item/stop-left-ac.png) | 좌측 대기 시 머리핀/모자 장식 액세서리 |
+| **Layer 4** | 액세서리 (정지 우) | `stop-right-ac.png` | $60 \times 60\text{ px}$ | ![액세서리 우](../images/sample/item/stop-right-ac.png) | 우측 대기 시 머리핀/모자 장식 액세서리 |
 
 ## 4. 필드 배치 및 겹침 처리 규칙 (Z-Index Hierarchy)
 
@@ -163,22 +188,35 @@
      image-rendering: pixelated;
    }
    ```
-4. **에셋 파일 저장 및 명명 규칙:**
+4. **샘플 에셋 파일 저장 및 명명 규칙:**
    ```text
-   docs/
-   ├── images/
-   │   └── sample/
-   │       ├── sample_creature_lv1.png
-   │       ├── sample_creature_lv2.png
-   │       ├── sample_creature_lv3.png
-   │       ├── sample_creature_lv4.png
-   │       ├── sample_creature_lv5.png
-   │       ├── sample_avatar_left_stop.png
-   │       ├── sample_avatar_right_stop.png
-   │       ├── sample_avatar_right_1.png
-   │       ├── sample_avatar_right_2.png
-   │       ├── sample_avatar_right_item_1.png
-   │       └── sample_avatar_right_item_2.png
-   └── spikes/
-       └── asset-sourcing.md
+    docs/
+    ├── images/
+    │   └── sample/
+    │       ├── avatar/
+    │       │   ├── stop-left-avatar.png
+    │       │   ├── stop-right-avatar.png
+    │       │   ├── walk-left-avatar-1.png
+    │       │   ├── walk-left-avatar-2.png
+    │       │   ├── walk-right-avatar-1.png
+    │       │   └── walk-right-avatar-2.png
+    │       ├── creature/
+    │       │   ├── sample_creature_lv1.png
+    │       │   ├── sample_creature_lv2.png
+    │       │   ├── sample_creature_lv3.png
+    │       │   ├── sample_creature_lv4.png
+    │       │   └── sample_creature_lv5.png
+    │       └── item/
+    │           ├── stop-left-ac.png
+    │           ├── stop-left-cloth.png
+    │           ├── stop-left-face.png
+    │           ├── stop-left-hair.png
+    │           ├── stop-right-ac.png
+    │           ├── stop-right-cloth.png
+    │           ├── stop-right-face.png
+    │           ├── stop-right-hair-1.png
+    │           ├── walk-right-hair-1.png
+    │           └── walk-right-hair-2.png
+    └── spikes/
+    └── asset-sourcing.md
    ```
