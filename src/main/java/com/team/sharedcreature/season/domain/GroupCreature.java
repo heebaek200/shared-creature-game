@@ -61,7 +61,7 @@ public class GroupCreature {
         this.groupSeason = groupSeason;
         this.totalExperience = 0L;
         this.growthStage = "EGG";
-        this.status = "EGG";
+        this.status = "ACTIVE";
         this.createdAt = now;
         this.updatedAt = now;
     }
