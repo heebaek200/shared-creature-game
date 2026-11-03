@@ -19,3 +19,19 @@ spring:
     properties:
       hibernate:
         default_batch_fetch_size: 100
+  session:
+    store-type: jdbc
+    timeout: 7d
+    jdbc:
+      initialize-schema: never
+
+oauth:
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
+    client-secret: ${GOOGLE_CLIENT_SECRET:}
+    redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:5173/oauth2/callback/google}
+
+auth:
+  initial-super-admin:
+    provider: ${INITIAL_SUPER_ADMIN_PROVIDER:}
+    provider-user-id: ${INITIAL_SUPER_ADMIN_PROVIDER_USER_ID:}

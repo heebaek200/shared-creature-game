@@ -297,6 +297,10 @@ $RECYCLE.BIN/
 *.env
 !.env.example
 
+# Frontend build output
+frontend/node_modules/
+frontend/dist/
+
 ### Gradle project ###
 # Spring Initializr 프로젝트의 로컬 캐시와 빌드 산출물은 제외합니다.
 .gradle/
