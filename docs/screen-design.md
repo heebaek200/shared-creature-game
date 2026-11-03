@@ -21,28 +21,28 @@ Vanilla JavaScript ES Module·Vite·Bootstrap v5 기반 Full CSR 화면과 Histo
 
 ## 2. 화면 경로
 
-**기존 Route·요청 ID·와이어프레임 파일을 변경하지 않습니다.** 화면의 최초 조회와 버튼 동작 Operation은 [구현 안내서 4절](implementation-guide.md#4-화면별-rest-api-연결표)을 따릅니다.
+와이어프레임의 **미리보기**는 GitHub Pages에 배포된 HTML을 열고, **HTML 소스**는 저장소 내 파일을 엽니다. 미리보기 URL은 GitHub Pages가 `main` 브랜치의 `/docs` 디렉터리를 게시하고, 프로젝트 사이트 주소가 `https://heebaek200.github.io/shared-creature-game/`인 경우를 전제로 합니다. 현재 배포 설정 및 실제 공개 여부는 미확인 상태입니다. 배포 전에는 로컬의 `docs/design/wireframes/index.html`을 브라우저에서 열어 확인합니다.
 
-| 접근 구분 | 경로 | 요청 ID | 구현할 기능 | 작업 대상(와이어프레임) |
+| 접근 구분 | 경로 | 요청 ID | 구현할 기능 | 와이어프레임 |
 |---|---|---|---|---|
-| 공개 | `/login` | `REQ-AUTH-001`, `REQ-AUTH-003`, `REQ-AUTH-004` | Google·Naver 로그인 | [로그인](design/wireframes/login.md) |
-| 공개 | `/invite/:token` | `REQ-INV-001` | 초대 확인·수락·거절 | [초대](design/wireframes/invite.md) |
-| 가입 진행 | `/signup` | `REQ-AUTH-002`, `REQ-AUTH-003`, `REQ-INV-001` | 닉네임 확정·가입 완료 | [회원가입](design/wireframes/signup.md) |
-| 그룹 없음 | `/groups/select` | `REQ-AUTH-002`, `REQ-GRP-001`, `REQ-GRP-002`, `REQ-AI-001` | 공개 그룹 가입·생성·소개 교정 | [그룹 선택](design/wireframes/group-select.md) |
-| 그룹 회원 | `/creature` | `REQ-SEA-001`, `REQ-SEA-002`, `REQ-SEA-003`, `REQ-QST-002`, `REQ-AVA-002`, `REQ-RT-001` | 크리처 홈·Presence | [크리처](design/wireframes/creature.md) |
-| 그룹 회원 | `/quests` | `REQ-QST-001`, `REQ-QST-002`, `REQ-QST-003`, `REQ-QST-004` | 일일·주간 퀘스트·사진 제출 | [퀘스트](design/wireframes/quests.md) |
-| 그룹 회원 | `/rankings` | `REQ-RNK-001`, `REQ-RNK-002` | 시즌 개인·그룹 랭킹 | [랭킹](design/wireframes/rankings.md) |
-| 그룹 회원 | `/group` | `REQ-GRP-002`, `REQ-GRP-003`, `REQ-GRP-006` | 그룹 현황·탈퇴·신고 | [그룹](design/wireframes/group.md) |
-| 로그인 회원 | `/shop` | `REQ-AVA-001`, `REQ-PAY-001` | 상품·테스트 결제 | [상점](design/wireframes/shop.md) |
-| 로그인 회원 | `/avatar` | `REQ-AVA-001` | 아바타 아이템 장착 | [아바타](design/wireframes/avatar.md) |
-| 로그인 회원 | `/payments` | `REQ-PAY-001`, `REQ-PAY-002` | 결제·환불 이력과 요청 | [결제 내역](design/wireframes/payments.md) |
-| 그룹 관리자 | `/group-admin` | `REQ-INV-002`, `REQ-GRP-004`, `REQ-GRP-005`, `REQ-SEA-002` | 구성원·권한·초대·종 선택 | [그룹 관리](design/wireframes/group-admin.md) |
-| 전체 관리자 | `/admin` | `REQ-ADM-001` | 운영 대시보드 | [대시보드](design/wireframes/admin-dashboard.md) |
-| 전체 관리자 | `/admin/reports` | `REQ-GRP-006`, `REQ-ADM-002` | 신고 검토·강퇴 | [신고](design/wireframes/admin-reports.md) |
-| 전체 관리자 | `/admin/refunds` | `REQ-PAY-002`, `REQ-ADM-003` | 환불 승인·거절·복구 | [환불](design/wireframes/admin-refunds.md) |
-| 전체 관리자 | `/admin/operations` | `REQ-GRP-004`, `REQ-SEA-001`, `REQ-QST-001`, `REQ-ADM-004` | 시즌·Scheduler·운영 경고 | [운영](design/wireframes/admin-operations.md) |
-| 오류 | `/403` | 권한 제한 요청 | 접근 거부 | [오류](design/wireframes/errors.md) |
-| 오류 | `*` | 해당 없음 | 404 | [오류](design/wireframes/errors.md) |
+| 공개 | `/login` | `REQ-AUTH-001`, `REQ-AUTH-003`, `REQ-AUTH-004` | Google·Naver 로그인 | [로그인 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/login.html) · [HTML 소스](design/wireframes/login.html) |
+| 공개 | `/invite/:token` | `REQ-INV-001` | 초대 확인·수락·거절 | [초대 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/invite.html) · [HTML 소스](design/wireframes/invite.html) |
+| 가입 진행 | `/signup` | `REQ-AUTH-002`, `REQ-AUTH-003`, `REQ-INV-001` | 닉네임 확정·가입 완료 | [회원가입 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/signup.html) · [HTML 소스](design/wireframes/signup.html) |
+| 그룹 없음 | `/groups/select` | `REQ-AUTH-002`, `REQ-GRP-001`, `REQ-GRP-002`, `REQ-AI-001` | 공개 그룹 가입·생성·소개 교정 | [그룹 선택 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/group-select.html) · [HTML 소스](design/wireframes/group-select.html) |
+| 그룹 회원 | `/creature` | `REQ-SEA-001`, `REQ-SEA-002`, `REQ-SEA-003`, `REQ-QST-002`, `REQ-AVA-002`, `REQ-RT-001` | 크리처 홈·Presence | [크리처 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/creature.html) · [HTML 소스](design/wireframes/creature.html) |
+| 그룹 회원 | `/quests` | `REQ-QST-001`, `REQ-QST-002`, `REQ-QST-003`, `REQ-QST-004` | 일일·주간 퀘스트·사진 제출 | [퀘스트 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/quests.html) · [HTML 소스](design/wireframes/quests.html) |
+| 그룹 회원 | `/rankings` | `REQ-RNK-001`, `REQ-RNK-002` | 시즌 개인·그룹 랭킹 | [랭킹 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/rankings.html) · [HTML 소스](design/wireframes/rankings.html) |
+| 그룹 회원 | `/group` | `REQ-GRP-002`, `REQ-GRP-003`, `REQ-GRP-006` | 그룹 현황·탈퇴·신고 | [그룹 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/group.html) · [HTML 소스](design/wireframes/group.html) |
+| 로그인 회원 | `/shop` | `REQ-AVA-001`, `REQ-PAY-001` | 상품·테스트 결제 | [상점 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/shop.html) · [HTML 소스](design/wireframes/shop.html) |
+| 로그인 회원 | `/avatar` | `REQ-AVA-001` | 아바타 아이템 장착 | [아바타 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/avatar.html) · [HTML 소스](design/wireframes/avatar.html) |
+| 로그인 회원 | `/payments` | `REQ-PAY-001`, `REQ-PAY-002` | 결제·환불 이력과 요청 | [결제 내역 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/payments.html) · [HTML 소스](design/wireframes/payments.html) |
+| 그룹 관리자 | `/group-admin` | `REQ-INV-002`, `REQ-GRP-004`, `REQ-GRP-005`, `REQ-SEA-002` | 구성원·권한·초대·종 선택 | [그룹 관리 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/group-admin.html) · [HTML 소스](design/wireframes/group-admin.html) |
+| 전체 관리자 | `/admin` | `REQ-ADM-001` | 운영 대시보드 | [대시보드 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/admin-dashboard.html) · [HTML 소스](design/wireframes/admin-dashboard.html) |
+| 전체 관리자 | `/admin/reports` | `REQ-GRP-006`, `REQ-ADM-002` | 신고 검토·강퇴 | [신고 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/admin-reports.html) · [HTML 소스](design/wireframes/admin-reports.html) |
+| 전체 관리자 | `/admin/refunds` | `REQ-PAY-002`, `REQ-ADM-003` | 환불 승인·거절·복구 | [환불 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/admin-refunds.html) · [HTML 소스](design/wireframes/admin-refunds.html) |
+| 전체 관리자 | `/admin/operations` | `REQ-GRP-004`, `REQ-SEA-001`, `REQ-QST-001`, `REQ-ADM-004` | 시즌·Scheduler·운영 경고 | [운영 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/admin-operations.html) · [HTML 소스](design/wireframes/admin-operations.html) |
+| 오류 | `/403` | 권한 제한 요청 | 접근 거부 | [오류 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/errors.html) · [HTML 소스](design/wireframes/errors.html) |
+| 오류 | `*` | 해당 없음 | 404 | [오류 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/errors.html) · [HTML 소스](design/wireframes/errors.html) |
 
 그룹 회원의 기본 경로는 `/creature`, 전체 관리자의 관리 기본 경로는 `/admin`입니다. `REQ-UI-001`·`REQ-UI-002`는 전체 화면, `REQ-AUTH-004`는 Route Guard 전체에 적용합니다.
 
@@ -219,7 +219,7 @@ Vanilla JavaScript ES Module·Vite·Bootstrap v5 기반 Full CSR 화면과 Histo
 
 ### 완료 확인
 
-유효 제출과 GPS·시각 누락, JPEG 외 형식, 기간 종료가 각각 올바르게 안내됩니다.
+유효 제출과 GPS·시각 누락, JPEG 외 형식, 기간 종료가 각각 올바르게 안내됩니다. iOS 시연에는 카메라의 `높은 호환성` 설정을 안내합니다.
 
 ## 10. 랭킹과 그룹 화면
 
