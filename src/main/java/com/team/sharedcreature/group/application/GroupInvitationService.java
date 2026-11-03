@@ -5,6 +5,7 @@ import com.team.sharedcreature._core.security.Hashing;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature._core.security.SessionAuthenticationFilter;
 import com.team.sharedcreature.auth.application.AuthService;
+import com.team.sharedcreature.auth.application.PendingSignup;
 import com.team.sharedcreature.group.api.NavigationResponse;
 import com.team.sharedcreature.group.api.PublicInvitationResponse;
 import com.team.sharedcreature.group.domain.GroupInviteLink;
@@ -39,8 +40,8 @@ public class GroupInvitationService {
 
     /** 활성 Token의 공개 그룹 상태를 조회합니다. */
     @Transactional(readOnly = true)
-    public PublicInvitationResponse getPublicInvitation(String token) {
-        return response(activeInvitation(token));
+    public PublicInvitationResponse getPublicInvitation(String token, HttpSession session) {
+        return response(activeInvitation(token), session);
     }
 
     /** 초대를 세션에 연결하거나 인증된 무소속 사용자를 즉시 가입시킵니다. */
@@ -50,10 +51,6 @@ public class GroupInvitationService {
         if (!"ACTIVE".equals(invitation.getGroup().getStatus())) {
             throw conflict("INVITE_INVALID", "현재 사용할 수 없는 초대입니다.");
         }
-        if (invitation.getGroup().getCurrentMemberCount() >= invitation.getGroup().getCapacity()) {
-            throw conflict("GROUP_FULL", "그룹 정원이 가득 찼습니다.");
-        }
-
         Object login = session.getAttribute(SessionAuthenticationFilter.LOGIN_USER);
         if (login instanceof LoginUser loginUser) {
             var current = membershipRepository.findActiveWithGroupByUserId(loginUser.id());
@@ -63,7 +60,10 @@ public class GroupInvitationService {
                 }
                 throw conflict("ALREADY_IN_GROUP", "이미 활성 그룹에 소속되어 있습니다.");
             }
-            var membership = membershipService.joinGroup(loginUser, invitation.getGroup().getId());
+            if (invitation.getGroup().getCurrentMemberCount() >= invitation.getGroup().getCapacity()) {
+                throw conflict("GROUP_FULL", "그룹 정원이 가득 찼습니다.");
+            }
+            var membership = membershipService.joinInvitation(loginUser, invitation.getId());
             var roles = new HashSet<>(loginUser.roles());
             roles.add(membership.role());
             session.setAttribute(
@@ -74,10 +74,18 @@ public class GroupInvitationService {
             return new NavigationResponse("/creature", null);
         }
 
+        if (invitation.getGroup().getCurrentMemberCount() >= invitation.getGroup().getCapacity()) {
+            throw conflict("GROUP_FULL", "그룹 정원이 가득 찼습니다.");
+        }
+
         session.setAttribute(
                 InvitationSessionContext.SESSION_KEY,
                 new InvitationSessionContext(invitation.getId())
         );
+        Object pending = session.getAttribute(AuthService.PENDING_SIGNUP);
+        if (pending instanceof PendingSignup pendingSignup) {
+            session.setAttribute(AuthService.PENDING_SIGNUP, pendingSignup.withInviteLinkId(invitation.getId()));
+        }
         return new NavigationResponse(
                 session.getAttribute(AuthService.PENDING_SIGNUP) == null ? "/login" : "/signup",
                 null
@@ -87,9 +95,9 @@ public class GroupInvitationService {
     /** 초대 문맥과 가입 대기를 제거하고 현재 인증 상태에 맞는 일반 경로를 반환합니다. */
     @Transactional(readOnly = true)
     public NavigationResponse rejectInvitation(String token, HttpSession session) {
-        activeInvitation(token);
         session.removeAttribute(InvitationSessionContext.SESSION_KEY);
         session.removeAttribute(AuthService.PENDING_SIGNUP);
+        activeInvitation(token);
 
         Object login = session.getAttribute(SessionAuthenticationFilter.LOGIN_USER);
         if (login instanceof LoginUser loginUser) {
@@ -102,26 +110,50 @@ public class GroupInvitationService {
     }
 
     private GroupInviteLink activeInvitation(String token) {
-        return inviteLinkRepository.findByTokenHashAndStatus(Hashing.sha256(token), "ACTIVE")
+        GroupInviteLink invitation = inviteLinkRepository.findByTokenHash(Hashing.sha256(token))
                 .orElseThrow(() -> new BusinessException(
                         HttpStatus.NOT_FOUND,
                         "RESOURCE_NOT_FOUND",
                         "초대 정보를 찾을 수 없습니다."
                 ));
+        if (!"ACTIVE".equals(invitation.getStatus())) {
+            throw conflict("INVITE_INVALID", "현재 사용할 수 없는 초대입니다.");
+        }
+        return invitation;
     }
 
-    private PublicInvitationResponse response(GroupInviteLink invitation) {
+    private PublicInvitationResponse response(GroupInviteLink invitation, HttpSession session) {
         var group = invitation.getGroup();
-        boolean groupActive = "ACTIVE".equals(group.getStatus());
-        boolean acceptable = groupActive && group.getCurrentMemberCount() < group.getCapacity();
+        String blockedReason = blockedReason(group, session);
         return new PublicInvitationResponse(
                 group.getId(),
                 group.getName(),
+                group.getDescription(),
                 group.getCurrentMemberCount(),
                 group.getCapacity(),
-                groupActive ? "ACTIVE" : "GROUP_UNAVAILABLE",
-                acceptable
+                blockedReason == null,
+                blockedReason
         );
+    }
+
+    private String blockedReason(com.team.sharedcreature.group.domain.Group group, HttpSession session) {
+        if (!"ACTIVE".equals(group.getStatus())) {
+            return "INVITE_INVALID";
+        }
+        Object login = session.getAttribute(SessionAuthenticationFilter.LOGIN_USER);
+        if (login instanceof LoginUser loginUser) {
+            var membership = membershipRepository.findActiveWithGroupByUserId(loginUser.id());
+            if (membership.isPresent()) {
+                return "ALREADY_IN_GROUP";
+            }
+            if (membershipService.isJoinRestricted(loginUser.id())) {
+                return "JOIN_COOLDOWN_ACTIVE";
+            }
+        }
+        if (group.getCurrentMemberCount() >= group.getCapacity()) {
+            return "GROUP_FULL";
+        }
+        return null;
     }
 
     private BusinessException conflict(String code, String message) {

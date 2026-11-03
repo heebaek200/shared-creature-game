@@ -6,7 +6,6 @@ import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature._core.security.SessionAuthenticationFilter;
 import com.team.sharedcreature.auth.application.AuthService;
 import com.team.sharedcreature.auth.application.PendingSignup;
-import com.team.sharedcreature.group.api.PublicInvitationResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
@@ -81,7 +80,10 @@ public class AuthController {
                 pending.email(),
                 pending.suggestedNickname(),
                 pending.expiresAt(),
-                authService.signupInvitation(pending).orElse(null)
+                authService.signupInvitation(pending)
+                        .map(invitation -> new SignupInvitationResponse(
+                                invitation.groupId(), invitation.groupName()))
+                        .orElse(null)
         ));
     }
 
@@ -108,10 +110,10 @@ public class AuthController {
         Object pending = session.getAttribute(AuthService.PENDING_SIGNUP);
         if (pending instanceof PendingSignup pendingSignup && pendingSignup.expiresAt().isAfter(Instant.now())) {
             return ApiResponse.success(new CurrentUserResponse(
-                    "SIGNUP_PENDING", "SIGNUP_REQUIRED", null, null, List.of(), null, null, null));
+                    "SIGNUP_PENDING", "SIGNUP_REQUIRED", null, null, List.of(), null, null));
         }
         return ApiResponse.success(new CurrentUserResponse(
-                "ANONYMOUS", "NOT_STARTED", null, null, List.of(), null, null, null));
+                "ANONYMOUS", "NOT_STARTED", null, null, List.of(), null, null));
     }
 
     /** 현재 애플리케이션 세션만 무효화합니다. */
@@ -144,7 +146,6 @@ public class AuthController {
                 membership,
                 user.roles().stream().sorted().toList(),
                 authService.currentRestrictionUntil(user.id()).orElse(null),
-                null,
                 onboardingReason
         );
     }
@@ -157,7 +158,7 @@ public class AuthController {
     /** OAuth 로그인 시작 요청입니다. */
     public record OAuthAttemptRequest(
             @NotBlank @Pattern(regexp = "GOOGLE") String provider,
-            @Pattern(regexp = "DEFAULT|INVITATION") String returnRoute
+            @Pattern(regexp = "DEFAULT|INVITE") String returnRoute
     ) {
     }
 
@@ -171,8 +172,12 @@ public class AuthController {
             String email,
             String suggestedNickname,
             Instant expiresAt,
-            PublicInvitationResponse invitation
+            SignupInvitationResponse invitation
     ) {
+    }
+
+    /** 가입 화면에 필요한 최소 초대 그룹 정보입니다. */
+    public record SignupInvitationResponse(Long groupId, String groupName) {
     }
 
     /** 신규 회원 닉네임 입력입니다. */
@@ -187,7 +192,6 @@ public class AuthController {
             MembershipResponse membership,
             List<String> roles,
             Instant restrictionUntil,
-            String sessionNotice,
             String onboardingReason
     ) {
     }

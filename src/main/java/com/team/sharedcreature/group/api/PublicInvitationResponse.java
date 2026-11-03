@@ -4,9 +4,10 @@ package com.team.sharedcreature.group.api;
 public record PublicInvitationResponse(
         Long groupId,
         String groupName,
+        String description,
         int currentMemberCount,
         int capacity,
-        String status,
-        boolean acceptable
+        boolean joinable,
+        String joinBlockedReason
 ) {
 }

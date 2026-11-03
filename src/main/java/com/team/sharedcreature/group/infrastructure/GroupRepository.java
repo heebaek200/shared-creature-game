@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.util.Optional;
@@ -32,4 +33,18 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT group FROM Group group WHERE group.id = :groupId")
     Optional<Group> findByIdForUpdate(@Param("groupId") Long groupId);
+
+    /** 정원이 남은 활성 공개 그룹의 카운터를 조건부로 한 명 증가시킵니다. */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE game_groups
+               SET current_member_count = current_member_count + 1
+                 , updated_at = :now
+                 , version = version + 1
+             WHERE id = :groupId
+               AND status = 'ACTIVE'
+               AND visibility = 'PUBLIC'
+               AND current_member_count < capacity
+            """, nativeQuery = true)
+    int incrementMemberCountIfAvailable(@Param("groupId") Long groupId, @Param("now") java.time.Instant now);
 }

@@ -13,6 +13,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.sql.Statement;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.test.context.ActiveProfiles;
 
 /** 실제 MySQL 잠금으로 그룹 정원과 사용자당 단일 활성 멤버십을 검증합니다. */
@@ -54,6 +56,9 @@ class GroupJoinConcurrencyIntegrationTest {
         Long firstUserId = insertUser();
         Long secondUserId = insertUser();
         Long groupId = insertGroup(NAME_PREFIX + "정원", 19);
+        for (int index = 0; index < 19; index++) {
+            insertMembership(groupId, insertUser(), index == 0 ? "PRIMARY" : "MEMBER");
+        }
         CountDownLatch start = new CountDownLatch(1);
 
         Future<String> first = submitJoin(firstUserId, groupId, start);
@@ -69,14 +74,14 @@ class GroupJoinConcurrencyIntegrationTest {
                 "SELECT COUNT(*) FROM group_memberships WHERE group_id = ? AND status = 'ACTIVE'",
                 Integer.class,
                 groupId
-        )).isEqualTo(1);
+        )).isEqualTo(20);
     }
 
     @Test
     void 한_사용자가_서로_다른_그룹에_동시_가입하면_한_건만_활성화된다() throws Exception {
         Long userId = insertUser();
-        Long firstGroupId = insertGroup(NAME_PREFIX + "가", 1);
-        Long secondGroupId = insertGroup(NAME_PREFIX + "나", 1);
+        Long firstGroupId = insertGroup(NAME_PREFIX + "가", 0);
+        Long secondGroupId = insertGroup(NAME_PREFIX + "나", 0);
         CountDownLatch start = new CountDownLatch(1);
 
         Future<String> first = submitJoin(userId, firstGroupId, start);
@@ -105,8 +110,7 @@ class GroupJoinConcurrencyIntegrationTest {
     }
 
     private Long insertUser() {
-        jdbcTemplate.update(
-                """
+        String sql = """
                 INSERT INTO users (
                     status
                   , global_role
@@ -116,16 +120,16 @@ class GroupJoinConcurrencyIntegrationTest {
                   , created_at
                   , updated_at
                 ) VALUES ('ACTIVE', 'USER', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), 0, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
-                """
-        );
-        Long userId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+                """;
+        GeneratedKeyHolder keyHolder = new GeneratedKeyHolder();
+        jdbcTemplate.update(connection -> connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS), keyHolder);
+        Long userId = keyHolder.getKey().longValue();
         fixtureUserIds.add(userId);
         return userId;
     }
 
     private Long insertGroup(String name, int memberCount) {
-        jdbcTemplate.update(
-                """
+        String sql = """
                 INSERT INTO game_groups (
                     name
                   , normalized_name
@@ -139,12 +143,36 @@ class GroupJoinConcurrencyIntegrationTest {
                   , created_at
                   , updated_at
                 ) VALUES (?, ?, '', 'PUBLIC', 'ACTIVE', 20, ?, NULL, 0, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+                """;
+        GeneratedKeyHolder keyHolder = new GeneratedKeyHolder();
+        jdbcTemplate.update(connection -> {
+            var statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+            statement.setString(1, name);
+            statement.setString(2, name);
+            statement.setInt(3, memberCount);
+            return statement;
+        }, keyHolder);
+        return keyHolder.getKey().longValue();
+    }
+
+    private void insertMembership(Long groupId, Long userId, String role) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO group_memberships (
+                    group_id
+                  , user_id
+                  , role
+                  , status
+                  , joined_at
+                  , version
+                  , created_at
+                  , updated_at
+                ) VALUES (?, ?, ?, 'ACTIVE', UTC_TIMESTAMP(6), 0, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
                 """,
-                name,
-                name,
-                memberCount
+                groupId,
+                userId,
+                role
         );
-        return jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
     private void deleteFixtures() {

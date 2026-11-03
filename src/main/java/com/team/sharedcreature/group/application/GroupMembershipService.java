@@ -95,6 +95,13 @@ public class GroupMembershipService {
      */
     @Transactional
     public CreateGroupResponse createGroup(LoginUser loginUser, CreateGroupRequest request) {
+        Season season = seasonRepository.findForShareByStatus("ACTIVE", PageRequest.of(0, 1)).stream()
+                .findFirst()
+                .orElseThrow(() -> notFound("현재 시즌을 찾을 수 없습니다."));
+        Instant now = Instant.now(clock);
+        if (!"ACTIVE".equals(season.getStatus()) || !now.isBefore(season.getEndAt())) {
+            throw notFound("현재 시즌을 찾을 수 없습니다.");
+        }
         User creator = userRepository.findByIdForUpdate(loginUser.id())
                 .orElseThrow(() -> new BusinessException(HttpStatus.UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다."));
         String name = normalize(request.name());
@@ -105,13 +112,6 @@ public class GroupMembershipService {
         }
         if (membershipRepository.existsByUserIdAndStatus(creator.getId(), "ACTIVE")) {
             throw conflict("ALREADY_IN_GROUP", "이미 활성 그룹에 소속되어 있습니다.");
-        }
-        Season season = seasonRepository.findForShareByStatus("ACTIVE", PageRequest.of(0, 1)).stream()
-                .findFirst()
-                .orElseThrow(() -> notFound("현재 시즌을 찾을 수 없습니다."));
-        Instant now = Instant.now(clock);
-        if (!"ACTIVE".equals(season.getStatus()) || !now.isBefore(season.getEndAt())) {
-            throw notFound("현재 시즌을 찾을 수 없습니다.");
         }
         if (restrictionRepository.existsByUserIdAndRestrictedUntilAfter(creator.getId(), now)) {
             throw conflict("JOIN_COOLDOWN_ACTIVE", "그룹 가입 제한 시간이 끝난 뒤 다시 시도해 주세요.");
@@ -141,10 +141,8 @@ public class GroupMembershipService {
     /** 공개 활성 그룹을 가입 가능 상태와 함께 페이지로 조회합니다. */
     @Transactional(readOnly = true)
     public Page<GroupSummaryResponse> listPublicGroups(LoginUser loginUser, String query, int page, int size) {
-        if (membershipRepository.existsByUserIdAndStatus(loginUser.id(), "ACTIVE")) {
-            throw conflict("ALREADY_IN_GROUP", "이미 활성 그룹에 소속되어 있습니다.");
-        }
         Instant now = Instant.now(clock);
+        boolean alreadyInGroup = membershipRepository.existsByUserIdAndStatus(loginUser.id(), "ACTIVE");
         boolean restricted = restrictionRepository.existsByUserIdAndRestrictedUntilAfter(loginUser.id(), now);
         String normalizedQuery = query == null ? "" : escapeLike(normalize(query));
         PageRequest pageable = PageRequest.of(
@@ -153,24 +151,38 @@ public class GroupMembershipService {
                 Sort.by(Sort.Order.asc("name"), Sort.Order.asc("id"))
         );
         return groupRepository.findPublicGroups(normalizedQuery, pageable)
-                .map(group -> summary(group, restricted));
+                .map(group -> summary(group, alreadyInGroup, restricted));
     }
 
     /** 인증 사용자를 지정한 공개 그룹의 일반 구성원으로 가입시킵니다. */
     @Transactional
     public MembershipResponse joinGroup(LoginUser loginUser, Long groupId) {
-        return joinGroup(loginUser.id(), groupId);
+        return joinGroup(loginUser.id(), loginUser.nickname(), groupId, null);
+    }
+
+    /** 인증 사용자를 최종 유효성 검사를 통과한 초대 그룹에 가입시킵니다. */
+    @Transactional
+    public MembershipResponse joinInvitation(LoginUser loginUser, Long invitationId) {
+        GroupInviteLink invitation = activeInvitation(invitationId);
+        return joinGroup(
+                loginUser.id(),
+                loginUser.nickname(),
+                invitation.getGroup().getId(),
+                invitationId
+        );
     }
 
     /** 가입 대기 계정이 초대 그룹에 가입하도록 시도하고 계정 생성과 분리된 실패 결과를 반환합니다. */
     @Transactional
-    public InvitationJoinResult tryJoinInvitation(Long userId, Long invitationId) {
-        GroupInviteLink invitation = inviteLinkRepository.findByIdAndStatus(invitationId, "ACTIVE").orElse(null);
-        if (invitation == null || !"ACTIVE".equals(invitation.getGroup().getStatus())) {
+    public InvitationJoinResult tryJoinInvitation(Long userId, String nickname, Long invitationId) {
+        GroupInviteLink invitation;
+        try {
+            invitation = activeInvitation(invitationId);
+        } catch (BusinessException exception) {
             return InvitationJoinResult.failure("INVITE_INVALID");
         }
         try {
-            MembershipResponse membership = joinGroup(userId, invitation.getGroup().getId());
+            MembershipResponse membership = joinGroup(userId, nickname, invitation.getGroup().getId(), invitationId);
             return InvitationJoinResult.success(membership);
         } catch (BusinessException exception) {
             return InvitationJoinResult.failure(exception.code());
@@ -187,21 +199,42 @@ public class GroupMembershipService {
                     return new com.team.sharedcreature.group.api.PublicInvitationResponse(
                             group.getId(),
                             group.getName(),
+                            group.getDescription(),
                             group.getCurrentMemberCount(),
                             group.getCapacity(),
-                            active ? "ACTIVE" : "GROUP_UNAVAILABLE",
-                            active && group.getCurrentMemberCount() < group.getCapacity()
+                            active && group.getCurrentMemberCount() < group.getCapacity(),
+                            !active ? "INVITE_INVALID"
+                                    : group.getCurrentMemberCount() >= group.getCapacity() ? "GROUP_FULL" : null
                     );
                 });
     }
 
-    private MembershipResponse joinGroup(Long userId, Long groupId) {
+    /** 현재 사용자의 활성 재가입 제한 여부를 조회합니다. */
+    @Transactional(readOnly = true)
+    public boolean isJoinRestricted(Long userId) {
+        return restrictionRepository.existsByUserIdAndRestrictedUntilAfter(userId, Instant.now(clock));
+    }
+
+    private GroupInviteLink activeInvitation(Long invitationId) {
+        GroupInviteLink invitation = inviteLinkRepository.findByIdAndStatus(invitationId, "ACTIVE")
+                .orElseThrow(() -> conflict("INVITE_INVALID", "현재 사용할 수 없는 초대입니다."));
+        if (!"ACTIVE".equals(invitation.getGroup().getStatus())) {
+            throw conflict("INVITE_INVALID", "현재 사용할 수 없는 초대입니다.");
+        }
+        return invitation;
+    }
+
+    private MembershipResponse joinGroup(Long userId, String nickname, Long groupId, Long invitationId) {
         User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(HttpStatus.UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다."));
         Group group = groupRepository.findByIdForUpdate(groupId)
                 .orElseThrow(() -> notFound("가입할 그룹을 찾을 수 없습니다."));
         if (!"ACTIVE".equals(group.getStatus()) || !"PUBLIC".equals(group.getVisibility())) {
             throw notFound("가입할 그룹을 찾을 수 없습니다.");
+        }
+        if (invitationId != null
+                && inviteLinkRepository.findActiveForUpdate(invitationId, groupId).isEmpty()) {
+            throw conflict("INVITE_INVALID", "현재 사용할 수 없는 초대입니다.");
         }
         if (membershipRepository.existsByUserIdAndStatus(userId, "ACTIVE")) {
             throw conflict("ALREADY_IN_GROUP", "이미 활성 그룹에 소속되어 있습니다.");
@@ -210,23 +243,25 @@ public class GroupMembershipService {
         if (restrictionRepository.existsByUserIdAndRestrictedUntilAfter(userId, now)) {
             throw conflict("JOIN_COOLDOWN_ACTIVE", "그룹 가입 제한 시간이 끝난 뒤 다시 시도해 주세요.");
         }
-        if (group.getCurrentMemberCount() >= group.getCapacity()) {
+        if (groupRepository.incrementMemberCountIfAvailable(groupId, now) != 1) {
             throw conflict("GROUP_FULL", "그룹 정원이 가득 찼습니다.");
         }
-        group.addMember(now);
         GroupMembership membership = membershipRepository.save(GroupMembership.member(group, user, now));
         return new MembershipResponse(
                 membership.getId(),
                 group.getId(),
                 membership.getRole(),
                 membership.getJoinedAt(),
-                membership.getStatus()
+                membership.getStatus(),
+                nickname
         );
     }
 
-    private GroupSummaryResponse summary(Group group, boolean restricted) {
+    private GroupSummaryResponse summary(Group group, boolean alreadyInGroup, boolean restricted) {
         int remaining = Math.max(0, group.getCapacity() - group.getCurrentMemberCount());
-        String reason = remaining == 0 ? "FULL" : restricted ? "COOLDOWN" : null;
+        String reason = alreadyInGroup
+                ? "ALREADY_IN_GROUP"
+                : restricted ? "JOIN_COOLDOWN_ACTIVE" : remaining == 0 ? "GROUP_FULL" : null;
         return new GroupSummaryResponse(
                 group.getId(),
                 group.getName(),

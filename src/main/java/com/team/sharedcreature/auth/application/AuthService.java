@@ -96,7 +96,7 @@ public class AuthService {
         GroupInviteLink invitation = null;
         String intent = "LOGIN";
         String resolvedRoute = returnRoute == null ? "DEFAULT" : returnRoute;
-        if ("INVITATION".equals(resolvedRoute)) {
+        if ("INVITE".equals(resolvedRoute)) {
             Object context = session.getAttribute(InvitationSessionContext.SESSION_KEY);
             if (!(context instanceof InvitationSessionContext invitationContext)) {
                 throw new BusinessException(
@@ -107,7 +107,7 @@ public class AuthService {
             }
             invitation = inviteLinkRepository.findByIdAndStatus(invitationContext.inviteLinkId(), "ACTIVE")
                     .orElseThrow(() -> conflict("INVITE_INVALID", "현재 사용할 수 없는 초대입니다."));
-            intent = "INVITATION";
+            intent = "INVITE";
         }
         attemptRepository.save(OauthLoginAttempt.start(
                 Hashing.sha256(state),
@@ -161,8 +161,13 @@ public class AuthService {
         OauthLoginAttempt attempt = attemptRepository.findByStateHashForUpdate(stateHash)
                 .orElseThrow(() -> conflict("OAUTH_STATE_INVALID", "유효하지 않은 로그인 요청입니다."));
         validateAttempt(attempt, sessionHash, now);
+        Long invitationId = "INVITE".equals(attempt.getIntent()) ? currentInvitationId(session) : null;
+        GroupInviteLink latestInvitation = invitationId == null
+                ? null
+                : inviteLinkRepository.findById(invitationId).orElse(null);
+        attempt.replaceInviteLink(latestInvitation);
         attempt.consume(now);
-        if (attempt.getInviteLink() == null) {
+        if (invitationId == null) {
             session.removeAttribute(ONBOARDING_REASON);
         }
 
@@ -172,8 +177,8 @@ public class AuthService {
             if (!"ACTIVE".equals(user.getStatus())) {
                 throw new BusinessException(HttpStatus.FORBIDDEN, "ACCOUNT_NOT_ACTIVE", "사용할 수 없는 계정입니다.");
             }
-            joinExistingInvitation(attempt, user, session);
             String nickname = userProfileRepository.findByUserId(user.getId()).map(UserProfile::getNickname).orElse("회원");
+            joinExistingInvitation(invitationId, user, nickname, session);
             Set<String> roles = currentRoles(user);
             session.setAttribute(SessionAuthenticationFilter.LOGIN_USER, new LoginUser(user.getId(), nickname, roles));
             session.removeAttribute(OAUTH_NONCE);
@@ -187,7 +192,7 @@ public class AuthService {
         session.setAttribute(PENDING_SIGNUP, new PendingSignup(
                 "GOOGLE", profile.providerUserId(), profile.email(), profile.emailVerified(),
                 profile.suggestedNickname(),
-                attempt.getInviteLink() == null ? null : attempt.getInviteLink().getId(),
+                invitationId,
                 now.plusSeconds(1800)));
         session.removeAttribute(OAUTH_NONCE);
         return "/";
@@ -216,7 +221,7 @@ public class AuthService {
         userProfileRepository.save(UserProfile.create(user, nickname.strip(), normalizedNickname, now));
         if (pending.inviteLinkId() != null) {
             GroupMembershipService.InvitationJoinResult result =
-                    groupMembershipService.tryJoinInvitation(user.getId(), pending.inviteLinkId());
+                    groupMembershipService.tryJoinInvitation(user.getId(), nickname.strip(), pending.inviteLinkId());
             if (result.joined()) {
                 session.removeAttribute(ONBOARDING_REASON);
             } else {
@@ -239,18 +244,23 @@ public class AuthService {
         return groupMembershipService.findInvitation(pending.inviteLinkId());
     }
 
-    private void joinExistingInvitation(OauthLoginAttempt attempt, User user, HttpSession session) {
-        if (attempt.getInviteLink() == null) {
+    private void joinExistingInvitation(Long invitationId, User user, String nickname, HttpSession session) {
+        if (invitationId == null) {
+            return;
+        }
+        GroupInviteLink invitation = inviteLinkRepository.findById(invitationId).orElse(null);
+        if (invitation == null) {
+            session.setAttribute(ONBOARDING_REASON, "INVITE_INVALID");
             return;
         }
         var current = membershipRepository.findActiveWithGroupByUserId(user.getId());
-        if (current.isPresent() && current.get().getGroup().getId().equals(attempt.getInviteLink().getGroup().getId())) {
+        if (current.isPresent() && current.get().getGroup().getId().equals(invitation.getGroup().getId())) {
             session.removeAttribute(ONBOARDING_REASON);
             session.removeAttribute(InvitationSessionContext.SESSION_KEY);
             return;
         }
         GroupMembershipService.InvitationJoinResult result =
-                groupMembershipService.tryJoinInvitation(user.getId(), attempt.getInviteLink().getId());
+                groupMembershipService.tryJoinInvitation(user.getId(), nickname, invitationId);
         if (result.joined()) {
             session.removeAttribute(ONBOARDING_REASON);
         } else {
@@ -264,12 +274,20 @@ public class AuthService {
     }
 
     private Set<String> currentRoles(User user) {
+        var roles = new java.util.HashSet<String>();
         if ("SUPER_ADMIN".equals(user.getGlobalRole())) {
-            return Set.of("SUPER_ADMIN");
+            roles.add("SUPER_ADMIN");
         }
-        return membershipRepository.findByUserIdAndStatus(user.getId(), "ACTIVE")
-                .map(membership -> Set.of(membership.getRole()))
-                .orElseGet(Set::of);
+        membershipRepository.findByUserIdAndStatus(user.getId(), "ACTIVE")
+                .ifPresent(membership -> roles.add(membership.getRole()));
+        return Set.copyOf(roles);
+    }
+
+    private Long currentInvitationId(HttpSession session) {
+        Object context = session.getAttribute(InvitationSessionContext.SESSION_KEY);
+        return context instanceof InvitationSessionContext invitationContext
+                ? invitationContext.inviteLinkId()
+                : null;
     }
 
     /** 현재 사용자의 활성 그룹 멤버십을 Route Guard 응답용으로 조회합니다. */

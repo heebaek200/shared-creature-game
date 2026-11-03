@@ -23,8 +23,11 @@ public class InvitationController {
 
     /** 초대 Token에 연결된 공개 그룹 상태를 반환합니다. */
     @GetMapping("/{token}")
-    public ApiResponse<PublicInvitationResponse> getPublicInvitation(@PathVariable String token) {
-        return ApiResponse.success(invitationService.getPublicInvitation(token));
+    public ApiResponse<PublicInvitationResponse> getPublicInvitation(
+            @PathVariable String token,
+            HttpSession session
+    ) {
+        return ApiResponse.success(invitationService.getPublicInvitation(token, session));
     }
 
     /** 초대를 수락하고 인증 상태에 맞는 다음 경로를 반환합니다. */

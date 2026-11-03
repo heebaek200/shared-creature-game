@@ -8,6 +8,7 @@ public record MembershipResponse(
         Long groupId,
         String role,
         Instant joinedAt,
-        String status
+        String status,
+        String nickname
 ) {
 }
