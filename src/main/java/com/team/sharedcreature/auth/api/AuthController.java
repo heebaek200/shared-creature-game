@@ -136,9 +136,7 @@ public class AuthController {
         String onboarding = user.roles().contains("SUPER_ADMIN") || membership != null
                 ? "COMPLETED"
                 : "GROUP_REQUIRED";
-        String onboardingReason = membership == null
-                ? (String) session.getAttribute(AuthService.ONBOARDING_REASON)
-                : null;
+        String onboardingReason = authService.consumeOnboardingReason(session);
         return new CurrentUserResponse(
                 "AUTHENTICATED",
                 onboarding,

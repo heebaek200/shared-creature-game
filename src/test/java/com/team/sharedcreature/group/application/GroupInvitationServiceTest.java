@@ -19,7 +19,9 @@ import com.team.sharedcreature.group.domain.GroupInviteLink;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +34,8 @@ import org.springframework.mock.web.MockHttpSession;
 @ExtendWith(MockitoExtension.class)
 class GroupInvitationServiceTest {
 
+    private static final String VALID_TOKEN = "a".repeat(32);
+
     @Mock GroupInviteLinkRepository inviteLinkRepository;
     @Mock GroupMembershipRepository membershipRepository;
     @Mock GroupMembershipService membershipService;
@@ -40,7 +44,12 @@ class GroupInvitationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new GroupInvitationService(inviteLinkRepository, membershipRepository, membershipService);
+        service = new GroupInvitationService(
+                inviteLinkRepository,
+                membershipRepository,
+                membershipService,
+                Clock.fixed(Instant.parse("2026-11-03T00:00:00Z"), ZoneOffset.UTC)
+        );
     }
 
     @Test
@@ -58,7 +67,7 @@ class GroupInvitationServiceTest {
                 Instant.parse("2026-11-03T01:00:00Z")
         ));
 
-        var result = service.acceptInvitation("latest-token", session);
+        var result = service.acceptInvitation(VALID_TOKEN, session);
 
         assertThat(result.nextRoute()).isEqualTo("/signup");
         assertThat(((InvitationSessionContext) session.getAttribute(
@@ -80,7 +89,7 @@ class GroupInvitationServiceTest {
                 new LoginUser(1L, "기존회원", Set.of("MEMBER"))
         );
 
-        var result = service.acceptInvitation("same-group-token", session);
+        var result = service.acceptInvitation(VALID_TOKEN, session);
 
         assertThat(result.nextRoute()).isEqualTo("/creature");
         verify(membershipService, never()).joinInvitation(
@@ -104,11 +113,44 @@ class GroupInvitationServiceTest {
                 Instant.parse("2026-11-03T01:00:00Z")
         ));
 
-        assertThatThrownBy(() -> service.rejectInvitation("invalid-token", session))
+        assertThatThrownBy(() -> service.rejectInvitation(VALID_TOKEN, session))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.code()).isEqualTo("RESOURCE_NOT_FOUND"));
         assertThat(session.getAttribute(InvitationSessionContext.SESSION_KEY)).isNull();
         assertThat(session.getAttribute(AuthService.PENDING_SIGNUP)).isNull();
+    }
+
+    @Test
+    void 만료된_가입_대기에서_초대를_수락하면_대기를_제거하고_로그인으로_이동한다() {
+        GroupInviteLink invitation = invitation(20L, 3L, 1, 20);
+        when(inviteLinkRepository.findByTokenHash(anyString())).thenReturn(Optional.of(invitation));
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute(AuthService.PENDING_SIGNUP, new PendingSignup(
+                "GOOGLE",
+                "provider-user",
+                "user@example.com",
+                true,
+                "가입자",
+                10L,
+                Instant.parse("2026-11-03T00:00:00Z")
+        ));
+
+        var result = service.acceptInvitation(VALID_TOKEN, session);
+
+        assertThat(result.nextRoute()).isEqualTo("/login");
+        assertThat(session.getAttribute(AuthService.PENDING_SIGNUP)).isNull();
+        assertThat(session.getAttribute(InvitationSessionContext.SESSION_KEY))
+                .isEqualTo(new InvitationSessionContext(20L));
+    }
+
+    @Test
+    void 초대_Token_형식이_잘못되면_조회하지_않고_필드_오류를_반환한다() {
+        MockHttpSession session = new MockHttpSession();
+
+        assertThatThrownBy(() -> service.getPublicInvitation("invalid-token", session))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.code()).isEqualTo("INVALID_FIELD_VALUE"));
+        verify(inviteLinkRepository, never()).findByTokenHash(anyString());
     }
 
     private GroupInviteLink invitation(Long invitationId, Long groupId, int currentCount, int capacity) {

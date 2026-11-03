@@ -312,6 +312,13 @@ public class AuthService {
         ).map(com.team.sharedcreature.group.domain.GroupJoinRestriction::getRestrictedUntil);
     }
 
+    /** 초대 가입 실패 사유를 다음 인증 응답에서 한 번 반환하도록 소비합니다. */
+    public String consumeOnboardingReason(HttpSession session) {
+        Object reason = session.getAttribute(ONBOARDING_REASON);
+        session.removeAttribute(ONBOARDING_REASON);
+        return reason instanceof String value ? value : null;
+    }
+
     private String token() {
         byte[] bytes = new byte[32];
         secureRandom.nextBytes(bytes);

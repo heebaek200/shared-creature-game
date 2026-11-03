@@ -16,26 +16,34 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /** 공개 초대 조회와 세션 문맥 수락·거절 흐름을 처리합니다. */
 @Service
 public class GroupInvitationService {
 
+    private static final Pattern TOKEN_PATTERN = Pattern.compile("[A-Za-z0-9_-]{32,128}");
+
     private final GroupInviteLinkRepository inviteLinkRepository;
     private final GroupMembershipRepository membershipRepository;
     private final GroupMembershipService membershipService;
+    private final Clock clock;
 
     /** 초대 검증과 즉시 가입에 필요한 협력 객체를 주입받습니다. */
     public GroupInvitationService(
             GroupInviteLinkRepository inviteLinkRepository,
             GroupMembershipRepository membershipRepository,
-            GroupMembershipService membershipService
+            GroupMembershipService membershipService,
+            Clock clock
     ) {
         this.inviteLinkRepository = inviteLinkRepository;
         this.membershipRepository = membershipRepository;
         this.membershipService = membershipService;
+        this.clock = clock;
     }
 
     /** 활성 Token의 공개 그룹 상태를 조회합니다. */
@@ -84,12 +92,13 @@ public class GroupInvitationService {
         );
         Object pending = session.getAttribute(AuthService.PENDING_SIGNUP);
         if (pending instanceof PendingSignup pendingSignup) {
-            session.setAttribute(AuthService.PENDING_SIGNUP, pendingSignup.withInviteLinkId(invitation.getId()));
+            if (pendingSignup.expiresAt().isAfter(Instant.now(clock))) {
+                session.setAttribute(AuthService.PENDING_SIGNUP, pendingSignup.withInviteLinkId(invitation.getId()));
+                return new NavigationResponse("/signup", null);
+            }
+            session.removeAttribute(AuthService.PENDING_SIGNUP);
         }
-        return new NavigationResponse(
-                session.getAttribute(AuthService.PENDING_SIGNUP) == null ? "/login" : "/signup",
-                null
-        );
+        return new NavigationResponse("/login", null);
     }
 
     /** 초대 문맥과 가입 대기를 제거하고 현재 인증 상태에 맞는 일반 경로를 반환합니다. */
@@ -110,6 +119,13 @@ public class GroupInvitationService {
     }
 
     private GroupInviteLink activeInvitation(String token) {
+        if (token == null || !TOKEN_PATTERN.matcher(token).matches()) {
+            throw new BusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_FIELD_VALUE",
+                    "초대 Token 형식을 확인해 주세요."
+            );
+        }
         GroupInviteLink invitation = inviteLinkRepository.findByTokenHash(Hashing.sha256(token))
                 .orElseThrow(() -> new BusinessException(
                         HttpStatus.NOT_FOUND,
