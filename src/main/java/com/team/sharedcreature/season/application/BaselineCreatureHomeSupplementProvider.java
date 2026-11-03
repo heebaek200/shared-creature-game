@@ -2,7 +2,6 @@ package com.team.sharedcreature.season.application;
 
 import com.team.sharedcreature.season.domain.GroupCreature;
 import com.team.sharedcreature.season.infrastructure.CreatureExperienceLedgerRepository;
-import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -13,7 +12,6 @@ import java.util.UUID;
 /**
  * 연계 이슈 구현 전에도 실제 오늘 경험치와 유효한 빈 부가 목록을 제공하는 기본 Provider입니다.
  */
-@Component
 public class BaselineCreatureHomeSupplementProvider implements CreatureHomeSupplementProvider {
 
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Seoul");

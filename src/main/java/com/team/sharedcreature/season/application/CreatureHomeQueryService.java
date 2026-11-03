@@ -53,15 +53,15 @@ public class CreatureHomeQueryService {
         GroupMembership membership = membershipRepository.findActiveWithGroupByUserId(userId)
                 .orElseThrow(() -> new BusinessException(
                         HttpStatus.FORBIDDEN,
-                        "GROUP_MEMBERSHIP_REQUIRED",
-                        "활성 그룹 소속이 필요합니다."
+                        "ROLE_FORBIDDEN",
+                        "요청 권한이 없습니다."
                 ));
         Season season = seasonQueryService.findCurrentSeason();
         GroupSeason groupSeason = groupSeasonRepository.findSnapshotByGroupIdAndSeasonId(
                         membership.getGroup().getId(), season.getId())
-                .orElseThrow(() -> conflict("GROUP_SEASON_UNAVAILABLE", "현재 그룹의 시즌 참여 정보가 없습니다."));
+                .orElseThrow(() -> notFound("현재 그룹의 시즌 참여 정보를 찾을 수 없습니다."));
         GroupCreature creature = groupCreatureRepository.findSnapshotByGroupSeasonId(groupSeason.getId())
-                .orElseThrow(() -> conflict("GROUP_CREATURE_UNAVAILABLE", "현재 그룹 크리처가 없습니다."));
+                .orElseThrow(() -> notFound("현재 그룹 크리처를 찾을 수 없습니다."));
         CreatureHomeSupplementProvider.Supplement supplement = supplementProvider
                 .getSupplement(creature, userId, now);
 
@@ -92,7 +92,7 @@ public class CreatureHomeQueryService {
         );
     }
 
-    private BusinessException conflict(String code, String message) {
-        return new BusinessException(HttpStatus.CONFLICT, code, message);
+    private BusinessException notFound(String message) {
+        return new BusinessException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", message);
     }
 }

@@ -68,26 +68,24 @@ public class CreatureSelectionService {
     /** 부화 기한 전에 관리자의 최종 종 선택을 반영하고 같은 종 재선택은 기존 결과를 반환합니다. */
     @Transactional
     public CreatureSelectionResponse selectSpecies(Long userId, Long speciesId) {
-        Instant now = Instant.now(clock);
         GroupMembership membership = requireAdminMembership(userId);
-        Season season = seasonQueryService.findCurrentSeason();
+        Season season = seasonQueryService.findCurrentSeasonForShare();
         GroupSeason groupSeason = groupSeasonRepository.findForUpdateByGroupIdAndSeasonId(
                         membership.getGroup().getId(), season.getId())
-                .orElseThrow(() -> conflict("GROUP_SEASON_UNAVAILABLE", "현재 그룹의 시즌 참여 정보가 없습니다."));
-        if (!groupSeason.isSelectionOpenAt(now)) {
+                .orElseThrow(() -> notFound("현재 그룹의 시즌 참여 정보를 찾을 수 없습니다."));
+        Instant now = Instant.now(clock);
+        if (!"ACTIVE".equals(season.getStatus())
+                || !now.isBefore(season.getEndAt())
+                || !groupSeason.isSelectionOpenAt(now)) {
             throw conflict("CREATURE_SELECTION_CLOSED", "크리처 선택 시간이 종료됐습니다.");
         }
         CreatureSpecies species = speciesRepository.findByIdAndStatus(speciesId, "ACTIVE")
-                .orElseThrow(() -> new BusinessException(
-                        HttpStatus.NOT_FOUND,
-                        "CREATURE_SPECIES_NOT_FOUND",
-                        "선택할 수 있는 크리처 종을 찾을 수 없습니다."
-                ));
+                .orElseThrow(() -> notFound("선택할 수 있는 크리처 종을 찾을 수 없습니다."));
 
         boolean changed = groupSeason.selectSpecies(species, membership.getUser(), now);
         if (changed) {
             GroupCreature creature = groupCreatureRepository.findSnapshotByGroupSeasonId(groupSeason.getId())
-                    .orElseThrow(() -> conflict("GROUP_CREATURE_UNAVAILABLE", "현재 그룹 크리처가 없습니다."));
+                    .orElseThrow(() -> notFound("현재 그룹 크리처를 찾을 수 없습니다."));
             publish(groupSeason, creature, now);
         }
         return CreatureSelectionResponse.from(groupSeason);
@@ -99,13 +97,19 @@ public class CreatureSelectionService {
      */
     @Transactional
     public Optional<CreatureSelectionResponse> hatchIfDue(Long groupSeasonId, Instant now) {
+        Optional<Season> currentSeason = seasonQueryService.findCurrentSeasonForShareIfPresent();
+        if (currentSeason.isEmpty()) {
+            return Optional.empty();
+        }
+        Season season = currentSeason.get();
         GroupSeason groupSeason = groupSeasonRepository.findForUpdateById(groupSeasonId)
-                .orElseThrow(() -> conflict("GROUP_SEASON_UNAVAILABLE", "그룹 시즌 참여 정보가 없습니다."));
+                .orElseThrow(() -> notFound("그룹 시즌 참여 정보를 찾을 수 없습니다."));
         if (!"PREPARING".equals(groupSeason.getStatus())
+                || !season.getId().equals(groupSeason.getSeason().getId())
                 || now.isBefore(groupSeason.getSelectionDeadlineAt())
-                || !"ACTIVE".equals(groupSeason.getSeason().getStatus())
-                || !now.isBefore(groupSeason.getSeason().getEndAt())
-                || !groupSeason.getSelectionDeadlineAt().isBefore(groupSeason.getSeason().getEndAt())) {
+                || !"ACTIVE".equals(season.getStatus())
+                || !now.isBefore(season.getEndAt())
+                || !groupSeason.getSelectionDeadlineAt().isBefore(season.getEndAt())) {
             return Optional.empty();
         }
 
@@ -113,13 +117,13 @@ public class CreatureSelectionService {
             List<CreatureSpecies> activeSpecies = speciesRepository
                     .findAllByStatusOrderByDisplayOrderAscIdAsc("ACTIVE");
             if (activeSpecies.isEmpty()) {
-                throw conflict("ACTIVE_CREATURE_SPECIES_UNAVAILABLE", "부화할 활성 크리처 종이 없습니다.");
+                throw new IllegalStateException("No active creature species is available for hatching.");
             }
             groupSeason.selectRandomSpecies(activeSpecies.get(randomGenerator.nextInt(activeSpecies.size())), now);
         }
 
         GroupCreature creature = groupCreatureRepository.findForUpdateByGroupSeasonId(groupSeason.getId())
-                .orElseThrow(() -> conflict("GROUP_CREATURE_UNAVAILABLE", "현재 그룹 크리처가 없습니다."));
+                .orElseThrow(() -> notFound("현재 그룹 크리처를 찾을 수 없습니다."));
         creature.hatch(groupSeason.getSelectedSpecies(), groupSeason.getSelectionSource(), now);
         groupSeason.activate(now);
         publish(groupSeason, creature, now);
@@ -130,8 +134,8 @@ public class CreatureSelectionService {
         GroupMembership membership = membershipRepository.findActiveWithGroupByUserId(userId)
                 .orElseThrow(() -> new BusinessException(
                         HttpStatus.FORBIDDEN,
-                        "GROUP_MEMBERSHIP_REQUIRED",
-                        "활성 그룹 소속이 필요합니다."
+                        "ROLE_FORBIDDEN",
+                        "요청 권한이 없습니다."
                 ));
         if (!"PRIMARY".equals(membership.getRole()) && !"DEPUTY".equals(membership.getRole())) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "ROLE_FORBIDDEN", "요청 권한이 없습니다.");
@@ -151,5 +155,9 @@ public class CreatureSelectionService {
 
     private BusinessException conflict(String code, String message) {
         return new BusinessException(HttpStatus.CONFLICT, code, message);
+    }
+
+    private BusinessException notFound(String message) {
+        return new BusinessException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", message);
     }
 }
