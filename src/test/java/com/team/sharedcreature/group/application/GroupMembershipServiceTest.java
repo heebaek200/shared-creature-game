@@ -13,6 +13,7 @@ import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.api.CreateGroupRequest;
+import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.infrastructure.GroupAdminChangeRepository;
 import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
 import com.team.sharedcreature.group.infrastructure.GroupJoinRestrictionRepository;
@@ -73,7 +74,7 @@ class GroupMembershipServiceTest {
                 "http://localhost:5173"
         );
         user = mock(User.class);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user));
     }
 
     @Test
@@ -137,6 +138,44 @@ class GroupMembershipServiceTest {
                 assertThat(exception.code()).isEqualTo("RESOURCE_NOT_FOUND"));
         verify(groupRepository, never()).save(any());
         verify(groupSeasonRepository, never()).save(any());
+    }
+
+    @Test
+    void joinGroup은_사용자와_그룹을_잠근_뒤_일반_구성원을_등록한다() {
+        Group group = mock(Group.class);
+        when(group.getId()).thenReturn(10L);
+        when(group.getStatus()).thenReturn("ACTIVE");
+        when(group.getVisibility()).thenReturn("PUBLIC");
+        when(group.getCurrentMemberCount()).thenReturn(19);
+        when(group.getCapacity()).thenReturn(20);
+        when(groupRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(group));
+        when(membershipRepository.existsByUserIdAndStatus(1L, "ACTIVE")).thenReturn(false);
+        when(restrictionRepository.existsByUserIdAndRestrictedUntilAfter(any(), any())).thenReturn(false);
+        when(membershipRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.joinGroup(new LoginUser(1L, "가입자", Set.of()), 10L);
+
+        assertThat(result.groupId()).isEqualTo(10L);
+        assertThat(result.role()).isEqualTo("MEMBER");
+        assertThat(result.status()).isEqualTo("ACTIVE");
+        verify(group).addMember(clock.instant());
+    }
+
+    @Test
+    void joinGroup은_잠금_후_정원이_가득_찬_그룹을_거절한다() {
+        Group group = mock(Group.class);
+        when(group.getStatus()).thenReturn("ACTIVE");
+        when(group.getVisibility()).thenReturn("PUBLIC");
+        when(group.getCurrentMemberCount()).thenReturn(20);
+        when(group.getCapacity()).thenReturn(20);
+        when(groupRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(group));
+        when(membershipRepository.existsByUserIdAndStatus(1L, "ACTIVE")).thenReturn(false);
+        when(restrictionRepository.existsByUserIdAndRestrictedUntilAfter(any(), any())).thenReturn(false);
+
+        assertThatThrownBy(() -> service.joinGroup(new LoginUser(1L, "가입자", Set.of()), 10L))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.code()).isEqualTo("GROUP_FULL"));
+        verify(membershipRepository, never()).save(any());
     }
 
     private static class MutableClock extends Clock {

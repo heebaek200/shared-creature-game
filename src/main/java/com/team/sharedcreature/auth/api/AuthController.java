@@ -6,6 +6,7 @@ import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature._core.security.SessionAuthenticationFilter;
 import com.team.sharedcreature.auth.application.AuthService;
 import com.team.sharedcreature.auth.application.PendingSignup;
+import com.team.sharedcreature.group.api.PublicInvitationResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
@@ -76,7 +77,12 @@ public class AuthController {
             throw new BusinessException(HttpStatus.CONFLICT, "SIGNUP_CONTEXT_EXPIRED", "가입 대기 시간이 만료됐습니다.");
         }
         return ApiResponse.success(new SignupContextResponse(
-                pending.provider(), pending.email(), pending.suggestedNickname(), pending.expiresAt()));
+                pending.provider(),
+                pending.email(),
+                pending.suggestedNickname(),
+                pending.expiresAt(),
+                authService.signupInvitation(pending).orElse(null)
+        ));
     }
 
     /** 닉네임을 확정하고 신규 내부 계정과 로그인 세션을 생성합니다. */
@@ -87,7 +93,9 @@ public class AuthController {
     ) {
         LoginUser loginUser = authService.completeSignup(signup.nickname(), request.getSession());
         request.changeSessionId();
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(authenticated(loginUser)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(
+                authenticated(loginUser, request.getSession())
+        ));
     }
 
     /** 비로그인·가입 대기·인증 사용자의 Route Guard 상태를 반환합니다. */
@@ -95,15 +103,15 @@ public class AuthController {
     public ApiResponse<CurrentUserResponse> getCurrentUser(HttpSession session) {
         Object login = session.getAttribute(SessionAuthenticationFilter.LOGIN_USER);
         if (login instanceof LoginUser loginUser) {
-            return ApiResponse.success(authenticated(loginUser));
+            return ApiResponse.success(authenticated(loginUser, session));
         }
         Object pending = session.getAttribute(AuthService.PENDING_SIGNUP);
         if (pending instanceof PendingSignup pendingSignup && pendingSignup.expiresAt().isAfter(Instant.now())) {
             return ApiResponse.success(new CurrentUserResponse(
-                    "SIGNUP_PENDING", "SIGNUP_REQUIRED", null, null, List.of(), null));
+                    "SIGNUP_PENDING", "SIGNUP_REQUIRED", null, null, List.of(), null, null, null));
         }
         return ApiResponse.success(new CurrentUserResponse(
-                "ANONYMOUS", "NOT_STARTED", null, null, List.of(), null));
+                "ANONYMOUS", "NOT_STARTED", null, null, List.of(), null, null, null));
     }
 
     /** 현재 애플리케이션 세션만 무효화합니다. */
@@ -113,7 +121,7 @@ public class AuthController {
         return ApiResponse.success(new EmptyResponse());
     }
 
-    private CurrentUserResponse authenticated(LoginUser user) {
+    private CurrentUserResponse authenticated(LoginUser user, HttpSession session) {
         MembershipResponse membership = authService.currentMembership(user.id())
                 .map(value -> new MembershipResponse(
                         value.membershipId(),
@@ -126,13 +134,18 @@ public class AuthController {
         String onboarding = user.roles().contains("SUPER_ADMIN") || membership != null
                 ? "COMPLETED"
                 : "GROUP_REQUIRED";
+        String onboardingReason = membership == null
+                ? (String) session.getAttribute(AuthService.ONBOARDING_REASON)
+                : null;
         return new CurrentUserResponse(
                 "AUTHENTICATED",
                 onboarding,
                 new UserSummaryResponse(user.id(), user.nickname()),
                 membership,
                 user.roles().stream().sorted().toList(),
-                null
+                authService.currentRestrictionUntil(user.id()).orElse(null),
+                null,
+                onboardingReason
         );
     }
 
@@ -153,7 +166,13 @@ public class AuthController {
     }
 
     /** 가입 대기 정보 응답입니다. */
-    public record SignupContextResponse(String provider, String email, String suggestedNickname, Instant expiresAt) {
+    public record SignupContextResponse(
+            String provider,
+            String email,
+            String suggestedNickname,
+            Instant expiresAt,
+            PublicInvitationResponse invitation
+    ) {
     }
 
     /** 신규 회원 닉네임 입력입니다. */
@@ -167,7 +186,9 @@ public class AuthController {
             UserSummaryResponse user,
             MembershipResponse membership,
             List<String> roles,
-            Instant restrictionUntil
+            Instant restrictionUntil,
+            String sessionNotice,
+            String onboardingReason
     ) {
     }
 

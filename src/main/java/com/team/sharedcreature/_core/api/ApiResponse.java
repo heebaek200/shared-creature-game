@@ -2,6 +2,7 @@ package com.team.sharedcreature._core.api;
 
 import java.time.Clock;
 import java.time.Instant;
+import org.springframework.data.domain.Page;
 
 /**
  * REST 성공 응답의 data와 meta 형식을 통일합니다.
@@ -32,6 +33,20 @@ public record ApiResponse<T>(T data, ApiMeta meta) {
      * @return 공통 성공 응답
      */
     public static <T> ApiResponse<T> success(T data, Clock clock) {
-        return new ApiResponse<>(data, new ApiMeta(Instant.now(clock)));
+        return new ApiResponse<>(data, ApiMeta.common(Instant.now(clock)));
+    }
+
+    /** Spring Data 페이지의 항목과 페이지 메타데이터를 공통 형식으로 변환합니다. */
+    public static <T> ApiResponse<java.util.List<T>> page(Page<T> page) {
+        return new ApiResponse<>(
+                page.getContent(),
+                ApiMeta.page(
+                        Instant.now(Clock.systemUTC()),
+                        page.getNumber(),
+                        page.getSize(),
+                        page.getTotalElements(),
+                        page.getTotalPages()
+                )
+        );
     }
 }

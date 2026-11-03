@@ -74,4 +74,13 @@ public class Group {
     public static Group create(String name, String normalizedName, String description, User creator, Instant now) {
         return new Group(name, normalizedName, description, creator, now);
     }
+
+    /** 잠긴 그룹에 정원 범위 안에서 구성원 한 명을 반영합니다. */
+    public void addMember(Instant now) {
+        if (currentMemberCount >= capacity) {
+            throw new IllegalStateException("그룹 정원을 초과할 수 없습니다.");
+        }
+        this.currentMemberCount++;
+        this.updatedAt = now;
+    }
 }

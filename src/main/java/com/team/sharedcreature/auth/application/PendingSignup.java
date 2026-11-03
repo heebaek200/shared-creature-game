@@ -12,6 +12,7 @@ public record PendingSignup(
         String email,
         boolean emailVerified,
         String suggestedNickname,
+        Long inviteLinkId,
         Instant expiresAt
 ) implements Serializable {
 }
