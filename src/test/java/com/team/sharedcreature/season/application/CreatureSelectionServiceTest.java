@@ -110,7 +110,7 @@ class CreatureSelectionServiceTest {
     void 시즌_종료가_먼저_선점되면_알을_부화시키지_않는다() {
         when(seasonQueryService.findCurrentSeasonForShareIfPresent()).thenReturn(Optional.empty());
 
-        assertThat(service.hatchIfDue(100L, Instant.parse("2026-11-06T00:00:00Z"))).isEmpty();
+        assertThat(service.hatchIfDue(100L)).isEmpty();
         verify(groupSeasonRepository, never()).findForUpdateById(100L);
         verify(groupCreatureRepository, never()).findForUpdateByGroupSeasonId(100L);
     }
@@ -128,9 +128,12 @@ class CreatureSelectionServiceTest {
         ReflectionTestUtils.setField(creature, "id", 200L);
         when(seasonQueryService.findCurrentSeasonForShareIfPresent()).thenReturn(Optional.of(season));
         when(groupSeasonRepository.findForUpdateById(100L)).thenReturn(Optional.of(groupSeason));
-        when(groupCreatureRepository.findForUpdateByGroupSeasonId(100L)).thenReturn(Optional.of(creature));
+        when(groupCreatureRepository.findForUpdateByGroupSeasonId(100L)).thenAnswer(invocation -> {
+            clock.set(groupSeason.getSelectionDeadlineAt());
+            return Optional.of(creature);
+        });
 
-        assertThat(service.hatchIfDue(100L, groupSeason.getSelectionDeadlineAt())).isPresent();
+        assertThat(service.hatchIfDue(100L)).isPresent();
 
         InOrder locks = inOrder(seasonQueryService, groupSeasonRepository, groupCreatureRepository);
         locks.verify(seasonQueryService).findCurrentSeasonForShareIfPresent();

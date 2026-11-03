@@ -21,6 +21,7 @@ import com.team.sharedcreature.season.infrastructure.GroupSeasonRepository;
 import com.team.sharedcreature.season.infrastructure.SeasonGroupScoreRepository;
 import com.team.sharedcreature.season.infrastructure.SeasonRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -90,7 +91,6 @@ public class GroupMembershipService {
      */
     @Transactional
     public CreateGroupResponse createGroup(LoginUser loginUser, CreateGroupRequest request) {
-        Instant now = Instant.now(clock);
         User creator = userRepository.findById(loginUser.id())
                 .orElseThrow(() -> new BusinessException(HttpStatus.UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다."));
         String name = normalize(request.name());
@@ -102,12 +102,16 @@ public class GroupMembershipService {
         if (membershipRepository.existsByUserIdAndStatus(creator.getId(), "ACTIVE")) {
             throw conflict("ALREADY_IN_GROUP", "이미 활성 그룹에 소속되어 있습니다.");
         }
+        Season season = seasonRepository.findForShareByStatus("ACTIVE", PageRequest.of(0, 1)).stream()
+                .findFirst()
+                .orElseThrow(() -> notFound("현재 시즌을 찾을 수 없습니다."));
+        Instant now = Instant.now(clock);
+        if (!"ACTIVE".equals(season.getStatus()) || !now.isBefore(season.getEndAt())) {
+            throw notFound("현재 시즌을 찾을 수 없습니다.");
+        }
         if (restrictionRepository.existsByUserIdAndRestrictedUntilAfter(creator.getId(), now)) {
             throw conflict("JOIN_COOLDOWN_ACTIVE", "그룹 가입 제한 시간이 끝난 뒤 다시 시도해 주세요.");
         }
-
-        Season season = seasonRepository.findFirstByStatusOrderByStartAtDesc("ACTIVE")
-                .orElseThrow(() -> conflict("CURRENT_SEASON_UNAVAILABLE", "현재 진행 중인 시즌이 없습니다."));
         Group group = groupRepository.save(Group.create(request.name().strip(), name, description, creator, now));
         GroupMembership membership = membershipRepository.save(GroupMembership.primary(group, creator, now));
         adminChangeRepository.save(GroupAdminChange.initialPrimary(group, creator, now));
@@ -142,5 +146,9 @@ public class GroupMembershipService {
 
     private BusinessException conflict(String code, String message) {
         return new BusinessException(HttpStatus.CONFLICT, code, message);
+    }
+
+    private BusinessException notFound(String message) {
+        return new BusinessException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", message);
     }
 }

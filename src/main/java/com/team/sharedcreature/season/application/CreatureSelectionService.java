@@ -96,7 +96,7 @@ public class CreatureSelectionService {
      * 시즌 종료가 먼저이거나 아직 기한 전이면 상태를 변경하지 않습니다.
      */
     @Transactional
-    public Optional<CreatureSelectionResponse> hatchIfDue(Long groupSeasonId, Instant now) {
+    public Optional<CreatureSelectionResponse> hatchIfDue(Long groupSeasonId) {
         Optional<Season> currentSeason = seasonQueryService.findCurrentSeasonForShareIfPresent();
         if (currentSeason.isEmpty()) {
             return Optional.empty();
@@ -105,8 +105,14 @@ public class CreatureSelectionService {
         GroupSeason groupSeason = groupSeasonRepository.findForUpdateById(groupSeasonId)
                 .orElseThrow(() -> notFound("그룹 시즌 참여 정보를 찾을 수 없습니다."));
         if (!"PREPARING".equals(groupSeason.getStatus())
-                || !season.getId().equals(groupSeason.getSeason().getId())
-                || now.isBefore(groupSeason.getSelectionDeadlineAt())
+                || !season.getId().equals(groupSeason.getSeason().getId())) {
+            return Optional.empty();
+        }
+
+        GroupCreature creature = groupCreatureRepository.findForUpdateByGroupSeasonId(groupSeason.getId())
+                .orElseThrow(() -> notFound("현재 그룹 크리처를 찾을 수 없습니다."));
+        Instant now = Instant.now(clock);
+        if (now.isBefore(groupSeason.getSelectionDeadlineAt())
                 || !"ACTIVE".equals(season.getStatus())
                 || !now.isBefore(season.getEndAt())
                 || !groupSeason.getSelectionDeadlineAt().isBefore(season.getEndAt())) {
@@ -122,8 +128,6 @@ public class CreatureSelectionService {
             groupSeason.selectRandomSpecies(activeSpecies.get(randomGenerator.nextInt(activeSpecies.size())), now);
         }
 
-        GroupCreature creature = groupCreatureRepository.findForUpdateByGroupSeasonId(groupSeason.getId())
-                .orElseThrow(() -> notFound("현재 그룹 크리처를 찾을 수 없습니다."));
         creature.hatch(groupSeason.getSelectedSpecies(), groupSeason.getSelectionSource(), now);
         groupSeason.activate(now);
         publish(groupSeason, creature, now);

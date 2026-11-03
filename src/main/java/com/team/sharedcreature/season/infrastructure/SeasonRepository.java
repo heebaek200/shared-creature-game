@@ -25,4 +25,8 @@ public interface SeasonRepository extends JpaRepository<Season, Long> {
              ORDER BY season.startAt DESC
             """)
     List<Season> findForShareByStatus(@Param("status") String status, Pageable pageable);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT season FROM Season season WHERE season.id = :seasonId")
+    Optional<Season> findForUpdateById(@Param("seasonId") Long seasonId);
 }
