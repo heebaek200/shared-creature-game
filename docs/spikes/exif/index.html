@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>사진 업로드 및 EXIF 검증</title>
+</head>
+<body>
+<h2>📸 스마트폰 사진 업로드 & EXIF 검증 테스트</h2>
+
+<div>
+    <input type="file" id="photoInput" accept="image/jpeg, image/jpg">
+    <button onclick="uploadPhoto()">업로드 및 검증 요청</button>
+</div>
+
+<h3>결과:</h3>
+<pre id="resultMessage" style="background: #f4f4f4; padding: 10px; border-radius: 5px;"></pre>
+
+<script>
+    function uploadPhoto() {
+        const fileInput = document.getElementById('photoInput');
+        const resultElement = document.getElementById('resultMessage');
+
+        if (fileInput.files.length === 0) {
+            alert('업로드할 JPEG 사진을 선택해주세요!');
+            return;
+        }
+
+        const file = fileInput.files[0];
+        const formData = new FormData();
+        formData.append('file', file);
+
+        resultElement.innerText = '업로드 및 분석 중... ⏳';
+
+        // 👇 이 부분을 컨트롤러 경로와 일치하도록 수정합니다!
+        fetch('/api/v1/photo-submissions/upload', {
+            method: 'POST',
+            body: formData
+        })
+            .then(async response => {
+                const text = await response.text();
+                if (response.ok) {
+                    resultElement.innerText = '✅ 성공:\n' + text;
+                } else {
+                    resultElement.innerText = '❌ 실패/거부:\n' + text;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                resultElement.innerText = '⚠️ 통신 중 오류가 발생했습니다.';
+            });
+    }
+</script>
+</body>
+</html>
