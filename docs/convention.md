@@ -629,6 +629,7 @@ frontend/src/mocks
 - 최초 관리자용 `INITIAL_SUPER_ADMIN_PROVIDER`, `INITIAL_SUPER_ADMIN_PROVIDER_USER_ID`도 환경변수로 전달하며 실제 공급자 사용자 ID는 `.env.example`이나 문서에 기록하지 않습니다.
 - 활성 전체 관리자가 아직 없으면 두 초기 관리자 변수를 함께 요구하고 한쪽 누락·지원하지 않는 공급자·빈 사용자 ID는 시작 검증에서 실패시킵니다. 기존 활성 전체 관리자가 있으면 환경변수로 역할을 다시 변경하지 않으며, 일치하는 기존 일반 회원도 자동 승격하지 않습니다.
 - 스피어 실행 시 현재 H2 기반 `application-local.yaml`을 로컬 MySQL로 변경합니다. `local`은 `ddl-auto=update`, 별도 `shared_creature_game_test`를 사용하는 `test`는 `ddl-auto=create-drop`을 사용하며 생성 컬럼·UNIQUE·비관적 잠금은 MySQL에서 검증합니다.
+- Flyway와 Liquibase는 사용하지 않습니다. 일반 테이블과 컬럼은 위 `ddl-auto` 정책으로 관리하고, Hibernate가 생성·변경하기 어려운 MySQL STORED 생성 컬럼·UNIQUE 인덱스와 Spring Session JDBC 테이블 같은 특수 스키마만 재실행 가능한 별도 SQL로 관리합니다.
 - `integration`은 `APP_BASE_URL`에 현재 임시 HTTPS Origin을 설정합니다. 터널 제품은 고정하지 않고 실행 담당자와 등록 절차만 팀 실행 가이드에 둡니다.
 - `.env.example`에는 실제 값 없이 필요한 변수 이름과 설명만 기록합니다.
 - `test` Profile은 실제 Google·Naver OAuth, PortOne 또는 Gemini API를 호출하지 않고 가짜 Adapter를 사용합니다.

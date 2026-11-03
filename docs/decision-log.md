@@ -567,7 +567,7 @@
 
 - 결정: LLM 연동은 새 그룹 소개 최대 500자의 맞춤법·띄어쓰기·어색한 표현을 Gemini로 교정하는 단일 기능으로 제한합니다. 사용자가 버튼을 눌렀을 때만 서버가 호출하고, 구조화된 `correctedText` 제안을 사용자가 선택적으로 적용합니다. 자동 저장·자동 게시·대화·요약·판정 기능은 만들지 않습니다.
 - 상태: confirmed
-- 근거: 서버 간 LLM 요청을 시연하면서 기존 그룹 생성 화면과 `groups.description`을 재사용해 프로젝트 범위 증가를 최소화하기 위함입니다.
+- 근거: 서버 간 LLM 요청을 시연하면서 기존 그룹 생성 화면과 `game_groups.description`을 재사용해 프로젝트 범위 증가를 최소화하기 위함입니다.
 - 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, screen-design.md, class-diagram.md, project_plan.md, common-foundation.yaml
 
 ## 2026-11-02 주 관리자 이전 후 기존 관리자 역할 확정
@@ -733,3 +733,35 @@
 - 상태: confirmed
 - 근거: 1인 그룹의 종료 불가 상태를 해소하고 외부 시스템 중단·기간 경계·활동 저장 지연·그룹 이동에서도 보상과 결제 상태를 일관되게 유지하기 위함입니다.
 - 영향 문서: requirements.md, business-rules.md, database-design.md, screen-design.md, api-design.md, convention.md, class-diagram.md, implementation-guide.md, project_plan.md, common-foundation.yaml
+
+## 2026-11-03 스키마 관리 방식을 기존 학습 범위로 제한
+
+- 결정: Flyway와 Liquibase는 도입하지 않습니다. 일반 테이블과 컬럼은 `local`의 `ddl-auto=update`, `test`의 `ddl-auto=create-drop`으로 관리하고, MySQL STORED 생성 컬럼·UNIQUE 인덱스와 Spring Session JDBC 테이블처럼 Hibernate가 안전하게 관리하기 어려운 특수 스키마만 재실행 가능한 별도 SQL로 관리합니다.
+- 상태: confirmed
+- 근거: 팀이 학습한 JPA·Hibernate 범위 안에서 구현하고, 학습하지 않은 마이그레이션 도구 도입으로 인한 일정·운영 부담을 피하면서 MySQL 전용 정합성 제약은 데이터베이스에서 유지하기 위함입니다.
+- 영향 문서: convention.md, common-foundation.yaml
+
+## 2026-11-03 공통 기반 구현의 최소 범위 확정
+
+- 결정: 공통 기반 구현에는 공통 REST API와 MySQL 환경, 설계된 40개 업무 테이블의 전체 JPA Entity·기본 `JpaRepository`, 로컬 기본 샘플 데이터, 경로 등급별 Spring Security 인증·인가, 중앙 집중 REST 예외 처리, Vite Router·공통 API Client·Theme CSS, 백엔드와 프론트엔드를 잇는 견본 기능 한 개와 동일 계약의 목 데이터를 포함합니다.
+- 결정: Google 소셜 로그인은 서버 세션·가입 대기·내부 사용자 연결과 교체 가능한 공급자 경계까지 공통 기반에서 구현하고, 실제 Google API 자격 증명과 외부 연동 마무리는 사용자가 이어서 수행할 수 있도록 `README.md`에 로컬 설정 절차를 기록합니다. Naver 공급자 구현은 후속 범위로 미룹니다.
+- 결정: `data.sql`에는 스키마 DDL이 아니라 로컬 실행용 기본 샘플 데이터 DML만 둡니다. MySQL 전용 생성 컬럼·UNIQUE와 Spring Session 테이블 DDL은 별도 특수 스키마 SQL로 관리합니다.
+- 상태: confirmed
+- 근거: 초보 팀원이 공통 구조와 견본 수직 흐름을 복사해 기능을 확장할 수 있는 최소 실행 기반을 먼저 제공하면서, 학습하지 않은 도구와 즉시 필요하지 않은 Naver 외부 연동을 이번 공통 기반에서 분리하기 위함입니다.
+- 영향 문서: convention.md, implementation-guide.md, README.md, common-foundation.yaml
+
+## 2026-11-03 공통 기반 견본 기능과 와이어프레임 적용 범위 확정
+
+- 결정: 공통 기반의 견본 수직 기능은 `createGroup`으로 구현합니다. Controller·Service·Repository·DTO·API Client·그룹 생성 Page·동일 계약의 목 데이터와 자동 테스트를 포함하고, 그룹·주 관리자 멤버십·최초 관리자 변경 이력·활성 초대 링크·현재 시즌 참여·알 상태 크리처·0점 시즌 그룹 점수를 설계된 단일 트랜잭션으로 생성합니다.
+- 결정: 기존 Markdown 와이어프레임은 화면 구조를 확인하는 설계 참고 자료로 유지합니다. 이번 공통 기반에서는 HTML 와이어프레임 변환, 공통 와이어프레임 CSS와 GitHub Pages 공개를 구현·검증 대상으로 사용하지 않습니다.
+- 상태: confirmed
+- 근거: `createGroup`이 인증 사용자, Validation, 트랜잭션, 여러 Repository, REST 오류와 Form 처리를 함께 보여 주어 후속 기능의 기준 예제로 적합하며, HTML/Pages 변환은 실행 가능한 애플리케이션 기반을 만드는 현재 우선순위에 직접 필요하지 않기 때문입니다.
+- 영향 문서: screen-design.md, implementation-guide.md, common-foundation.yaml
+
+## 2026-11-03 그룹 테이블명을 MySQL 비예약어로 변경
+
+- 결정: 그룹 기준 테이블명을 `groups`에서 `game_groups`로 변경합니다. Java 도메인명 `Group`과 REST·화면 경로의 `/groups`는 변경하지 않습니다.
+- 상태: confirmed
+- 대체한 결정: 그룹 기준 테이블명을 `groups`로 사용한 기존 데이터베이스 설계
+- 근거: `GROUPS`가 MySQL 8.0.2부터 예약어이므로 Hibernate `ddl-auto=update`가 생성하는 FK DDL에서 구문 오류가 발생하는 문제를 제거하기 위함입니다.
+- 영향 문서: database-design.md, decision-log.md, implementation-guide.md, project_plan.md, common-foundation.yaml

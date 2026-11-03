@@ -86,7 +86,7 @@ Router
 2. `CreateGroupRequest`에 `name`, `description`만 선언하고 10.2절의 길이·정규화 규칙을 검증합니다.
 3. `GroupController.createGroup()`은 로그인 사용자 ID와 Request DTO를 `GroupMembershipService.createGroup()`에 전달합니다.
 4. Service는 `REQ-GRP-001`에 따라 활성 그룹 소속, 24시간 제한과 이름 중복을 검사합니다.
-5. 데이터베이스 설계서의 잠금 순서대로 사용자·그룹 관련 상태를 확인하고 `groups`, `group_memberships`, `group_invite_links`를 한 트랜잭션에서 생성합니다.
+5. 데이터베이스 설계서의 잠금 순서대로 사용자·그룹 관련 상태를 확인하고 `game_groups`, `group_memberships`, `group_invite_links`를 한 트랜잭션에서 생성합니다.
 6. Service는 생성된 Entity를 그대로 반환하지 않고 `CreateGroupResponse`를 만듭니다.
 7. Controller는 `201`과 Success Envelope를 반환합니다. 이름 중복은 `GROUP_NAME_ALREADY_USED`, 기존 그룹은 `ALREADY_IN_GROUP`, 제한 중이면 `JOIN_COOLDOWN_ACTIVE`입니다.
 8. 테스트는 정상 생성, 이름 길이 위반, 이름 중복, 기존 소속과 24시간 제한을 각각 확인합니다.
@@ -150,7 +150,7 @@ public ResponseEntity<ApiResponse<CreateGroupResponse>> createGroup(
 | 기능 | Operation 범위 | 주요 Service·Port | 먼저 볼 테이블 |
 |---|---|---|---|
 | 인증·가입 | `getCsrfToken` ~ `logout` | `AuthService`, `SocialLoginClient` | `users`, `social_accounts`, `user_profiles`, `oauth_login_attempts`, Spring Session 테이블 |
-| 초대·그룹 | `getPublicInvitation` ~ `rotateInvitation` | `GroupMembershipService`, `GroupAdminService` | `groups`, `group_memberships`, `group_invite_links`, `group_join_restrictions` |
+| 초대·그룹 | `getPublicInvitation` ~ `rotateInvitation` | `GroupMembershipService`, `GroupAdminService` | `game_groups`, `group_memberships`, `group_invite_links`, `group_join_restrictions` |
 | 시즌·크리처 | `getCurrentSeason` ~ `selectCreatureSpecies` | 시즌·크리처 Service | `seasons`, `creature_species`, `group_seasons`, `group_creatures` |
 | 퀘스트 | `listCurrentQuests` ~ `submitQuestPhoto` | 퀘스트 완료·보상 Service | `quest_templates`, `quest_assignments`, `quest_completions`, `quest_reward_ledgers`, `photo_submissions` |
 | 랭킹 | `getMemberRanking`, `getGroupRanking` | Ranking Query Service | `season_member_contributions`, `season_group_scores`, 시즌 종료 Ranking Snapshot 테이블 |

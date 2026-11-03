@@ -26,7 +26,7 @@
 
 | 테이블 | 책임 |
 |---|---|
-| `groups` | 공개 그룹, 정원, 주 관리자와 운영 상태 관리 |
+| `game_groups` | 공개 그룹, 정원, 주 관리자와 운영 상태 관리 |
 | `group_memberships` | 가입·탈퇴·강퇴 이력과 당시 역할 관리 |
 | `group_invite_links` | 현재·폐기된 초대 링크와 재발급 이력 관리 |
 | `group_join_restrictions` | 탈퇴·강퇴 후 24시간 가입 제한의 현재 종료 시각 관리 |
@@ -118,7 +118,7 @@ erDiagram
         VARCHAR initiating_session_hash
         VARCHAR status
     }
-    groups {
+    game_groups {
         BIGINT id PK
         BIGINT primary_admin_user_id FK
         VARCHAR normalized_name UK
@@ -173,18 +173,18 @@ erDiagram
     users ||--|| social_accounts : owns
     users ||--|| user_profiles : has
     users ||--o{ group_memberships : joins
-    groups ||--o{ group_memberships : contains
-    users ||--o{ groups : primary_admin
-    groups ||--o{ group_invite_links : issues
+    game_groups ||--o{ group_memberships : contains
+    users ||--o{ game_groups : primary_admin
+    game_groups ||--o{ group_invite_links : issues
     group_invite_links o|--o{ oauth_login_attempts : carries_context
     users ||--o| group_join_restrictions : restricted
     group_memberships ||--o| group_join_restrictions : causes
     users ||--o{ user_reports : reports
     users ||--o{ user_reports : reported
-    groups ||--o{ user_reports : receives
+    game_groups ||--o{ user_reports : receives
     user_reports ||--o{ moderation_actions : resolved_by
     group_memberships ||--o{ moderation_actions : target
-    groups ||--o{ group_admin_changes : records
+    game_groups ||--o{ group_admin_changes : records
 ```
 
 #### 시즌·크리처·랭킹 ERD
@@ -247,7 +247,7 @@ erDiagram
     }
 
     seasons ||--o{ group_seasons : includes
-    groups ||--o{ group_seasons : participates
+    game_groups ||--o{ group_seasons : participates
     group_seasons ||--|| group_creatures : raises
     creature_species ||--o{ group_creatures : species
     group_creatures ||--o{ creature_experience_ledgers : accumulates
@@ -258,10 +258,10 @@ erDiagram
     group_seasons ||--o{ season_member_rank_snapshots : snapshots
     users ||--o{ season_member_rank_snapshots : ranked
     seasons ||--o{ season_group_rank_snapshots : snapshots
-    groups ||--o{ season_group_rank_snapshots : ranked
+    game_groups ||--o{ season_group_rank_snapshots : ranked
 ```
 
-`groups`, `users`와 `quest_completions`는 다른 영역의 기준 테이블이며 이 ERD에 관계 확인을 위해 함께 표시합니다.
+`game_groups`, `users`와 `quest_completions`는 다른 영역의 기준 테이블이며 이 ERD에 관계 확인을 위해 함께 표시합니다.
 
 #### 퀘스트·활동 ERD
 
@@ -464,7 +464,7 @@ erDiagram
 
     users ||--o{ admin_audit_logs : acts
     users ||--o{ api_idempotency_records : invokes
-    groups o|--o{ admin_audit_logs : scopes
+    game_groups o|--o{ admin_audit_logs : scopes
 ```
 
 `scheduler_executions`는 특정 업무 부모에 종속되지 않고 `(job_type, scheduled_for)` 논리 키로 시즌·부화·퀘스트 배정·정리 작업의 실행권을 관리합니다.
@@ -478,7 +478,7 @@ erDiagram
 - 경험치와 기여도 변경의 근거는 원장에 남기고 현재 합계는 `group_creatures`, `season_member_contributions`, `season_group_scores`에 유지합니다.
 - `quest_assignments`는 모든 사용자에게 공통인 기간별 배정이고 사용자별 결과는 `quest_completions`이 관리합니다.
 - 결제 주문, PG 거래, 아이템 소유와 환불은 서로 다른 상태머신이므로 `purchases`, `payment_transactions`, `owned_items`, `refund_requests`로 분리합니다.
-- Gemini 그룹 소개 교정 요청과 결과는 업무 데이터로 저장하지 않으며 사용자가 적용한 최종 `groups.description`만 그룹 생성 시 저장합니다.
+- Gemini 그룹 소개 교정 요청과 결과는 업무 데이터로 저장하지 않으며 사용자가 적용한 최종 `game_groups.description`만 그룹 생성 시 저장합니다.
 
 ## 5. 관계 Cardinality와 FK 정책
 
@@ -489,9 +489,9 @@ erDiagram
 | `users` | `social_accounts` | 1:1, `social_accounts.user_id` UNIQUE |
 | `users` | `user_profiles` | 1:1, `user_profiles.user_id` UNIQUE |
 | `users` | `group_memberships` | 1:N, 활성 멤버십은 최대 1건 |
-| `groups` | `group_memberships` | 1:N, 활성 멤버십은 `capacity` 이하 |
-| `groups` | `group_invite_links` | 1:N, 활성 링크는 최대 1건 |
-| `groups` | `group_seasons` | 1:N |
+| `game_groups` | `group_memberships` | 1:N, 활성 멤버십은 `capacity` 이하 |
+| `game_groups` | `group_invite_links` | 1:N, 활성 링크는 최대 1건 |
+| `game_groups` | `group_seasons` | 1:N |
 | `seasons` | `group_seasons` | 1:N |
 | `group_seasons` | `group_creatures` | 1:1, `group_season_id` UNIQUE |
 | `quest_periods` | `quest_assignments` | 1:N |
@@ -507,11 +507,11 @@ erDiagram
 
 ### 5.2. 주 관리자 관계
 
-- `groups.primary_admin_user_id`는 `users.id`를 참조하며 활성 그룹에는 필수입니다. 유일한 주 관리자 탈퇴로 그룹이 `INACTIVE`가 되면 NULL로 변경합니다.
+- `game_groups.primary_admin_user_id`는 `users.id`를 참조하며 활성 그룹에는 필수입니다. 유일한 주 관리자 탈퇴로 그룹이 `INACTIVE`가 되면 NULL로 변경합니다.
 - 활성 주 관리자 멤버십에는 `status = 'ACTIVE' AND role = 'PRIMARY'`일 때만 `group_id`가 생성되는 `primary_group_id` STORED 생성 컬럼을 둡니다.
 - `primary_group_id` UNIQUE로 그룹당 활성 주 관리자 멤버십을 한 건만 허용합니다.
 - 그룹 생성 시 그룹, 주 관리자 멤버십과 `group_admin_changes` 최초 이력을 같은 트랜잭션에서 생성합니다.
-- 주 관리자 이전 시 기존·신규 사용자 행을 사용자 ID 오름차순 → 그룹 → 두 멤버십 ID 오름차순으로 잠그고 대상 역할을 `PRIMARY`, 기존 주 관리자 역할을 `MEMBER`로 변경합니다. `groups.primary_admin_user_id`와 `group_admin_changes` 이력을 같은 트랜잭션에서 함께 반영합니다.
+- 주 관리자 이전 시 기존·신규 사용자 행을 사용자 ID 오름차순 → 그룹 → 두 멤버십 ID 오름차순으로 잠그고 대상 역할을 `PRIMARY`, 기존 주 관리자 역할을 `MEMBER`로 변경합니다. `game_groups.primary_admin_user_id`와 `group_admin_changes` 이력을 같은 트랜잭션에서 함께 반영합니다.
 
 ### 5.3. FK 삭제 정책
 
@@ -588,13 +588,13 @@ ALTER TABLE group_memberships
 
 ### 7.2. 그룹 정원 카운터
 
-- `groups.capacity`의 기본값과 MVP 최대값은 20입니다.
-- `groups.current_member_count`는 활성 멤버십 수를 나타내는 비정규화 카운터입니다.
+- `game_groups.capacity`의 기본값과 MVP 최대값은 20입니다.
+- `game_groups.current_member_count`는 활성 멤버십 수를 나타내는 비정규화 카운터입니다.
 - `0 <= current_member_count AND current_member_count <= capacity` CHECK 제약을 적용합니다.
 - 가입 시 아래 조건부 갱신이 1건 성공한 경우에만 활성 멤버십을 생성합니다.
 
 ```sql
-UPDATE groups
+UPDATE game_groups
    SET current_member_count = current_member_count + 1
  WHERE id = :group_id
    AND current_member_count < capacity;
@@ -742,7 +742,7 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 
 ### 10.3. 그룹·운영 테이블
 
-#### `groups`
+#### `game_groups`
 
 | 컬럼 | 형식 | 제약·설명 |
 |---|---|---|
@@ -761,14 +761,14 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 
 공개 목록을 위해 `(status, visibility, current_member_count)` 인덱스를 사용합니다.
 
-주 관리자가 유일한 활성 구성원인 상태에서 자기 탈퇴하면 공통 멤버십 종료 트랜잭션이 `groups.status = 'INACTIVE'`, `current_member_count = 0`, `primary_admin_user_id = NULL`을 함께 반영합니다. 활성 초대 링크는 `INVALIDATED`, 현재 `group_seasons`는 `ENDED`, `group_creatures`는 `ARCHIVED`로 전환하며 기존 경험치·점수·기여도·랭킹 이력은 삭제하지 않습니다. 해당 그룹은 이후 보상을 받지 않지만 정규 시즌 종료 작업은 조기 종료된 그룹 시즌도 최종 랭킹 Snapshot 대상에 포함합니다. 비활성 그룹 이름은 재사용하지 않습니다.
+주 관리자가 유일한 활성 구성원인 상태에서 자기 탈퇴하면 공통 멤버십 종료 트랜잭션이 `game_groups.status = 'INACTIVE'`, `current_member_count = 0`, `primary_admin_user_id = NULL`을 함께 반영합니다. 활성 초대 링크는 `INVALIDATED`, 현재 `group_seasons`는 `ENDED`, `group_creatures`는 `ARCHIVED`로 전환하며 기존 경험치·점수·기여도·랭킹 이력은 삭제하지 않습니다. 해당 그룹은 이후 보상을 받지 않지만 정규 시즌 종료 작업은 조기 종료된 그룹 시즌도 최종 랭킹 Snapshot 대상에 포함합니다. 비활성 그룹 이름은 재사용하지 않습니다.
 
 #### `group_memberships`
 
 | 컬럼 | 형식 | 제약·설명 |
 |---|---|---|
 | `id` | BIGINT | PK, AUTO_INCREMENT |
-| `group_id` | BIGINT | FK → `groups.id` |
+| `group_id` | BIGINT | FK → `game_groups.id` |
 | `user_id` | BIGINT | FK → `users.id` |
 | `role` | VARCHAR(30) | `PRIMARY`, `DEPUTY`, `MEMBER` |
 | `status` | VARCHAR(30) | `ACTIVE`, `LEFT`, `REMOVED` |
@@ -789,7 +789,7 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 | 컬럼 | 형식 | 제약·설명 |
 |---|---|---|
 | `id` | BIGINT | PK, AUTO_INCREMENT |
-| `group_id` | BIGINT | FK → `groups.id` |
+| `group_id` | BIGINT | FK → `game_groups.id` |
 | `token_hash` | CHAR(64) | 링크 토큰 SHA-256 Hash, UNIQUE |
 | `status` | VARCHAR(30) | `ACTIVE`, `INVALIDATED` |
 | `issued_by_user_id` | BIGINT | FK → `users.id` |
@@ -820,7 +820,7 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 | `id` | BIGINT | PK, AUTO_INCREMENT |
 | `reporter_user_id` | BIGINT | 신고자 FK → `users.id` |
 | `reported_user_id` | BIGINT | 피신고자 FK → `users.id` |
-| `group_id` | BIGINT | 관련 그룹 FK → `groups.id` |
+| `group_id` | BIGINT | 관련 그룹 FK → `game_groups.id` |
 | `category` | VARCHAR(30) | 신고 분류 |
 | `content` | VARCHAR(1000) | 신고 내용 |
 | `status` | VARCHAR(30) | `RECEIVED`, `RESOLVED`, `REJECTED` |
@@ -838,7 +838,7 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 |---|---|---|
 | `id` | BIGINT | PK, AUTO_INCREMENT |
 | `report_id` | BIGINT | FK → `user_reports.id`, 미접속 강퇴는 NULL |
-| `group_id` | BIGINT | FK → `groups.id` |
+| `group_id` | BIGINT | FK → `game_groups.id` |
 | `membership_id` | BIGINT | 종료한 멤버십 FK → `group_memberships.id` |
 | `target_user_id` | BIGINT | 대상 FK → `users.id` |
 | `actor_user_id` | BIGINT | 실행자 FK → `users.id` |
@@ -854,7 +854,7 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 | 컬럼 | 형식 | 제약·설명 |
 |---|---|---|
 | `id` | BIGINT | PK, AUTO_INCREMENT |
-| `group_id` | BIGINT | FK → `groups.id` |
+| `group_id` | BIGINT | FK → `game_groups.id` |
 | `target_user_id` | BIGINT | 권한 대상 FK → `users.id` |
 | `actor_user_id` | BIGINT | 변경자 FK → `users.id` |
 | `change_type` | VARCHAR(30) | `INITIAL_PRIMARY`, `TRANSFER_PRIMARY`, `GRANT_DEPUTY`, `REVOKE_DEPUTY` |
@@ -901,7 +901,7 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 | 컬럼 | 형식 | 제약·설명 |
 |---|---|---|
 | `id` | BIGINT | PK, AUTO_INCREMENT |
-| `group_id` | BIGINT | FK → `groups.id` |
+| `group_id` | BIGINT | FK → `game_groups.id` |
 | `season_id` | BIGINT | FK → `seasons.id` |
 | `selection_deadline_at` | DATETIME(6) | 그룹의 시즌 참여 행 생성 후 정확히 72시간 |
 | `selected_species_id` | BIGINT | 현재 선택 FK → `creature_species.id`, 선택 전 NULL |
@@ -986,7 +986,7 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 | `id` | BIGINT | PK, AUTO_INCREMENT |
 | `season_id` | BIGINT | FK → `seasons.id` |
 | `group_season_id` | BIGINT | FK → `group_seasons.id` |
-| `group_id` | BIGINT | FK → `groups.id` |
+| `group_id` | BIGINT | FK → `game_groups.id` |
 | `user_id` | BIGINT | FK → `users.id` |
 | `rank_number` | INT | 그룹 내 최종 순위 |
 | `contribution_score` | BIGINT | 최종 기여 점수 |
@@ -1004,7 +1004,7 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 | `id` | BIGINT | PK, AUTO_INCREMENT |
 | `season_id` | BIGINT | FK → `seasons.id` |
 | `group_season_id` | BIGINT | FK → `group_seasons.id` |
-| `group_id` | BIGINT | FK → `groups.id` |
+| `group_id` | BIGINT | FK → `game_groups.id` |
 | `rank_number` | INT | 전체 그룹 최종 순위 |
 | `score` | BIGINT | 최종 그룹 점수 |
 | `score_reached_at` | DATETIME(6) | 동점 판단 시각 |
@@ -1374,7 +1374,7 @@ WebSocket 알림과 후속 이벤트는 데이터베이스 Commit 이후 발행�
 | `action_type` | VARCHAR(100) | 강퇴, 권한 변경, 환불 판단, 운영 복구 등 작업 코드 |
 | `target_type` | VARCHAR(50) | 대상 Aggregate 종류 |
 | `target_id` | BIGINT | 대상 Aggregate ID |
-| `group_id` | BIGINT | 관련 그룹 FK → `groups.id`, 전체 작업이면 NULL |
+| `group_id` | BIGINT | 관련 그룹 FK → `game_groups.id`, 전체 작업이면 NULL |
 | `result` | VARCHAR(30) | `SUCCESS`, `REJECTED`, `FAILED` |
 | `reason` | VARCHAR(500) | 작업 사유 또는 거절 사유 |
 | `detail` | JSON | 비밀·개인정보를 제외한 변경 전후 식별 정보 |
