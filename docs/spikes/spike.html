@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOM + CSS 사용자 아바타 표현 프로토타입 (완성본)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        h2 { color: #1e293b; margin-bottom: 5px; font-size: 20px; text-align: center; }
+        p { color: #64748b; font-size: 13px; margin-bottom: 15px; text-align: center; }
+
+        /* 테스트 조작 버튼 영역 */
+        .controls {
+            margin-bottom: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+        }
+        .controls button {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: background 0.2s;
+        }
+        .controls button:hover {
+            background-color: #2563eb;
+        }
+        .controls button.accent {
+            background-color: #10b981;
+        }
+        .controls button.accent:hover {
+            background-color: #059669;
+        }
+
+        /* 메인 스테이지 박스 (PC·모바일 반응형 적용) */
+        #stage {
+            position: relative;
+            width: 100%;
+            max-width: 600px;       /* PC 최대 600px */
+            aspect-ratio: 1 / 1;    /* 모바일 1:1 정사각형 비율 유지 */
+            background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+            border: 3px solid #94a3b8;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+        }
+
+        /* 중앙 공동 크리처 */
+        .creature-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 5;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 12px 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        .creature-center:hover {
+            transform: translate(-50%, -50%) scale(1.05);
+        }
+        .creature-center span { font-size: 40px; }
+        .creature-center p { margin: 4px 0 0 0; font-weight: bold; color: #334155; font-size: 12px; }
+
+        /* 아바타 둥실둥실 이동 애니메이션 */
+        @keyframes floatUpDown {
+            0%, 100% { transform: translate(-50%, -50%) translateY(0px); }
+            50% { transform: translate(-50%, -50%) translateY(-6px); }
+        }
+
+        /* 사용자 아바타 노드 */
+        .avatar-node {
+            position: absolute;
+            cursor: pointer;
+            text-align: center;
+            transform: translate(-50%, -50%);
+            /* [배치 및 이동 표현] 위치 변화 시 0.5초간 부드럽게 이동 */
+            transition: left 0.5s ease-in-out, top 0.5s ease-in-out, transform 0.2s ease;
+            animation: floatUpDown 3s ease-in-out infinite;
+        }
+        .avatar-node:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+            z-index: 100;
+        }
+
+        .avatar-wrapper {
+            position: relative;
+            width: 40px;
+            height: 40px;
+            margin: 0 auto;
+        }
+
+        /* [본체 레이어] */
+        .avatar-base {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-color: #3b82f6;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 11px;
+            font-weight: bold;
+            z-index: 1;
+        }
+
+        /* [꾸미기 아이템 레이어 - z-index 합성] */
+        .avatar-item {
+            position: absolute;
+            top: -6px;
+            right: -4px;
+            width: 18px;
+            height: 18px;
+            background-color: #f59e0b;
+            border: 1.5px solid #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            line-height: 1;
+        }
+
+        /* 닉네임 라벨 */
+        .avatar-name {
+            font-size: 9px;
+            color: #334155;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 1px 5px;
+            border-radius: 4px;
+            margin-top: 2px;
+            display: inline-block;
+            font-weight: 600;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+
+<h2>🌱 사용자 아바타 표현 프로토타입</h2>
+<p>배치·이동 표현 및 장착 아이템 동적 외형 갱신 테스트</p>
+
+<!-- 조작 버튼 영역 -->
+<div class="controls">
+    <button onclick="changeCreatureStage(1)">Lv.1 (알)</button>
+    <button onclick="changeCreatureStage(2)">Lv.2 (부화)</button>
+    <button onclick="changeCreatureStage(3)">Lv.3 (드래곤)</button>
+    <button class="accent" onclick="updateUser1Item('👑')">유저1 왕관 갱신</button>
+    <button class="accent" onclick="updateUser1Item('🎩')">유저1 모자 갱신</button>
+    <button class="accent" onclick="updateUser1Item('')">유저1 아이템 해제</button>
+    <button onclick="randomizePositions()">위치 무작위 이동 테스트</button>
+</div>
+
+<div id="stage">
+    <!-- 중앙 크리처 -->
+    <div class="creature-center" id="creature-box">
+        <span id="creature-icon">🥚</span>
+        <p id="creature-text">공동 크리처 (Lv.1)</p>
+    </div>
+</div>
+
+<script>
+    const stage = document.getElementById('stage');
+
+    // 크리처 성장 단계
+    const creatureStages = {
+        1: { icon: '🥚', name: '공동 크리처 (Lv.1 - 알)' },
+        2: { icon: '🐣', name: '공동 크리처 (Lv.2 - 부화)' },
+        3: { icon: '🐉', name: '공동 크리처 (Lv.3 - 드래곤)' }
+    };
+
+    function changeCreatureStage(level) {
+        const data = creatureStages[level];
+        document.getElementById('creature-icon').innerText = data.icon;
+        document.getElementById('creature-text').innerText = data.name;
+    }
+
+    // 최대 20명 아바타 동시 표시 설정
+    const totalAvatars = 20;
+    const radiusPercent = 28; // 반지름 %
+
+    const avatars = Array.from({ length: totalAvatars }, (_, i) => ({
+        id: i + 1,
+        name: `유저_${i + 1}`,
+        angle: (i / totalAvatars) * Math.PI * 2,
+        itemIcon: (i % 2 === 0) ? '👑' : '' // 짝수 유저 임시 아이템
+    }));
+
+    // 아바타 생성 및 동적 배치
+    avatars.forEach((avatar, index) => {
+        const xPercent = 50 + Math.cos(avatar.angle) * radiusPercent;
+        const yPercent = 50 + Math.sin(avatar.angle) * radiusPercent;
+
+        const node = document.createElement('div');
+        node.className = 'avatar-node';
+        node.id = `avatar-node-${avatar.id}`;
+        node.style.left = `${xPercent}%`;
+        node.style.top = `${yPercent}%`;
+        // 둥실거리는 타이밍을 유저마다 다르게 설정
+        node.style.animationDelay = `${(index * 0.15).toFixed(2)}s`;
+
+        const itemHTML = avatar.itemIcon
+            ? `<div class="avatar-item" id="item-${avatar.id}">${avatar.itemIcon}</div>`
+            : '';
+
+        node.innerHTML = `
+                <div class="avatar-wrapper">
+                    <div class="avatar-base">${avatar.id}</div>
+                    ${itemHTML}
+                </div>
+                <div class="avatar-name">${avatar.name}</div>
+            `;
+
+        // 아바타 선택 시 사용자 정보 표시
+        node.addEventListener('click', () => {
+            const currentItem = avatar.itemIcon ? `장착 중 (${avatar.itemIcon})` : '없음';
+            alert(`👤 사용자 정보\n- 이름: ${avatar.name}\n- 고유 ID: ${avatar.id}번\n- 장착 아이템: ${currentItem}`);
+        });
+
+        stage.appendChild(node);
+    });
+
+    // 🎯 [장착 아이템 변경 시 외형 갱신] 로직
+    function updateUser1Item(newItemIcon) {
+        const targetAvatar = avatars.find(a => a.id === 1);
+        if (!targetAvatar) return;
+
+        targetAvatar.itemIcon = newItemIcon;
+        const node = document.getElementById('avatar-node-1');
+        const wrapper = node.querySelector('.avatar-wrapper');
+        let itemEl = document.getElementById('item-1');
+
+        if (newItemIcon) {
+            if (itemEl) {
+                itemEl.innerText = newItemIcon;
+            } else {
+                itemEl = document.createElement('div');
+                itemEl.className = 'avatar-item';
+                itemEl.id = 'item-1';
+                itemEl.innerText = newItemIcon;
+                wrapper.appendChild(itemEl);
+            }
+        } else {
+            if (itemEl) itemEl.remove();
+        }
+    }
+
+    // 🎯 [아바타별 위치 배치와 간단한 이동 표현] 로직
+    function randomizePositions() {
+        avatars.forEach(avatar => {
+            // 반지름 범위 안에서 위치 재계산
+            const randomAngle = Math.random() * Math.PI * 2;
+            const randomRadius = 18 + Math.random() * 15;
+
+            const newX = 50 + Math.cos(randomAngle) * randomRadius;
+            const newY = 50 + Math.sin(randomAngle) * randomRadius;
+
+            const node = document.getElementById(`avatar-node-${avatar.id}`);
+            node.style.left = `${newX.toFixed(2)}%`;
+            node.style.top = `${newY.toFixed(2)}%`;
+        });
+    }
+</script>
+</body>
+</html>

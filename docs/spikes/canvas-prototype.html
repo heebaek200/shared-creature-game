@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas 2D 사용자 아바타 표현 프로토타입</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        h2 { color: #1e293b; margin-bottom: 5px; font-size: 20px; text-align: center; }
+        p { color: #64748b; font-size: 13px; margin-bottom: 15px; text-align: center; }
+
+        .controls {
+            margin-bottom: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+        }
+        .controls button {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: background 0.2s;
+        }
+        .controls button:hover { background-color: #2563eb; }
+        .controls button.accent { background-color: #10b981; }
+        .controls button.accent:hover { background-color: #059669; }
+
+        /* 스테이지 래퍼 (PC·모바일 반응형 비율 유지) */
+        .stage-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            aspect-ratio: 1 / 1;
+            border: 3px solid #94a3b8;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+            background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<h2>🎨 Canvas 2D 사용자 아바타 표현 프로토타입</h2>
+<p>캔버스 기반 애니메이션 루프 & 좌표 충돌 판정 구현</p>
+
+<div class="controls">
+    <button onclick="changeCreatureStage(1)">Lv.1 (알)</button>
+    <button onclick="changeCreatureStage(2)">Lv.2 (부화)</button>
+    <button onclick="changeCreatureStage(3)">Lv.3 (드래곤)</button>
+    <button class="accent" onclick="updateUser1Item('👑')">유저1 왕관 갱신</button>
+    <button class="accent" onclick="updateUser1Item('🎩')">유저1 모자 갱신</button>
+    <button class="accent" onclick="updateUser1Item('')">유저1 아이템 해제</button>
+    <button onclick="randomizePositions()">위치 무작위 이동 테스트</button>
+</div>
+
+<div class="stage-wrapper">
+    <canvas id="canvas" width="600" height="600"></canvas>
+</div>
+
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // 크리처 성장 단계
+    const creatureStages = {
+        1: { icon: '🥚', name: '공동 크리처 (Lv.1 - 알)' },
+        2: { icon: '🐣', name: '공동 크리처 (Lv.2 - 부화)' },
+        3: { icon: '🐉', name: '공동 크리처 (Lv.3 - 드래곤)' }
+    };
+    let currentLevel = 1;
+
+    function changeCreatureStage(level) {
+        currentLevel = level;
+    }
+
+    // 최대 20명 아바타 배치 및 애니메이션 속성 초기화
+    const totalAvatars = 20;
+    const center = 300;
+    const radius = 170;
+
+    const avatars = Array.from({ length: totalAvatars }, (_, i) => {
+        const angle = (i / totalAvatars) * Math.PI * 2;
+        const targetX = center + Math.cos(angle) * radius;
+        const targetY = center + Math.sin(angle) * radius;
+
+        return {
+            id: i + 1,
+            name: `유저_${i + 1}`,
+            x: targetX,
+            y: targetY,
+            targetX: targetX,
+            targetY: targetY,
+            itemIcon: (i % 2 === 0) ? '👑' : '',
+            floatOffset: Math.random() * Math.PI * 2
+        };
+    });
+
+    // 🎯 [장착 아이템 변경 시 외형 갱신]
+    function updateUser1Item(newItemIcon) {
+        const user1 = avatars.find(a => a.id === 1);
+        if (user1) {
+            user1.itemIcon = newItemIcon;
+        }
+    }
+
+    // 🎯 [아바타별 위치 배치와 간단한 이동 표현]
+    function randomizePositions() {
+        avatars.forEach(avatar => {
+            const randomAngle = Math.random() * Math.PI * 2;
+            const randomRadius = 110 + Math.random() * 90;
+            avatar.targetX = center + Math.cos(randomAngle) * randomRadius;
+            avatar.targetY = center + Math.sin(randomAngle) * randomRadius;
+        });
+    }
+
+    // 🎨 Canvas 2D 메인 렌더링 루프
+    let time = 0;
+    function render() {
+        time += 0.04;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. 중앙 크리처 렌더링
+        const creatureData = creatureStages[currentLevel];
+        ctx.save();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
+        ctx.shadowBlur = 10;
+
+        // 라운드 박스
+        ctx.beginPath();
+        ctx.roundRect(center - 80, center - 45, 160, 90, 12);
+        ctx.fill();
+
+        // 아이콘 및 이름
+        ctx.font = '36px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(creatureData.icon, center, center - 12);
+
+        ctx.fillStyle = '#334155';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText(creatureData.name, center, center + 25);
+        ctx.restore();
+
+        // 2. 20명 아바타 렌더링
+        avatars.forEach(avatar => {
+            // 부드러운 위치 이동 (보간)
+            avatar.x += (avatar.targetX - avatar.x) * 0.1;
+            avatar.y += (avatar.targetY - avatar.y) * 0.1;
+
+            // 둥실거림 애니메이션
+            const offsetY = Math.sin(time + avatar.floatOffset) * 3;
+            const drawX = avatar.x;
+            const drawY = avatar.y + offsetY;
+
+            // [본체 레이어] 원형 베이스
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(drawX, drawY, 20, 0, Math.PI * 2);
+            ctx.fillStyle = '#3b82f6';
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#ffffff';
+            ctx.stroke();
+
+            // 본체 내부 ID 텍스트
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(avatar.id, drawX, drawY);
+
+            // [꾸미기 아이템 레이어 - 순서 상 위에 그림]
+            if (avatar.itemIcon) {
+                const itemX = drawX + 13;
+                const itemY = drawY - 13;
+
+                ctx.beginPath();
+                ctx.arc(itemX, itemY, 9, 0, Math.PI * 2);
+                ctx.fillStyle = '#f59e0b';
+                ctx.fill();
+                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = '#ffffff';
+                ctx.stroke();
+
+                ctx.font = '10px sans-serif';
+                ctx.fillText(avatar.itemIcon, itemX, itemY);
+            }
+
+            // 닉네임 라벨
+            const labelText = avatar.name;
+            ctx.font = 'bold 9px sans-serif';
+            const textWidth = ctx.measureText(labelText).width;
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.beginPath();
+            ctx.roundRect(drawX - textWidth / 2 - 4, drawY + 23, textWidth + 8, 14, 4);
+            ctx.fill();
+
+            ctx.fillStyle = '#334155';
+            ctx.fillText(labelText, drawX, drawY + 30);
+            ctx.restore();
+        });
+
+        requestAnimationFrame(render);
+    }
+
+    // 🎯 [아바타 선택 시 사용자 정보 표시] 클릭 충돌 판정
+    canvas.addEventListener('click', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        // 반응형 비율 계산
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        const clickX = (e.clientX - rect.left) * scaleX;
+        const clickY = (e.clientY - rect.top) * scaleY;
+
+        // 마우스 클릭 좌표와 아바타 중심점 좌표 간 수학적 거리 계산
+        const clicked = avatars.find(avatar => {
+            const dist = Math.hypot(clickX - avatar.x, clickY - avatar.y);
+            return dist <= 20; // 아바타 반지름 20px 내 선택 판단
+        });
+
+        if (clicked) {
+            const itemState = clicked.itemIcon ? `장착 중 (${clicked.itemIcon})` : '없음';
+            alert(`👤 사용자 정보\n- 이름: ${clicked.name}\n- 고유 ID: ${clicked.id}번\n- 장착 아이템: ${itemState}`);
+        }
+    });
+
+    // 렌더링 루프 시작
+    render();
+</script>
+
+</body>
+</html>
