@@ -141,6 +141,8 @@
 
 **오류 조건 우선순위:** 인증/서명 → CSRF → 권한·리소스 범위 → 형식 및 필드 검증 → 업무 상태·동시성. 필드 오류와 공통 상태 오류가 함께 발생하면 선행 단계 오류로 응답합니다. 동일 주문·환불의 멱등 재요청은 최초 HTTP 상태와 Body를 그대로 반환합니다.
 
+**확인 필요 — `429 Retry-After` 응답 헤더:** [프론트엔드 공통 오류 이슈 #34](https://github.com/heebaek200/shared-creature-game/issues/34)에는 `Retry-After` 동안 재요청을 제한하도록 되어 있습니다. 현재 REST 계약에는 이 헤더의 필수 여부와 값 형식(지연 초 또는 HTTP-date)이 정의되지 않았으므로 구현 전 합의가 필요합니다. 이 문서는 형식을 임의로 확정하지 않습니다.
+
 ## 2. 인증·초대 API
 
 ### getCsrfToken — `GET /api/v1/auth/csrf`
@@ -222,9 +224,9 @@
 | Header | Location | string(uri) | Y | N | 검증된 동일 Origin CSR Route |
 | Body | — | — | — | — | JSON Envelope 없음 |
 
-**오류 응답**
-
 인가 오류·`state`/세션 검증 실패 시 **토큰과 코드가 URL에 노출되지 않는 내부 오류 경로로 302 Redirect**. 아래 오류 코드는 내부 사유 분류이며, 일반 JSON 응답으로 리다이렉트하지 않습니다.
+
+**오류 응답**
 
 | HTTP | code | 조건 |
 |---|---|---|
@@ -248,10 +250,10 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.provider | string(enum) | Y | N | GOOGLE \| NAVER |  |
+| data.provider | string(enum) | Y | N | GOOGLE \| NAVER | 소셜 공급자 |
 | data.email | string | Y | N | 1~320자 | 공급자 이메일 |
 | data.suggestedNickname | string | Y | Y | 0~20자 | 추천 닉네임 |
-| data.invitation | object | Y | Y | 초대 문맥이 없으면 null |  |
+| data.invitation | object | Y | Y | 초대 문맥이 없으면 null | 초대 링크 |
 | data.invitation.groupId | integer(int64) | C | N | 1 이상 | 초대 대상 그룹 ID |
 | data.invitation.groupName | string | C | N | 2~30자 | 초대 대상 그룹명 |
 | data.expiresAt | string(date-time) | Y | N | UTC ISO 8601 | 가입 대기 종료 시각 |
@@ -285,18 +287,18 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.authenticationState | string(enum) | Y | N | ANONYMOUS \| SIGNUP_PENDING \| AUTHENTICATED |  |
-| data.onboardingState | string(enum) | Y | N | NOT_STARTED \| SIGNUP_REQUIRED \| GROUP_REQUIRED \| COMPLETED |  |
-| data.user | object | Y | Y | 비로그인/가입 대기에서는 null |  |
-| data.user.userId | integer(int64) | C | N | 1 이상 |  |
-| data.user.nickname | string | C | N | 2~20자 |  |
-| data.membership | object | Y | Y | 그룹 미가입이면 null |  |
-| data.membership.membershipId | integer(int64) | C | N | 1 이상 |  |
-| data.membership.groupId | integer(int64) | C | N | 1 이상 |  |
-| data.membership.role | string(enum) | C | N | PRIMARY \| DEPUTY \| MEMBER |  |
-| data.membership.status | string(enum) | C | N | ACTIVE \| LEFT \| REMOVED |  |
-| data.membership.joinedAt | string(date-time) | C | N | UTC ISO 8601 |  |
-| data.roles | array<string(enum)> | Y | N | 요소: SUPER_ADMIN, PRIMARY, DEPUTY, MEMBER; 없으면 [] |  |
+| data.authenticationState | string(enum) | Y | N | ANONYMOUS \| SIGNUP_PENDING \| AUTHENTICATED | 인증 상태 |
+| data.onboardingState | string(enum) | Y | N | NOT_STARTED \| SIGNUP_REQUIRED \| GROUP_REQUIRED \| COMPLETED | 온보딩 상태 |
+| data.user | object | Y | Y | 비로그인/가입 대기에서는 null | 사용자 |
+| data.user.userId | integer(int64) | C | N | 1 이상 | 사용자 ID |
+| data.user.nickname | string | C | N | 2~20자 | 닉네임 |
+| data.membership | object | Y | Y | 그룹 미가입이면 null | 멤버십 |
+| data.membership.membershipId | integer(int64) | C | N | 1 이상 | 멤버십 ID |
+| data.membership.groupId | integer(int64) | C | N | 1 이상 | 그룹 ID |
+| data.membership.role | string(enum) | C | N | PRIMARY \| DEPUTY \| MEMBER | 멤버십 역할 |
+| data.membership.status | string(enum) | C | N | ACTIVE \| LEFT \| REMOVED | 멤버십 상태 |
+| data.membership.joinedAt | string(date-time) | C | N | UTC ISO 8601 | 가입 시각 |
+| data.roles | array<string(enum)> | Y | N | 요소: SUPER_ADMIN, PRIMARY, DEPUTY, MEMBER; 없으면 [] | 역할 목록 |
 | data.restrictionUntil | string(date-time) | Y | Y | UTC ISO 8601 | 그룹 가입 제한 없으면 null |
 | data.onboardingReason | string(enum) | Y | Y | INVITE_INVALID \| GROUP_FULL \| JOIN_COOLDOWN_ACTIVE \| ALREADY_IN_GROUP; 없으면 null | 초대 가입 실패 원인, 응답 후 세션에서 제거 |
 
@@ -329,18 +331,18 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.authenticationState | string(enum) | Y | N | ANONYMOUS \| SIGNUP_PENDING \| AUTHENTICATED |  |
-| data.onboardingState | string(enum) | Y | N | NOT_STARTED \| SIGNUP_REQUIRED \| GROUP_REQUIRED \| COMPLETED |  |
-| data.user | object | Y | Y | 비로그인/가입 대기에서는 null |  |
-| data.user.userId | integer(int64) | C | N | 1 이상 |  |
-| data.user.nickname | string | C | N | 2~20자 |  |
-| data.membership | object | Y | Y | 그룹 미가입이면 null |  |
-| data.membership.membershipId | integer(int64) | C | N | 1 이상 |  |
-| data.membership.groupId | integer(int64) | C | N | 1 이상 |  |
-| data.membership.role | string(enum) | C | N | PRIMARY \| DEPUTY \| MEMBER |  |
-| data.membership.status | string(enum) | C | N | ACTIVE \| LEFT \| REMOVED |  |
-| data.membership.joinedAt | string(date-time) | C | N | UTC ISO 8601 |  |
-| data.roles | array<string(enum)> | Y | N | 요소: SUPER_ADMIN, PRIMARY, DEPUTY, MEMBER; 없으면 [] |  |
+| data.authenticationState | string(enum) | Y | N | ANONYMOUS \| SIGNUP_PENDING \| AUTHENTICATED | 인증 상태 |
+| data.onboardingState | string(enum) | Y | N | NOT_STARTED \| SIGNUP_REQUIRED \| GROUP_REQUIRED \| COMPLETED | 온보딩 상태 |
+| data.user | object | Y | Y | 비로그인/가입 대기에서는 null | 사용자 |
+| data.user.userId | integer(int64) | C | N | 1 이상 | 사용자 ID |
+| data.user.nickname | string | C | N | 2~20자 | 닉네임 |
+| data.membership | object | Y | Y | 그룹 미가입이면 null | 멤버십 |
+| data.membership.membershipId | integer(int64) | C | N | 1 이상 | 멤버십 ID |
+| data.membership.groupId | integer(int64) | C | N | 1 이상 | 그룹 ID |
+| data.membership.role | string(enum) | C | N | PRIMARY \| DEPUTY \| MEMBER | 멤버십 역할 |
+| data.membership.status | string(enum) | C | N | ACTIVE \| LEFT \| REMOVED | 멤버십 상태 |
+| data.membership.joinedAt | string(date-time) | C | N | UTC ISO 8601 | 가입 시각 |
+| data.roles | array<string(enum)> | Y | N | 요소: SUPER_ADMIN, PRIMARY, DEPUTY, MEMBER; 없으면 [] | 역할 목록 |
 | data.restrictionUntil | string(date-time) | Y | Y | UTC ISO 8601 | 그룹 가입 제한 없으면 null |
 | data.onboardingReason | string(enum) | Y | Y | INVITE_INVALID \| GROUP_FULL \| JOIN_COOLDOWN_ACTIVE \| ALREADY_IN_GROUP; 없으면 null | 초대 가입 실패 원인, 응답 후 세션에서 제거 |
 
@@ -393,13 +395,13 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.groupId | integer(int64) | Y | N | 1 이상 |  |
-| data.groupName | string | Y | N | 2~30자 |  |
-| data.description | string | Y | N | 0~500자 |  |
-| data.currentMemberCount | integer | Y | N | 0~20 |  |
-| data.capacity | integer | Y | N | 고정 20 |  |
-| data.joinable | boolean | Y | N | true/false |  |
-| data.joinBlockedReason | string(enum) | Y | Y | GROUP_FULL \| JOIN_COOLDOWN_ACTIVE \| INVITE_INVALID \| ALREADY_IN_GROUP; 가입 가능하면 null |  |
+| data.groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
+| data.groupName | string | Y | N | 2~30자 | 그룹명 |
+| data.description | string | Y | N | 0~500자 | 성공 데이터 소개/설명 |
+| data.currentMemberCount | integer | Y | N | 0~20 | 현재 구성원 수 |
+| data.capacity | integer | Y | N | 고정 20 | 정원 |
+| data.joinable | boolean | Y | N | true/false | 가입 가능 여부 |
+| data.joinBlockedReason | string(enum) | Y | Y | GROUP_FULL \| JOIN_COOLDOWN_ACTIVE \| INVITE_INVALID \| ALREADY_IN_GROUP; 가입 가능하면 null | 그룹 가입 제한 사유 |
 
 **오류 응답**
 
@@ -428,7 +430,7 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.nextRoute | string | Y | N | /login \| /signup \| /groups/select \| /creature \| /admin 등 내부 CSR 경로 |  |
+| data.nextRoute | string | Y | N | /login \| /signup \| /groups/select \| /creature \| /admin 등 내부 CSR 경로 | 다음 화면 경로 |
 | data.reasonCode | string | Y | Y | 없으면 null | 이동·실패 안내용 서버 코드 |
 
 **오류 응답**
@@ -462,7 +464,7 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.nextRoute | string | Y | N | /login \| /signup \| /groups/select \| /creature \| /admin 등 내부 CSR 경로 |  |
+| data.nextRoute | string | Y | N | /login \| /signup \| /groups/select \| /creature \| /admin 등 내부 CSR 경로 | 다음 화면 경로 |
 | data.reasonCode | string | Y | Y | 없으면 null | 이동·실패 안내용 서버 코드 |
 
 **오류 응답**
@@ -496,14 +498,14 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | array<object> | Y | N | 0건이면 [] | 목록 |
-| data[].groupId | integer(int64) | Y | N | 1 이상 |  |
-| data[].name | string | Y | N | 2~30자 |  |
-| data[].description | string | Y | N | 0~500자 |  |
-| data[].currentMemberCount | integer | Y | N | 0~20 |  |
-| data[].capacity | integer | Y | N | 고정 20 |  |
-| data[].remainingCapacity | integer | Y | N | 0~20 |  |
-| data[].joinable | boolean | Y | N | true/false |  |
-| data[].joinBlockedReason | string(enum) | Y | Y | GROUP_FULL \| JOIN_COOLDOWN_ACTIVE \| ALREADY_IN_GROUP; 가입 가능하면 null |  |
+| data[].groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
+| data[].name | string | Y | N | 2~30자 | 성공 데이터 이름 |
+| data[].description | string | Y | N | 0~500자 | 성공 데이터 소개/설명 |
+| data[].currentMemberCount | integer | Y | N | 0~20 | 현재 구성원 수 |
+| data[].capacity | integer | Y | N | 고정 20 | 정원 |
+| data[].remainingCapacity | integer | Y | N | 0~20 | 잔여 정원 |
+| data[].joinable | boolean | Y | N | true/false | 가입 가능 여부 |
+| data[].joinBlockedReason | string(enum) | Y | Y | GROUP_FULL \| JOIN_COOLDOWN_ACTIVE \| ALREADY_IN_GROUP; 가입 가능하면 null | 그룹별 가입 불가 사유 |
 | meta | object | Y | N | — | 목록 부가 정보 |
 | meta.page | integer | Y | N | 0 이상 | 현재 페이지 |
 | meta.size | integer | Y | N | 1~50 | 요청 페이지 크기 |
@@ -524,6 +526,8 @@
 - **Operation ID:** `createGroup` · **요구사항:** `REQ-GRP-001` · **인증·권한:** `AUTHENTICATED` · **성공 HTTP:** `201`
 - **엔드포인트 조건:** 새 그룹과 PRIMARY 멤버십 및 활성 초대 링크를 생성한다.
 
+> **확인 필요:** 아래 응답의 `data.group.group` 이중 중첩은 기존 API 계약 그대로입니다. 이슈별 계약 추출 과정에서 중복된 래핑 가능성이 발견되었지만, DTO 변경이 확정되지 않았으므로 임의로 평탄화하지 않았습니다.
+
 **요청 필드**
 
 | 위치 | 필드명 | 타입 | 필수 | null | 검증·기본값 |
@@ -539,25 +543,25 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.group | object | Y | N | 필수 |  |
-| data.group.group | object | Y | N | 필수 |  |
-| data.group.group.groupId | integer(int64) | Y | N | 1 이상 |  |
-| data.group.group.name | string | Y | N | 2~30자 |  |
-| data.group.group.description | string | Y | N | 0~500자 |  |
-| data.group.group.currentMemberCount | integer | Y | N | 0~20 |  |
-| data.group.group.capacity | integer | Y | N | 고정 20 |  |
-| data.group.group.remainingCapacity | integer | Y | N | 0~20 |  |
-| data.group.group.joinable | boolean | Y | N | true/false |  |
-| data.group.group.joinBlockedReason | string(enum) | Y | Y | GROUP_FULL \| JOIN_COOLDOWN_ACTIVE \| ALREADY_IN_GROUP; 가입 가능하면 null |  |
+| data.group | object | Y | N | 필수 | 그룹 |
+| data.group.group | object | Y | N | 필수 | 그룹 상세 객체(원문 중첩 경로·확인 필요) |
+| data.group.group.groupId | integer(int64) | Y | N | 1 이상 | 그룹 상세 ID(원문 중첩 경로·확인 필요) |
+| data.group.group.name | string | Y | N | 2~30자 | 그룹 이름 |
+| data.group.group.description | string | Y | N | 0~500자 | 그룹 소개/설명 |
+| data.group.group.currentMemberCount | integer | Y | N | 0~20 | 현재 구성원 수 |
+| data.group.group.capacity | integer | Y | N | 고정 20 | 정원 |
+| data.group.group.remainingCapacity | integer | Y | N | 0~20 | 잔여 정원 |
+| data.group.group.joinable | boolean | Y | N | true/false | 가입 가능 여부 |
+| data.group.group.joinBlockedReason | string(enum) | Y | Y | GROUP_FULL \| JOIN_COOLDOWN_ACTIVE \| ALREADY_IN_GROUP; 가입 가능하면 null | 그룹 가입 제한 사유 |
 | data.group.primaryAdmin | object | Y | Y | 활성 그룹 필수 | 비활성 그룹에서는 null |
-| data.group.primaryAdmin.userId | integer(int64) | C | N | 1 이상 |  |
-| data.group.primaryAdmin.nickname | string | C | N | 2~20자 |  |
-| data.group.myMembership | object | Y | Y | 내가 그룹 미가입이면 null |  |
-| data.group.myMembership.membershipId | integer(int64) | C | N | 1 이상 |  |
-| data.group.myMembership.groupId | integer(int64) | C | N | 1 이상 |  |
-| data.group.myMembership.role | string(enum) | C | N | PRIMARY \| DEPUTY \| MEMBER |  |
-| data.group.myMembership.status | string(enum) | C | N | ACTIVE \| LEFT \| REMOVED |  |
-| data.group.myMembership.joinedAt | string(date-time) | C | N | UTC ISO 8601 |  |
+| data.group.primaryAdmin.userId | integer(int64) | C | N | 1 이상 | 사용자 ID |
+| data.group.primaryAdmin.nickname | string | C | N | 2~20자 | 닉네임 |
+| data.group.myMembership | object | Y | Y | 내가 그룹 미가입이면 null | 내 멤버십 |
+| data.group.myMembership.membershipId | integer(int64) | C | N | 1 이상 | 멤버십 ID |
+| data.group.myMembership.groupId | integer(int64) | C | N | 1 이상 | 그룹 ID |
+| data.group.myMembership.role | string(enum) | C | N | PRIMARY \| DEPUTY \| MEMBER | 내 멤버십 역할 |
+| data.group.myMembership.status | string(enum) | C | N | ACTIVE \| LEFT \| REMOVED | 내 멤버십 상태 |
+| data.group.myMembership.joinedAt | string(date-time) | C | N | UTC ISO 8601 | 가입 시각 |
 | data.initialInvitationUrl | string(uri) | Y | N | 동일 Origin /invite/{token} | 신규 그룹 초대 링크 |
 
 **오류 응답**
@@ -592,7 +596,7 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.originalText | string | Y | N | 1~500자 |  |
+| data.originalText | string | Y | N | 1~500자 | 교정 대상 원문 |
 | data.suggestedText | string | Y | N | 0~500자 | 교정 제안 |
 | data.changed | boolean | Y | N | true/false | 내용 변경 여부 |
 
@@ -624,12 +628,12 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.membershipId | integer(int64) | Y | N | 1 이상 |  |
-| data.groupId | integer(int64) | Y | N | 1 이상 |  |
-| data.role | string(enum) | Y | N | PRIMARY \| DEPUTY \| MEMBER |  |
-| data.status | string(enum) | Y | N | ACTIVE \| LEFT \| REMOVED |  |
-| data.joinedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.nickname | string | Y | N | 2~20자 |  |
+| data.membershipId | integer(int64) | Y | N | 1 이상 | 멤버십 ID |
+| data.groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
+| data.role | string(enum) | Y | N | PRIMARY \| DEPUTY \| MEMBER | 성공 데이터 역할 |
+| data.status | string(enum) | Y | N | ACTIVE \| LEFT \| REMOVED | 성공 데이터 상태 |
+| data.joinedAt | string(date-time) | Y | N | UTC ISO 8601 | 가입 시각 |
+| data.nickname | string | Y | N | 2~20자 | 닉네임 |
 
 **오류 응답**
 
@@ -660,24 +664,24 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.group | object | Y | N | 필수 |  |
-| data.group.groupId | integer(int64) | Y | N | 1 이상 |  |
-| data.group.name | string | Y | N | 2~30자 |  |
-| data.group.description | string | Y | N | 0~500자 |  |
-| data.group.currentMemberCount | integer | Y | N | 0~20 |  |
-| data.group.capacity | integer | Y | N | 고정 20 |  |
-| data.group.remainingCapacity | integer | Y | N | 0~20 |  |
-| data.group.joinable | boolean | Y | N | true/false |  |
-| data.group.joinBlockedReason | string(enum) | Y | Y | GROUP_FULL \| JOIN_COOLDOWN_ACTIVE \| ALREADY_IN_GROUP; 가입 가능하면 null |  |
+| data.group | object | Y | N | 필수 | 그룹 |
+| data.group.groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
+| data.group.name | string | Y | N | 2~30자 | 그룹 이름 |
+| data.group.description | string | Y | N | 0~500자 | 그룹 소개/설명 |
+| data.group.currentMemberCount | integer | Y | N | 0~20 | 현재 구성원 수 |
+| data.group.capacity | integer | Y | N | 고정 20 | 정원 |
+| data.group.remainingCapacity | integer | Y | N | 0~20 | 잔여 정원 |
+| data.group.joinable | boolean | Y | N | true/false | 가입 가능 여부 |
+| data.group.joinBlockedReason | string(enum) | Y | Y | GROUP_FULL \| JOIN_COOLDOWN_ACTIVE \| ALREADY_IN_GROUP; 가입 가능하면 null | 그룹 가입 제한 사유 |
 | data.primaryAdmin | object | Y | Y | 활성 그룹 필수 | 비활성 그룹에서는 null |
-| data.primaryAdmin.userId | integer(int64) | C | N | 1 이상 |  |
-| data.primaryAdmin.nickname | string | C | N | 2~20자 |  |
-| data.myMembership | object | Y | Y | 내가 그룹 미가입이면 null |  |
-| data.myMembership.membershipId | integer(int64) | C | N | 1 이상 |  |
-| data.myMembership.groupId | integer(int64) | C | N | 1 이상 |  |
-| data.myMembership.role | string(enum) | C | N | PRIMARY \| DEPUTY \| MEMBER |  |
-| data.myMembership.status | string(enum) | C | N | ACTIVE \| LEFT \| REMOVED |  |
-| data.myMembership.joinedAt | string(date-time) | C | N | UTC ISO 8601 |  |
+| data.primaryAdmin.userId | integer(int64) | C | N | 1 이상 | 사용자 ID |
+| data.primaryAdmin.nickname | string | C | N | 2~20자 | 닉네임 |
+| data.myMembership | object | Y | Y | 내가 그룹 미가입이면 null | 내 멤버십 |
+| data.myMembership.membershipId | integer(int64) | C | N | 1 이상 | 멤버십 ID |
+| data.myMembership.groupId | integer(int64) | C | N | 1 이상 | 그룹 ID |
+| data.myMembership.role | string(enum) | C | N | PRIMARY \| DEPUTY \| MEMBER | 내 멤버십 역할 |
+| data.myMembership.status | string(enum) | C | N | ACTIVE \| LEFT \| REMOVED | 내 멤버십 상태 |
+| data.myMembership.joinedAt | string(date-time) | C | N | UTC ISO 8601 | 가입 시각 |
 
 **오류 응답**
 
@@ -706,12 +710,12 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | array<object> | Y | N | 0건이면 [] | 목록 |
-| data[].userId | integer(int64) | Y | N | 1 이상 |  |
-| data[].nickname | string | Y | N | 2~20자 |  |
-| data[].membershipId | integer(int64) | Y | N | 1 이상 |  |
-| data[].role | string(enum) | Y | N | PRIMARY \| DEPUTY \| MEMBER |  |
-| data[].status | string(enum) | Y | N | ACTIVE \| LEFT \| REMOVED |  |
-| data[].joinedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
+| data[].userId | integer(int64) | Y | N | 1 이상 | 사용자 ID |
+| data[].nickname | string | Y | N | 2~20자 | 닉네임 |
+| data[].membershipId | integer(int64) | Y | N | 1 이상 | 멤버십 ID |
+| data[].role | string(enum) | Y | N | PRIMARY \| DEPUTY \| MEMBER | 성공 데이터 역할 |
+| data[].status | string(enum) | Y | N | ACTIVE \| LEFT \| REMOVED | 성공 데이터 상태 |
+| data[].joinedAt | string(date-time) | Y | N | UTC ISO 8601 | 가입 시각 |
 | data[].lastActiveAt | string(date-time) | Y | Y | UTC ISO 8601 | 접속 기록 없으면 null |
 | meta | object | Y | N | — | 목록 부가 정보 |
 | meta.page | integer | Y | N | 0 이상 | 현재 페이지 |
@@ -746,12 +750,12 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.groupId | integer(int64) | Y | N | 1 이상 |  |
-| data.userId | integer(int64) | Y | N | 1 이상 |  |
-| data.endedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.exitReason | string(enum) | Y | N | SELF \| INACTIVE \| REPORT |  |
-| data.restrictionUntil | string(date-time) | Y | N | UTC ISO 8601, endedAt+24시간 |  |
-| data.groupDeactivated | boolean | Y | N | true/false |  |
+| data.groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
+| data.userId | integer(int64) | Y | N | 1 이상 | 사용자 ID |
+| data.endedAt | string(date-time) | Y | N | UTC ISO 8601 | 종료 시각 |
+| data.exitReason | string(enum) | Y | N | SELF \| INACTIVE \| REPORT | 탈퇴/강퇴 사유 |
+| data.restrictionUntil | string(date-time) | Y | N | UTC ISO 8601, endedAt+24시간 | 가입 제한 만료 시각 |
+| data.groupDeactivated | boolean | Y | N | true/false | 그룹 비활성화 여부 |
 
 **오류 응답**
 
@@ -784,12 +788,12 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.userId | integer(int64) | Y | N | 1 이상 |  |
-| data.nickname | string | Y | N | 2~20자 |  |
-| data.membershipId | integer(int64) | Y | N | 1 이상 |  |
-| data.role | string(enum) | Y | N | PRIMARY \| DEPUTY \| MEMBER |  |
-| data.status | string(enum) | Y | N | ACTIVE \| LEFT \| REMOVED |  |
-| data.joinedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
+| data.userId | integer(int64) | Y | N | 1 이상 | 사용자 ID |
+| data.nickname | string | Y | N | 2~20자 | 닉네임 |
+| data.membershipId | integer(int64) | Y | N | 1 이상 | 멤버십 ID |
+| data.role | string(enum) | Y | N | PRIMARY \| DEPUTY \| MEMBER | 성공 데이터 역할 |
+| data.status | string(enum) | Y | N | ACTIVE \| LEFT \| REMOVED | 성공 데이터 상태 |
+| data.joinedAt | string(date-time) | Y | N | UTC ISO 8601 | 가입 시각 |
 | data.lastActiveAt | string(date-time) | Y | Y | UTC ISO 8601 | 접속 기록 없으면 null |
 
 **오류 응답**
@@ -825,12 +829,12 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.groupId | integer(int64) | Y | N | 1 이상 |  |
-| data.userId | integer(int64) | Y | N | 1 이상 |  |
-| data.endedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.exitReason | string(enum) | Y | N | SELF \| INACTIVE \| REPORT |  |
-| data.restrictionUntil | string(date-time) | Y | N | UTC ISO 8601, endedAt+24시간 |  |
-| data.groupDeactivated | boolean | Y | N | true/false |  |
+| data.groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
+| data.userId | integer(int64) | Y | N | 1 이상 | 사용자 ID |
+| data.endedAt | string(date-time) | Y | N | UTC ISO 8601 | 종료 시각 |
+| data.exitReason | string(enum) | Y | N | SELF \| INACTIVE \| REPORT | 탈퇴/강퇴 사유 |
+| data.restrictionUntil | string(date-time) | Y | N | UTC ISO 8601, endedAt+24시간 | 가입 제한 만료 시각 |
+| data.groupDeactivated | boolean | Y | N | true/false | 그룹 비활성화 여부 |
 
 **오류 응답**
 
@@ -864,24 +868,24 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.group | object | Y | N | 필수 |  |
-| data.group.groupId | integer(int64) | Y | N | 1 이상 |  |
-| data.group.name | string | Y | N | 2~30자 |  |
-| data.group.description | string | Y | N | 0~500자 |  |
-| data.group.currentMemberCount | integer | Y | N | 0~20 |  |
-| data.group.capacity | integer | Y | N | 고정 20 |  |
-| data.group.remainingCapacity | integer | Y | N | 0~20 |  |
-| data.group.joinable | boolean | Y | N | true/false |  |
-| data.group.joinBlockedReason | string(enum) | Y | Y | GROUP_FULL \| JOIN_COOLDOWN_ACTIVE \| ALREADY_IN_GROUP; 가입 가능하면 null |  |
+| data.group | object | Y | N | 필수 | 그룹 |
+| data.group.groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
+| data.group.name | string | Y | N | 2~30자 | 그룹 이름 |
+| data.group.description | string | Y | N | 0~500자 | 그룹 소개/설명 |
+| data.group.currentMemberCount | integer | Y | N | 0~20 | 현재 구성원 수 |
+| data.group.capacity | integer | Y | N | 고정 20 | 정원 |
+| data.group.remainingCapacity | integer | Y | N | 0~20 | 잔여 정원 |
+| data.group.joinable | boolean | Y | N | true/false | 가입 가능 여부 |
+| data.group.joinBlockedReason | string(enum) | Y | Y | GROUP_FULL \| JOIN_COOLDOWN_ACTIVE \| ALREADY_IN_GROUP; 가입 가능하면 null | 그룹 가입 제한 사유 |
 | data.primaryAdmin | object | Y | Y | 활성 그룹 필수 | 비활성 그룹에서는 null |
-| data.primaryAdmin.userId | integer(int64) | C | N | 1 이상 |  |
-| data.primaryAdmin.nickname | string | C | N | 2~20자 |  |
-| data.myMembership | object | Y | Y | 내가 그룹 미가입이면 null |  |
-| data.myMembership.membershipId | integer(int64) | C | N | 1 이상 |  |
-| data.myMembership.groupId | integer(int64) | C | N | 1 이상 |  |
-| data.myMembership.role | string(enum) | C | N | PRIMARY \| DEPUTY \| MEMBER |  |
-| data.myMembership.status | string(enum) | C | N | ACTIVE \| LEFT \| REMOVED |  |
-| data.myMembership.joinedAt | string(date-time) | C | N | UTC ISO 8601 |  |
+| data.primaryAdmin.userId | integer(int64) | C | N | 1 이상 | 사용자 ID |
+| data.primaryAdmin.nickname | string | C | N | 2~20자 | 닉네임 |
+| data.myMembership | object | Y | Y | 내가 그룹 미가입이면 null | 내 멤버십 |
+| data.myMembership.membershipId | integer(int64) | C | N | 1 이상 | 멤버십 ID |
+| data.myMembership.groupId | integer(int64) | C | N | 1 이상 | 그룹 ID |
+| data.myMembership.role | string(enum) | C | N | PRIMARY \| DEPUTY \| MEMBER | 내 멤버십 역할 |
+| data.myMembership.status | string(enum) | C | N | ACTIVE \| LEFT \| REMOVED | 내 멤버십 상태 |
+| data.myMembership.joinedAt | string(date-time) | C | N | UTC ISO 8601 | 가입 시각 |
 
 **오류 응답**
 
@@ -910,12 +914,12 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.groupId | integer(int64) | Y | N | 1 이상 |  |
-| data.invitationUrl | string(uri) | Y | N | 동일 Origin /invite/{token} |  |
-| data.issuedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.issuedByUserId | integer(int64) | Y | N | 1 이상 |  |
-| data.unlimitedUses | boolean | Y | N | 고정 true |  |
-| data.expiresAt | string(date-time) | Y | Y | 항상 null(무기한) |  |
+| data.groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
+| data.invitationUrl | string(uri) | Y | N | 동일 Origin /invite/{token} | 초대 URL |
+| data.issuedAt | string(date-time) | Y | N | UTC ISO 8601 | 발급 시각 |
+| data.issuedByUserId | integer(int64) | Y | N | 1 이상 | 링크 발급 사용자 ID |
+| data.unlimitedUses | boolean | Y | N | 고정 true | 사용 횟수 무제한 여부 |
+| data.expiresAt | string(date-time) | Y | Y | 항상 null(무기한) | 만료 시각 |
 
 **오류 응답**
 
@@ -942,12 +946,12 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.groupId | integer(int64) | Y | N | 1 이상 |  |
-| data.invitationUrl | string(uri) | Y | N | 동일 Origin /invite/{token} |  |
-| data.issuedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.issuedByUserId | integer(int64) | Y | N | 1 이상 |  |
-| data.unlimitedUses | boolean | Y | N | 고정 true |  |
-| data.expiresAt | string(date-time) | Y | Y | 항상 null(무기한) |  |
+| data.groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
+| data.invitationUrl | string(uri) | Y | N | 동일 Origin /invite/{token} | 초대 URL |
+| data.issuedAt | string(date-time) | Y | N | UTC ISO 8601 | 발급 시각 |
+| data.issuedByUserId | integer(int64) | Y | N | 1 이상 | 링크 발급 사용자 ID |
+| data.unlimitedUses | boolean | Y | N | 고정 true | 사용 횟수 무제한 여부 |
+| data.expiresAt | string(date-time) | Y | Y | 항상 null(무기한) | 만료 시각 |
 
 **오류 응답**
 
@@ -977,11 +981,11 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.seasonId | integer(int64) | Y | N | 1 이상 |  |
-| data.seasonNumber | integer | Y | N | 1 이상 |  |
-| data.status | string(enum) | Y | N | SCHEDULED \| ACTIVE \| CLOSING \| ENDED |  |
-| data.startAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.endAt | string(date-time) | Y | N | UTC ISO 8601 |  |
+| data.seasonId | integer(int64) | Y | N | 1 이상 | 시즌 ID |
+| data.seasonNumber | integer | Y | N | 1 이상 | 시즌 번호 |
+| data.status | string(enum) | Y | N | SCHEDULED \| ACTIVE \| CLOSING \| ENDED | 성공 데이터 상태 |
+| data.startAt | string(date-time) | Y | N | UTC ISO 8601 | 시작 시각 |
+| data.endAt | string(date-time) | Y | N | UTC ISO 8601 | 종료 시각 |
 
 **오류 응답**
 
@@ -1007,54 +1011,54 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.groupId | integer(int64) | Y | N | 1 이상 |  |
-| data.groupName | string | Y | N | 2~30자 |  |
-| data.season | object | Y | N | 필수 |  |
-| data.season.seasonId | integer(int64) | Y | N | 1 이상 |  |
-| data.season.seasonNumber | integer | Y | N | 1 이상 |  |
-| data.season.status | string(enum) | Y | N | SCHEDULED \| ACTIVE \| CLOSING \| ENDED |  |
-| data.season.startAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.season.endAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.creature | object | Y | N | 필수 |  |
-| data.creature.groupCreatureId | integer(int64) | Y | N | 1 이상 |  |
-| data.creature.creatureSpeciesId | integer(int64) | Y | Y | 알 기간 null |  |
-| data.creature.growthStage | string(enum) | Y | N | EGG \| HATCHLING \| GROWING \| MATURE \| COMPLETE |  |
-| data.creature.totalExperience | integer(int64) | Y | N | 0 이상 |  |
-| data.creature.nextStageAtExperience | integer(int64) | Y | Y | 다음 성장 임계값; 최종 단계 null |  |
+| data.groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
+| data.groupName | string | Y | N | 2~30자 | 그룹명 |
+| data.season | object | Y | N | 필수 | 시즌 |
+| data.season.seasonId | integer(int64) | Y | N | 1 이상 | 시즌 ID |
+| data.season.seasonNumber | integer | Y | N | 1 이상 | 시즌 번호 |
+| data.season.status | string(enum) | Y | N | SCHEDULED \| ACTIVE \| CLOSING \| ENDED | 시즌 상태 |
+| data.season.startAt | string(date-time) | Y | N | UTC ISO 8601 | 시작 시각 |
+| data.season.endAt | string(date-time) | Y | N | UTC ISO 8601 | 종료 시각 |
+| data.creature | object | Y | N | 필수 | 크리처 |
+| data.creature.groupCreatureId | integer(int64) | Y | N | 1 이상 | 그룹 크리처 ID |
+| data.creature.creatureSpeciesId | integer(int64) | Y | Y | 알 기간 null | 크리처 종 ID |
+| data.creature.growthStage | string(enum) | Y | N | EGG \| HATCHLING \| GROWING \| MATURE \| COMPLETE | 성장 단계 |
+| data.creature.totalExperience | integer(int64) | Y | N | 0 이상 | 누적 경험치 |
+| data.creature.nextStageAtExperience | integer(int64) | Y | Y | 다음 성장 임계값; 최종 단계 null | 다음 성장 단계 달성 경험치 |
 | data.creature.selectionDeadlineAt | string(date-time) | Y | N | UTC ISO 8601 | 선택 기한 |
 | data.todayExperience | integer(int64) | Y | N | 0 이상 | 오늘 그룹 합산 경험치 |
-| data.onlineMembers | array<object> | Y | N | 빈 값 [] |  |
-| data.onlineMembers[].userId | integer(int64) | Y | N | 1 이상 |  |
-| data.onlineMembers[].nickname | string | Y | N | 2~20자 |  |
-| data.onlineMembers[].rank | integer | Y | Y | 1 이상; 집계 불가면 null |  |
-| data.onlineMembers[].contributionScore | integer(int64) | Y | N | 0 이상 |  |
-| data.onlineMembers[].avatar | object | Y | N | 필수 |  |
-| data.onlineMembers[].avatar.equipments | object | Y | N | 네 슬롯 항상 존재 |  |
-| data.onlineMembers[].avatar.equipments.HEAD | object | Y | Y | 미장착이면 null |  |
-| data.onlineMembers[].avatar.equipments.HEAD.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.onlineMembers[].avatar.equipments.HEAD.shopItemId | integer(int64) | C | N | 1 이상 |  |
-| data.onlineMembers[].avatar.equipments.HEAD.name | string | C | N | 1~100자 |  |
-| data.onlineMembers[].avatar.equipments.HEAD.assetKey | string | C | N | 1~255자 |  |
-| data.onlineMembers[].avatar.equipments.FACE | object | Y | Y | 미장착이면 null |  |
-| data.onlineMembers[].avatar.equipments.FACE.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.onlineMembers[].avatar.equipments.FACE.shopItemId | integer(int64) | C | N | 1 이상 |  |
-| data.onlineMembers[].avatar.equipments.FACE.name | string | C | N | 1~100자 |  |
-| data.onlineMembers[].avatar.equipments.FACE.assetKey | string | C | N | 1~255자 |  |
-| data.onlineMembers[].avatar.equipments.BODY | object | Y | Y | 미장착이면 null |  |
-| data.onlineMembers[].avatar.equipments.BODY.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.onlineMembers[].avatar.equipments.BODY.shopItemId | integer(int64) | C | N | 1 이상 |  |
-| data.onlineMembers[].avatar.equipments.BODY.name | string | C | N | 1~100자 |  |
-| data.onlineMembers[].avatar.equipments.BODY.assetKey | string | C | N | 1~255자 |  |
-| data.onlineMembers[].avatar.equipments.ACCESSORY | object | Y | Y | 미장착이면 null |  |
-| data.onlineMembers[].avatar.equipments.ACCESSORY.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.onlineMembers[].avatar.equipments.ACCESSORY.shopItemId | integer(int64) | C | N | 1 이상 |  |
-| data.onlineMembers[].avatar.equipments.ACCESSORY.name | string | C | N | 1~100자 |  |
-| data.onlineMembers[].avatar.equipments.ACCESSORY.assetKey | string | C | N | 1~255자 |  |
-| data.recentContributions | array<object> | Y | N | 빈 값 [] |  |
-| data.recentContributions[].userId | integer(int64) | Y | N | 1 이상 |  |
-| data.recentContributions[].nickname | string | Y | N | 2~20자 |  |
-| data.recentContributions[].amount | integer(int64) | Y | N | 1 이상 |  |
-| data.recentContributions[].occurredAt | string(date-time) | Y | N | UTC ISO 8601 |  |
+| data.onlineMembers | array<object> | Y | N | 빈 값 [] | 온라인 구성원 |
+| data.onlineMembers[].userId | integer(int64) | Y | N | 1 이상 | 사용자 ID |
+| data.onlineMembers[].nickname | string | Y | N | 2~20자 | 닉네임 |
+| data.onlineMembers[].rank | integer | Y | Y | 1 이상; 집계 불가면 null | 순위 |
+| data.onlineMembers[].contributionScore | integer(int64) | Y | N | 0 이상 | 기여도 점수 |
+| data.onlineMembers[].avatar | object | Y | N | 필수 | 아바타 |
+| data.onlineMembers[].avatar.equipments | object | Y | N | 네 슬롯 항상 존재 | 장착 슬롯별 아이템 |
+| data.onlineMembers[].avatar.equipments.HEAD | object | Y | Y | 미장착이면 null | 접속 구성원 아바타의 머리 슬롯 |
+| data.onlineMembers[].avatar.equipments.HEAD.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.onlineMembers[].avatar.equipments.HEAD.shopItemId | integer(int64) | C | N | 1 이상 | 상점 상품 ID |
+| data.onlineMembers[].avatar.equipments.HEAD.name | string | C | N | 1~100자 | 머리 슬롯 이름 |
+| data.onlineMembers[].avatar.equipments.HEAD.assetKey | string | C | N | 1~255자 | 이미지/리소스 키 |
+| data.onlineMembers[].avatar.equipments.FACE | object | Y | Y | 미장착이면 null | 접속 구성원 아바타의 얼굴 슬롯 |
+| data.onlineMembers[].avatar.equipments.FACE.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.onlineMembers[].avatar.equipments.FACE.shopItemId | integer(int64) | C | N | 1 이상 | 상점 상품 ID |
+| data.onlineMembers[].avatar.equipments.FACE.name | string | C | N | 1~100자 | 얼굴 슬롯 이름 |
+| data.onlineMembers[].avatar.equipments.FACE.assetKey | string | C | N | 1~255자 | 이미지/리소스 키 |
+| data.onlineMembers[].avatar.equipments.BODY | object | Y | Y | 미장착이면 null | 접속 구성원 아바타의 몸통 슬롯 |
+| data.onlineMembers[].avatar.equipments.BODY.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.onlineMembers[].avatar.equipments.BODY.shopItemId | integer(int64) | C | N | 1 이상 | 상점 상품 ID |
+| data.onlineMembers[].avatar.equipments.BODY.name | string | C | N | 1~100자 | 몸통 슬롯 이름 |
+| data.onlineMembers[].avatar.equipments.BODY.assetKey | string | C | N | 1~255자 | 이미지/리소스 키 |
+| data.onlineMembers[].avatar.equipments.ACCESSORY | object | Y | Y | 미장착이면 null | 접속 구성원 아바타의 장신구 슬롯 |
+| data.onlineMembers[].avatar.equipments.ACCESSORY.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.onlineMembers[].avatar.equipments.ACCESSORY.shopItemId | integer(int64) | C | N | 1 이상 | 상점 상품 ID |
+| data.onlineMembers[].avatar.equipments.ACCESSORY.name | string | C | N | 1~100자 | 장신구 슬롯 이름 |
+| data.onlineMembers[].avatar.equipments.ACCESSORY.assetKey | string | C | N | 1~255자 | 이미지/리소스 키 |
+| data.recentContributions | array<object> | Y | N | 빈 값 [] | 최근 기여 내역 목록 |
+| data.recentContributions[].userId | integer(int64) | Y | N | 1 이상 | 사용자 ID |
+| data.recentContributions[].nickname | string | Y | N | 2~20자 | 닉네임 |
+| data.recentContributions[].amount | integer(int64) | Y | N | 1 이상 | 금액 |
+| data.recentContributions[].occurredAt | string(date-time) | Y | N | UTC ISO 8601 | 발생 시각 |
 | data.snapshotAt | string(date-time) | Y | N | UTC ISO 8601 | Snapshot 생성 시각 |
 
 **오류 응답**
@@ -1081,11 +1085,11 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | array<object> | Y | N | 0건이면 [] | 목록 |
-| data[].creatureSpeciesId | integer(int64) | Y | N | 1 이상 |  |
-| data[].code | string | Y | N | 1~50자 |  |
-| data[].name | string | Y | N | 1~50자 |  |
-| data[].assetKey | string | Y | N | 1~255자 |  |
-| data[].displayOrder | integer | Y | N | 0 이상 |  |
+| data[].creatureSpeciesId | integer(int64) | Y | N | 1 이상 | 크리처 종 ID |
+| data[].code | string | Y | N | 1~50자 | 코드 |
+| data[].name | string | Y | N | 1~50자 | 성공 데이터 이름 |
+| data[].assetKey | string | Y | N | 1~255자 | 이미지/리소스 키 |
+| data[].displayOrder | integer | Y | N | 0 이상 | 표시 순서 |
 
 **오류 응답**
 
@@ -1114,12 +1118,12 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.groupId | integer(int64) | Y | N | 1 이상 |  |
-| data.seasonId | integer(int64) | Y | N | 1 이상 |  |
-| data.creatureSpeciesId | integer(int64) | Y | N | 1 이상 |  |
-| data.selectedByUserId | integer(int64) | Y | N | 1 이상 |  |
-| data.selectedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.selectionDeadlineAt | string(date-time) | Y | N | UTC ISO 8601 |  |
+| data.groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
+| data.seasonId | integer(int64) | Y | N | 1 이상 | 시즌 ID |
+| data.creatureSpeciesId | integer(int64) | Y | N | 1 이상 | 크리처 종 ID |
+| data.selectedByUserId | integer(int64) | Y | N | 1 이상 | 종 선택한 사용자 ID |
+| data.selectedAt | string(date-time) | Y | N | UTC ISO 8601 | 선택 시각 |
+| data.selectionDeadlineAt | string(date-time) | Y | N | UTC ISO 8601 | 크리처 종 선택 마감 시각 |
 
 **오류 응답**
 
@@ -1153,26 +1157,26 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | array<object> | Y | N | 0건이면 [] | 목록 |
-| data[].assignmentId | integer(int64) | Y | N | 1 이상 |  |
-| data[].periodId | integer(int64) | Y | N | 1 이상 |  |
-| data[].periodType | string(enum) | Y | N | DAILY \| WEEKLY |  |
-| data[].periodStartAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data[].periodEndAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data[].slotNumber | integer | Y | N | 1 이상 |  |
-| data[].templateCode | string | Y | N | 1~30자 |  |
-| data[].title | string | Y | N | 1~100자 |  |
-| data[].description | string | Y | N | 0~500자 |  |
-| data[].difficulty | string(enum) | Y | N | LOW \| MEDIUM \| HIGH |  |
-| data[].verificationType | string(enum) | Y | N | SELF_CHECK \| SERVER_EVENT \| AGGREGATE \| PHOTO_EXIF |  |
-| data[].creatureExperience | integer(int64) | Y | N | 일일 100, 주간 300 |  |
-| data[].contributionScore | integer(int64) | Y | N | 일일 10/20/30, 주간 30/60/90 |  |
-| data[].completed | boolean | Y | N | true/false |  |
-| data[].completedAt | string(date-time) | Y | Y | 미완료 null |  |
-| data[].completionId | integer(int64) | Y | Y | 미완료 null |  |
-| data[].progress | object | Y | N | 진행도 값; 횟수 없는 퀘스트도 0/1로 표현 |  |
-| data[].progress.current | integer | Y | N | 0 이상 |  |
-| data[].progress.target | integer | Y | N | 1 이상 |  |
-| data[].photoAttemptsRemaining | integer | Y | Y | 0~5; PHOTO_EXIF 외에는 null |  |
+| data[].assignmentId | integer(int64) | Y | N | 1 이상 | 퀘스트 배정 ID |
+| data[].periodId | integer(int64) | Y | N | 1 이상 | 퀘스트 기간 ID |
+| data[].periodType | string(enum) | Y | N | DAILY \| WEEKLY | 기간 유형 |
+| data[].periodStartAt | string(date-time) | Y | N | UTC ISO 8601 | 배정 기간 시작 |
+| data[].periodEndAt | string(date-time) | Y | N | UTC ISO 8601 | 배정 기간 종료 |
+| data[].slotNumber | integer | Y | N | 1 이상 | 슬롯 번호 |
+| data[].templateCode | string | Y | N | 1~30자 | 퀘스트 템플릿 코드 |
+| data[].title | string | Y | N | 1~100자 | 성공 데이터 제목 |
+| data[].description | string | Y | N | 0~500자 | 성공 데이터 소개/설명 |
+| data[].difficulty | string(enum) | Y | N | LOW \| MEDIUM \| HIGH | 난이도 |
+| data[].verificationType | string(enum) | Y | N | SELF_CHECK \| SERVER_EVENT \| AGGREGATE \| PHOTO_EXIF | 검증 유형 |
+| data[].creatureExperience | integer(int64) | Y | N | 일일 100, 주간 300 | 크리처 보상 경험치 |
+| data[].contributionScore | integer(int64) | Y | N | 일일 10/20/30, 주간 30/60/90 | 기여도 점수 |
+| data[].completed | boolean | Y | N | true/false | 완료 여부 |
+| data[].completedAt | string(date-time) | Y | Y | 미완료 null | 완료 시각 |
+| data[].completionId | integer(int64) | Y | Y | 미완료 null | 완료 기록 ID |
+| data[].progress | object | Y | N | 진행도 값; 횟수 없는 퀘스트도 0/1로 표현 | 진행도 |
+| data[].progress.current | integer | Y | N | 0 이상 | 현재 값 |
+| data[].progress.target | integer | Y | N | 1 이상 | 목표 값 |
+| data[].photoAttemptsRemaining | integer | Y | Y | 0~5; PHOTO_EXIF 외에는 null | 사진 제출 가능 잔여 횟수 |
 
 **오류 응답**
 
@@ -1202,15 +1206,15 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.completionId | integer(int64) | Y | N | 1 이상 |  |
-| data.assignmentId | integer(int64) | Y | N | 1 이상 |  |
-| data.userId | integer(int64) | Y | N | 1 이상 |  |
-| data.completedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.creatureExperienceAwarded | integer(int64) | Y | N | 0 이상 |  |
-| data.contributionAwarded | integer(int64) | Y | N | 0 이상 |  |
-| data.creatureTotalExperience | integer(int64) | Y | N | 0 이상 |  |
-| data.creatureGrowthStage | string(enum) | Y | N | EGG \| HATCHLING \| GROWING \| MATURE \| COMPLETE |  |
-| data.groupSeasonScore | integer(int64) | Y | N | 0 이상 |  |
+| data.completionId | integer(int64) | Y | N | 1 이상 | 완료 기록 ID |
+| data.assignmentId | integer(int64) | Y | N | 1 이상 | 퀘스트 배정 ID |
+| data.userId | integer(int64) | Y | N | 1 이상 | 사용자 ID |
+| data.completedAt | string(date-time) | Y | N | UTC ISO 8601 | 완료 시각 |
+| data.creatureExperienceAwarded | integer(int64) | Y | N | 0 이상 | 지급한 크리처 경험치 |
+| data.contributionAwarded | integer(int64) | Y | N | 0 이상 | 지급한 기여 점수 |
+| data.creatureTotalExperience | integer(int64) | Y | N | 0 이상 | 크리처 누적 경험치 |
+| data.creatureGrowthStage | string(enum) | Y | N | EGG \| HATCHLING \| GROWING \| MATURE \| COMPLETE | 크리처 성장 단계 |
+| data.groupSeasonScore | integer(int64) | Y | N | 0 이상 | 그룹 시즌 점수 |
 
 **오류 응답**
 
@@ -1244,11 +1248,11 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.checkInId | integer(int64) | Y | N | 1 이상 |  |
-| data.checkInDate | string(date) | Y | N | YYYY-MM-DD, KST 날짜 |  |
-| data.checkedInAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.isMorning | boolean | Y | N | KST 05:00~08:59:59 |  |
-| data.completedQuestIds | array<integer(int64)> | Y | N | 자동 완료된 퀘스트 완료 ID 목록, 없으면 [] |  |
+| data.checkInId | integer(int64) | Y | N | 1 이상 | 체크인 ID |
+| data.checkInDate | string(date) | Y | N | YYYY-MM-DD, KST 날짜 | 체크인 날짜 |
+| data.checkedInAt | string(date-time) | Y | N | UTC ISO 8601 | 체크인 시각 |
+| data.isMorning | boolean | Y | N | KST 05:00~08:59:59 | 기상 체크인 여부 |
+| data.completedQuestIds | array<integer(int64)> | Y | N | 자동 완료된 퀘스트 완료 ID 목록, 없으면 [] | 완료한 퀘스트 ID 목록 |
 
 **오류 응답**
 
@@ -1282,14 +1286,14 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.photoSubmissionId | integer(int64) | Y | N | 1 이상 |  |
-| data.assignmentId | integer(int64) | Y | N | 1 이상 |  |
-| data.attemptNumber | integer | Y | N | 1~5 |  |
-| data.verificationStatus | string(enum) | Y | N | PENDING \| VALID \| INVALID |  |
-| data.failureReason | string | Y | Y | EXIF_GPS_MISSING \| EXIF_GPS_OUT_OF_RANGE \| EXIF_CAPTURED_AT_MISSING \| PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD \| PHOTO_PROCESSING_TIMEOUT \| QUEST_PERIOD_ENDED; 실패 외 null |  |
-| data.uploadedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.capturedAt | string(date-time) | Y | Y | EXIF 누락 시 null |  |
-| data.completionId | integer(int64) | Y | Y | 확정된 보상 없으면 null |  |
+| data.photoSubmissionId | integer(int64) | Y | N | 1 이상 | 사진 제출 ID |
+| data.assignmentId | integer(int64) | Y | N | 1 이상 | 퀘스트 배정 ID |
+| data.attemptNumber | integer | Y | N | 1~5 | 제출 시도 번호 |
+| data.verificationStatus | string(enum) | Y | N | PENDING \| VALID \| INVALID | 사진 검증 상태 |
+| data.failureReason | string | Y | Y | EXIF_GPS_MISSING \| EXIF_GPS_OUT_OF_RANGE \| EXIF_CAPTURED_AT_MISSING \| PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD \| PHOTO_PROCESSING_TIMEOUT \| QUEST_PERIOD_ENDED; 실패 외 null | 검증 실패 사유 |
+| data.uploadedAt | string(date-time) | Y | N | UTC ISO 8601 | 업로드 접수 시각 |
+| data.capturedAt | string(date-time) | Y | Y | EXIF 누락 시 null | 사진 촬영 시각 |
+| data.completionId | integer(int64) | Y | Y | 확정된 보상 없으면 null | 완료 기록 ID |
 
 **오류 응답**
 
@@ -1327,12 +1331,12 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | array<object> | Y | N | 0건이면 [] | 목록 |
-| data[].rank | integer | Y | N | 1 이상 |  |
-| data[].userId | integer(int64) | Y | N | 1 이상 |  |
-| data[].nickname | string | Y | N | 2~20자 |  |
-| data[].contributionScore | integer(int64) | Y | N | 0 이상 |  |
-| data[].scoreReachedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data[].participantStatus | string(enum) | Y | N | ACTIVE \| LEFT \| REMOVED |  |
+| data[].rank | integer | Y | N | 1 이상 | 순위 |
+| data[].userId | integer(int64) | Y | N | 1 이상 | 사용자 ID |
+| data[].nickname | string | Y | N | 2~20자 | 닉네임 |
+| data[].contributionScore | integer(int64) | Y | N | 0 이상 | 기여도 점수 |
+| data[].scoreReachedAt | string(date-time) | Y | N | UTC ISO 8601 | 해당 점수 도달 시각 |
+| data[].participantStatus | string(enum) | Y | N | ACTIVE \| LEFT \| REMOVED | 참여 상태 |
 | meta | object | Y | N | — | 목록 부가 정보 |
 | meta.page | integer | Y | N | 0 이상 | 현재 페이지 |
 | meta.size | integer | Y | N | 1~50 | 요청 페이지 크기 |
@@ -1372,11 +1376,11 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | array<object> | Y | N | 0건이면 [] | 목록 |
-| data[].rank | integer | Y | N | 1 이상 |  |
-| data[].groupId | integer(int64) | Y | N | 1 이상 |  |
-| data[].groupName | string | Y | N | 2~30자 |  |
-| data[].score | integer(int64) | Y | N | 0 이상 |  |
-| data[].scoreReachedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
+| data[].rank | integer | Y | N | 1 이상 | 순위 |
+| data[].groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
+| data[].groupName | string | Y | N | 2~30자 | 그룹명 |
+| data[].score | integer(int64) | Y | N | 0 이상 | 점수 |
+| data[].scoreReachedAt | string(date-time) | Y | N | UTC ISO 8601 | 해당 점수 도달 시각 |
 | meta | object | Y | N | — | 목록 부가 정보 |
 | meta.page | integer | Y | N | 0 이상 | 현재 페이지 |
 | meta.size | integer | Y | N | 1~50 | 요청 페이지 크기 |
@@ -1417,14 +1421,14 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | array<object> | Y | N | 0건이면 [] | 목록 |
-| data[].shopItemId | integer(int64) | Y | N | 1 이상 |  |
-| data[].code | string | Y | N | 1~50자 |  |
-| data[].name | string | Y | N | 1~100자 |  |
-| data[].description | string | Y | N | 0~500자 |  |
-| data[].priceKrw | integer(int64) | Y | N | 1 이상, 원 단위 |  |
-| data[].slot | string(enum) | Y | N | HEAD \| FACE \| BODY \| ACCESSORY |  |
-| data[].assetKey | string | Y | N | 1~255자 |  |
-| data[].status | string(enum) | Y | N | ACTIVE \| INACTIVE |  |
+| data[].shopItemId | integer(int64) | Y | N | 1 이상 | 상점 상품 ID |
+| data[].code | string | Y | N | 1~50자 | 코드 |
+| data[].name | string | Y | N | 1~100자 | 성공 데이터 이름 |
+| data[].description | string | Y | N | 0~500자 | 성공 데이터 소개/설명 |
+| data[].priceKrw | integer(int64) | Y | N | 1 이상, 원 단위 | 가격(원) |
+| data[].slot | string(enum) | Y | N | HEAD \| FACE \| BODY \| ACCESSORY | 장착 슬롯 |
+| data[].assetKey | string | Y | N | 1~255자 | 이미지/리소스 키 |
+| data[].status | string(enum) | Y | N | ACTIVE \| INACTIVE | 성공 데이터 상태 |
 | meta | object | Y | N | — | 목록 부가 정보 |
 | meta.page | integer | Y | N | 0 이상 | 현재 페이지 |
 | meta.size | integer | Y | N | 1~50 | 요청 페이지 크기 |
@@ -1456,14 +1460,14 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.shopItemId | integer(int64) | Y | N | 1 이상 |  |
-| data.code | string | Y | N | 1~50자 |  |
-| data.name | string | Y | N | 1~100자 |  |
-| data.description | string | Y | N | 0~500자 |  |
-| data.priceKrw | integer(int64) | Y | N | 1 이상, 원 단위 |  |
-| data.slot | string(enum) | Y | N | HEAD \| FACE \| BODY \| ACCESSORY |  |
-| data.assetKey | string | Y | N | 1~255자 |  |
-| data.status | string(enum) | Y | N | ACTIVE \| INACTIVE |  |
+| data.shopItemId | integer(int64) | Y | N | 1 이상 | 상점 상품 ID |
+| data.code | string | Y | N | 1~50자 | 코드 |
+| data.name | string | Y | N | 1~100자 | 성공 데이터 이름 |
+| data.description | string | Y | N | 0~500자 | 성공 데이터 소개/설명 |
+| data.priceKrw | integer(int64) | Y | N | 1 이상, 원 단위 | 가격(원) |
+| data.slot | string(enum) | Y | N | HEAD \| FACE \| BODY \| ACCESSORY | 장착 슬롯 |
+| data.assetKey | string | Y | N | 1~255자 | 이미지/리소스 키 |
+| data.status | string(enum) | Y | N | ACTIVE \| INACTIVE | 성공 데이터 상태 |
 
 **오류 응답**
 
@@ -1494,16 +1498,16 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | array<object> | Y | N | 0건이면 [] | 목록 |
-| data[].ownedItemId | integer(int64) | Y | N | 1 이상 |  |
-| data[].purchaseId | integer(int64) | Y | N | 1 이상 |  |
-| data[].shopItemId | integer(int64) | Y | N | 1 이상 |  |
-| data[].name | string | Y | N | 1~100자 |  |
-| data[].slot | string(enum) | Y | N | HEAD \| FACE \| BODY \| ACCESSORY |  |
-| data[].assetKey | string | Y | N | 1~255자 |  |
-| data[].status | string(enum) | Y | N | OWNED_UNUSED \| OWNED_USED \| REVOKED |  |
-| data[].usedAt | string(date-time) | Y | Y | 미사용이면 null |  |
-| data[].revokedAt | string(date-time) | Y | Y | 회수 전 null |  |
-| data[].equipped | boolean | Y | N | 현재 장착 상태 |  |
+| data[].ownedItemId | integer(int64) | Y | N | 1 이상 | 보유 아이템 ID |
+| data[].purchaseId | integer(int64) | Y | N | 1 이상 | 구매 ID |
+| data[].shopItemId | integer(int64) | Y | N | 1 이상 | 상점 상품 ID |
+| data[].name | string | Y | N | 1~100자 | 성공 데이터 이름 |
+| data[].slot | string(enum) | Y | N | HEAD \| FACE \| BODY \| ACCESSORY | 장착 슬롯 |
+| data[].assetKey | string | Y | N | 1~255자 | 이미지/리소스 키 |
+| data[].status | string(enum) | Y | N | OWNED_UNUSED \| OWNED_USED \| REVOKED | 성공 데이터 상태 |
+| data[].usedAt | string(date-time) | Y | Y | 미사용이면 null | 최초 사용 시각 |
+| data[].revokedAt | string(date-time) | Y | Y | 회수 전 null | 아이템 회수 시각 |
+| data[].equipped | boolean | Y | N | 현재 장착 상태 | 장착 여부 |
 | meta | object | Y | N | — | 목록 부가 정보 |
 | meta.page | integer | Y | N | 0 이상 | 현재 페이지 |
 | meta.size | integer | Y | N | 1~50 | 요청 페이지 크기 |
@@ -1534,28 +1538,28 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.userId | integer(int64) | Y | N | 1 이상 |  |
-| data.equipments | object | Y | N | 슬롯 네 개 모두 포함 |  |
-| data.equipments.HEAD | object | Y | Y | 미장착이면 null |  |
-| data.equipments.HEAD.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.HEAD.shopItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.HEAD.name | string | C | N | 1~100자 |  |
-| data.equipments.HEAD.assetKey | string | C | N | 1~255자 |  |
-| data.equipments.FACE | object | Y | Y | 미장착이면 null |  |
-| data.equipments.FACE.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.FACE.shopItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.FACE.name | string | C | N | 1~100자 |  |
-| data.equipments.FACE.assetKey | string | C | N | 1~255자 |  |
-| data.equipments.BODY | object | Y | Y | 미장착이면 null |  |
-| data.equipments.BODY.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.BODY.shopItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.BODY.name | string | C | N | 1~100자 |  |
-| data.equipments.BODY.assetKey | string | C | N | 1~255자 |  |
-| data.equipments.ACCESSORY | object | Y | Y | 미장착이면 null |  |
-| data.equipments.ACCESSORY.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.ACCESSORY.shopItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.ACCESSORY.name | string | C | N | 1~100자 |  |
-| data.equipments.ACCESSORY.assetKey | string | C | N | 1~255자 |  |
+| data.userId | integer(int64) | Y | N | 1 이상 | 사용자 ID |
+| data.equipments | object | Y | N | 슬롯 네 개 모두 포함 | 아바타 슬롯별 장착 정보 |
+| data.equipments.HEAD | object | Y | Y | 미장착이면 null | 내 아바타 머리 슬롯 |
+| data.equipments.HEAD.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.equipments.HEAD.shopItemId | integer(int64) | C | N | 1 이상 | 상점 상품 ID |
+| data.equipments.HEAD.name | string | C | N | 1~100자 | 머리 슬롯 이름 |
+| data.equipments.HEAD.assetKey | string | C | N | 1~255자 | 이미지/리소스 키 |
+| data.equipments.FACE | object | Y | Y | 미장착이면 null | 내 아바타 얼굴 슬롯 |
+| data.equipments.FACE.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.equipments.FACE.shopItemId | integer(int64) | C | N | 1 이상 | 상점 상품 ID |
+| data.equipments.FACE.name | string | C | N | 1~100자 | 얼굴 슬롯 이름 |
+| data.equipments.FACE.assetKey | string | C | N | 1~255자 | 이미지/리소스 키 |
+| data.equipments.BODY | object | Y | Y | 미장착이면 null | 내 아바타 몸통 슬롯 |
+| data.equipments.BODY.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.equipments.BODY.shopItemId | integer(int64) | C | N | 1 이상 | 상점 상품 ID |
+| data.equipments.BODY.name | string | C | N | 1~100자 | 몸통 슬롯 이름 |
+| data.equipments.BODY.assetKey | string | C | N | 1~255자 | 이미지/리소스 키 |
+| data.equipments.ACCESSORY | object | Y | Y | 미장착이면 null | 내 아바타 장신구 슬롯 |
+| data.equipments.ACCESSORY.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.equipments.ACCESSORY.shopItemId | integer(int64) | C | N | 1 이상 | 상점 상품 ID |
+| data.equipments.ACCESSORY.name | string | C | N | 1~100자 | 장신구 슬롯 이름 |
+| data.equipments.ACCESSORY.assetKey | string | C | N | 1~255자 | 이미지/리소스 키 |
 
 **오류 응답**
 
@@ -1585,28 +1589,28 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.userId | integer(int64) | Y | N | 1 이상 |  |
-| data.equipments | object | Y | N | 슬롯 네 개 모두 포함 |  |
-| data.equipments.HEAD | object | Y | Y | 미장착이면 null |  |
-| data.equipments.HEAD.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.HEAD.shopItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.HEAD.name | string | C | N | 1~100자 |  |
-| data.equipments.HEAD.assetKey | string | C | N | 1~255자 |  |
-| data.equipments.FACE | object | Y | Y | 미장착이면 null |  |
-| data.equipments.FACE.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.FACE.shopItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.FACE.name | string | C | N | 1~100자 |  |
-| data.equipments.FACE.assetKey | string | C | N | 1~255자 |  |
-| data.equipments.BODY | object | Y | Y | 미장착이면 null |  |
-| data.equipments.BODY.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.BODY.shopItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.BODY.name | string | C | N | 1~100자 |  |
-| data.equipments.BODY.assetKey | string | C | N | 1~255자 |  |
-| data.equipments.ACCESSORY | object | Y | Y | 미장착이면 null |  |
-| data.equipments.ACCESSORY.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.ACCESSORY.shopItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.ACCESSORY.name | string | C | N | 1~100자 |  |
-| data.equipments.ACCESSORY.assetKey | string | C | N | 1~255자 |  |
+| data.userId | integer(int64) | Y | N | 1 이상 | 사용자 ID |
+| data.equipments | object | Y | N | 슬롯 네 개 모두 포함 | 아바타 슬롯별 장착 정보 |
+| data.equipments.HEAD | object | Y | Y | 미장착이면 null | 내 아바타 머리 슬롯 |
+| data.equipments.HEAD.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.equipments.HEAD.shopItemId | integer(int64) | C | N | 1 이상 | 상점 상품 ID |
+| data.equipments.HEAD.name | string | C | N | 1~100자 | 머리 슬롯 이름 |
+| data.equipments.HEAD.assetKey | string | C | N | 1~255자 | 이미지/리소스 키 |
+| data.equipments.FACE | object | Y | Y | 미장착이면 null | 내 아바타 얼굴 슬롯 |
+| data.equipments.FACE.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.equipments.FACE.shopItemId | integer(int64) | C | N | 1 이상 | 상점 상품 ID |
+| data.equipments.FACE.name | string | C | N | 1~100자 | 얼굴 슬롯 이름 |
+| data.equipments.FACE.assetKey | string | C | N | 1~255자 | 이미지/리소스 키 |
+| data.equipments.BODY | object | Y | Y | 미장착이면 null | 내 아바타 몸통 슬롯 |
+| data.equipments.BODY.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.equipments.BODY.shopItemId | integer(int64) | C | N | 1 이상 | 상점 상품 ID |
+| data.equipments.BODY.name | string | C | N | 1~100자 | 몸통 슬롯 이름 |
+| data.equipments.BODY.assetKey | string | C | N | 1~255자 | 이미지/리소스 키 |
+| data.equipments.ACCESSORY | object | Y | Y | 미장착이면 null | 내 아바타 장신구 슬롯 |
+| data.equipments.ACCESSORY.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.equipments.ACCESSORY.shopItemId | integer(int64) | C | N | 1 이상 | 상점 상품 ID |
+| data.equipments.ACCESSORY.name | string | C | N | 1~100자 | 장신구 슬롯 이름 |
+| data.equipments.ACCESSORY.assetKey | string | C | N | 1~255자 | 이미지/리소스 키 |
 
 **오류 응답**
 
@@ -1640,28 +1644,28 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.userId | integer(int64) | Y | N | 1 이상 |  |
-| data.equipments | object | Y | N | 슬롯 네 개 모두 포함 |  |
-| data.equipments.HEAD | object | Y | Y | 미장착이면 null |  |
-| data.equipments.HEAD.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.HEAD.shopItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.HEAD.name | string | C | N | 1~100자 |  |
-| data.equipments.HEAD.assetKey | string | C | N | 1~255자 |  |
-| data.equipments.FACE | object | Y | Y | 미장착이면 null |  |
-| data.equipments.FACE.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.FACE.shopItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.FACE.name | string | C | N | 1~100자 |  |
-| data.equipments.FACE.assetKey | string | C | N | 1~255자 |  |
-| data.equipments.BODY | object | Y | Y | 미장착이면 null |  |
-| data.equipments.BODY.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.BODY.shopItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.BODY.name | string | C | N | 1~100자 |  |
-| data.equipments.BODY.assetKey | string | C | N | 1~255자 |  |
-| data.equipments.ACCESSORY | object | Y | Y | 미장착이면 null |  |
-| data.equipments.ACCESSORY.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.ACCESSORY.shopItemId | integer(int64) | C | N | 1 이상 |  |
-| data.equipments.ACCESSORY.name | string | C | N | 1~100자 |  |
-| data.equipments.ACCESSORY.assetKey | string | C | N | 1~255자 |  |
+| data.userId | integer(int64) | Y | N | 1 이상 | 사용자 ID |
+| data.equipments | object | Y | N | 슬롯 네 개 모두 포함 | 아바타 슬롯별 장착 정보 |
+| data.equipments.HEAD | object | Y | Y | 미장착이면 null | 내 아바타 머리 슬롯 |
+| data.equipments.HEAD.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.equipments.HEAD.shopItemId | integer(int64) | C | N | 1 이상 | 상점 상품 ID |
+| data.equipments.HEAD.name | string | C | N | 1~100자 | 머리 슬롯 이름 |
+| data.equipments.HEAD.assetKey | string | C | N | 1~255자 | 이미지/리소스 키 |
+| data.equipments.FACE | object | Y | Y | 미장착이면 null | 내 아바타 얼굴 슬롯 |
+| data.equipments.FACE.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.equipments.FACE.shopItemId | integer(int64) | C | N | 1 이상 | 상점 상품 ID |
+| data.equipments.FACE.name | string | C | N | 1~100자 | 얼굴 슬롯 이름 |
+| data.equipments.FACE.assetKey | string | C | N | 1~255자 | 이미지/리소스 키 |
+| data.equipments.BODY | object | Y | Y | 미장착이면 null | 내 아바타 몸통 슬롯 |
+| data.equipments.BODY.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.equipments.BODY.shopItemId | integer(int64) | C | N | 1 이상 | 상점 상품 ID |
+| data.equipments.BODY.name | string | C | N | 1~100자 | 몸통 슬롯 이름 |
+| data.equipments.BODY.assetKey | string | C | N | 1~255자 | 이미지/리소스 키 |
+| data.equipments.ACCESSORY | object | Y | Y | 미장착이면 null | 내 아바타 장신구 슬롯 |
+| data.equipments.ACCESSORY.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.equipments.ACCESSORY.shopItemId | integer(int64) | C | N | 1 이상 | 상점 상품 ID |
+| data.equipments.ACCESSORY.name | string | C | N | 1~100자 | 장신구 슬롯 이름 |
+| data.equipments.ACCESSORY.assetKey | string | C | N | 1~255자 | 이미지/리소스 키 |
 
 **오류 응답**
 
@@ -1696,26 +1700,26 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.purchaseId | integer(int64) | Y | N | 1 이상 |  |
-| data.orderNumber | string(uuid) | Y | N | UUID 36자 = PG paymentId |  |
-| data.shopItemId | integer(int64) | Y | N | 1 이상 |  |
-| data.itemName | string | Y | N | 1~100자 |  |
-| data.totalAmount | integer(int64) | Y | N | 1 이상, 서버 확정 가격 |  |
-| data.currency | string(enum) | Y | N | KRW |  |
-| data.payment | object | Y | N | 포트원 V2 클라이언트 공개 설정만 포함 |  |
-| data.payment.storeId | string | Y | N | 1자 이상, 공개값 |  |
-| data.payment.channelKey | string | Y | N | 1자 이상, 공개값 |  |
-| data.payment.paymentId | string(uuid) | Y | N | orderNumber와 동일 |  |
-| data.payment.orderName | string | Y | N | 1~100자 |  |
-| data.payment.totalAmount | integer(int64) | Y | N | totalAmount와 동일 |  |
-| data.payment.currency | string(enum) | Y | N | KRW |  |
-| data.payment.payMethod | string(enum) | Y | N | EASY_PAY |  |
-| data.payment.easyPay | object | Y | N | 필수 |  |
-| data.payment.easyPay.easyPayProvider | string(enum) | Y | N | KAKAOPAY |  |
-| data.payment.windowType | object | Y | N | 필수 |  |
-| data.payment.windowType.pc | string(enum) | Y | N | IFRAME |  |
-| data.payment.windowType.mobile | string(enum) | Y | N | REDIRECTION |  |
-| data.createdAt | string(date-time) | Y | N | UTC ISO 8601 |  |
+| data.purchaseId | integer(int64) | Y | N | 1 이상 | 구매 ID |
+| data.orderNumber | string(uuid) | Y | N | UUID 36자 = PG paymentId | 내부 주문 번호 |
+| data.shopItemId | integer(int64) | Y | N | 1 이상 | 상점 상품 ID |
+| data.itemName | string | Y | N | 1~100자 | 상품명 |
+| data.totalAmount | integer(int64) | Y | N | 1 이상, 서버 확정 가격 | 합계 금액 |
+| data.currency | string(enum) | Y | N | KRW | 통화 |
+| data.payment | object | Y | N | 포트원 V2 클라이언트 공개 설정만 포함 | 결제 |
+| data.payment.storeId | string | Y | N | 1자 이상, 공개값 | 포트원 스토어 ID |
+| data.payment.channelKey | string | Y | N | 1자 이상, 공개값 | 포트원 채널 키 |
+| data.payment.paymentId | string(uuid) | Y | N | orderNumber와 동일 | PG 결제 식별자 |
+| data.payment.orderName | string | Y | N | 1~100자 | 결제 주문명 |
+| data.payment.totalAmount | integer(int64) | Y | N | totalAmount와 동일 | 합계 금액 |
+| data.payment.currency | string(enum) | Y | N | KRW | 통화 |
+| data.payment.payMethod | string(enum) | Y | N | EASY_PAY | 결제 수단 |
+| data.payment.easyPay | object | Y | N | 필수 | 간편 결제 정보 |
+| data.payment.easyPay.easyPayProvider | string(enum) | Y | N | KAKAOPAY | 간편 결제 공급자 |
+| data.payment.windowType | object | Y | N | 필수 | 결제창 표시 방식 |
+| data.payment.windowType.pc | string(enum) | Y | N | IFRAME | PC 결제창 표시 방식 |
+| data.payment.windowType.mobile | string(enum) | Y | N | REDIRECTION | 모바일 결제창 표시 방식 |
+| data.createdAt | string(date-time) | Y | N | UTC ISO 8601 | 생성 시각 |
 
 **오류 응답**
 
@@ -1749,34 +1753,34 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.purchaseId | integer(int64) | Y | N | 1 이상 |  |
-| data.orderNumber | string(uuid) | Y | N | UUID 36자 |  |
-| data.itemName | string | Y | N | 1~100자 |  |
-| data.priceKrw | integer(int64) | Y | N | 1 이상 |  |
-| data.currency | string(enum) | Y | N | KRW |  |
-| data.status | string(enum) | Y | N | READY \| PAID \| FAILED \| CANCELLED |  |
-| data.createdAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.ownedItemStatus | string(enum) | Y | Y | OWNED_UNUSED \| OWNED_USED \| REVOKED; 미지급 null |  |
-| data.latestRefundStatus | string(enum) | Y | Y | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED; 요청 없으면 null |  |
-| data.shopItemId | integer(int64) | Y | N | 1 이상 |  |
-| data.transactions | array<object> | Y | N | 미거래면 [] |  |
-| data.transactions[].transactionId | integer(int64) | Y | N | 1 이상 |  |
-| data.transactions[].provider | string(enum) | Y | N | PORTONE |  |
-| data.transactions[].providerTransactionId | string | Y | Y | 승인/취소 거래 확정 전 null |  |
-| data.transactions[].transactionType | string(enum) | Y | N | APPROVAL \| CANCELLATION |  |
-| data.transactions[].amountKrw | integer(int64) | Y | N | 0 이상 |  |
-| data.transactions[].status | string(enum) | Y | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN |  |
-| data.transactions[].processedAt | string(date-time) | Y | Y | 미확정이면 null |  |
-| data.refundRequests | array<object> | Y | N | 없으면 [] |  |
-| data.refundRequests[].refundRequestId | integer(int64) | Y | N | 1 이상 |  |
-| data.refundRequests[].purchaseId | integer(int64) | Y | N | 1 이상 |  |
-| data.refundRequests[].requestedByUserId | integer(int64) | Y | N | 1 이상 |  |
-| data.refundRequests[].requestReason | string | Y | N | 1~500자 |  |
-| data.refundRequests[].decisionReason | string | Y | Y | 처리 전 null |  |
-| data.refundRequests[].status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED |  |
-| data.refundRequests[].requestedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.refundRequests[].reviewedAt | string(date-time) | Y | Y | 미심사 null |  |
-| data.refundRequests[].completedAt | string(date-time) | Y | Y | 완료 전 null |  |
+| data.purchaseId | integer(int64) | Y | N | 1 이상 | 구매 ID |
+| data.orderNumber | string(uuid) | Y | N | UUID 36자 | 내부 주문 번호 |
+| data.itemName | string | Y | N | 1~100자 | 상품명 |
+| data.priceKrw | integer(int64) | Y | N | 1 이상 | 가격(원) |
+| data.currency | string(enum) | Y | N | KRW | 통화 |
+| data.status | string(enum) | Y | N | READY \| PAID \| FAILED \| CANCELLED | 성공 데이터 상태 |
+| data.createdAt | string(date-time) | Y | N | UTC ISO 8601 | 생성 시각 |
+| data.ownedItemStatus | string(enum) | Y | Y | OWNED_UNUSED \| OWNED_USED \| REVOKED; 미지급 null | 아이템 보유 상태 |
+| data.latestRefundStatus | string(enum) | Y | Y | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED; 요청 없으면 null | 최근 환불 상태 |
+| data.shopItemId | integer(int64) | Y | N | 1 이상 | 상점 상품 ID |
+| data.transactions | array<object> | Y | N | 미거래면 [] | PG 거래 기록 |
+| data.transactions[].transactionId | integer(int64) | Y | N | 1 이상 | 거래 ID |
+| data.transactions[].provider | string(enum) | Y | N | PORTONE | 소셜 공급자 |
+| data.transactions[].providerTransactionId | string | Y | Y | 승인/취소 거래 확정 전 null | PG 거래 ID |
+| data.transactions[].transactionType | string(enum) | Y | N | APPROVAL \| CANCELLATION | PG 거래 유형 |
+| data.transactions[].amountKrw | integer(int64) | Y | N | 0 이상 | 금액(원) |
+| data.transactions[].status | string(enum) | Y | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | PG 거래 기록 상태 |
+| data.transactions[].processedAt | string(date-time) | Y | Y | 미확정이면 null | 처리 시각 |
+| data.refundRequests | array<object> | Y | N | 없으면 [] | 환불 요청 목록 |
+| data.refundRequests[].refundRequestId | integer(int64) | Y | N | 1 이상 | 환불 요청 ID |
+| data.refundRequests[].purchaseId | integer(int64) | Y | N | 1 이상 | 구매 ID |
+| data.refundRequests[].requestedByUserId | integer(int64) | Y | N | 1 이상 | 신청 사용자 ID |
+| data.refundRequests[].requestReason | string | Y | N | 1~500자 | 환불 요청 사유 |
+| data.refundRequests[].decisionReason | string | Y | Y | 처리 전 null | 관리자 판단 사유 |
+| data.refundRequests[].status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 환불 요청 목록 상태 |
+| data.refundRequests[].requestedAt | string(date-time) | Y | N | UTC ISO 8601 | 요청 시각 |
+| data.refundRequests[].reviewedAt | string(date-time) | Y | Y | 미심사 null | 관리자 심사 시각 |
+| data.refundRequests[].completedAt | string(date-time) | Y | Y | 완료 전 null | 완료 시각 |
 
 **오류 응답**
 
@@ -1810,15 +1814,15 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | array<object> | Y | N | 0건이면 [] | 목록 |
-| data[].purchaseId | integer(int64) | Y | N | 1 이상 |  |
-| data[].orderNumber | string(uuid) | Y | N | UUID 36자 |  |
-| data[].itemName | string | Y | N | 1~100자 |  |
-| data[].priceKrw | integer(int64) | Y | N | 1 이상 |  |
-| data[].currency | string(enum) | Y | N | KRW |  |
-| data[].status | string(enum) | Y | N | READY \| PAID \| FAILED \| CANCELLED |  |
-| data[].createdAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data[].ownedItemStatus | string(enum) | Y | Y | OWNED_UNUSED \| OWNED_USED \| REVOKED; 미지급 null |  |
-| data[].latestRefundStatus | string(enum) | Y | Y | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED; 요청 없으면 null |  |
+| data[].purchaseId | integer(int64) | Y | N | 1 이상 | 구매 ID |
+| data[].orderNumber | string(uuid) | Y | N | UUID 36자 | 내부 주문 번호 |
+| data[].itemName | string | Y | N | 1~100자 | 상품명 |
+| data[].priceKrw | integer(int64) | Y | N | 1 이상 | 가격(원) |
+| data[].currency | string(enum) | Y | N | KRW | 통화 |
+| data[].status | string(enum) | Y | N | READY \| PAID \| FAILED \| CANCELLED | 성공 데이터 상태 |
+| data[].createdAt | string(date-time) | Y | N | UTC ISO 8601 | 생성 시각 |
+| data[].ownedItemStatus | string(enum) | Y | Y | OWNED_UNUSED \| OWNED_USED \| REVOKED; 미지급 null | 아이템 보유 상태 |
+| data[].latestRefundStatus | string(enum) | Y | Y | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED; 요청 없으면 null | 최근 환불 상태 |
 | meta | object | Y | N | — | 목록 부가 정보 |
 | meta.page | integer | Y | N | 0 이상 | 현재 페이지 |
 | meta.size | integer | Y | N | 1~50 | 요청 페이지 크기 |
@@ -1850,34 +1854,34 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.purchaseId | integer(int64) | Y | N | 1 이상 |  |
-| data.orderNumber | string(uuid) | Y | N | UUID 36자 |  |
-| data.itemName | string | Y | N | 1~100자 |  |
-| data.priceKrw | integer(int64) | Y | N | 1 이상 |  |
-| data.currency | string(enum) | Y | N | KRW |  |
-| data.status | string(enum) | Y | N | READY \| PAID \| FAILED \| CANCELLED |  |
-| data.createdAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.ownedItemStatus | string(enum) | Y | Y | OWNED_UNUSED \| OWNED_USED \| REVOKED; 미지급 null |  |
-| data.latestRefundStatus | string(enum) | Y | Y | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED; 요청 없으면 null |  |
-| data.shopItemId | integer(int64) | Y | N | 1 이상 |  |
-| data.transactions | array<object> | Y | N | 미거래면 [] |  |
-| data.transactions[].transactionId | integer(int64) | Y | N | 1 이상 |  |
-| data.transactions[].provider | string(enum) | Y | N | PORTONE |  |
-| data.transactions[].providerTransactionId | string | Y | Y | 승인/취소 거래 확정 전 null |  |
-| data.transactions[].transactionType | string(enum) | Y | N | APPROVAL \| CANCELLATION |  |
-| data.transactions[].amountKrw | integer(int64) | Y | N | 0 이상 |  |
-| data.transactions[].status | string(enum) | Y | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN |  |
-| data.transactions[].processedAt | string(date-time) | Y | Y | 미확정이면 null |  |
-| data.refundRequests | array<object> | Y | N | 없으면 [] |  |
-| data.refundRequests[].refundRequestId | integer(int64) | Y | N | 1 이상 |  |
-| data.refundRequests[].purchaseId | integer(int64) | Y | N | 1 이상 |  |
-| data.refundRequests[].requestedByUserId | integer(int64) | Y | N | 1 이상 |  |
-| data.refundRequests[].requestReason | string | Y | N | 1~500자 |  |
-| data.refundRequests[].decisionReason | string | Y | Y | 처리 전 null |  |
-| data.refundRequests[].status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED |  |
-| data.refundRequests[].requestedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.refundRequests[].reviewedAt | string(date-time) | Y | Y | 미심사 null |  |
-| data.refundRequests[].completedAt | string(date-time) | Y | Y | 완료 전 null |  |
+| data.purchaseId | integer(int64) | Y | N | 1 이상 | 구매 ID |
+| data.orderNumber | string(uuid) | Y | N | UUID 36자 | 내부 주문 번호 |
+| data.itemName | string | Y | N | 1~100자 | 상품명 |
+| data.priceKrw | integer(int64) | Y | N | 1 이상 | 가격(원) |
+| data.currency | string(enum) | Y | N | KRW | 통화 |
+| data.status | string(enum) | Y | N | READY \| PAID \| FAILED \| CANCELLED | 성공 데이터 상태 |
+| data.createdAt | string(date-time) | Y | N | UTC ISO 8601 | 생성 시각 |
+| data.ownedItemStatus | string(enum) | Y | Y | OWNED_UNUSED \| OWNED_USED \| REVOKED; 미지급 null | 아이템 보유 상태 |
+| data.latestRefundStatus | string(enum) | Y | Y | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED; 요청 없으면 null | 최근 환불 상태 |
+| data.shopItemId | integer(int64) | Y | N | 1 이상 | 상점 상품 ID |
+| data.transactions | array<object> | Y | N | 미거래면 [] | PG 거래 기록 |
+| data.transactions[].transactionId | integer(int64) | Y | N | 1 이상 | 거래 ID |
+| data.transactions[].provider | string(enum) | Y | N | PORTONE | 소셜 공급자 |
+| data.transactions[].providerTransactionId | string | Y | Y | 승인/취소 거래 확정 전 null | PG 거래 ID |
+| data.transactions[].transactionType | string(enum) | Y | N | APPROVAL \| CANCELLATION | PG 거래 유형 |
+| data.transactions[].amountKrw | integer(int64) | Y | N | 0 이상 | 금액(원) |
+| data.transactions[].status | string(enum) | Y | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | PG 거래 기록 상태 |
+| data.transactions[].processedAt | string(date-time) | Y | Y | 미확정이면 null | 처리 시각 |
+| data.refundRequests | array<object> | Y | N | 없으면 [] | 환불 요청 목록 |
+| data.refundRequests[].refundRequestId | integer(int64) | Y | N | 1 이상 | 환불 요청 ID |
+| data.refundRequests[].purchaseId | integer(int64) | Y | N | 1 이상 | 구매 ID |
+| data.refundRequests[].requestedByUserId | integer(int64) | Y | N | 1 이상 | 신청 사용자 ID |
+| data.refundRequests[].requestReason | string | Y | N | 1~500자 | 환불 요청 사유 |
+| data.refundRequests[].decisionReason | string | Y | Y | 처리 전 null | 관리자 판단 사유 |
+| data.refundRequests[].status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 환불 요청 목록 상태 |
+| data.refundRequests[].requestedAt | string(date-time) | Y | N | UTC ISO 8601 | 요청 시각 |
+| data.refundRequests[].reviewedAt | string(date-time) | Y | Y | 미심사 null | 관리자 심사 시각 |
+| data.refundRequests[].completedAt | string(date-time) | Y | Y | 완료 전 null | 완료 시각 |
 
 **오류 응답**
 
@@ -1915,8 +1919,6 @@
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
 
-**오류 응답**
-
 서명 실패 및 변조된 전송은 `400` **빈 응답 본문**. 검증 후 알 수 없는 `type`, 재수신, 미등록 주문은 `202` + `{"data":{}}`; 검증된 이벤트의 결제 상태는 포트원 최신 조회 후 반영합니다. 공급자 서버 오류 시 `5xx` 가능.
 
 ### createRefundRequest — `POST /api/v1/purchases/{purchaseId}/refund-requests`
@@ -1939,15 +1941,15 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.refundRequestId | integer(int64) | Y | N | 1 이상 |  |
-| data.purchaseId | integer(int64) | Y | N | 1 이상 |  |
-| data.requestedByUserId | integer(int64) | Y | N | 1 이상 |  |
-| data.requestReason | string | Y | N | 1~500자 |  |
-| data.decisionReason | string | Y | Y | 처리 전 null |  |
-| data.status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED |  |
-| data.requestedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.reviewedAt | string(date-time) | Y | Y | 미심사 null |  |
-| data.completedAt | string(date-time) | Y | Y | 완료 전 null |  |
+| data.refundRequestId | integer(int64) | Y | N | 1 이상 | 환불 요청 ID |
+| data.purchaseId | integer(int64) | Y | N | 1 이상 | 구매 ID |
+| data.requestedByUserId | integer(int64) | Y | N | 1 이상 | 신청 사용자 ID |
+| data.requestReason | string | Y | N | 1~500자 | 환불 요청 사유 |
+| data.decisionReason | string | Y | Y | 처리 전 null | 관리자 판단 사유 |
+| data.status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
+| data.requestedAt | string(date-time) | Y | N | UTC ISO 8601 | 요청 시각 |
+| data.reviewedAt | string(date-time) | Y | Y | 미심사 null | 관리자 심사 시각 |
+| data.completedAt | string(date-time) | Y | Y | 완료 전 null | 완료 시각 |
 
 **오류 응답**
 
@@ -1981,15 +1983,15 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | array<object> | Y | N | 0건이면 [] | 목록 |
-| data[].refundRequestId | integer(int64) | Y | N | 1 이상 |  |
-| data[].purchaseId | integer(int64) | Y | N | 1 이상 |  |
-| data[].requestedByUserId | integer(int64) | Y | N | 1 이상 |  |
-| data[].requestReason | string | Y | N | 1~500자 |  |
-| data[].decisionReason | string | Y | Y | 처리 전 null |  |
-| data[].status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED |  |
-| data[].requestedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data[].reviewedAt | string(date-time) | Y | Y | 미심사 null |  |
-| data[].completedAt | string(date-time) | Y | Y | 완료 전 null |  |
+| data[].refundRequestId | integer(int64) | Y | N | 1 이상 | 환불 요청 ID |
+| data[].purchaseId | integer(int64) | Y | N | 1 이상 | 구매 ID |
+| data[].requestedByUserId | integer(int64) | Y | N | 1 이상 | 신청 사용자 ID |
+| data[].requestReason | string | Y | N | 1~500자 | 환불 요청 사유 |
+| data[].decisionReason | string | Y | Y | 처리 전 null | 관리자 판단 사유 |
+| data[].status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
+| data[].requestedAt | string(date-time) | Y | N | UTC ISO 8601 | 요청 시각 |
+| data[].reviewedAt | string(date-time) | Y | Y | 미심사 null | 관리자 심사 시각 |
+| data[].completedAt | string(date-time) | Y | Y | 완료 전 null | 완료 시각 |
 | meta | object | Y | N | — | 목록 부가 정보 |
 | meta.page | integer | Y | N | 0 이상 | 현재 페이지 |
 | meta.size | integer | Y | N | 1~50 | 요청 페이지 크기 |
@@ -2023,15 +2025,15 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | array<object> | Y | N | 0건이면 [] | 목록 |
-| data[].refundRequestId | integer(int64) | Y | N | 1 이상 |  |
-| data[].purchaseId | integer(int64) | Y | N | 1 이상 |  |
-| data[].requestedByUserId | integer(int64) | Y | N | 1 이상 |  |
-| data[].requestReason | string | Y | N | 1~500자 |  |
-| data[].decisionReason | string | Y | Y | 처리 전 null |  |
-| data[].status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED |  |
-| data[].requestedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data[].reviewedAt | string(date-time) | Y | Y | 미심사 null |  |
-| data[].completedAt | string(date-time) | Y | Y | 완료 전 null |  |
+| data[].refundRequestId | integer(int64) | Y | N | 1 이상 | 환불 요청 ID |
+| data[].purchaseId | integer(int64) | Y | N | 1 이상 | 구매 ID |
+| data[].requestedByUserId | integer(int64) | Y | N | 1 이상 | 신청 사용자 ID |
+| data[].requestReason | string | Y | N | 1~500자 | 환불 요청 사유 |
+| data[].decisionReason | string | Y | Y | 처리 전 null | 관리자 판단 사유 |
+| data[].status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
+| data[].requestedAt | string(date-time) | Y | N | UTC ISO 8601 | 요청 시각 |
+| data[].reviewedAt | string(date-time) | Y | Y | 미심사 null | 관리자 심사 시각 |
+| data[].completedAt | string(date-time) | Y | Y | 완료 전 null | 완료 시각 |
 | meta | object | Y | N | — | 목록 부가 정보 |
 | meta.page | integer | Y | N | 0 이상 | 현재 페이지 |
 | meta.size | integer | Y | N | 1~50 | 요청 페이지 크기 |
@@ -2064,29 +2066,29 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.refundRequestId | integer(int64) | Y | N | 1 이상 |  |
-| data.purchaseId | integer(int64) | Y | N | 1 이상 |  |
-| data.requestedByUserId | integer(int64) | Y | N | 1 이상 |  |
-| data.requestReason | string | Y | N | 1~500자 |  |
-| data.decisionReason | string | Y | Y | 처리 전 null |  |
-| data.status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED |  |
-| data.requestedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.reviewedAt | string(date-time) | Y | Y | 미심사 null |  |
-| data.completedAt | string(date-time) | Y | Y | 완료 전 null |  |
-| data.reviewedByUserId | integer(int64) | Y | Y | 미심사 null |  |
-| data.purchase | object | Y | N | 필수 |  |
-| data.purchase.orderNumber | string(uuid) | Y | N | UUID 36자 |  |
-| data.purchase.itemName | string | Y | N | 1~100자 |  |
-| data.purchase.priceKrw | integer(int64) | Y | N | 1 이상 |  |
-| data.purchase.status | string(enum) | Y | N | READY \| PAID \| FAILED \| CANCELLED |  |
-| data.ownedItem | object | Y | Y | 미지급이면 null |  |
-| data.ownedItem.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.ownedItem.status | string(enum) | C | N | OWNED_UNUSED \| OWNED_USED \| REVOKED |  |
-| data.ownedItem.usedAt | string(date-time) | C | Y | 미사용 null |  |
-| data.latestCancellation | object | Y | Y | 취소 시도 전 null |  |
-| data.latestCancellation.providerTransactionId | string | C | Y | 미확정 null |  |
-| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN |  |
-| data.latestCancellation.processedAt | string(date-time) | C | Y | 미확정 null |  |
+| data.refundRequestId | integer(int64) | Y | N | 1 이상 | 환불 요청 ID |
+| data.purchaseId | integer(int64) | Y | N | 1 이상 | 구매 ID |
+| data.requestedByUserId | integer(int64) | Y | N | 1 이상 | 신청 사용자 ID |
+| data.requestReason | string | Y | N | 1~500자 | 환불 요청 사유 |
+| data.decisionReason | string | Y | Y | 처리 전 null | 관리자 판단 사유 |
+| data.status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
+| data.requestedAt | string(date-time) | Y | N | UTC ISO 8601 | 요청 시각 |
+| data.reviewedAt | string(date-time) | Y | Y | 미심사 null | 관리자 심사 시각 |
+| data.completedAt | string(date-time) | Y | Y | 완료 전 null | 완료 시각 |
+| data.reviewedByUserId | integer(int64) | Y | Y | 미심사 null | 심사한 관리자 ID |
+| data.purchase | object | Y | N | 필수 | 구매 |
+| data.purchase.orderNumber | string(uuid) | Y | N | UUID 36자 | 내부 주문 번호 |
+| data.purchase.itemName | string | Y | N | 1~100자 | 상품명 |
+| data.purchase.priceKrw | integer(int64) | Y | N | 1 이상 | 가격(원) |
+| data.purchase.status | string(enum) | Y | N | READY \| PAID \| FAILED \| CANCELLED | 구매 상태 |
+| data.ownedItem | object | Y | Y | 미지급이면 null | 보유 아이템 |
+| data.ownedItem.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.ownedItem.status | string(enum) | C | N | OWNED_UNUSED \| OWNED_USED \| REVOKED | 보유 아이템 상태 |
+| data.ownedItem.usedAt | string(date-time) | C | Y | 미사용 null | 최초 사용 시각 |
+| data.latestCancellation | object | Y | Y | 취소 시도 전 null | 최근 PG 취소 거래 |
+| data.latestCancellation.providerTransactionId | string | C | Y | 미확정 null | PG 거래 ID |
+| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 최근 PG 취소 거래 상태 |
+| data.latestCancellation.processedAt | string(date-time) | C | Y | 미확정 null | 처리 시각 |
 
 **오류 응답**
 
@@ -2120,29 +2122,29 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.refundRequestId | integer(int64) | Y | N | 1 이상 |  |
-| data.purchaseId | integer(int64) | Y | N | 1 이상 |  |
-| data.requestedByUserId | integer(int64) | Y | N | 1 이상 |  |
-| data.requestReason | string | Y | N | 1~500자 |  |
-| data.decisionReason | string | Y | Y | 처리 전 null |  |
-| data.status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED |  |
-| data.requestedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.reviewedAt | string(date-time) | Y | Y | 미심사 null |  |
-| data.completedAt | string(date-time) | Y | Y | 완료 전 null |  |
-| data.reviewedByUserId | integer(int64) | Y | Y | 미심사 null |  |
-| data.purchase | object | Y | N | 필수 |  |
-| data.purchase.orderNumber | string(uuid) | Y | N | UUID 36자 |  |
-| data.purchase.itemName | string | Y | N | 1~100자 |  |
-| data.purchase.priceKrw | integer(int64) | Y | N | 1 이상 |  |
-| data.purchase.status | string(enum) | Y | N | READY \| PAID \| FAILED \| CANCELLED |  |
-| data.ownedItem | object | Y | Y | 미지급이면 null |  |
-| data.ownedItem.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.ownedItem.status | string(enum) | C | N | OWNED_UNUSED \| OWNED_USED \| REVOKED |  |
-| data.ownedItem.usedAt | string(date-time) | C | Y | 미사용 null |  |
-| data.latestCancellation | object | Y | Y | 취소 시도 전 null |  |
-| data.latestCancellation.providerTransactionId | string | C | Y | 미확정 null |  |
-| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN |  |
-| data.latestCancellation.processedAt | string(date-time) | C | Y | 미확정 null |  |
+| data.refundRequestId | integer(int64) | Y | N | 1 이상 | 환불 요청 ID |
+| data.purchaseId | integer(int64) | Y | N | 1 이상 | 구매 ID |
+| data.requestedByUserId | integer(int64) | Y | N | 1 이상 | 신청 사용자 ID |
+| data.requestReason | string | Y | N | 1~500자 | 환불 요청 사유 |
+| data.decisionReason | string | Y | Y | 처리 전 null | 관리자 판단 사유 |
+| data.status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
+| data.requestedAt | string(date-time) | Y | N | UTC ISO 8601 | 요청 시각 |
+| data.reviewedAt | string(date-time) | Y | Y | 미심사 null | 관리자 심사 시각 |
+| data.completedAt | string(date-time) | Y | Y | 완료 전 null | 완료 시각 |
+| data.reviewedByUserId | integer(int64) | Y | Y | 미심사 null | 심사한 관리자 ID |
+| data.purchase | object | Y | N | 필수 | 구매 |
+| data.purchase.orderNumber | string(uuid) | Y | N | UUID 36자 | 내부 주문 번호 |
+| data.purchase.itemName | string | Y | N | 1~100자 | 상품명 |
+| data.purchase.priceKrw | integer(int64) | Y | N | 1 이상 | 가격(원) |
+| data.purchase.status | string(enum) | Y | N | READY \| PAID \| FAILED \| CANCELLED | 구매 상태 |
+| data.ownedItem | object | Y | Y | 미지급이면 null | 보유 아이템 |
+| data.ownedItem.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.ownedItem.status | string(enum) | C | N | OWNED_UNUSED \| OWNED_USED \| REVOKED | 보유 아이템 상태 |
+| data.ownedItem.usedAt | string(date-time) | C | Y | 미사용 null | 최초 사용 시각 |
+| data.latestCancellation | object | Y | Y | 취소 시도 전 null | 최근 PG 취소 거래 |
+| data.latestCancellation.providerTransactionId | string | C | Y | 미확정 null | PG 거래 ID |
+| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 최근 PG 취소 거래 상태 |
+| data.latestCancellation.processedAt | string(date-time) | C | Y | 미확정 null | 처리 시각 |
 
 **오류 응답**
 
@@ -2178,29 +2180,29 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.refundRequestId | integer(int64) | Y | N | 1 이상 |  |
-| data.purchaseId | integer(int64) | Y | N | 1 이상 |  |
-| data.requestedByUserId | integer(int64) | Y | N | 1 이상 |  |
-| data.requestReason | string | Y | N | 1~500자 |  |
-| data.decisionReason | string | Y | Y | 처리 전 null |  |
-| data.status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED |  |
-| data.requestedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.reviewedAt | string(date-time) | Y | Y | 미심사 null |  |
-| data.completedAt | string(date-time) | Y | Y | 완료 전 null |  |
-| data.reviewedByUserId | integer(int64) | Y | Y | 미심사 null |  |
-| data.purchase | object | Y | N | 필수 |  |
-| data.purchase.orderNumber | string(uuid) | Y | N | UUID 36자 |  |
-| data.purchase.itemName | string | Y | N | 1~100자 |  |
-| data.purchase.priceKrw | integer(int64) | Y | N | 1 이상 |  |
-| data.purchase.status | string(enum) | Y | N | READY \| PAID \| FAILED \| CANCELLED |  |
-| data.ownedItem | object | Y | Y | 미지급이면 null |  |
-| data.ownedItem.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.ownedItem.status | string(enum) | C | N | OWNED_UNUSED \| OWNED_USED \| REVOKED |  |
-| data.ownedItem.usedAt | string(date-time) | C | Y | 미사용 null |  |
-| data.latestCancellation | object | Y | Y | 취소 시도 전 null |  |
-| data.latestCancellation.providerTransactionId | string | C | Y | 미확정 null |  |
-| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN |  |
-| data.latestCancellation.processedAt | string(date-time) | C | Y | 미확정 null |  |
+| data.refundRequestId | integer(int64) | Y | N | 1 이상 | 환불 요청 ID |
+| data.purchaseId | integer(int64) | Y | N | 1 이상 | 구매 ID |
+| data.requestedByUserId | integer(int64) | Y | N | 1 이상 | 신청 사용자 ID |
+| data.requestReason | string | Y | N | 1~500자 | 환불 요청 사유 |
+| data.decisionReason | string | Y | Y | 처리 전 null | 관리자 판단 사유 |
+| data.status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
+| data.requestedAt | string(date-time) | Y | N | UTC ISO 8601 | 요청 시각 |
+| data.reviewedAt | string(date-time) | Y | Y | 미심사 null | 관리자 심사 시각 |
+| data.completedAt | string(date-time) | Y | Y | 완료 전 null | 완료 시각 |
+| data.reviewedByUserId | integer(int64) | Y | Y | 미심사 null | 심사한 관리자 ID |
+| data.purchase | object | Y | N | 필수 | 구매 |
+| data.purchase.orderNumber | string(uuid) | Y | N | UUID 36자 | 내부 주문 번호 |
+| data.purchase.itemName | string | Y | N | 1~100자 | 상품명 |
+| data.purchase.priceKrw | integer(int64) | Y | N | 1 이상 | 가격(원) |
+| data.purchase.status | string(enum) | Y | N | READY \| PAID \| FAILED \| CANCELLED | 구매 상태 |
+| data.ownedItem | object | Y | Y | 미지급이면 null | 보유 아이템 |
+| data.ownedItem.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.ownedItem.status | string(enum) | C | N | OWNED_UNUSED \| OWNED_USED \| REVOKED | 보유 아이템 상태 |
+| data.ownedItem.usedAt | string(date-time) | C | Y | 미사용 null | 최초 사용 시각 |
+| data.latestCancellation | object | Y | Y | 취소 시도 전 null | 최근 PG 취소 거래 |
+| data.latestCancellation.providerTransactionId | string | C | Y | 미확정 null | PG 거래 ID |
+| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 최근 PG 취소 거래 상태 |
+| data.latestCancellation.processedAt | string(date-time) | C | Y | 미확정 null | 처리 시각 |
 
 **오류 응답**
 
@@ -2234,29 +2236,29 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.refundRequestId | integer(int64) | Y | N | 1 이상 |  |
-| data.purchaseId | integer(int64) | Y | N | 1 이상 |  |
-| data.requestedByUserId | integer(int64) | Y | N | 1 이상 |  |
-| data.requestReason | string | Y | N | 1~500자 |  |
-| data.decisionReason | string | Y | Y | 처리 전 null |  |
-| data.status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED |  |
-| data.requestedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.reviewedAt | string(date-time) | Y | Y | 미심사 null |  |
-| data.completedAt | string(date-time) | Y | Y | 완료 전 null |  |
-| data.reviewedByUserId | integer(int64) | Y | Y | 미심사 null |  |
-| data.purchase | object | Y | N | 필수 |  |
-| data.purchase.orderNumber | string(uuid) | Y | N | UUID 36자 |  |
-| data.purchase.itemName | string | Y | N | 1~100자 |  |
-| data.purchase.priceKrw | integer(int64) | Y | N | 1 이상 |  |
-| data.purchase.status | string(enum) | Y | N | READY \| PAID \| FAILED \| CANCELLED |  |
-| data.ownedItem | object | Y | Y | 미지급이면 null |  |
-| data.ownedItem.ownedItemId | integer(int64) | C | N | 1 이상 |  |
-| data.ownedItem.status | string(enum) | C | N | OWNED_UNUSED \| OWNED_USED \| REVOKED |  |
-| data.ownedItem.usedAt | string(date-time) | C | Y | 미사용 null |  |
-| data.latestCancellation | object | Y | Y | 취소 시도 전 null |  |
-| data.latestCancellation.providerTransactionId | string | C | Y | 미확정 null |  |
-| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN |  |
-| data.latestCancellation.processedAt | string(date-time) | C | Y | 미확정 null |  |
+| data.refundRequestId | integer(int64) | Y | N | 1 이상 | 환불 요청 ID |
+| data.purchaseId | integer(int64) | Y | N | 1 이상 | 구매 ID |
+| data.requestedByUserId | integer(int64) | Y | N | 1 이상 | 신청 사용자 ID |
+| data.requestReason | string | Y | N | 1~500자 | 환불 요청 사유 |
+| data.decisionReason | string | Y | Y | 처리 전 null | 관리자 판단 사유 |
+| data.status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
+| data.requestedAt | string(date-time) | Y | N | UTC ISO 8601 | 요청 시각 |
+| data.reviewedAt | string(date-time) | Y | Y | 미심사 null | 관리자 심사 시각 |
+| data.completedAt | string(date-time) | Y | Y | 완료 전 null | 완료 시각 |
+| data.reviewedByUserId | integer(int64) | Y | Y | 미심사 null | 심사한 관리자 ID |
+| data.purchase | object | Y | N | 필수 | 구매 |
+| data.purchase.orderNumber | string(uuid) | Y | N | UUID 36자 | 내부 주문 번호 |
+| data.purchase.itemName | string | Y | N | 1~100자 | 상품명 |
+| data.purchase.priceKrw | integer(int64) | Y | N | 1 이상 | 가격(원) |
+| data.purchase.status | string(enum) | Y | N | READY \| PAID \| FAILED \| CANCELLED | 구매 상태 |
+| data.ownedItem | object | Y | Y | 미지급이면 null | 보유 아이템 |
+| data.ownedItem.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
+| data.ownedItem.status | string(enum) | C | N | OWNED_UNUSED \| OWNED_USED \| REVOKED | 보유 아이템 상태 |
+| data.ownedItem.usedAt | string(date-time) | C | Y | 미사용 null | 최초 사용 시각 |
+| data.latestCancellation | object | Y | Y | 취소 시도 전 null | 최근 PG 취소 거래 |
+| data.latestCancellation.providerTransactionId | string | C | Y | 미확정 null | PG 거래 ID |
+| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 최근 PG 취소 거래 상태 |
+| data.latestCancellation.processedAt | string(date-time) | C | Y | 미확정 null | 처리 시각 |
 
 **오류 응답**
 
@@ -2294,15 +2296,15 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.reportId | integer(int64) | Y | N | 1 이상 |  |
-| data.groupId | integer(int64) | Y | N | 1 이상 |  |
-| data.reporterUserId | integer(int64) | Y | N | 1 이상 |  |
-| data.reportedUserId | integer(int64) | Y | N | 1 이상 |  |
-| data.category | string(enum) | Y | N | HARASSMENT \| SPAM \| INAPPROPRIATE_CONTENT \| OTHER |  |
-| data.content | string | Y | N | 1~1000자 |  |
-| data.status | string(enum) | Y | N | RECEIVED \| RESOLVED \| REJECTED |  |
-| data.createdAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.handledAt | string(date-time) | Y | Y | 미처리 null |  |
+| data.reportId | integer(int64) | Y | N | 1 이상 | 신고 ID |
+| data.groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
+| data.reporterUserId | integer(int64) | Y | N | 1 이상 | 신고자 ID |
+| data.reportedUserId | integer(int64) | Y | N | 1 이상 | 피신고자 ID |
+| data.category | string(enum) | Y | N | HARASSMENT \| SPAM \| INAPPROPRIATE_CONTENT \| OTHER | 신고 분류 |
+| data.content | string | Y | N | 1~1000자 | 내용 |
+| data.status | string(enum) | Y | N | RECEIVED \| RESOLVED \| REJECTED | 성공 데이터 상태 |
+| data.createdAt | string(date-time) | Y | N | UTC ISO 8601 | 생성 시각 |
+| data.handledAt | string(date-time) | Y | Y | 미처리 null | 처리 시각 |
 
 **오류 응답**
 
@@ -2334,15 +2336,15 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | array<object> | Y | N | 0건이면 [] | 목록 |
-| data[].reportId | integer(int64) | Y | N | 1 이상 |  |
-| data[].groupId | integer(int64) | Y | N | 1 이상 |  |
-| data[].reporterUserId | integer(int64) | Y | N | 1 이상 |  |
-| data[].reportedUserId | integer(int64) | Y | N | 1 이상 |  |
-| data[].category | string(enum) | Y | N | HARASSMENT \| SPAM \| INAPPROPRIATE_CONTENT \| OTHER |  |
-| data[].content | string | Y | N | 1~1000자 |  |
-| data[].status | string(enum) | Y | N | RECEIVED \| RESOLVED \| REJECTED |  |
-| data[].createdAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data[].handledAt | string(date-time) | Y | Y | 미처리 null |  |
+| data[].reportId | integer(int64) | Y | N | 1 이상 | 신고 ID |
+| data[].groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
+| data[].reporterUserId | integer(int64) | Y | N | 1 이상 | 신고자 ID |
+| data[].reportedUserId | integer(int64) | Y | N | 1 이상 | 피신고자 ID |
+| data[].category | string(enum) | Y | N | HARASSMENT \| SPAM \| INAPPROPRIATE_CONTENT \| OTHER | 신고 분류 |
+| data[].content | string | Y | N | 1~1000자 | 내용 |
+| data[].status | string(enum) | Y | N | RECEIVED \| RESOLVED \| REJECTED | 성공 데이터 상태 |
+| data[].createdAt | string(date-time) | Y | N | UTC ISO 8601 | 생성 시각 |
+| data[].handledAt | string(date-time) | Y | Y | 미처리 null | 처리 시각 |
 | meta | object | Y | N | — | 목록 부가 정보 |
 | meta.page | integer | Y | N | 0 이상 | 현재 페이지 |
 | meta.size | integer | Y | N | 1~50 | 요청 페이지 크기 |
@@ -2375,19 +2377,19 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.reportId | integer(int64) | Y | N | 1 이상 |  |
-| data.groupId | integer(int64) | Y | N | 1 이상 |  |
-| data.reporterUserId | integer(int64) | Y | N | 1 이상 |  |
-| data.reportedUserId | integer(int64) | Y | N | 1 이상 |  |
-| data.category | string(enum) | Y | N | HARASSMENT \| SPAM \| INAPPROPRIATE_CONTENT \| OTHER |  |
-| data.content | string | Y | N | 1~1000자 |  |
-| data.status | string(enum) | Y | N | RECEIVED \| RESOLVED \| REJECTED |  |
-| data.createdAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.handledAt | string(date-time) | Y | Y | 미처리 null |  |
-| data.reportedUserNickname | string | Y | N | 2~20자 |  |
-| data.reporterNickname | string | Y | N | 2~20자 |  |
-| data.handledByUserId | integer(int64) | Y | Y | 미처리 null |  |
-| data.resolution | string | Y | Y | 미처리 null / 처리 사유 1~1000자 |  |
+| data.reportId | integer(int64) | Y | N | 1 이상 | 신고 ID |
+| data.groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
+| data.reporterUserId | integer(int64) | Y | N | 1 이상 | 신고자 ID |
+| data.reportedUserId | integer(int64) | Y | N | 1 이상 | 피신고자 ID |
+| data.category | string(enum) | Y | N | HARASSMENT \| SPAM \| INAPPROPRIATE_CONTENT \| OTHER | 신고 분류 |
+| data.content | string | Y | N | 1~1000자 | 내용 |
+| data.status | string(enum) | Y | N | RECEIVED \| RESOLVED \| REJECTED | 성공 데이터 상태 |
+| data.createdAt | string(date-time) | Y | N | UTC ISO 8601 | 생성 시각 |
+| data.handledAt | string(date-time) | Y | Y | 미처리 null | 처리 시각 |
+| data.reportedUserNickname | string | Y | N | 2~20자 | 피신고자 닉네임 |
+| data.reporterNickname | string | Y | N | 2~20자 | 신고자 닉네임 |
+| data.handledByUserId | integer(int64) | Y | Y | 미처리 null | 처리 관리자 ID |
+| data.resolution | string | Y | Y | 미처리 null / 처리 사유 1~1000자 | 신고 처리 결과 |
 
 **오류 응답**
 
@@ -2419,19 +2421,19 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.reportId | integer(int64) | Y | N | 1 이상 |  |
-| data.groupId | integer(int64) | Y | N | 1 이상 |  |
-| data.reporterUserId | integer(int64) | Y | N | 1 이상 |  |
-| data.reportedUserId | integer(int64) | Y | N | 1 이상 |  |
-| data.category | string(enum) | Y | N | HARASSMENT \| SPAM \| INAPPROPRIATE_CONTENT \| OTHER |  |
-| data.content | string | Y | N | 1~1000자 |  |
-| data.status | string(enum) | Y | N | RECEIVED \| RESOLVED \| REJECTED |  |
-| data.createdAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.handledAt | string(date-time) | Y | Y | 미처리 null |  |
-| data.reportedUserNickname | string | Y | N | 2~20자 |  |
-| data.reporterNickname | string | Y | N | 2~20자 |  |
-| data.handledByUserId | integer(int64) | Y | Y | 미처리 null |  |
-| data.resolution | string | Y | Y | 미처리 null / 처리 사유 1~1000자 |  |
+| data.reportId | integer(int64) | Y | N | 1 이상 | 신고 ID |
+| data.groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
+| data.reporterUserId | integer(int64) | Y | N | 1 이상 | 신고자 ID |
+| data.reportedUserId | integer(int64) | Y | N | 1 이상 | 피신고자 ID |
+| data.category | string(enum) | Y | N | HARASSMENT \| SPAM \| INAPPROPRIATE_CONTENT \| OTHER | 신고 분류 |
+| data.content | string | Y | N | 1~1000자 | 내용 |
+| data.status | string(enum) | Y | N | RECEIVED \| RESOLVED \| REJECTED | 성공 데이터 상태 |
+| data.createdAt | string(date-time) | Y | N | UTC ISO 8601 | 생성 시각 |
+| data.handledAt | string(date-time) | Y | Y | 미처리 null | 처리 시각 |
+| data.reportedUserNickname | string | Y | N | 2~20자 | 피신고자 닉네임 |
+| data.reporterNickname | string | Y | N | 2~20자 | 신고자 닉네임 |
+| data.handledByUserId | integer(int64) | Y | Y | 미처리 null | 처리 관리자 ID |
+| data.resolution | string | Y | Y | 미처리 null / 처리 사유 1~1000자 | 신고 처리 결과 |
 
 **오류 응답**
 
@@ -2465,19 +2467,19 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.reportId | integer(int64) | Y | N | 1 이상 |  |
-| data.groupId | integer(int64) | Y | N | 1 이상 |  |
-| data.reporterUserId | integer(int64) | Y | N | 1 이상 |  |
-| data.reportedUserId | integer(int64) | Y | N | 1 이상 |  |
-| data.category | string(enum) | Y | N | HARASSMENT \| SPAM \| INAPPROPRIATE_CONTENT \| OTHER |  |
-| data.content | string | Y | N | 1~1000자 |  |
-| data.status | string(enum) | Y | N | RECEIVED \| RESOLVED \| REJECTED |  |
-| data.createdAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.handledAt | string(date-time) | Y | Y | 미처리 null |  |
-| data.reportedUserNickname | string | Y | N | 2~20자 |  |
-| data.reporterNickname | string | Y | N | 2~20자 |  |
-| data.handledByUserId | integer(int64) | Y | Y | 미처리 null |  |
-| data.resolution | string | Y | Y | 미처리 null / 처리 사유 1~1000자 |  |
+| data.reportId | integer(int64) | Y | N | 1 이상 | 신고 ID |
+| data.groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
+| data.reporterUserId | integer(int64) | Y | N | 1 이상 | 신고자 ID |
+| data.reportedUserId | integer(int64) | Y | N | 1 이상 | 피신고자 ID |
+| data.category | string(enum) | Y | N | HARASSMENT \| SPAM \| INAPPROPRIATE_CONTENT \| OTHER | 신고 분류 |
+| data.content | string | Y | N | 1~1000자 | 내용 |
+| data.status | string(enum) | Y | N | RECEIVED \| RESOLVED \| REJECTED | 성공 데이터 상태 |
+| data.createdAt | string(date-time) | Y | N | UTC ISO 8601 | 생성 시각 |
+| data.handledAt | string(date-time) | Y | Y | 미처리 null | 처리 시각 |
+| data.reportedUserNickname | string | Y | N | 2~20자 | 피신고자 닉네임 |
+| data.reporterNickname | string | Y | N | 2~20자 | 신고자 닉네임 |
+| data.handledByUserId | integer(int64) | Y | Y | 미처리 null | 처리 관리자 ID |
+| data.resolution | string | Y | Y | 미처리 null / 처리 사유 1~1000자 | 신고 처리 결과 |
 
 **오류 응답**
 
@@ -2513,24 +2515,24 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.group | object | Y | N | 필수 |  |
-| data.group.groupId | integer(int64) | Y | N | 1 이상 |  |
-| data.group.name | string | Y | N | 2~30자 |  |
-| data.group.description | string | Y | N | 0~500자 |  |
-| data.group.currentMemberCount | integer | Y | N | 0~20 |  |
-| data.group.capacity | integer | Y | N | 고정 20 |  |
-| data.group.remainingCapacity | integer | Y | N | 0~20 |  |
-| data.group.joinable | boolean | Y | N | true/false |  |
-| data.group.joinBlockedReason | string(enum) | Y | Y | GROUP_FULL \| JOIN_COOLDOWN_ACTIVE \| ALREADY_IN_GROUP; 가입 가능하면 null |  |
+| data.group | object | Y | N | 필수 | 그룹 |
+| data.group.groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
+| data.group.name | string | Y | N | 2~30자 | 그룹 이름 |
+| data.group.description | string | Y | N | 0~500자 | 그룹 소개/설명 |
+| data.group.currentMemberCount | integer | Y | N | 0~20 | 현재 구성원 수 |
+| data.group.capacity | integer | Y | N | 고정 20 | 정원 |
+| data.group.remainingCapacity | integer | Y | N | 0~20 | 잔여 정원 |
+| data.group.joinable | boolean | Y | N | true/false | 가입 가능 여부 |
+| data.group.joinBlockedReason | string(enum) | Y | Y | GROUP_FULL \| JOIN_COOLDOWN_ACTIVE \| ALREADY_IN_GROUP; 가입 가능하면 null | 그룹 가입 제한 사유 |
 | data.primaryAdmin | object | Y | Y | 활성 그룹 필수 | 비활성 그룹에서는 null |
-| data.primaryAdmin.userId | integer(int64) | C | N | 1 이상 |  |
-| data.primaryAdmin.nickname | string | C | N | 2~20자 |  |
-| data.myMembership | object | Y | Y | 내가 그룹 미가입이면 null |  |
-| data.myMembership.membershipId | integer(int64) | C | N | 1 이상 |  |
-| data.myMembership.groupId | integer(int64) | C | N | 1 이상 |  |
-| data.myMembership.role | string(enum) | C | N | PRIMARY \| DEPUTY \| MEMBER |  |
-| data.myMembership.status | string(enum) | C | N | ACTIVE \| LEFT \| REMOVED |  |
-| data.myMembership.joinedAt | string(date-time) | C | N | UTC ISO 8601 |  |
+| data.primaryAdmin.userId | integer(int64) | C | N | 1 이상 | 사용자 ID |
+| data.primaryAdmin.nickname | string | C | N | 2~20자 | 닉네임 |
+| data.myMembership | object | Y | Y | 내가 그룹 미가입이면 null | 내 멤버십 |
+| data.myMembership.membershipId | integer(int64) | C | N | 1 이상 | 멤버십 ID |
+| data.myMembership.groupId | integer(int64) | C | N | 1 이상 | 그룹 ID |
+| data.myMembership.role | string(enum) | C | N | PRIMARY \| DEPUTY \| MEMBER | 내 멤버십 역할 |
+| data.myMembership.status | string(enum) | C | N | ACTIVE \| LEFT \| REMOVED | 내 멤버십 상태 |
+| data.myMembership.joinedAt | string(date-time) | C | N | UTC ISO 8601 | 가입 시각 |
 
 **오류 응답**
 
@@ -2563,43 +2565,43 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
-| data.range | string(enum) | Y | N | 7_DAYS \| 30_DAYS \| CURRENT_SEASON |  |
-| data.groupId | integer(int64) | Y | Y | 전체 집계 null |  |
-| data.aggregatedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
-| data.summary | object | Y | N | 필수 |  |
-| data.summary.activeUsers | integer(int64) | Y | N | 0 이상 |  |
-| data.summary.activeGroups | integer(int64) | Y | N | 0 이상 |  |
-| data.summary.questCompletionRate | number | Y | N | 0~100, % |  |
-| data.summary.operationalWarningCount | integer(int64) | Y | N | 0 이상 |  |
-| data.activitySeries | array<object> | Y | N | 날짜 오름차순, 없으면 [] |  |
-| data.activitySeries[].date | string(date) | Y | N | YYYY-MM-DD, KST |  |
-| data.activitySeries[].activeUsers | integer | Y | N | 0 이상 |  |
-| data.activitySeries[].questCompletions | integer | Y | N | 0 이상 |  |
-| data.growthStages | array<object> | Y | N | 없으면 [] |  |
-| data.growthStages[].stage | string(enum) | Y | N | EGG \| HATCHLING \| GROWING \| MATURE \| COMPLETE |  |
-| data.growthStages[].count | integer | Y | N | 0 이상 |  |
-| data.topGroups | array<object> | Y | N | 최대 10개 |  |
-| data.topGroups[].groupId | integer(int64) | Y | N | 1 이상 |  |
-| data.topGroups[].groupName | string | Y | N | 2~30자 |  |
-| data.topGroups[].score | integer(int64) | Y | N | 0 이상 |  |
-| data.paymentSeries | array<object> | Y | N | 기간 순, 없으면 [] |  |
-| data.paymentSeries[].date | string(date) | Y | N | YYYY-MM-DD, KST |  |
-| data.paymentSeries[].paidAmountKrw | integer(int64) | Y | N | 0 이상 |  |
-| data.paymentSeries[].refundedAmountKrw | integer(int64) | Y | N | 0 이상 |  |
-| data.capacityUsage | object | Y | N | 필수 |  |
-| data.capacityUsage.occupied | integer(int64) | Y | N | 0 이상 |  |
-| data.capacityUsage.remaining | integer(int64) | Y | N | 0 이상 |  |
-| data.queues | object | Y | N | 필수 |  |
-| data.queues.pendingReports | integer | Y | N | 0 이상 |  |
-| data.queues.pendingRefunds | integer | Y | N | 0 이상 |  |
-| data.queues.operationalWarnings | array<object> | Y | N | 최근 10건 이하 |  |
-| data.queues.operationalWarnings[].warningKey | string | Y | N | 1~255자; 유형+원본 식별자 결합, 동일 상태에서 안정적 |  |
-| data.queues.operationalWarnings[].type | string(enum) | Y | N | SCHEDULER_FAILED \| TEMPLATE_SHORTAGE \| MEMBER_COUNT_MISMATCH \| PAYMENT_UNCERTAIN \| REFUND_UNCERTAIN \| PHOTO_DELETION_FAILED |  |
-| data.queues.operationalWarnings[].severity | string(enum) | Y | N | WARNING \| CRITICAL |  |
-| data.queues.operationalWarnings[].resourceType | string | Y | N | SEASON \| QUEST_PERIOD \| GROUP \| PURCHASE \| REFUND_REQUEST \| PHOTO_SUBMISSION |  |
-| data.queues.operationalWarnings[].resourceId | integer(int64) | Y | N | 1 이상 |  |
-| data.queues.operationalWarnings[].message | string | Y | N | 1~1000자 |  |
-| data.queues.operationalWarnings[].detectedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
+| data.range | string(enum) | Y | N | 7_DAYS \| 30_DAYS \| CURRENT_SEASON | 기간 범위 |
+| data.groupId | integer(int64) | Y | Y | 전체 집계 null | 그룹 ID |
+| data.aggregatedAt | string(date-time) | Y | N | UTC ISO 8601 | 통계 집계 시각 |
+| data.summary | object | Y | N | 필수 | 요약 통계 객체 |
+| data.summary.activeUsers | integer(int64) | Y | N | 0 이상 | 활동 사용자 수 |
+| data.summary.activeGroups | integer(int64) | Y | N | 0 이상 | 활성 그룹 수 |
+| data.summary.questCompletionRate | number | Y | N | 0~100, % | 퀘스트 완료 비율 |
+| data.summary.operationalWarningCount | integer(int64) | Y | N | 0 이상 | 운영 경고 수 |
+| data.activitySeries | array<object> | Y | N | 날짜 오름차순, 없으면 [] | 기간별 활동 통계 |
+| data.activitySeries[].date | string(date) | Y | N | YYYY-MM-DD, KST | 날짜 |
+| data.activitySeries[].activeUsers | integer | Y | N | 0 이상 | 활동 사용자 수 |
+| data.activitySeries[].questCompletions | integer | Y | N | 0 이상 | 퀘스트 완료 건수 |
+| data.growthStages | array<object> | Y | N | 없으면 [] | 성장 단계별 분포 |
+| data.growthStages[].stage | string(enum) | Y | N | EGG \| HATCHLING \| GROWING \| MATURE \| COMPLETE | 성장 단계 |
+| data.growthStages[].count | integer | Y | N | 0 이상 | 성장 단계별 분포 개수 |
+| data.topGroups | array<object> | Y | N | 최대 10개 | 상위 그룹 통계 |
+| data.topGroups[].groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
+| data.topGroups[].groupName | string | Y | N | 2~30자 | 그룹명 |
+| data.topGroups[].score | integer(int64) | Y | N | 0 이상 | 점수 |
+| data.paymentSeries | array<object> | Y | N | 기간 순, 없으면 [] | 기간별 결제/환불 통계 |
+| data.paymentSeries[].date | string(date) | Y | N | YYYY-MM-DD, KST | 날짜 |
+| data.paymentSeries[].paidAmountKrw | integer(int64) | Y | N | 0 이상 | 결제 완료 금액(원) |
+| data.paymentSeries[].refundedAmountKrw | integer(int64) | Y | N | 0 이상 | 환불 금액(원) |
+| data.capacityUsage | object | Y | N | 필수 | 그룹 정원 사용 현황 |
+| data.capacityUsage.occupied | integer(int64) | Y | N | 0 이상 | 사용 중인 정원 |
+| data.capacityUsage.remaining | integer(int64) | Y | N | 0 이상 | 잔여 |
+| data.queues | object | Y | N | 필수 | 관리 대기 건 목록 |
+| data.queues.pendingReports | integer | Y | N | 0 이상 | 대기 중인 신고 목록 |
+| data.queues.pendingRefunds | integer | Y | N | 0 이상 | 대기 중인 환불 요청 목록 |
+| data.queues.operationalWarnings | array<object> | Y | N | 최근 10건 이하 | 운영 경고 목록 |
+| data.queues.operationalWarnings[].warningKey | string | Y | N | 1~255자; 유형+원본 식별자 결합, 동일 상태에서 안정적 | 경고 키 |
+| data.queues.operationalWarnings[].type | string(enum) | Y | N | SCHEDULER_FAILED \| TEMPLATE_SHORTAGE \| MEMBER_COUNT_MISMATCH \| PAYMENT_UNCERTAIN \| REFUND_UNCERTAIN \| PHOTO_DELETION_FAILED | 운영 경고 목록 유형 |
+| data.queues.operationalWarnings[].severity | string(enum) | Y | N | WARNING \| CRITICAL | 심각도 |
+| data.queues.operationalWarnings[].resourceType | string | Y | N | SEASON \| QUEST_PERIOD \| GROUP \| PURCHASE \| REFUND_REQUEST \| PHOTO_SUBMISSION | 경고 관련 자원 유형 |
+| data.queues.operationalWarnings[].resourceId | integer(int64) | Y | N | 1 이상 | 경고 관련 자원 ID |
+| data.queues.operationalWarnings[].message | string | Y | N | 1~1000자 | 메시지 |
+| data.queues.operationalWarnings[].detectedAt | string(date-time) | Y | N | UTC ISO 8601 | 운영 경고 감지 시각 |
 
 **오류 응답**
 
@@ -2630,13 +2632,13 @@
 | 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
 |---|---|---|---|---|---|
 | data | array<object> | Y | N | 0건이면 [] | 목록 |
-| data[].warningKey | string | Y | N | 1~255자; 유형+원본 식별자 결합, 동일 상태에서 안정적 |  |
-| data[].type | string(enum) | Y | N | SCHEDULER_FAILED \| TEMPLATE_SHORTAGE \| MEMBER_COUNT_MISMATCH \| PAYMENT_UNCERTAIN \| REFUND_UNCERTAIN \| PHOTO_DELETION_FAILED |  |
-| data[].severity | string(enum) | Y | N | WARNING \| CRITICAL |  |
-| data[].resourceType | string | Y | N | SEASON \| QUEST_PERIOD \| GROUP \| PURCHASE \| REFUND_REQUEST \| PHOTO_SUBMISSION |  |
-| data[].resourceId | integer(int64) | Y | N | 1 이상 |  |
-| data[].message | string | Y | N | 1~1000자 |  |
-| data[].detectedAt | string(date-time) | Y | N | UTC ISO 8601 |  |
+| data[].warningKey | string | Y | N | 1~255자; 유형+원본 식별자 결합, 동일 상태에서 안정적 | 경고 키 |
+| data[].type | string(enum) | Y | N | SCHEDULER_FAILED \| TEMPLATE_SHORTAGE \| MEMBER_COUNT_MISMATCH \| PAYMENT_UNCERTAIN \| REFUND_UNCERTAIN \| PHOTO_DELETION_FAILED | 성공 데이터 유형 |
+| data[].severity | string(enum) | Y | N | WARNING \| CRITICAL | 심각도 |
+| data[].resourceType | string | Y | N | SEASON \| QUEST_PERIOD \| GROUP \| PURCHASE \| REFUND_REQUEST \| PHOTO_SUBMISSION | 경고 관련 자원 유형 |
+| data[].resourceId | integer(int64) | Y | N | 1 이상 | 경고 관련 자원 ID |
+| data[].message | string | Y | N | 1~1000자 | 메시지 |
+| data[].detectedAt | string(date-time) | Y | N | UTC ISO 8601 | 운영 경고 감지 시각 |
 | meta | object | Y | N | — | 목록 부가 정보 |
 | meta.page | integer | Y | N | 0 이상 | 현재 페이지 |
 | meta.size | integer | Y | N | 1~50 | 요청 페이지 크기 |
@@ -2677,6 +2679,8 @@
 | groupId | integer(int64) | Y | N | 1 이상, 구독 그룹과 일치 |
 | occurredAt | string(date-time) | Y | N | UTC ISO 8601 |
 | payload | object | Y | N | 이벤트별 Payload 스키마 |
+
+**확인 필요 — 메시지 순서·스트림 식별:** 이슈 #23·#28·#38은 `sequence` 누락 및 `streamInstanceId` 변경 감지에 따른 재조회 동작을 요구하지만, 현재 이벤트 Envelope과 `getCreatureHome` Snapshot 필드에는 두 값의 전달 경로가 정의되어 있지 않습니다. 두 식별자의 자료형·생성 주기·시퀀스 범위·Snapshot 포함 여부를 합의하기 전까지는 새 필드를 임의 추가하지 않으며, 재연결 시 REST Snapshot 재조회 계약은 유지합니다.
 
 ### 10.2. `PRESENCE_JOINED`
 
