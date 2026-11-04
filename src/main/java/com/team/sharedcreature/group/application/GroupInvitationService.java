@@ -1,6 +1,7 @@
 package com.team.sharedcreature.group.application;
 
 import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.Hashing;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature._core.security.SessionAuthenticationFilter;
@@ -12,7 +13,6 @@ import com.team.sharedcreature.group.domain.GroupInviteLink;
 import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import jakarta.servlet.http.HttpSession;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,7 +57,7 @@ public class GroupInvitationService {
     public NavigationResponse acceptInvitation(String token, HttpSession session) {
         GroupInviteLink invitation = activeInvitation(token);
         if (!"ACTIVE".equals(invitation.getGroup().getStatus())) {
-            throw conflict("INVITE_INVALID", "현재 사용할 수 없는 초대입니다.");
+            throw conflict(ErrorCode.INVITE_INVALID, "현재 사용할 수 없는 초대입니다.");
         }
         Object login = session.getAttribute(SessionAuthenticationFilter.LOGIN_USER);
         if (login instanceof LoginUser loginUser) {
@@ -66,10 +66,10 @@ public class GroupInvitationService {
                 if (current.get().getGroup().getId().equals(invitation.getGroup().getId())) {
                     return new NavigationResponse("/creature", null);
                 }
-                throw conflict("ALREADY_IN_GROUP", "이미 활성 그룹에 소속되어 있습니다.");
+                throw conflict(ErrorCode.ALREADY_IN_GROUP, "이미 활성 그룹에 소속되어 있습니다.");
             }
             if (invitation.getGroup().getCurrentMemberCount() >= invitation.getGroup().getCapacity()) {
-                throw conflict("GROUP_FULL", "그룹 정원이 가득 찼습니다.");
+                throw conflict(ErrorCode.GROUP_FULL, "그룹 정원이 가득 찼습니다.");
             }
             var membership = membershipService.joinInvitation(loginUser, invitation.getId());
             var roles = new HashSet<>(loginUser.roles());
@@ -83,7 +83,7 @@ public class GroupInvitationService {
         }
 
         if (invitation.getGroup().getCurrentMemberCount() >= invitation.getGroup().getCapacity()) {
-            throw conflict("GROUP_FULL", "그룹 정원이 가득 찼습니다.");
+            throw conflict(ErrorCode.GROUP_FULL, "그룹 정원이 가득 찼습니다.");
         }
 
         session.setAttribute(
@@ -120,20 +120,15 @@ public class GroupInvitationService {
 
     private GroupInviteLink activeInvitation(String token) {
         if (token == null || !TOKEN_PATTERN.matcher(token).matches()) {
-            throw new BusinessException(
-                    HttpStatus.BAD_REQUEST,
-                    "INVALID_FIELD_VALUE",
-                    "초대 Token 형식을 확인해 주세요."
-            );
+            throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE, "초대 Token 형식을 확인해 주세요.");
         }
         GroupInviteLink invitation = inviteLinkRepository.findByTokenHash(Hashing.sha256(token))
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.NOT_FOUND,
-                        "RESOURCE_NOT_FOUND",
+                        ErrorCode.RESOURCE_NOT_FOUND,
                         "초대 정보를 찾을 수 없습니다."
                 ));
         if (!"ACTIVE".equals(invitation.getStatus())) {
-            throw conflict("INVITE_INVALID", "현재 사용할 수 없는 초대입니다.");
+            throw conflict(ErrorCode.INVITE_INVALID, "현재 사용할 수 없는 초대입니다.");
         }
         return invitation;
     }
@@ -172,7 +167,7 @@ public class GroupInvitationService {
         return null;
     }
 
-    private BusinessException conflict(String code, String message) {
-        return new BusinessException(HttpStatus.CONFLICT, code, message);
+    private BusinessException conflict(ErrorCode errorCode, String message) {
+        return new BusinessException(errorCode, message);
     }
 }

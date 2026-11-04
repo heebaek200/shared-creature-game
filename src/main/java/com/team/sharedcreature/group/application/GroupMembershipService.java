@@ -1,6 +1,7 @@
 package com.team.sharedcreature.group.application;
 
 import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.Hashing;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.auth.domain.User;
@@ -26,7 +27,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -103,18 +103,18 @@ public class GroupMembershipService {
             throw notFound("현재 시즌을 찾을 수 없습니다.");
         }
         User creator = userRepository.findByIdForUpdate(loginUser.id())
-                .orElseThrow(() -> new BusinessException(HttpStatus.UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REQUIRED));
         String name = normalize(request.name());
         String description = request.description() == null ? "" : request.description().strip();
 
         if (groupRepository.existsByNormalizedName(name)) {
-            throw conflict("GROUP_NAME_ALREADY_USED", "이미 사용 중인 그룹 이름입니다.");
+            throw conflict(ErrorCode.GROUP_NAME_ALREADY_USED, "이미 사용 중인 그룹 이름입니다.");
         }
         if (membershipRepository.existsByUserIdAndStatus(creator.getId(), "ACTIVE")) {
-            throw conflict("ALREADY_IN_GROUP", "이미 활성 그룹에 소속되어 있습니다.");
+            throw conflict(ErrorCode.ALREADY_IN_GROUP, "이미 활성 그룹에 소속되어 있습니다.");
         }
         if (restrictionRepository.existsByUserIdAndRestrictedUntilAfter(creator.getId(), now)) {
-            throw conflict("JOIN_COOLDOWN_ACTIVE", "그룹 가입 제한 시간이 끝난 뒤 다시 시도해 주세요.");
+            throw conflict(ErrorCode.JOIN_COOLDOWN_ACTIVE, "그룹 가입 제한 시간이 끝난 뒤 다시 시도해 주세요.");
         }
         Group group = groupRepository.save(Group.create(request.name().strip(), name, description, creator, now));
         GroupMembership membership = membershipRepository.save(GroupMembership.primary(group, creator, now));
@@ -217,16 +217,16 @@ public class GroupMembershipService {
 
     private GroupInviteLink activeInvitation(Long invitationId) {
         GroupInviteLink invitation = inviteLinkRepository.findByIdAndStatus(invitationId, "ACTIVE")
-                .orElseThrow(() -> conflict("INVITE_INVALID", "현재 사용할 수 없는 초대입니다."));
+                .orElseThrow(() -> conflict(ErrorCode.INVITE_INVALID, "현재 사용할 수 없는 초대입니다."));
         if (!"ACTIVE".equals(invitation.getGroup().getStatus())) {
-            throw conflict("INVITE_INVALID", "현재 사용할 수 없는 초대입니다.");
+            throw conflict(ErrorCode.INVITE_INVALID, "현재 사용할 수 없는 초대입니다.");
         }
         return invitation;
     }
 
     private MembershipResponse joinGroup(Long userId, String nickname, Long groupId, Long invitationId) {
         User user = userRepository.findByIdForUpdate(userId)
-                .orElseThrow(() -> new BusinessException(HttpStatus.UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REQUIRED));
         Group group = groupRepository.findByIdForUpdate(groupId)
                 .orElseThrow(() -> notFound("가입할 그룹을 찾을 수 없습니다."));
         if (!"ACTIVE".equals(group.getStatus()) || !"PUBLIC".equals(group.getVisibility())) {
@@ -234,17 +234,17 @@ public class GroupMembershipService {
         }
         if (invitationId != null
                 && inviteLinkRepository.findActiveForUpdate(invitationId, groupId).isEmpty()) {
-            throw conflict("INVITE_INVALID", "현재 사용할 수 없는 초대입니다.");
+            throw conflict(ErrorCode.INVITE_INVALID, "현재 사용할 수 없는 초대입니다.");
         }
         if (membershipRepository.existsByUserIdAndStatus(userId, "ACTIVE")) {
-            throw conflict("ALREADY_IN_GROUP", "이미 활성 그룹에 소속되어 있습니다.");
+            throw conflict(ErrorCode.ALREADY_IN_GROUP, "이미 활성 그룹에 소속되어 있습니다.");
         }
         Instant now = Instant.now(clock);
         if (restrictionRepository.existsByUserIdAndRestrictedUntilAfter(userId, now)) {
-            throw conflict("JOIN_COOLDOWN_ACTIVE", "그룹 가입 제한 시간이 끝난 뒤 다시 시도해 주세요.");
+            throw conflict(ErrorCode.JOIN_COOLDOWN_ACTIVE, "그룹 가입 제한 시간이 끝난 뒤 다시 시도해 주세요.");
         }
         if (groupRepository.incrementMemberCountIfAvailable(groupId, now) != 1) {
-            throw conflict("GROUP_FULL", "그룹 정원이 가득 찼습니다.");
+            throw conflict(ErrorCode.GROUP_FULL, "그룹 정원이 가득 찼습니다.");
         }
         GroupMembership membership = membershipRepository.save(GroupMembership.member(group, user, now));
         return new MembershipResponse(
@@ -288,12 +288,12 @@ public class GroupMembershipService {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    private BusinessException conflict(String code, String message) {
-        return new BusinessException(HttpStatus.CONFLICT, code, message);
+    private BusinessException conflict(ErrorCode errorCode, String message) {
+        return new BusinessException(errorCode, message);
     }
 
     private BusinessException notFound(String message) {
-        return new BusinessException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", message);
+        return new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, message);
     }
 
     /** 회원가입은 유지하면서 초대 가입 성공 또는 표준 실패 사유를 전달합니다. */

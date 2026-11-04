@@ -2,6 +2,7 @@ package com.team.sharedcreature.auth.api;
 
 import com.team.sharedcreature._core.api.ApiResponse;
 import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature._core.security.SessionAuthenticationFilter;
 import com.team.sharedcreature.auth.application.AuthService;
@@ -70,10 +71,11 @@ public class AuthController {
 
     /** 가입 대기 세션의 검증된 공급자 정보를 반환합니다. */
     @GetMapping("/api/v1/auth/signup-context")
-    public ApiResponse<SignupContextResponse> getSignupContext(HttpSession session) {
+    public ApiResponse<SignupContextResponse> getSignupContext(HttpSession session, HttpServletRequest request) {
+        requireValidSession(request);
         Object attribute = session.getAttribute(AuthService.PENDING_SIGNUP);
         if (!(attribute instanceof PendingSignup pending) || pending.expiresAt().isBefore(Instant.now())) {
-            throw new BusinessException(HttpStatus.CONFLICT, "SIGNUP_CONTEXT_EXPIRED", "가입 대기 시간이 만료됐습니다.");
+            throw new BusinessException(ErrorCode.SIGNUP_CONTEXT_EXPIRED);
         }
         return ApiResponse.success(new SignupContextResponse(
                 pending.provider(),
@@ -93,6 +95,7 @@ public class AuthController {
             @Valid @RequestBody SignupRequest signup,
             HttpServletRequest request
     ) {
+        requireValidSession(request);
         LoginUser loginUser = authService.completeSignup(signup.nickname(), request.getSession());
         request.changeSessionId();
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(
@@ -151,6 +154,12 @@ public class AuthController {
     private ResponseEntity<Void> redirect(String route, String code) {
         URI location = UriComponentsBuilder.fromPath(route).queryParam("oauthError", code).build().toUri();
         return ResponseEntity.status(HttpStatus.FOUND).location(location).build();
+    }
+
+    private void requireValidSession(HttpServletRequest request) {
+        if (Boolean.TRUE.equals(request.getAttribute(SessionAuthenticationFilter.SESSION_EXPIRED))) {
+            throw new BusinessException(ErrorCode.SESSION_EXPIRED);
+        }
     }
 
     /** OAuth 로그인 시작 요청입니다. */

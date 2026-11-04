@@ -1,6 +1,7 @@
 package com.team.sharedcreature.auth.application;
 
 import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.Hashing;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature._core.security.SessionAuthenticationFilter;
@@ -17,7 +18,6 @@ import com.team.sharedcreature.group.domain.GroupInviteLink;
 import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
 import com.team.sharedcreature.group.infrastructure.GroupJoinRestrictionRepository;
 import jakarta.servlet.http.HttpSession;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -88,7 +88,7 @@ public class AuthService {
     @Transactional
     public OAuthAttemptResult createOAuthAttempt(String provider, String returnRoute, HttpSession session) {
         if (!"GOOGLE".equals(provider)) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "INVALID_FIELD_VALUE", "현재 Google 로그인만 지원합니다.");
+            throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE, "현재 Google 로그인만 지원합니다.");
         }
         Instant now = Instant.now(clock);
         String state = token();
@@ -99,14 +99,10 @@ public class AuthService {
         if ("INVITE".equals(resolvedRoute)) {
             Object context = session.getAttribute(InvitationSessionContext.SESSION_KEY);
             if (!(context instanceof InvitationSessionContext invitationContext)) {
-                throw new BusinessException(
-                        HttpStatus.BAD_REQUEST,
-                        "INVALID_FIELD_VALUE",
-                        "수락한 초대 문맥이 필요합니다."
-                );
+                throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE, "수락한 초대 문맥이 필요합니다.");
             }
             invitation = inviteLinkRepository.findByIdAndStatus(invitationContext.inviteLinkId(), "ACTIVE")
-                    .orElseThrow(() -> conflict("INVITE_INVALID", "현재 사용할 수 없는 초대입니다."));
+                    .orElseThrow(() -> conflict(ErrorCode.INVITE_INVALID, "현재 사용할 수 없는 초대입니다."));
             intent = "INVITE";
         }
         attemptRepository.save(OauthLoginAttempt.start(
@@ -138,16 +134,16 @@ public class AuthService {
 
     private void validateAttempt(String stateHash, String sessionHash, Instant now) {
         OauthLoginAttempt attempt = attemptRepository.findByStateHash(stateHash)
-                .orElseThrow(() -> conflict("OAUTH_STATE_INVALID", "유효하지 않은 로그인 요청입니다."));
+                .orElseThrow(() -> conflict(ErrorCode.OAUTH_STATE_INVALID, "유효하지 않은 로그인 요청입니다."));
         validateAttempt(attempt, sessionHash, now);
     }
 
     private void validateAttempt(OauthLoginAttempt attempt, String sessionHash, Instant now) {
         if (!"PENDING".equals(attempt.getStatus()) || attempt.getExpiresAt().isBefore(now)) {
-            throw conflict("OAUTH_STATE_INVALID", "만료되거나 이미 사용한 로그인 요청입니다.");
+            throw conflict(ErrorCode.OAUTH_STATE_INVALID, "만료되거나 이미 사용한 로그인 요청입니다.");
         }
         if (!attempt.getInitiatingSessionHash().equals(sessionHash)) {
-            throw conflict("OAUTH_SESSION_MISMATCH", "로그인을 시작한 브라우저 세션과 다릅니다.");
+            throw conflict(ErrorCode.OAUTH_SESSION_MISMATCH, "로그인을 시작한 브라우저 세션과 다릅니다.");
         }
     }
 
@@ -159,7 +155,7 @@ public class AuthService {
             Instant now
     ) {
         OauthLoginAttempt attempt = attemptRepository.findByStateHashForUpdate(stateHash)
-                .orElseThrow(() -> conflict("OAUTH_STATE_INVALID", "유효하지 않은 로그인 요청입니다."));
+                .orElseThrow(() -> conflict(ErrorCode.OAUTH_STATE_INVALID, "유효하지 않은 로그인 요청입니다."));
         validateAttempt(attempt, sessionHash, now);
         Long invitationId = "INVITE".equals(attempt.getIntent()) ? currentInvitationId(session) : null;
         GroupInviteLink latestInvitation = invitationId == null
@@ -175,7 +171,7 @@ public class AuthService {
         if (account.isPresent()) {
             User user = account.get().getUser();
             if (!"ACTIVE".equals(user.getStatus())) {
-                throw new BusinessException(HttpStatus.FORBIDDEN, "ACCOUNT_NOT_ACTIVE", "사용할 수 없는 계정입니다.");
+                throw new BusinessException(ErrorCode.ACCOUNT_NOT_ACTIVE);
             }
             String nickname = userProfileRepository.findByUserId(user.getId()).map(UserProfile::getNickname).orElse("회원");
             joinExistingInvitation(invitationId, user, nickname, session);
@@ -187,7 +183,7 @@ public class AuthService {
 
         String normalizedEmail = profile.email().strip().toLowerCase(Locale.ROOT);
         if (socialAccountRepository.findByNormalizedEmail(normalizedEmail).isPresent()) {
-            throw conflict("SOCIAL_EMAIL_PROVIDER_CONFLICT", "이미 다른 소셜 공급자로 가입한 이메일입니다.");
+            throw conflict(ErrorCode.SOCIAL_EMAIL_PROVIDER_CONFLICT, "이미 다른 소셜 공급자로 가입한 이메일입니다.");
         }
         session.setAttribute(PENDING_SIGNUP, new PendingSignup(
                 "GOOGLE", profile.providerUserId(), profile.email(), profile.emailVerified(),
@@ -205,11 +201,11 @@ public class AuthService {
         Object attribute = session.getAttribute(PENDING_SIGNUP);
         if (!(attribute instanceof PendingSignup pending) || pending.expiresAt().isBefore(now)) {
             session.removeAttribute(PENDING_SIGNUP);
-            throw conflict("SIGNUP_CONTEXT_EXPIRED", "가입 대기 시간이 만료됐습니다.");
+            throw conflict(ErrorCode.SIGNUP_CONTEXT_EXPIRED, "가입 대기 시간이 만료됐습니다.");
         }
         String normalizedNickname = normalize(nickname);
         if (userProfileRepository.existsByNormalizedNickname(normalizedNickname)) {
-            throw conflict("NICKNAME_ALREADY_USED", "이미 사용 중인 닉네임입니다.");
+            throw conflict(ErrorCode.NICKNAME_ALREADY_USED, "이미 사용 중인 닉네임입니다.");
         }
         String globalRole = initialSuperAdmin.matches(pending.provider(), pending.providerUserId())
                 && !userRepository.existsByGlobalRoleAndStatus("SUPER_ADMIN", "ACTIVE")
@@ -325,8 +321,8 @@ public class AuthService {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    private BusinessException conflict(String code, String message) {
-        return new BusinessException(HttpStatus.CONFLICT, code, message);
+    private BusinessException conflict(ErrorCode errorCode, String message) {
+        return new BusinessException(errorCode, message);
     }
 
     /** OAuth 시작 결과입니다. */
