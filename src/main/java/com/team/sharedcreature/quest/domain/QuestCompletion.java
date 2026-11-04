@@ -48,4 +48,33 @@ public class QuestCompletion {
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
+    /**
+     * 퀘스트 완료 기록을 생성합니다.
+     * 완료한 사용자와 퀘스트 배정, 완료 당시의 그룹 시즌 및 멤버십을 기록합니다.
+     * 완료 시각과 생성 시각은 동일한 서버 시각으로 저장합니다.
+     *
+     * @param user 완료한 사용자
+     * @param assignment 완료한 퀘스트 배정
+     * @param groupSeason 완료가 반영될 그룹 시즌
+     * @param membership 완료 시점의 멤버십
+     * @param now 완료 확정 시각
+     * @return 생성된 퀘스트 완료 엔티티
+     */
+    public static QuestCompletion create(
+            User user,
+            QuestAssignment assignment,
+            GroupSeason groupSeason,
+            GroupMembership membership,
+            Instant now
+    ) {
+        QuestCompletion completion = new QuestCompletion();
+        completion.user = user;
+        completion.questAssignment = assignment;
+        completion.groupSeason = groupSeason;
+        completion.membership = membership;
+        completion.completedAt = now;
+        completion.createdAt = now;
+        return completion;
+    }
 }

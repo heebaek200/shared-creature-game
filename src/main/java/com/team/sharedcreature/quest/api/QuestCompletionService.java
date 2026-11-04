@@ -1,0 +1,569 @@
+package com.team.sharedcreature.quest.api;
+
+import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature.auth.infrastructure.UserRepository;
+import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
+import com.team.sharedcreature.quest.domain.QuestAssignment;
+import com.team.sharedcreature.quest.domain.QuestCompletion;
+import com.team.sharedcreature.quest.domain.QuestRewardLedger;
+import com.team.sharedcreature.quest.infrastructure.*;
+import com.team.sharedcreature.season.application.SeasonQueryService;
+import com.team.sharedcreature.season.domain.CreatureExperienceLedger;
+import com.team.sharedcreature.season.domain.SeasonGroupScore;
+import com.team.sharedcreature.season.infrastructure.*;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import com.team.sharedcreature.auth.domain.User;
+import com.team.sharedcreature.group.domain.GroupMembership;
+import com.team.sharedcreature.season.domain.GroupSeason;
+import com.team.sharedcreature.season.domain.SeasonMemberContribution;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**퀘스트 조회와 완료 처리를 담당합니다.*/
+@Service
+@RequiredArgsConstructor
+public class QuestCompletionService {
+
+    /** 사용자의 현재 시즌 기여도 행을 조회하고 갱신합니다. */
+    private final SeasonMemberContributionRepository memberContributionRepository;
+
+    /** 현재 그룹 시즌의 점수 행을 조회하고 갱신합니다. */
+    private final SeasonGroupScoreRepository groupScoreRepository;
+
+    /** 퀘스트 완료별 보상 지급 이력을 저장합니다. */
+    private final QuestRewardLedgerRepository rewardLedgerRepository;
+
+    /** 현재 그룹 시즌의 크리처를 조회하고 경험치 변경을 반영합니다. */
+    private final GroupCreatureRepository groupCreatureRepository;
+
+    /** 완료별 크리처 경험치 지급 이력을 저장합니다. */
+    private final CreatureExperienceLedgerRepository creatureExperienceLedgerRepository;
+
+    /** 완료 기록에 연결할 사용자 정보를 조회합니다. */
+    private final UserRepository userRepository;
+
+    /** 사용자의 그룹에 속한 현재 시즌 정보를 조회합니다. */
+    private final GroupSeasonRepository groupSeasonRepository;
+
+    /**현재 사용자의 활성 그룹 멤버십을 조회합니다.*/
+    private final GroupMembershipRepository membershipRepository;
+
+    /**사용자의 체크인 기록을 조회합니다.*/
+    private final ServiceCheckInRepository serviceCheckInRepository;
+
+    /**현재 활성 시즌을 조회합니다.*/
+    private final SeasonQueryService seasonQueryService;
+
+    /**현재 진행 중인 일일·주간 퀘스트 기간을 조회합니다.*/
+    private final QuestPeriodRepository periodRepository;
+
+    /**기간에 배정된 퀘스트와 Snapshot을 조회합니다.*/
+    private final QuestAssignmentRepository assignmentRepository;
+
+    /**사용자별 퀘스트 완료 기록을 조회합니다.*/
+    private final QuestCompletionRepository completionRepository;
+
+    /**현재 시각을 제공해 기간 경계 판정을 일정하게 처리합니다.*/
+    private final Clock clock;
+
+    /**
+     * 현재 활성 시즌에서 진행 중인 일일 또는 주간 퀘스트 배정을 조회합니다.
+     *
+     * @param periodType 조회할 기간 유형 (일일, 주간)
+     * @return 슬롯 순서로 정렬된 현재 퀘스트 배정 목록
+     */
+
+    /**조회 하고자 하는 일일,주간 유형을 받고, 그에 맞는 퀘스트 목록을 리스트로 반환*/
+
+    /**방어 코드 DAILY나 WEEKLY가 아닐경우 400 Bad Request 던짐*/
+    public List<QuestAssignment> findCurrentAssignments(String periodType) {
+        if (periodType != null
+                && !periodType.equals("DAILY")
+                && !periodType.equals("WEEKLY")) {
+            throw new BusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_FIELD_VALUE",
+                    "기간 유형이 올바르지 않습니다."
+            );
+        }
+
+        /**null이 들어오면 DAILY WEEKLY 둘다 조회할 리스트로 생성*/
+        Instant now = Instant.now(clock);
+        Long seasonId = seasonQueryService.findCurrentSeason().getId();
+        List<String> periodTypes = periodType == null
+                ? List.of("DAILY", "WEEKLY")
+                : List.of(periodType);
+
+        /**반복문으로 퀘스트 수집*/
+        List<QuestAssignment> assignments = new ArrayList<>();
+
+        for (String type : periodTypes) {
+            periodRepository.findCurrentBySeasonAndType(seasonId, type, now)
+                    .ifPresent(period ->
+                            assignments.addAll(
+                                    assignmentRepository.findAllWithSnapshotByPeriodId(period.getId())
+                            )
+                    );
+        }
+
+        return assignments;
+    }
+
+    /**
+     * 현재 퀘스트 배정에 로그인한 사용자의 완료 기록을 연결합니다.
+     *
+     * 배정 ID 목록으로 해당 사용자의 완료 기록만 조회한 뒤,
+     * 각 완료 기록을 퀘스트 배정 ID를 키로 하는 Map에 저장합니다.</p>
+     *
+     * @param userId 로그인한 사용자 ID
+     * @param assignments 현재 기간에 배정된 퀘스트 목록
+     * @return 배정 ID별 완료 기록. 완료 기록이 없으면 해당 배정 ID는 Map에 없습니다.
+     */
+    public Map<Long, QuestCompletion> findCompletionsByAssignmentId(
+            Long userId,
+            List<QuestAssignment> assignments
+    ) {
+        /**방어 코드 불필요한 assignments.isEmpty()일때, 데이터베이스 조회 쿼리를 날리지 않고 곧바로 빈 맵을 반환*/
+        Map<Long, QuestCompletion> completionsByAssignmentId = new HashMap<>();
+        if (assignments.isEmpty()) {
+            return completionsByAssignmentId;
+        }
+
+        /**할당 ID 추출*/
+        List<Long> assignmentIds = new ArrayList<>();
+        for (QuestAssignment assignment : assignments) {
+            assignmentIds.add(assignment.getId());
+        }
+
+        /**사용자가 가진 완료 이력 중 해당 assignmentIds에 포함되는 데이터들을 단 한 번의 쿼리로 일괄 조회*/
+        List<QuestCompletion> completions =
+                completionRepository.findAllByUserIdAndQuestAssignmentIdIn(userId, assignmentIds);
+
+        /**조회된 리스트 형태의 완료 이력을 순회하며, 각 완료 데이터가 어떤 퀘스트에 속하는지 키값으로 매핑*/
+        for (QuestCompletion completion : completions) {
+            Long assignmentId = completion.getQuestAssignment().getId();
+            completionsByAssignmentId.put(assignmentId, completion);
+        }
+
+        return completionsByAssignmentId;
+    }
+
+    /**
+     * 현재 사용자의 퀘스트 배정과 완료 상태를 조회해 응답 DTO로 변환합니다.
+     *
+     * 먼저 활성 그룹 멤버십이 있는지 확인합니다. 이후 현재 기간의 배정을 조회하고,
+     * 로그인한 사용자 ID로 완료 기록을 조회해 각 배정에 연결합니다.
+     *
+     * @param userId 로그인한 사용자 ID
+     * @param periodType 조회할 기간 유형 DAILY, WEEKLY,
+     *                   전체 조회를 위한 null
+     * @return 배정 퀘스트와 사용자의 완료 상태 목록
+     */
+
+    /**권한 검증 403 BusinessException << 400/403계열 Exception 던짐*/
+    @Transactional(readOnly = true)
+    public List<CurrentQuestResponse> listCurrentQuests(Long userId, String periodType) {
+        membershipRepository.findActiveWithGroupByUserId(userId)
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.FORBIDDEN,
+                        "ROLE_FORBIDDEN",
+                        "요청 권한이 없습니다."
+                ));
+
+        /**퀘스트 할당과 완료 이력 조회*/
+        List<QuestAssignment> assignments = findCurrentAssignments(periodType);
+        Map<Long, QuestCompletion> completionsByAssignmentId =
+                findCompletionsByAssignmentId(userId, assignments);
+
+
+        /**
+         * 퀘스트 하나씩 조회해서 할당 만들어둔MAP에서 퀘스트 완료 확인
+         * 완료 여부에따라 완료시간 완료이력ID를 동적으로 설정
+         * CurrentQuestResponse에 감싸서 최종 응답리스트에 추가
+         * */
+        List<CurrentQuestResponse> responses = new ArrayList<>();
+
+        for (QuestAssignment assignment : assignments) {
+            QuestCompletion completion = completionsByAssignmentId.get(assignment.getId());
+            boolean completed = completion != null;
+
+            int currentProgress = completed ? 1 : 0;
+
+            /** D-M-01은 해당 KST 날짜의 기상 체크인 기록으로 진행도를 판정합니다. */
+            if ("D-M-01".equals(assignment.getQuestTemplate().getCode())
+                    && !completed) {
+                boolean checkedInThisMorning =
+                        serviceCheckInRepository.existsByUserIdAndCheckInDateAndIsMorningTrue(
+                                userId,
+                                assignment.getQuestPeriod().getPeriodDate()
+                        );
+
+                if (checkedInThisMorning) {
+                    currentProgress = 1;
+                }
+            }
+
+            CurrentQuestResponse.ProgressResponse progress =
+                    new CurrentQuestResponse.ProgressResponse(currentProgress, 1);
+
+            responses.add(new CurrentQuestResponse(
+                    assignment.getId(),
+                    assignment.getQuestPeriod().getId(),
+                    assignment.getQuestPeriod().getPeriodType(),
+                    assignment.getQuestPeriod().getStartAt(),
+                    assignment.getQuestPeriod().getEndAt(),
+                    assignment.getSlotNumber(),
+                    assignment.getQuestTemplate().getCode(),
+                    assignment.getTitleSnapshot(),
+                    assignment.getDescriptionSnapshot(),
+                    assignment.getDifficultySnapshot(),
+                    assignment.getVerificationTypeSnapshot(),
+                    assignment.getCreatureExperienceSnapshot(),
+                    assignment.getContributionScoreSnapshot(),
+                    completed,
+                    completed ? completion.getCompletedAt() : null,
+                    completed ? completion.getId() : null,
+                    progress,
+                    null
+            ));
+        }
+
+        return responses;
+    }
+
+    /**
+     * 완료 요청 대상 배정을 조회하고 직접 완료 가능 여부를 검사합니다.
+     *
+     * 먼저 사용자의 활성 멤버십을 확인합니다. 배정이 현재 활성 시즌에 속하고
+     * 현재 시각이 퀘스트 기간 안에 있는지도 검사합니다. 직접 완료는
+     * SELF_CHECK 유형에만 허용합니다.
+     *
+     * @param userId 완료를 요청한 사용자 ID
+     * @param assignmentId 완료 요청 대상 퀘스트 배정 ID
+     * @return 검증을 통과한 퀘스트 배정
+     */
+
+    /**403	ROLE_FORBIDDEN	요청자 권한 부족*/
+    @Transactional(readOnly = true)
+    public QuestAssignment findCompletableAssignment(Long userId, Long assignmentId) {
+        membershipRepository.findActiveWithGroupByUserId(userId)
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.FORBIDDEN,
+                        "ROLE_FORBIDDEN",
+                        "요청 권한이 없습니다."
+                ));
+
+        /**404	RESOURCE_NOT_FOUND	없거나 요청자에게 노출하지 않는 리소스*/
+        QuestAssignment assignment = assignmentRepository.findWithSnapshotById(assignmentId)
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.NOT_FOUND,
+                        "RESOURCE_NOT_FOUND",
+                        "퀘스트 배정을 찾을 수 없습니다."
+                ));
+
+        Instant now = Instant.now(clock);
+        Long currentSeasonId = seasonQueryService.findCurrentSeason().getId();
+
+        /**시즌 일치 여부*/
+        boolean currentSeason = assignment.getQuestPeriod().getSeason().getId()
+                .equals(currentSeasonId);
+
+        /**활성 기간 확인*/
+        boolean activePeriod = "ACTIVE".equals(assignment.getQuestPeriod().getStatus())
+                && !now.isBefore(assignment.getQuestPeriod().getStartAt())
+                && now.isBefore(assignment.getQuestPeriod().getEndAt());
+
+        /**409	QUEST_PERIOD_ENDED	퀘스트 유효 기간 밖*/
+        if (!currentSeason || !activePeriod) {
+            throw new BusinessException(
+                    HttpStatus.CONFLICT,
+                    "QUEST_PERIOD_ENDED",
+                    "퀘스트 유효 기간이 아닙니다."
+            );
+        }
+
+        /**409  QUEST_COMPLETION_NOT_ALLOWED  해당 판정 유형 직접 완료 불가*/
+        if (!"SELF_CHECK".equals(assignment.getVerificationTypeSnapshot())) {
+            throw new BusinessException(
+                    HttpStatus.CONFLICT,
+                    "QUEST_COMPLETION_NOT_ALLOWED",
+                    "이 퀘스트는 직접 완료할 수 없습니다."
+            );
+        }
+
+        return assignment;
+    }
+
+    /**
+     * 사용자의 현재 그룹 시즌에 퀘스트 완료 기록을 가져오거나 새로 저장합니다.
+     *
+     * 기존 완료 기록이 있으면 재사용합니다. 없으면 활성 멤버십과 그룹 시즌을 확인한 뒤
+     * 배정 Snapshot에 대한 완료 기록을 생성해 저장합니다.
+     *
+     * @param userId 완료를 요청한 사용자 ID
+     * @param assignment 검증을 통과한 퀘스트 배정
+     * @return 기존 또는 새로 저장한 완료 기록
+     */
+
+    /**중복 방지*/
+    private QuestCompletion getOrCreateCompletion(Long userId, QuestAssignment assignment) {
+        Map<Long, QuestCompletion> existingCompletions =
+                findCompletionsByAssignmentId(userId, List.of(assignment));
+
+        QuestCompletion existingCompletion = existingCompletions.get(assignment.getId());
+        if (existingCompletion != null) {
+            return existingCompletion;
+        }
+
+        /**그룹 소속 검증 403 ROLE_FORBIDDEN	요청자 권한 부족*/
+        var membership = membershipRepository.findActiveWithGroupByUserId(userId)
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.FORBIDDEN,
+                        "ROLE_FORBIDDEN",
+                        "요청 권한이 없습니다."
+                ));
+
+        /**그룹 시즌 참여 정보 검증 404 RESOURCE_NOT_FOUND 없거나 요청자에게 노출하지 않는 리소스*/
+        Long seasonId = assignment.getQuestPeriod().getSeason().getId();
+        var groupSeason = groupSeasonRepository.findSnapshotByGroupIdAndSeasonId(
+                        membership.getGroup().getId(),
+                        seasonId
+                )
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.NOT_FOUND,
+                        "RESOURCE_NOT_FOUND",
+                        "현재 그룹의 시즌 참여 정보를 찾을 수 없습니다."
+                ));
+
+        /**그룹 시즌 활성 정보 검증 409 QUEST_PERIOD_ENDED 퀘스트 유효 기간 밖*/
+        if (!"ACTIVE".equals(groupSeason.getStatus())) {
+            throw new BusinessException(
+                    HttpStatus.CONFLICT,
+                    "QUEST_PERIOD_ENDED",
+                    "그룹의 현재 시즌이 활성 상태가 아닙니다."
+            );
+        }
+
+        /**유저 확인 및 완료이력 생성 401	AUTH_REQUIRED 세션 인증 없음*/
+        var user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.UNAUTHORIZED,
+                        "AUTH_REQUIRED",
+                        "로그인이 필요합니다."
+                ));
+
+        QuestCompletion completion = QuestCompletion.create(
+                user,
+                assignment,
+                groupSeason,
+                membership,
+                Instant.now(clock)
+        );
+
+        return completionRepository.save(completion);
+    }
+
+    /**
+     * 현재 그룹 시즌의 사용자 기여도 행을 조회합니다.
+     *
+     * 기여도 행이 아직 없으면 0점으로 생성해 저장합니다.
+     *
+     * @param groupSeason 기여도가 속할 그룹 시즌
+     * @param user 기여도 소유 사용자
+     * @param membership 현재 멤버십
+     * @param now 현재 시각
+     * @return 기존 또는 새로 저장한 기여도 행
+     */
+    private SeasonMemberContribution getOrCreateMemberContribution(
+            GroupSeason groupSeason,
+            User user,
+            GroupMembership membership,
+            Instant now
+    ) {
+        /**기존 기여도 조회*/
+        SeasonMemberContribution contribution =
+                memberContributionRepository.findByGroupSeasonIdAndUserId(
+                        groupSeason.getId(),
+                        user.getId()
+                ).orElse(null);
+
+        if (contribution != null) {
+            return contribution;
+        }
+
+        /**신규 기여도 객체 생성및 초기화*/
+        SeasonMemberContribution newContribution =
+                SeasonMemberContribution.zero(groupSeason, user, membership, now);
+
+        return memberContributionRepository.save(newContribution);
+    }
+
+    /**
+     * 현재 그룹 시즌의 점수 행을 조회합니다.
+     *
+     * 그룹 시즌 생성 과정에서 점수 행도 함께 만들어져야 하므로,
+     * 행이 없으면 업무 오류 대신 서버 내부 상태 오류로 처리합니다.
+     *
+     * @param groupSeasonId 조회할 그룹 시즌 ID
+     * @return 해당 그룹 시즌의 점수 행
+     */
+    private SeasonGroupScore findGroupScore(Long groupSeasonId) {
+        return groupScoreRepository.findByGroupSeasonId(groupSeasonId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "초기 데이터 누락 groupSeasonId = " + groupSeasonId
+                ));
+    }
+
+    /**
+     * SELF_CHECK 퀘스트 완료를 확정하고 경험치·기여도 보상을 반영합니다.
+     *
+     * 현재 시즌과 그룹 시즌을 확인한 뒤, 기존 완료 기록이 있으면 재사용합니다.
+     * 새 완료라면 완료 기록, 보상 원장, 점수와 크리처 경험치를 한 트랜잭션에서 저장합니다.
+     *
+     * @param userId 완료를 요청한 사용자 ID
+     * @param assignmentId 완료할 퀘스트 배정 ID
+     * @return 완료 및 보상 반영 결과
+     */
+
+    /**동시성 락*/
+    @Transactional
+    public QuestCompletionResponse completeQuestAssignment(Long userId, Long assignmentId) {
+        seasonQueryService.findCurrentSeasonForShare();
+
+        /**401	AUTH_REQUIRED	세션 인증 없음*/
+        var user = userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다."));
+
+        /**403	ROLE_FORBIDDEN	요청자 권한 부족*/
+        var membership = membershipRepository.findActiveWithGroupByUserId(userId)
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.FORBIDDEN, "ROLE_FORBIDDEN", "요청 권한이 없습니다."));
+
+        QuestAssignment assignment = findCompletableAssignment(userId, assignmentId);
+
+        /**404	RESOURCE_NOT_FOUND	없거나 요청자에게 노출하지 않는 리소스*/
+        var groupSeason = groupSeasonRepository.findForUpdateByGroupIdAndSeasonId(
+                        membership.getGroup().getId(),
+                        assignment.getQuestPeriod().getSeason().getId())
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "그룹 시즌을 찾을 수 없습니다."));
+
+        /**409	QUEST_PERIOD_ENDED	퀘스트 유효 기간 밖*/
+        if (!"ACTIVE".equals(groupSeason.getStatus())) {
+            throw new BusinessException(
+                    HttpStatus.CONFLICT, "QUEST_PERIOD_ENDED", "그룹 시즌이 활성 상태가 아닙니다.");
+        }
+
+        /**중복 완료(이미 완료된 경우) 처리*/
+        Map<Long, QuestCompletion> existingCompletions =
+                findCompletionsByAssignmentId(userId, List.of(assignment));
+        QuestCompletion existing = existingCompletions.get(assignmentId);
+        if (existing != null) {
+            return buildExistingCompletionResponse(existing);
+        }
+
+        /**보상 산정 및 자원(크리처, 기여도, 그룹 점수) 반영*/
+        Instant now = Instant.now(clock);
+        /**404	RESOURCE_NOT_FOUND	없거나 요청자에게 노출하지 않는 리소스*/
+        var creature = groupCreatureRepository.findForUpdateByGroupSeasonId(groupSeason.getId())
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "그룹 크리처를 찾을 수 없습니다."));
+
+        var contribution = getOrCreateMemberContribution(groupSeason, user, membership, now);
+        var groupScore = findGroupScore(groupSeason.getId());
+
+        long experience = assignment.getCreatureExperienceSnapshot();
+        long contributionAmount = assignment.getContributionScoreSnapshot();
+
+        QuestCompletion completion = completionRepository.save(
+                QuestCompletion.create(user, assignment, groupSeason, membership, now));
+
+        creature.addExperience(experience, now);
+        contribution.addContribution(contributionAmount, membership, now);
+        groupScore.addScore(contributionAmount, now);
+
+        /**(Ledger) 기록 및 응답 반환*/
+        creatureExperienceLedgerRepository.save(
+                CreatureExperienceLedger.grant(
+                        creature, completion, experience, creature.getTotalExperience(), now));
+
+        rewardLedgerRepository.saveAll(List.of(
+                QuestRewardLedger.create(
+                        completion, "CREATURE_EXPERIENCE", experience,
+                        creature, null, null, now),
+                QuestRewardLedger.create(
+                        completion, "CONTRIBUTION", contributionAmount,
+                        null, contribution, groupScore, now)
+        ));
+
+        return new QuestCompletionResponse(
+                completion.getId(),
+                assignment.getId(),
+                userId,
+                completion.getCompletedAt(),
+                experience,
+                contributionAmount,
+                creature.getTotalExperience(),
+                creature.getGrowthStage(),
+                groupScore.getScore()
+        );
+    }
+
+    /**
+     * 이미 완료된 퀘스트 조회 시: 데이터베이스를 다시 변경(INSERT/UPDATE)하지 않고,
+     * 과거에 저장해 둔 보상 (rewardLedgers)과 경험치를 역으로 조회하여
+     * 당시 받았던 정확한 보상 값과 현재 크리처/그룹 상태를 조합해 응답을 만들어 줍니다.
+     *
+     * @param completion 기존 완료 기록
+     * @return 기존 지급량과 현재 시즌 상태를 담은 완료 응답
+     */
+    private QuestCompletionResponse buildExistingCompletionResponse(QuestCompletion completion) {
+        long experienceAwarded = 0L;
+        long contributionAwarded = 0L;
+
+        List<QuestRewardLedger> rewardLedgers =
+                rewardLedgerRepository.findAllByQuestCompletionId(completion.getId());
+
+        for (QuestRewardLedger ledger : rewardLedgers) {
+            if ("CREATURE_EXPERIENCE".equals(ledger.getRewardType())) {
+                experienceAwarded = ledger.getAmount();
+            } else if ("CONTRIBUTION".equals(ledger.getRewardType())) {
+                contributionAwarded = ledger.getAmount();
+            }
+        }
+
+        var experienceLedger = creatureExperienceLedgerRepository
+                .findByQuestCompletionId(completion.getId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Creature experience ledger is missing. completionId=" + completion.getId()));
+
+        var creature = groupCreatureRepository
+                .findSnapshotByGroupSeasonId(completion.getGroupSeason().getId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Group creature is missing. groupSeasonId=" + completion.getGroupSeason().getId()));
+
+        var groupScore = findGroupScore(completion.getGroupSeason().getId());
+
+        return new QuestCompletionResponse(
+                completion.getId(),
+                completion.getQuestAssignment().getId(),
+                completion.getUser().getId(),
+                completion.getCompletedAt(),
+                experienceAwarded,
+                contributionAwarded,
+                experienceLedger.getBalanceAfter(),
+                creature.getGrowthStage(),
+                groupScore.getScore()
+        );
+    }
+
+}
