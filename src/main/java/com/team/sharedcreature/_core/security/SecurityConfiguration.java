@@ -1,6 +1,7 @@
 package com.team.sharedcreature._core.security;
 
 import com.team.sharedcreature._core.web.RequestIdFilter;
+import com.team.sharedcreature._core.exception.ErrorCode;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -78,13 +79,19 @@ public class SecurityConfiguration {
                         .anyRequest().permitAll())
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint((request, response, exception) ->
-                                errorWriter.write(request, response, 401, "AUTH_REQUIRED", "로그인이 필요합니다."))
+                                errorWriter.write(
+                                        request,
+                                        response,
+                                        Boolean.TRUE.equals(request.getAttribute(SessionAuthenticationFilter.SESSION_EXPIRED))
+                                                ? ErrorCode.SESSION_EXPIRED
+                                                : ErrorCode.AUTH_REQUIRED
+                                ))
                         .accessDeniedHandler((request, response, exception) -> {
                             if (exception instanceof CsrfException) {
-                                errorWriter.write(request, response, 403, "CSRF_INVALID", "보안 토큰이 만료됐습니다.");
+                                errorWriter.write(request, response, ErrorCode.CSRF_INVALID);
                                 return;
                             }
-                            errorWriter.write(request, response, 403, "ROLE_FORBIDDEN", "요청 권한이 없습니다.");
+                            errorWriter.write(request, response, ErrorCode.ROLE_FORBIDDEN);
                         }))
                 .addFilterBefore(requestIdFilter, AnonymousAuthenticationFilter.class)
                 .addFilterBefore(sessionAuthenticationFilter, AnonymousAuthenticationFilter.class);

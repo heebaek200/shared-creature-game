@@ -1,13 +1,16 @@
 package com.team.sharedcreature._core.security;
 
+import com.team.sharedcreature._core.api.ErrorResponse;
+import com.team.sharedcreature._core.api.ErrorResponseFactory;
+import com.team.sharedcreature._core.exception.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
-import java.time.Clock;
-import java.time.Instant;
+import java.util.List;
 
 /**
  * Spring Security 단계의 실패도 공통 REST 오류 형식으로 기록합니다.
@@ -15,15 +18,18 @@ import java.time.Instant;
 @Component
 public class SecurityErrorWriter {
 
-    private final Clock clock;
+    private final ObjectMapper objectMapper;
+    private final ErrorResponseFactory responseFactory;
 
     /**
-     * 오류 발생 시각을 제공하는 Clock을 주입받습니다.
+     * JSON 직렬화기와 공통 오류 응답 생성기를 주입받습니다.
      *
-     * @param clock 공통 UTC Clock
+     * @param objectMapper 애플리케이션 JSON 직렬화기
+     * @param responseFactory 오류 Envelope 생성기
      */
-    public SecurityErrorWriter(Clock clock) {
-        this.clock = clock;
+    public SecurityErrorWriter(ObjectMapper objectMapper, ErrorResponseFactory responseFactory) {
+        this.objectMapper = objectMapper;
+        this.responseFactory = responseFactory;
     }
 
     /**
@@ -31,28 +37,20 @@ public class SecurityErrorWriter {
      *
      * @param request 현재 요청
      * @param response 현재 응답
-     * @param status HTTP 상태
-     * @param code 오류 코드
-     * @param message 안전한 오류 메시지
+     * @param errorCode API 오류 코드
      * @throws IOException 응답 기록 실패
      */
     public void write(
             HttpServletRequest request,
             HttpServletResponse response,
-            int status,
-            String code,
-            String message
+            ErrorCode errorCode
     ) throws IOException {
-        response.setStatus(status);
+        response.setStatus(errorCode.status().value());
         response.setCharacterEncoding("UTF-8");
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        String traceId = String.valueOf(request.getAttribute("requestId"));
-        response.getWriter().printf(
-                "{\"code\":\"%s\",\"message\":\"%s\",\"fieldErrors\":[],\"traceId\":\"%s\",\"timestamp\":\"%s\"}",
-                code,
-                message,
-                traceId,
-                Instant.now(clock)
-        );
+        Object requestId = request.getAttribute("requestId");
+        String traceId = requestId == null ? "unavailable" : requestId.toString();
+        ErrorResponse body = responseFactory.create(errorCode, null, List.of(), traceId);
+        objectMapper.writeValue(response.getWriter(), body);
     }
 }

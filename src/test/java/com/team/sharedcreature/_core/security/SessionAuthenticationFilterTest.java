@@ -108,4 +108,19 @@ class SessionAuthenticationFilterTest {
         assertThat(session.getAttribute(SessionAuthenticationFilter.LOGIN_USER)).isNull();
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
     }
+
+    @Test
+    void 복원할_수_없는_세션_ID는_만료_표시를_남긴다() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestedSessionId("expired-session");
+        request.setRequestedSessionIdValid(false);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        new SessionAuthenticationFilter(mock(UserRepository.class), mock(GroupMembershipRepository.class))
+                .doFilter(request, response, chain);
+
+        assertThat(request.getAttribute(SessionAuthenticationFilter.SESSION_EXPIRED)).isEqualTo(true);
+        verify(chain).doFilter(request, response);
+    }
 }

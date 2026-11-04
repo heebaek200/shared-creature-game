@@ -24,6 +24,7 @@ import java.util.Set;
 public class SessionAuthenticationFilter extends OncePerRequestFilter {
 
     public static final String LOGIN_USER = "AUTHENTICATED_USER";
+    public static final String SESSION_EXPIRED = "SESSION_EXPIRED";
 
     private final UserRepository userRepository;
     private final GroupMembershipRepository membershipRepository;
@@ -44,6 +45,9 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
+        if (request.getRequestedSessionId() != null && !request.isRequestedSessionIdValid()) {
+            request.setAttribute(SESSION_EXPIRED, true);
+        }
         Object attribute = request.getSession(false) == null
                 ? null
                 : request.getSession(false).getAttribute(LOGIN_USER);
