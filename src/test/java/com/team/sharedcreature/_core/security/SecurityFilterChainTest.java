@@ -8,6 +8,8 @@ import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -25,6 +27,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
@@ -40,6 +43,14 @@ class SecurityFilterChainTest {
 
     @Autowired
     private WebApplicationContext context;
+
+    @Autowired
+    @Qualifier("requestIdFilterRegistration")
+    private FilterRegistrationBean<RequestIdFilter> requestIdFilterRegistration;
+
+    @Autowired
+    @Qualifier("sessionAuthenticationFilterRegistration")
+    private FilterRegistrationBean<SessionAuthenticationFilter> sessionAuthenticationFilterRegistration;
 
     private MockMvc mockMvc;
 
@@ -57,6 +68,12 @@ class SecurityFilterChainTest {
                 .andExpect(header().string("X-Request-Id", "auth-required"))
                 .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"))
                 .andExpect(jsonPath("$.traceId").value("auth-required"));
+    }
+
+    @Test
+    void 커스텀_Filter는_Servlet에_중복_등록하지_않는다() {
+        assertThat(requestIdFilterRegistration.isEnabled()).isFalse();
+        assertThat(sessionAuthenticationFilterRegistration.isEnabled()).isFalse();
     }
 
     @Test

@@ -17,10 +17,10 @@ public class WebConfiguration implements WebMvcConfigurer {
         this.strictQueryParameterInterceptor = strictQueryParameterInterceptor;
     }
 
-    /** 내부 REST API와 OAuth Callback에 엄격한 Query 검증을 적용합니다. */
+    /** 내부 REST API에 엄격한 Query 검증을 적용합니다. */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(strictQueryParameterInterceptor)
-                .addPathPatterns("/api/v1/**", "/oauth2/callback/**");
+                .addPathPatterns("/api/v1/**");
     }
 }

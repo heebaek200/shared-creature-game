@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,6 +20,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.Clock;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.json.JsonMapper;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -32,8 +35,12 @@ class RestApiExceptionHandlerMockMvcTest {
     @BeforeEach
     void setUp() {
         var handler = new RestApiExceptionHandler(new ErrorResponseFactory(Clock.systemUTC()));
+        JsonMapper objectMapper = JsonMapper.builder()
+                .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .build();
         mockMvc = MockMvcBuilders.standaloneSetup(new TestController())
                 .setControllerAdvice(handler)
+                .setMessageConverters(new JacksonJsonHttpMessageConverter(objectMapper))
                 .addInterceptors(new StrictQueryParameterInterceptor())
                 .build();
     }
@@ -79,6 +86,15 @@ class RestApiExceptionHandlerMockMvcTest {
         mockMvc.perform(post("/test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void 미등록_JSON_필드는_400_INVALID_REQUEST로_응답한다() throws Exception {
+        mockMvc.perform(post("/test")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"valid\",\"unknown\":true}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
