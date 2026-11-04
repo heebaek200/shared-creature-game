@@ -4,8 +4,11 @@ import com.team.sharedcreature._core.api.ApiResponse;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature._core.security.SessionAuthenticationFilter;
 import com.team.sharedcreature.group.application.GroupMembershipService;
+import com.team.sharedcreature.group.application.GroupQueryService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
 
 import java.util.HashSet;
 import java.util.List;
@@ -29,10 +33,12 @@ import java.util.Set;
 public class GroupController {
 
     private final GroupMembershipService groupMembershipService;
+    private final GroupQueryService groupQueryService;
 
     /** 그룹 업무 Service를 주입받습니다. */
-    public GroupController(GroupMembershipService groupMembershipService) {
+    public GroupController(GroupMembershipService groupMembershipService, GroupQueryService groupQueryService) {
         this.groupMembershipService = groupMembershipService;
+        this.groupQueryService = groupQueryService;
     }
 
     /**
@@ -83,6 +89,53 @@ public class GroupController {
         session.setAttribute(
                 SessionAuthenticationFilter.LOGIN_USER,
                 new LoginUser(loginUser.id(), loginUser.nickname(), Set.copyOf(roles))
+        );
+    }
+
+    /**
+     * 현재 인증 사용자가 소속된 그룹의 상세 정보를 조회합니다.
+     *
+     * 사용자 ID로 활성 멤버십을 다시 확인합니다.
+     * 그룹 정보와 주 관리자 및 자신의 멤버십을 공통 응답 형식으로 반환합니다.
+     *
+     * @param loginUser 인증 사용자
+     * @return 현재 그룹 상세
+     */
+    @GetMapping("/me")
+    public ApiResponse<MyGroupResponse> getMyGroup(
+            @AuthenticationPrincipal LoginUser loginUser
+    ) {
+        // 현재 DB의 그룹 상태를 기준으로 조회합니다.
+        return ApiResponse.success(
+                groupQueryService.getMyGroup(loginUser.id())
+        );
+    }
+
+    /**
+     * 현재 그룹의 활성 구성원을 페이지 단위로 조회합니다.
+     *
+     * 페이지는 0부터 시작하고 기본 크기는 20명입니다.
+     * 한 번에 최대 50명까지 조회할 수 있으며 정렬은 서버에서 고정합니다.
+     *
+     * @param loginUser 인증 사용자
+     * @param page 페이지 번호
+     * @param size 페이지 크기
+     * @return 구성원 목록과 페이지 메타데이터
+     */
+    @GetMapping("/me/members")
+    public ApiResponse<List<GroupMemberResponse>> listMyGroupMembers(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20")
+            @Min(1) @Max(50) int size
+    ) {
+        // 기존 공통 페이지 응답 생성기를 재사용합니다.
+        return ApiResponse.page(
+                groupQueryService.listMyGroupMembers(
+                        loginUser.id(),
+                        page,
+                        size
+                )
         );
     }
 }
