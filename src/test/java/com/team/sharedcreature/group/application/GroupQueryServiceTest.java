@@ -166,4 +166,51 @@ class GroupQueryServiceTest {
 
         return membership;
     }
+
+    /**
+     * 활성 멤버십이 남아 있어도 그룹이 비활성화되었다면 상세 조회를 거부합니다.
+     *
+     * DB의 그룹 상태를 기준으로 접근 여부를 확인해야 합니다.
+     * 관리자 프로필 조회까지 진행하지 않는지도 검증합니다.
+     */
+    @Test
+    void 비활성_그룹의_상세는_조회할_수_없다() {
+        GroupMembership membership = mock(GroupMembership.class);
+        Group group = mock(Group.class);
+
+        // 활성 멤버십이지만 그룹 자체는 비활성 상태로 구성합니다.
+        when(membershipRepository.findActiveWithGroupByUserId(1L))
+                .thenReturn(Optional.of(membership));
+        when(membership.getGroup()).thenReturn(group);
+        when(group.getStatus()).thenReturn("INACTIVE");
+
+        // 비활성 그룹의 내부 데이터는 노출하지 않아야 합니다.
+        assertThatThrownBy(() -> service.getMyGroup(1L))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.code()).isEqualTo("RESOURCE_NOT_FOUND"));
+
+        verifyNoInteractions(profileRepository);
+    }
+
+    /**
+     * 현재 그룹이 없는 사용자는 구성원 목록에도 접근하지 못합니다.
+     *
+     * 그룹 상세 조회와 동일한 멤버십 검사를 사용해야 합니다.
+     * 멤버십이 없는 경우 구성원 조회 쿼리를 실행하지 않아야 합니다.
+     */
+    @Test
+    void 그룹_미가입_사용자는_구성원_목록을_조회할_수_없다() {
+        // 현재 가입된 그룹이 없는 상태를 모의합니다.
+        when(membershipRepository.findActiveWithGroupByUserId(1L))
+                .thenReturn(Optional.empty());
+
+        // 조회 접근이 거부되고 이후 구성원 쿼리를 실행하지 않는지 확인합니다.
+        assertThatThrownBy(() -> service.listMyGroupMembers(1L, 0, 20))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.code()).isEqualTo("RESOURCE_NOT_FOUND"));
+
+        verify(membershipRepository, never())
+                .findActiveMemberResponsesByGroupId(anyLong(), any());
+    }
+
 }
