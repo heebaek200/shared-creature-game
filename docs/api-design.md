@@ -916,7 +916,6 @@
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
 | data.groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
-| data.invitationUrl | string(uri) | Y | N | 동일 Origin /invite/{token} | 초대 URL |
 | data.issuedAt | string(date-time) | Y | N | UTC ISO 8601 | 발급 시각 |
 | data.issuedByUserId | integer(int64) | Y | N | 1 이상 | 링크 발급 사용자 ID |
 | data.unlimitedUses | boolean | Y | N | 고정 true | 사용 횟수 무제한 여부 |
