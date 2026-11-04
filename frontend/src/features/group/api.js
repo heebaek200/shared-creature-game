@@ -10,3 +10,36 @@ export function createGroup(input) {
     ? mockApi.createGroup(input)
     : apiRequest('/api/v1/groups', { method: 'POST', body: input });
 }
+
+/**
+ * 공개 초대 정보를 조회합니다.
+ */
+export function getPublicInvitation(token) {
+  return useMock
+      ? mockApi.getPublicInvitation(token)
+      : apiRequest((`/api/v1/invitations/${encodeURIComponent(token)}`));
+}
+
+/**
+ * 초대를 수락합니다.
+ */
+export function acceptInvitation(token) {
+  return useMock
+      ? mockApi.acceptInvitation(token)
+      : apiRequest((`/api/v1/invitations/${encodeURIComponent(token)}/accept`,
+          {method: 'POST'}));
+}
+
+/**
+ * 초대를 거절합니다.
+ */
+export function rejectInvitation(token) {
+  return useMock
+      ? mockApi.rejectInvitation(token)
+      : apiRequest((`/api/v1/invitations/${encodeURIComponent(token)}/reject`,
+          {method: 'POST'}));
+}
+
+
+
+

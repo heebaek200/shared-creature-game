@@ -13,14 +13,35 @@ export function createRouter(root, routes) {
 
   async function render() {
     cleanup();
-    const route = routes.find((candidate) => candidate.path === location.pathname)
-      ?? routes.find((candidate) => candidate.path === '*');
-    if (!route) return;
+
+    /**
+     * 정확한 문자열 비교가 아닌 정규식으로 경로를 확인하도록 수정
+     */
+    const route = routes.find((candidate) => {
+      if (candidate.path === '/invite/:token') {
+        return /^\/invite\/[^/]+$/.test(location.pathname);
+      }
+      return candidate.path === location.pathname;
+    }) ?? routes.find((candidate) => candidate.path === '*');
 
     if (route.access === 'HOME') {
       const me = await getCurrentUser();
       replace(defaultRoute(me));
       return;
+    }
+
+    // 회원가입 화면에 접근할 수 있는지 검사합니다.
+    if (route.path === '/signup') {
+      const me = await getCurrentUser();
+
+      const canSignup =
+          me.authenticationState === 'SIGNUP_PENDING' &&
+          me.onboardingState === 'SIGNUP_REQUIRED';
+
+      if (!canSignup) {
+        replace(defaultRoute(me));
+        return;
+      }
     }
 
     if (route.access !== 'PUBLIC') {
@@ -77,10 +98,12 @@ export function createRouter(root, routes) {
 
 /**
  * 현재 사용자 상태의 기본 CSR 진입 경로를 결정합니다.
- * @param {{authenticationState: string, roles: string[], membership: unknown}} me 현재 사용자 상태
  */
 function defaultRoute(me) {
-  if (me.authenticationState === 'SIGNUP_PENDING') return '/signup';
+  if (me.authenticationState === 'SIGNUP_PENDING' &&
+      me.onboardingState === 'SIGNUP_REQUIRED') {
+    return '/signup';
+  }
   if (me.authenticationState !== 'AUTHENTICATED') return '/login';
   if (me.roles.includes('SUPER_ADMIN')) return '/admin';
   if (me.membership) return '/creature';

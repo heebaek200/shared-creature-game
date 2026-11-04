@@ -22,3 +22,12 @@ export function createOAuthAttempt() {
 export function completeSignup(nickname) {
   return apiRequest('/api/v1/auth/signup', { method: 'POST', body: { nickname } });
 }
+
+/**
+ * 현재 세션에 저장된 가입 대기 정보를 조회합니다
+ */
+export function getSignupContext() {
+  return useMock
+      ? mockApi.getSignupContext()
+      : apiRequest('/api/v1/auth/signup-context');
+}

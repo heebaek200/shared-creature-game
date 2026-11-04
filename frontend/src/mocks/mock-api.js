@@ -41,6 +41,17 @@ export const mockApi = {
       initialInvitationUrl: `${location.origin}/invite/mock-invitation-token`,
     };
   },
+  async getSignupContext() {
+    await delay(200);
+
+    return {
+      provider: "GOOGLE",
+      email: 'example@gmail.com',
+      suggestedNickname: '새싹지기',
+      invitation: null,
+      expiresAt: new Date(Date.now() + 30 * 60 * 100).toISOString(),
+    };
+  },
 };
 
 function delay(milliseconds) {
