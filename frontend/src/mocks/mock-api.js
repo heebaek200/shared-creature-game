@@ -41,6 +41,67 @@ export const mockApi = {
       initialInvitationUrl: `${location.origin}/invite/mock-invitation-token`,
     };
   },
+  async getCreatureHome() {
+    await delay(200);
+    return {
+      groupId: 501,
+      groupName: "새싹 연구소 모임",
+      season: {
+        seasonId: 1,
+        seasonNumber: 1,
+        status: "ACTIVE",
+        startAt: "2026-11-01T00:00:00Z",
+        endAt: "2026-11-30T23:59:59Z",
+        seasonName: "시즌 1",
+        labName: "새싹 연구소"
+      },
+      creature: {
+        groupCreatureId: 701,
+        creatureSpeciesId: 3,
+        growthStage: "GROWING",
+        level: 3,
+        totalExperience: 58000,
+        nextLevelExp: 97500,
+        progress: 59,
+        remainingTime: "D-18",
+        selectionDeadlineAt: "2026-11-10T00:00:00Z"
+      },
+      todayExperience: 2400,
+      onlineMembers: Array.from({ length: 8 }, (_, i) => ({
+        userId: i + 101,
+        nickname: i === 0 ? "나" : `사용자 ${String.fromCharCode(65 + i)}`,
+        rank: i + 1,
+        contributionScore: (i + 1) * 250,
+        avatar: {
+          equipments: {
+            HEAD: { ownedItemId: 1, shopItemId: 1, name: "새싹 모자", assetKey: "head_sprout" },
+            FACE: null,
+            BODY: { ownedItemId: 2, shopItemId: 2, name: "기본 외형", assetKey: "body_default" },
+            ACCESSORY: null
+          }
+        },
+        zoneId: (i % 5) + 1
+      })),
+      recentContributions: [
+        { userId: 102, nickname: "사용자 A", amount: 100, occurredAt: new Date().toISOString() }
+      ],
+      snapshotAt: new Date().toISOString()
+    };
+  },
+
+  async getCurrentSeason() {
+    await delay(150);
+    return {
+      seasonId: 1,
+      seasonNumber: 1,
+      status: "ACTIVE",
+      startAt: "2026-11-01T00:00:00Z",
+      endAt: "2026-11-30T23:59:59Z",
+      seasonName: "시즌 1",
+      labName: "새싹 연구소"
+    };
+  },
+
 };
 
 function delay(milliseconds) {
