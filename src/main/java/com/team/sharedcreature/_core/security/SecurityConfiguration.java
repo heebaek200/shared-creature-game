@@ -1,14 +1,15 @@
 package com.team.sharedcreature._core.security;
 
-import com.team.sharedcreature._core.web.RequestIdFilter;
 import com.team.sharedcreature._core.exception.ErrorCode;
+import com.team.sharedcreature._core.web.RequestIdFilter;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
+import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.web.cors.CorsConfiguration;
@@ -88,14 +89,38 @@ public class SecurityConfiguration {
                                 ))
                         .accessDeniedHandler((request, response, exception) -> {
                             if (exception instanceof CsrfException) {
-                                errorWriter.write(request, response, ErrorCode.CSRF_INVALID);
+                                errorWriter.write(
+                                        request,
+                                        response,
+                                        Boolean.TRUE.equals(request.getAttribute(SessionAuthenticationFilter.SESSION_EXPIRED))
+                                                ? ErrorCode.SESSION_EXPIRED
+                                                : ErrorCode.CSRF_INVALID
+                                );
                                 return;
                             }
                             errorWriter.write(request, response, ErrorCode.ROLE_FORBIDDEN);
                         }))
-                .addFilterBefore(requestIdFilter, AnonymousAuthenticationFilter.class)
-                .addFilterBefore(sessionAuthenticationFilter, AnonymousAuthenticationFilter.class);
+                .addFilterBefore(requestIdFilter, CsrfFilter.class)
+                .addFilterAfter(sessionAuthenticationFilter, RequestIdFilter.class);
         return http.build();
+    }
+
+    /** Request ID Filter를 Security Filter Chain에서만 실행하도록 Servlet 자동 등록을 끕니다. */
+    @Bean
+    FilterRegistrationBean<RequestIdFilter> requestIdFilterRegistration(RequestIdFilter filter) {
+        FilterRegistrationBean<RequestIdFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    /** 세션 인증 Filter를 Security Filter Chain에서만 실행하도록 Servlet 자동 등록을 끕니다. */
+    @Bean
+    FilterRegistrationBean<SessionAuthenticationFilter> sessionAuthenticationFilterRegistration(
+            SessionAuthenticationFilter filter
+    ) {
+        FilterRegistrationBean<SessionAuthenticationFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     /**

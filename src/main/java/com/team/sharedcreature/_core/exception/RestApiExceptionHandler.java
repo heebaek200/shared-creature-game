@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.List;
@@ -84,6 +85,9 @@ public class RestApiExceptionHandler {
             HandlerMethodValidationException exception,
             HttpServletRequest request
     ) {
+        if (exception.isForReturnValue()) {
+            return handleUnexpected(exception, request);
+        }
         List<FieldErrorResponse> fields = exception.getParameterValidationResults().stream()
                 .flatMap(result -> result.getResolvableErrors().stream()
                         .map(error -> new FieldErrorResponse(
@@ -137,8 +141,8 @@ public class RestApiExceptionHandler {
     }
 
     /** 존재하지 않는 API 경로를 안전한 404 응답으로 변환합니다. */
-    @ExceptionHandler(NoResourceFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNotFound(NoResourceFoundException exception, HttpServletRequest request) {
+    @ExceptionHandler({NoHandlerFoundException.class, NoResourceFoundException.class})
+    public ResponseEntity<ErrorResponse> handleNotFound(Exception exception, HttpServletRequest request) {
         return response(ErrorCode.RESOURCE_NOT_FOUND, null, List.of(), request);
     }
 

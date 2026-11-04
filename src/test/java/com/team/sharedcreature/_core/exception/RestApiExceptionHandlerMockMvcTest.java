@@ -1,8 +1,11 @@
 package com.team.sharedcreature._core.exception;
 
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
+import com.team.sharedcreature._core.web.StrictQueryParameterInterceptor;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -31,6 +34,7 @@ class RestApiExceptionHandlerMockMvcTest {
         var handler = new RestApiExceptionHandler(new ErrorResponseFactory(Clock.systemUTC()));
         mockMvc = MockMvcBuilders.standaloneSetup(new TestController())
                 .setControllerAdvice(handler)
+                .addInterceptors(new StrictQueryParameterInterceptor())
                 .build();
     }
 
@@ -70,6 +74,57 @@ class RestApiExceptionHandlerMockMvcTest {
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 
+    @Test
+    void 잘못된_JSON은_400_INVALID_REQUEST로_응답한다() throws Exception {
+        mockMvc.perform(post("/test")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void 중복_Query는_400_INVALID_FIELD_VALUE로_응답한다() throws Exception {
+        mockMvc.perform(get("/required?q=first&q=second"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_FIELD_VALUE"));
+    }
+
+    @Test
+    void 미등록_Query는_400_INVALID_FIELD_VALUE로_응답한다() throws Exception {
+        mockMvc.perform(get("/required?q=value&unknown=value"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_FIELD_VALUE"));
+    }
+
+    @Test
+    void 선언된_Query는_정상적으로_Controller에_전달한다() throws Exception {
+        mockMvc.perform(get("/required?q=value"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void Query_제약조건_위반은_필드_오류로_응답한다() throws Exception {
+        mockMvc.perform(get("/bounded?size=0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_FIELD_VALUE"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("size"));
+    }
+
+    @Test
+    void 업무_충돌은_정의된_409_오류로_응답한다() throws Exception {
+        mockMvc.perform(get("/conflict"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("GROUP_FULL"));
+    }
+
+    @Test
+    void Controller_반환값_검증_실패는_500으로_응답한다() throws Exception {
+        mockMvc.perform(get("/invalid-return"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+    }
+
     @RestController
     static class TestController {
 
@@ -83,6 +138,21 @@ class RestApiExceptionHandlerMockMvcTest {
 
         @GetMapping("/required")
         void required(@RequestParam String q) {
+        }
+
+        @GetMapping("/bounded")
+        void bounded(@RequestParam @Min(1) int size) {
+        }
+
+        @GetMapping("/conflict")
+        void conflict() {
+            throw new BusinessException(ErrorCode.GROUP_FULL);
+        }
+
+        @GetMapping("/invalid-return")
+        @NotNull
+        String invalidReturn() {
+            return null;
         }
     }
 
