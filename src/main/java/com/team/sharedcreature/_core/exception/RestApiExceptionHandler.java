@@ -13,7 +13,6 @@ import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.ServletRequestBindingException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -141,21 +140,6 @@ public class RestApiExceptionHandler {
             HttpServletRequest request
     ) {
         return response(ErrorCode.FILE_TOO_LARGE, null, List.of(), request);
-    }
-
-    /** Path·Query 값의 타입 변환 실패를 입력 필드 오류로 변환합니다. */
-    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ResponseEntity<ErrorResponse> handleTypeMismatch(
-            MethodArgumentTypeMismatchException exception,
-            HttpServletRequest request
-    ) {
-        return response(
-                HttpStatus.BAD_REQUEST,
-                "INVALID_FIELD_VALUE",
-                "요청 필드의 타입이나 형식을 확인해 주세요.",
-                List.of(),
-                request
-        );
     }
 
     /** 존재하지 않는 API 경로를 안전한 404 응답으로 변환합니다. */
