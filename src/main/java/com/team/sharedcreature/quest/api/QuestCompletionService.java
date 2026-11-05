@@ -259,6 +259,45 @@ public class QuestCompletionService {
                 if (checkedInThisMorning) {
                     currentProgress = 1;
                 }
+                // 난이도별 퀘스트 완료 횟수 조회
+            } else if ("D-H-03".equals(templateCode)) {
+                progressTarget = 2;
+
+                if (completed) {
+                    currentProgress = progressTarget;
+                } else {
+                    var checkInDate = assignment.getQuestPeriod().getPeriodDate();
+                    var nextDate = checkInDate.plusDays(1);
+
+                    long lowDifficultyCompletions =
+                            completionRepository
+                                    .countDailyCompletionsByDifficultyInDateRange(
+                                            userId,
+                                            membership.getId(),
+                                            groupSeason.getId(),
+                                            "LOW",
+                                            checkInDate,
+                                            nextDate
+                                    );
+
+                    long mediumDifficultyCompletions =
+                            completionRepository
+                                    .countDailyCompletionsByDifficultyInDateRange(
+                                            userId,
+                                            membership.getId(),
+                                            groupSeason.getId(),
+                                            "MEDIUM",
+                                            checkInDate,
+                                            nextDate
+                                    );
+
+                    // 조건 달성도 계산 (중,하 퀘스트 둘 다 완료해야함)
+                    currentProgress = (int) (
+                            Math.min(lowDifficultyCompletions, 1L)
+                                    + Math.min(mediumDifficultyCompletions, 1L)
+                    );
+                }
+
                 // W-L-02, W-M-02, W-H-02가 각각 주간 일일 퀘스트 완료 3·7·14회를 진행도로 표시
             } else if ("W-L-02".equals(templateCode)
                     || "W-M-02".equals(templateCode)
@@ -1015,6 +1054,59 @@ public class QuestCompletionService {
             GroupSeason groupSeason
     ) {
         List<QuestAssignment> weeklyAssignments = findCurrentAssignments("WEEKLY");
+        List<QuestAssignment> dailyAssignments = findCurrentAssignments("DAILY");
+
+        // "D-H-03" 퀘스트 보상 처리
+        for (QuestAssignment dailyAssignment : dailyAssignments) {
+            String templateCode = dailyAssignment.getQuestTemplate().getCode();
+
+            if (!"D-H-03".equals(templateCode)
+                    || !"AGGREGATE".equals(
+                    dailyAssignment.getVerificationTypeSnapshot()
+            )) {
+                continue;
+            }
+
+            var checkInDate = dailyAssignment.getQuestPeriod().getPeriodDate();
+            var nextDate = checkInDate.plusDays(1);
+
+            long lowDifficultyCompletions =
+                    completionRepository.countDailyCompletionsByDifficultyInDateRange(
+                            user.getId(),
+                            membership.getId(),
+                            groupSeason.getId(),
+                            "LOW",
+                            checkInDate,
+                            nextDate
+                    );
+
+            long mediumDifficultyCompletions =
+                    completionRepository.countDailyCompletionsByDifficultyInDateRange(
+                            user.getId(),
+                            membership.getId(),
+                            groupSeason.getId(),
+                            "MEDIUM",
+                            checkInDate,
+                            nextDate
+                    );
+
+            if (lowDifficultyCompletions < 1 || mediumDifficultyCompletions < 1) {
+                continue;
+            }
+
+            // 중복 완료 방지 / 자동 보상 지급
+            Map<Long, QuestCompletion> existingDailyCompletions =
+                    findCompletionsByAssignmentId(
+                            user.getId(),
+                            List.of(dailyAssignment)
+                    );
+
+            if (existingDailyCompletions.containsKey(dailyAssignment.getId())) {
+                continue;
+            }
+
+            completeAndReward(user, membership, groupSeason, dailyAssignment);
+        }
 
         // 현재 주간 퀘스트 조회 및 집계형 필터링
         for (QuestAssignment weeklyAssignment : weeklyAssignments) {

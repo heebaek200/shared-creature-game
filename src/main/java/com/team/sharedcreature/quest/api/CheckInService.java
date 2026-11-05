@@ -261,6 +261,17 @@ public class CheckInService {
         ensureNotCheckedIn(userId, checkInDate);
         boolean isMorning = isMorningCheckIn(checkedInAt);
 
+        // 퀘스트 완료 상태 저장
+        ArrayList<QuestAssignment> currentAssignments = new ArrayList<>();
+        currentAssignments.addAll(questCompletionService.findCurrentAssignments("DAILY"));
+        currentAssignments.addAll(questCompletionService.findCurrentAssignments("WEEKLY"));
+
+        var completionsBefore =
+                questCompletionService.findCompletionsByAssignmentId(
+                        userId,
+                        currentAssignments
+                );
+
         // 사용자 활동 저장
         UserActivityEvent activityEvent = UserActivityEvent.create(
                 user,
@@ -315,6 +326,21 @@ public class CheckInService {
                     );
             if (completion.isPresent()) {
                 completedQuestIds.add(completion.get().getCompletionId());
+            }
+        }
+
+        // 최신 완료 상태 조회 / 신규 완료 퀘스트 색출
+        completedQuestIds.clear();
+
+        var completionsAfter =
+                questCompletionService.findCompletionsByAssignmentId(
+                        userId,
+                        currentAssignments
+                );
+
+        for (var entry : completionsAfter.entrySet()) {
+            if (!completionsBefore.containsKey(entry.getKey())) {
+                completedQuestIds.add(entry.getValue().getId());
             }
         }
 
