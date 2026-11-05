@@ -778,10 +778,12 @@
 
 - 결정: 정시 Cron, 초기화 완료 뒤 애플리케이션 기동 이벤트와 5분 주기 점검은 DB 상태·주입 `Clock`·KST 기간으로 누락 업무를 판정하는 공통 정상화 Service를 호출합니다. `(job_type, scheduled_for)`의 `scheduled_for`는 실제 실행 시각이 아니라 업무 논리 경계이며, 실행 이력이 없어도 업무 상태에서 누락을 발견합니다.
 - 결정: 서버 중단 중 만료된 퀘스트 기간과 중간 4주 시즌은 소급 생성하지 않고 보상도 이월하지 않습니다. 마지막 저장 시즌을 정상 종료한 뒤 최초 시즌의 4주 달력에서 현재 구간을 계산하여 마지막 시즌 번호의 다음 번호로 현재 시즌 하나만 만들고, 현재 일일·주간 배정만 복구합니다.
-- 결정: 정상화 순서는 종료 전 기한이 지난 부화, 잔여 `CLOSING` Snapshot, 시즌 `ENDED` 확정, 현재 시즌 생성, 현재 퀘스트 배정입니다. 지연 부화의 `hatched_at`은 `selection_deadline_at`, `updated_at`은 실제 처리 시각으로 기록합니다.
-- 결정: 시즌 의존 API는 `ACTIVE`와 `start_at <= now < end_at`을 함께 검사합니다. 정상화 전에는 새 오류 코드를 추가하지 않고 기존 `409 CONCURRENT_MODIFICATION`을 반환하여 프론트엔드 전용 분기를 늘리지 않습니다.
-- 결정: 시즌 정상화는 기동 시 완료하고, 부화·사진·결제처럼 대상이 많은 작업만 100건 단위로 처리해 다음 5분 점검에서 이어갑니다. 첫 시즌 기준 레코드가 없으면 자동 추정하지 않고 개발·시연 환경의 명시적 시드 준비를 요구합니다.
+- 결정: 종료 대상 시즌은 `selection_deadline_at < season.end_at`인 미부화 대상을 100건 단위로 전량 처리한 뒤에만 Snapshot과 `ENDED`를 확정합니다. 남은 대상이 있으면 `SEASON_CLOSE`를 성공 처리하지 않고 `CLOSING`에서 재개하며, 기한이 종료와 같거나 이후인 알은 그대로 보존합니다.
+- 결정: 현재 구간 시즌은 `SCHEDULED`로 생성합니다. 기존 활성 그룹의 `GroupSeason`, 알 상태 `GroupCreature`, 0점 `SeasonGroupScore`를 UNIQUE 기반으로 전량 초기화하고, `selection_deadline_at=season.start_at+72시간`에 따라 이미 기한이 지난 부화를 완료한 뒤 `ACTIVE`로 전환합니다. 시즌 도중 새 그룹은 실제 생성 시각+72시간을 유지합니다. 초기화 행의 `created_at`·`updated_at`은 실제 반영 시각입니다.
+- 결정: 관리자 선택의 기존 `selected_at`은 보존하고 미선택 무작위 복구만 `selected_at=selection_deadline_at`을 사용합니다. 지연 부화의 `hatched_at`은 `selection_deadline_at`, `updated_at`은 실제 처리 시각입니다.
+- 결정: 시즌 의존 API는 `ACTIVE`와 `start_at <= now < end_at`을 함께 검사합니다. 현재 퀘스트 기간이 없거나 `PENDING/FAILED`이면 빈 목록 대신 기존 `409 CONCURRENT_MODIFICATION`을 반환합니다. `createGroup`, 사진 제출과 `seasonId` 미지정 랭킹에도 같은 현재 시즌 보호를 적용하며 새 오류 코드는 추가하지 않습니다.
+- 결정: 부화·시즌 그룹 초기화·사진·결제처럼 대상이 많은 작업은 100건 단위로 처리해 중단 시 다음 기동 또는 5분 점검에서 이어갑니다. 선행 대상이 남은 시즌 종료·활성화 작업은 성공 처리하지 않습니다. 첫 시즌 기준 레코드가 없으면 자동 추정하지 않고 개발·시연 환경의 명시적 시드 준비를 요구합니다.
 - 상태: confirmed
 - 근거: 24시간 가동되지 않는 개발 환경에서 누락 업무를 복구하면서 존재하지 않았던 과거 시즌·퀘스트·보상을 만들지 않고, 기존 UNIQUE·Lease·오류 계약을 재사용해 구현과 프론트엔드 영향을 최소화하기 위함입니다.
-- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, class-diagram.md, implementation-guide.md
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, class-diagram.md
 - 후속 구현: Issue #24 시즌·퀘스트 Scheduler에서 고정 `Clock` 기반 재기동·부분 실패·중복 트리거 테스트로 검증합니다.
