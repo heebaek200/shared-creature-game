@@ -59,7 +59,7 @@ public class GroupInvitationManagementService {
             GroupInviteLinkRepository inviteLinkRepository,
             EntityManager entityManager,
             Clock clock,
-            @Value("${APP_BASE_URL}") String appBaseUrl
+            @Value("${APP_BASE_URL:http://localhost:5173}") String appBaseUrl
     ) {
         this.userRepository = userRepository;
         this.groupRepository = groupRepository;
