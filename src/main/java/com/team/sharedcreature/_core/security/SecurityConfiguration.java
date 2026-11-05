@@ -65,6 +65,7 @@ public class SecurityConfiguration {
                         .requestMatchers(
                                 "/api/v1/groups/me/members/*/role",
                                 "/api/v1/groups/me/primary-transfer",
+                                "/api/v1/groups/me/invitation", // GET 패스 추가
                                 "/api/v1/groups/me/invitation/**"
                         ).hasRole("PRIMARY")
                         .requestMatchers("/api/v1/groups/me/members/*/removals").hasAnyRole("PRIMARY", "DEPUTY")

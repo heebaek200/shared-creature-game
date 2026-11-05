@@ -178,7 +178,7 @@ public class GroupMembership {
             throw new IllegalStateException("활성 멤버십이 아닙니다.");
         }
 
-        if (!"PRIMARY".equals(this.role)) {
+        if ("PRIMARY".equals(this.role)) {
             throw new IllegalStateException("주 관리자는 강퇴할 수 없습니다.");
         }
 

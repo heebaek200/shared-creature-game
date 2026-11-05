@@ -3,6 +3,7 @@ package com.team.sharedcreature.group.api;
 import com.team.sharedcreature._core.api.ApiResponse;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.group.application.GroupAdminService;
+import com.team.sharedcreature.group.application.GroupInvitationManagementService;
 import com.team.sharedcreature.group.application.GroupRemovalService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -18,13 +19,16 @@ import org.springframework.web.bind.annotation.*;
 public class GroupAdminController {
     private final GroupAdminService groupAdminService;
     private final GroupRemovalService groupRemovalService;
+    private final GroupInvitationManagementService invitationManagementService;
 
     public GroupAdminController(
             GroupAdminService groupAdminService,
-            GroupRemovalService groupRemovalService
+            GroupRemovalService groupRemovalService,
+            GroupInvitationManagementService invitationManagementService
     ) {
         this.groupAdminService = groupAdminService;
         this.groupRemovalService = groupRemovalService;
+        this.invitationManagementService = invitationManagementService;
     }
 
     /**
@@ -93,5 +97,40 @@ public class GroupAdminController {
         );
 
         return ApiResponse.success(result);
+    }
+
+    /**
+     * GET /api/v1/groups/me/invitation
+     * 현재 활성 초대 링크의 관리 정보를 조회
+     *  - 주 관리자(PRIMARY) 만 요청 가능
+     *  - 이전 초대 원문 토큰이나 URL은 반환하지 않음
+     *  - 발급 시각과 발급자 등 메타데이터만 제공
+     */
+    @GetMapping("/invitation")
+    public ApiResponse<InvitationManagementResponse> getInvitationManagement(
+            @AuthenticationPrincipal LoginUser loginUser
+    ) {
+        // 최신 멤버십 역할 검증은 Service에서 다시 수행
+        return ApiResponse.success(
+                invitationManagementService.getInvitationManagement(loginUser.id())
+        );
+    }
+
+    /**
+     * POST /api/v1/groups/me/invitation/rotate
+     * 현재 그룹의 초대 링크를 새 토큰으로 재발급합니다.
+     *
+     * PRIMARY 관리자만 요청할 수 있습니다.
+     * 이전 링크를 무효화하고 새 링크를 원자적으로 발급합니다.
+     * 새 초대 URL은 이 응답에서만 반환합니다.
+     */
+    @PostMapping("/invitation/rotate")
+    public ApiResponse<RotateInvitationResponse> rotateInvitation(
+            @AuthenticationPrincipal LoginUser loginUser
+    ) {
+        // POST 요청에는 기존 Spring Security CSRF 검증이 적용됩니다.
+        return ApiResponse.success(
+                invitationManagementService.rotateInvitation(loginUser.id())
+        );
     }
 }
