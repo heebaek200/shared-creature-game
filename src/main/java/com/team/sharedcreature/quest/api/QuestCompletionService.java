@@ -1022,32 +1022,109 @@ public class QuestCompletionService {
                 continue;
             }
 
+            // 공통 기간 산정
             String templateCode = weeklyAssignment.getQuestTemplate().getCode();
-            int target;
-
-            // 코드별 목표치 확인
-            if ("W-L-02".equals(templateCode)) {
-                target = 3;
-            } else if ("W-M-02".equals(templateCode)) {
-                target = 7;
-            } else if ("W-H-02".equals(templateCode)) {
-                target = 14;
-            } else {
-                continue;
-            }
-
-            // 기간별 누적 완료 횟수 집계 및 조건 검사
             var weekStart = weeklyAssignment.getQuestPeriod().getPeriodDate();
             var weekEndExclusive = weekStart.plusWeeks(1);
 
-            long current = completionRepository.countDailyCompletionsInDateRange(
-                    user.getId(),
-                    membership.getId(),
-                    groupSeason.getId(),
-                    weekStart,
-                    weekEndExclusive
-            );
+            int target;
+            long current;
 
+            // 일일 누적 횟수 퀘스트
+            if ("W-L-02".equals(templateCode)) {
+                target = 3;
+                current = completionRepository.countDailyCompletionsInDateRange(
+                        user.getId(),
+                        membership.getId(),
+                        groupSeason.getId(),
+                        weekStart,
+                        weekEndExclusive
+                );
+            } else if ("W-M-02".equals(templateCode)) {
+                target = 7;
+                current = completionRepository.countDailyCompletionsInDateRange(
+                        user.getId(),
+                        membership.getId(),
+                        groupSeason.getId(),
+                        weekStart,
+                        weekEndExclusive
+                );
+            } else if ("W-H-02".equals(templateCode)) {
+                target = 14;
+                current = completionRepository.countDailyCompletionsInDateRange(
+                        user.getId(),
+                        membership.getId(),
+                        groupSeason.getId(),
+                        weekStart,
+                        weekEndExclusive
+                );
+                // 날짜 수 카운트 퀘스트
+            } else if ("W-L-03".equals(templateCode)) {
+                target = 2;
+                current = completionRepository.countDailyCompletionDaysInDateRange(
+                        user.getId(),
+                        membership.getId(),
+                        groupSeason.getId(),
+                        weekStart,
+                        weekEndExclusive
+                );
+            } else if ("W-M-03".equals(templateCode)) {
+                target = 4;
+                current = completionRepository.countDailyCompletionDaysInDateRange(
+                        user.getId(),
+                        membership.getId(),
+                        groupSeason.getId(),
+                        weekStart,
+                        weekEndExclusive
+                );
+                // 난이도별 클리어 퀘스트
+            } else if ("W-L-04".equals(templateCode)) {
+                target = 2;
+                current = completionRepository.countDailyCompletionsByDifficultyInDateRange(
+                        user.getId(),
+                        membership.getId(),
+                        groupSeason.getId(),
+                        "LOW",
+                        weekStart,
+                        weekEndExclusive
+                );
+            } else if ("W-M-04".equals(templateCode)) {
+                target = 3;
+                current = completionRepository.countDailyCompletionsByDifficultyInDateRange(
+                        user.getId(),
+                        membership.getId(),
+                        groupSeason.getId(),
+                        "MEDIUM",
+                        weekStart,
+                        weekEndExclusive
+                );
+                // 검증 타입별 퀘스트
+            } else if ("W-L-05".equals(templateCode)) {
+                target = 2;
+                current =
+                        completionRepository.countDailyCompletionsByVerificationTypeInDateRange(
+                                user.getId(),
+                                membership.getId(),
+                                groupSeason.getId(),
+                                "SELF_CHECK",
+                                weekStart,
+                                weekEndExclusive
+                        );
+                // 일일 퀘스트 클리어 퀘스트
+            } else if ("W-H-03".equals(templateCode)) {
+                target = 3;
+                current =
+                        completionRepository.countFullyCompletedDailyQuestDaysInDateRange(
+                                user.getId(),
+                                membership.getId(),
+                                groupSeason.getId(),
+                                weekStart,
+                                weekEndExclusive
+                        );
+            } else {
+                continue;
+            }
+            // 최종 달성 여부 검증
             if (current < target) {
                 continue;
             }
