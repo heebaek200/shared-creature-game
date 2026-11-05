@@ -2,9 +2,11 @@ package com.team.sharedcreature.group.infrastructure;
 
 import com.team.sharedcreature.group.api.GroupMemberResponse;
 import com.team.sharedcreature.group.domain.GroupMembership;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.util.Optional;
@@ -65,5 +67,58 @@ public interface GroupMembershipRepository extends JpaRepository<GroupMembership
     Page<GroupMemberResponse> findActiveMemberResponsesByGroupId(
             @Param("groupId") Long groupId,
             Pageable pageable
+    );
+
+    /**
+     * 사용자의 현재 활성 그룹 ID만을 조회
+     *  - 잠금 순서를 결정하기 위한 사전 조회용
+     *  - 잠금 획득 후 반드시 다시 검증해야 함
+     */
+    @Query("""
+        SELECT
+            membership.group.id
+        FROM
+            GroupMembership membership
+        WHERE
+            membership.user.id = :userId
+        AND membership.status = 'ACTIVE'
+""")
+    Optional<Long> findActiveGroupIdByUserId(@Param("userId") Long userId);
+
+    /**
+     * 지정한 그룹에 소속된 활성 회원의 멤버십 ID를 조회
+     * - 잠금 순서를 위한 사전 조회용
+     * - 실제 역할과 소속 상태는 행 잠금 후 다시 검사해야 함
+     */
+    @Query("""
+            SELECT
+                membership.id
+            FROM
+                GroupMembership membership
+            WHERE
+                membership.group.id = :groupId
+            AND membership.user.id  = :userId
+            AND membership.status   = 'ACTIVE'
+""")
+    Optional<Long> findActiveMembershipId(
+            @Param("groupId") Long groupId,
+            @Param("userId") Long userId
+    );
+
+    /**
+     * 멤버십 ID를 기준으로 비관적 쓰기 잠금을 획득, 대상 멤버십의 최신 역할과 활성 상태를 검사.
+     * - 멤버십 ID를 오름차순으로 정렬한 뒤 호출해야 함
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT
+                membership
+            FROM
+                GroupMembership membership
+            WHERE
+                membership.id = :membershipId
+""")
+    Optional<GroupMembership> findByIdForUpdate(
+            @Param("membershipId") Long membershipId
     );
 }

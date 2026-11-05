@@ -96,4 +96,55 @@ public class GroupMembership {
     public static GroupMembership member(Group group, User user, Instant now) {
         return new GroupMembership(group, user, "MEMBER", now);
     }
+
+    /**
+     * 일반 사용자(MEMBER)와 부 관리자(DEPUTY) 사이에서 그룹 관리자 권한을 변경합니다.
+     * 주 관리자(PRIMARY)의 역할은 이 메서드로 부여 또는 회수할 수 _없습니다_.
+     * 변경 시각은 기존 멤버십의 수정 시각에 함께 기록합니다.
+     */
+    public void changeDeputyRole(String nextRole, Instant now) {
+        if (!"MEMBER".equals(nextRole) && !"DEPUTY".equals(nextRole)) {
+            // 허용되지 않은 역할은 도메인에서도 거부
+            throw new IllegalArgumentException("변경할 수 없는 역할입니다.");
+        }
+
+        if ("PRIMARY".equals(this.role)) {
+            throw new IllegalStateException("주 관리자 역할은 직접 변경할 수 없습니다.");
+        }
+
+        this.role = nextRole;
+        this.updatedAt = now;
+    }
+
+    /**
+     * 주 관리자(PRIMARY) 이전 과정에서 기존 관리자를 일반 사용자(MEMBER)로 변경합니다.
+     *  - 신규 관리자를 지정하기 전에 호출됨
+     *  - 그룹별 PRIMARY UNIQUE 제약을 위한 로직
+     */
+    public void demotePrimary(Instant now) {
+        if (!"PRIMARY".equals(this.role)) {
+            throw new IllegalStateException("현재 주 관리자가 아닙니다.");
+        }
+
+        // 일반 사용자로 강등
+        this.role = "MEMBER";
+        this.updatedAt = now;
+    }
+
+    /**
+     * 기존 활성 회원을 새로운 주 관리자(PRIMARY)로 승격합니다.
+     *  - 이전 역할은 일반 사용자(MEMBER) 또는 부 관리자(DEPUTY)여야 함
+     *  - 기존 주 관리자 해제 이후에 호출해야 함
+     */
+    public void promotePrimary(Instant now) {
+        if (!"MEMBER".equals(this.role) && !"DEPUTY".equals(this.role)) {
+            throw new IllegalStateException("주 관리자로 이전할 수 없는 역할입니다");
+        }
+
+        // 주 관리자로 승격
+        this.role = "PRIMARY";
+        this.updatedAt = now;
+    }
+
+
 }

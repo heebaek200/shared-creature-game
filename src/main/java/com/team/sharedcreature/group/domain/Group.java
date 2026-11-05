@@ -75,4 +75,18 @@ public class Group {
         return new Group(name, normalizedName, description, creator, now);
     }
 
+    /**
+     * 그룹에 연결된 주 관리자 사용자 참조를 변경합니다.
+     *  - 멤버십의 PRIMARY 역할 변경과 동일한 트랜잭션에서 호출해야 함
+     *  - 그룹의 최신 수정 시간도 함께 갱신함
+     */
+    public void changePrimaryAdmin(User nextPrimary, Instant now) {
+        if (nextPrimary == null) {
+            throw new IllegalArgumentException("주 관리자가 필요합니다.");
+        }
+
+        this.primaryAdminUser = nextPrimary;
+        this.updatedAt = now;
+    }
+
 }
