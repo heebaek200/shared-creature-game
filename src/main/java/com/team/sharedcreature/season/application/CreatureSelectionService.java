@@ -1,6 +1,7 @@
 package com.team.sharedcreature.season.application;
 
 import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.season.api.CreatureSelectionResponse;
@@ -12,7 +13,6 @@ import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.CreatureSpeciesRepository;
 import com.team.sharedcreature.season.infrastructure.GroupCreatureRepository;
 import com.team.sharedcreature.season.infrastructure.GroupSeasonRepository;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -77,7 +77,7 @@ public class CreatureSelectionService {
         if (!"ACTIVE".equals(season.getStatus())
                 || !now.isBefore(season.getEndAt())
                 || !groupSeason.isSelectionOpenAt(now)) {
-            throw conflict("CREATURE_SELECTION_CLOSED", "크리처 선택 시간이 종료됐습니다.");
+            throw conflict(ErrorCode.CREATURE_SELECTION_CLOSED, "크리처 선택 시간이 종료됐습니다.");
         }
         CreatureSpecies species = speciesRepository.findByIdAndStatus(speciesId, "ACTIVE")
                 .orElseThrow(() -> notFound("선택할 수 있는 크리처 종을 찾을 수 없습니다."));
@@ -136,13 +136,9 @@ public class CreatureSelectionService {
 
     private GroupMembership requireAdminMembership(Long userId) {
         GroupMembership membership = membershipRepository.findActiveWithGroupByUserId(userId)
-                .orElseThrow(() -> new BusinessException(
-                        HttpStatus.FORBIDDEN,
-                        "ROLE_FORBIDDEN",
-                        "요청 권한이 없습니다."
-                ));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ROLE_FORBIDDEN));
         if (!"PRIMARY".equals(membership.getRole()) && !"DEPUTY".equals(membership.getRole())) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "ROLE_FORBIDDEN", "요청 권한이 없습니다.");
+            throw new BusinessException(ErrorCode.ROLE_FORBIDDEN);
         }
         return membership;
     }
@@ -157,11 +153,11 @@ public class CreatureSelectionService {
         ));
     }
 
-    private BusinessException conflict(String code, String message) {
-        return new BusinessException(HttpStatus.CONFLICT, code, message);
+    private BusinessException conflict(ErrorCode errorCode, String message) {
+        return new BusinessException(errorCode, message);
     }
 
     private BusinessException notFound(String message) {
-        return new BusinessException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", message);
+        return new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, message);
     }
 }

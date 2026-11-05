@@ -65,4 +65,19 @@ public class User {
     public static User register(String globalRole, Instant now) {
         return new User(globalRole, now);
     }
+
+    /**
+     * 기존 회원의 로그인 성공 시각과 마지막 인증 활동 시각을 갱신합니다.
+     *
+     * OAuth 인증이 성공한 기존 회원에게 적용하며, 신규 회원은 register()에서 초기화합니다.
+     * 마지막 수정 시각도 함께 갱신하고 JPA Dirty Checking으로 DB에 반영합니다.
+     *
+     * @param now 로그인 성공 시각
+     */
+    public void recordLogin(Instant now) {
+        // 로그인 성공과 동시에 두 인증 시각을 갱신합니다.
+        this.lastLoginAt = now;
+        this.lastActiveAt = now;
+        this.updatedAt = now;
+    }
 }

@@ -105,8 +105,8 @@
 
 | HTTP | code | 상태·원인 |
 |---|---|---|
-| 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
-| 400 | `INVALID_FIELD_VALUE` | 필드 타입·길이·값·형식 검증 실패 |
+| 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체 누락 또는 미등록 JSON 필드 |
+| 400 | `INVALID_FIELD_VALUE` | 필드 타입·길이·값·형식 검증 실패 또는 중복·미등록 Query |
 | 400 | `SLOT_MISMATCH` | 보유 아이템과 장착 슬롯 불일치 |
 | 401 | `AUTH_REQUIRED` | 세션 인증 없음 |
 | 401 | `SESSION_EXPIRED` | 인증 세션 만료 |
@@ -138,6 +138,7 @@
 | 409 | `IDEMPOTENCY_REQUEST_IN_PROGRESS` | 같은 멱등 키 처리 중 |
 | 413 | `FILE_TOO_LARGE` | 사진 10 MiB 초과 |
 | 429 | `RATE_LIMIT_EXCEEDED` | 호출량/동시 처리 제한 초과 |
+| 500 | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버 내부 오류 |
 
 **오류 조건 우선순위:** 인증/서명 → CSRF → 권한·리소스 범위 → 형식 및 필드 검증 → 업무 상태·동시성. 필드 오류와 공통 상태 오류가 함께 발생하면 선행 단계 오류로 응답합니다. 동일 주문·환불의 멱등 재요청은 최초 HTTP 상태와 Body를 그대로 반환합니다.
 
@@ -915,7 +916,6 @@
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
 | data.groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
-| data.invitationUrl | string(uri) | Y | N | 동일 Origin /invite/{token} | 초대 URL |
 | data.issuedAt | string(date-time) | Y | N | UTC ISO 8601 | 발급 시각 |
 | data.issuedByUserId | integer(int64) | Y | N | 1 이상 | 링크 발급 사용자 ID |
 | data.unlimitedUses | boolean | Y | N | 고정 true | 사용 횟수 무제한 여부 |
@@ -929,6 +929,7 @@
 | 401 | `SESSION_EXPIRED` | 인증 세션 만료 |
 | 403 | `ROLE_FORBIDDEN` | 요청자 권한 부족 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
+| 409 | `CONCURRENT_MODIFICATION` | 활성 그룹에 유효한 초대 링크가 존재하지 않는 비정상 상태 |
 
 ### rotateInvitation — `POST /api/v1/groups/me/invitation/rotate`
 
@@ -962,7 +963,7 @@
 | 403 | `ROLE_FORBIDDEN` | 요청자 권한 부족 |
 | 403 | `CSRF_INVALID` | CSRF 토큰 없음 또는 불일치 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
-| 409 | `CONCURRENT_MODIFICATION` | 동시 처리 또는 이미 변경된 리소스 |
+| 409 | `CONCURRENT_MODIFICATION` | 활성 초대 링크 누락 또는 동시 처리로 인한 상태 불일치 |
 
 ## 4. 시즌·크리처 API
 

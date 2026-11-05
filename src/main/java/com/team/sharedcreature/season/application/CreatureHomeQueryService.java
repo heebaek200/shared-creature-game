@@ -1,6 +1,7 @@
 package com.team.sharedcreature.season.application;
 
 import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.season.api.CreatureHomeResponse;
@@ -11,7 +12,6 @@ import com.team.sharedcreature.season.domain.GroupSeason;
 import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.GroupCreatureRepository;
 import com.team.sharedcreature.season.infrastructure.GroupSeasonRepository;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,11 +51,7 @@ public class CreatureHomeQueryService {
     public CreatureHomeResponse getCreatureHome(Long userId) {
         Instant now = Instant.now(clock);
         GroupMembership membership = membershipRepository.findActiveWithGroupByUserId(userId)
-                .orElseThrow(() -> new BusinessException(
-                        HttpStatus.FORBIDDEN,
-                        "ROLE_FORBIDDEN",
-                        "요청 권한이 없습니다."
-                ));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ROLE_FORBIDDEN));
         Season season = seasonQueryService.findCurrentSeason();
         GroupSeason groupSeason = groupSeasonRepository.findSnapshotByGroupIdAndSeasonId(
                         membership.getGroup().getId(), season.getId())
@@ -93,6 +89,6 @@ public class CreatureHomeQueryService {
     }
 
     private BusinessException notFound(String message) {
-        return new BusinessException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", message);
+        return new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, message);
     }
 }

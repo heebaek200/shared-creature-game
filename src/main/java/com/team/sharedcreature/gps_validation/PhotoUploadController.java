@@ -4,6 +4,8 @@ import com.drew.imaging.ImageMetadataReader;
 import com.drew.metadata.Metadata;
 import com.drew.metadata.exif.ExifSubIFDDirectory;
 import com.drew.metadata.exif.GpsDirectory;
+import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature._core.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -37,13 +39,13 @@ public class PhotoUploadController {
     public ResponseEntity<String> uploadPhoto(@RequestParam("file") MultipartFile file) {
         // 1. 파일 비어있음 검증
         if (file.isEmpty()) {
-            return ResponseEntity.badRequest().body("업로드된 파일이 비어 있습니다.");
+            throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE, "업로드된 파일이 비어 있습니다.");
         }
 
         // 2. 용량 제한 검증 (10 MiB)
         if (file.getSize() > MAX_FILE_SIZE) {
             log.warn("파일 용량 초과: {} bytes", file.getSize());
-            return ResponseEntity.badRequest().body("파일 용량은 10 MiB를 초과할 수 없습니다.");
+            throw new BusinessException(ErrorCode.FILE_TOO_LARGE);
         }
 
         try {
@@ -51,7 +53,10 @@ public class PhotoUploadController {
             String contentType = file.getContentType();
             if (contentType == null || (!contentType.equals("image/jpeg") && !contentType.equals("image/jpg"))) {
                 log.warn("지원하지 않는 MIME 타입: {}", contentType);
-                return ResponseEntity.badRequest().body("지원하지 않는 형식입니다. JPEG 파일만 업로드 가능합니다.");
+                throw new BusinessException(
+                        ErrorCode.INVALID_FIELD_VALUE,
+                        "지원하지 않는 형식입니다. JPEG 파일만 업로드 가능합니다."
+                );
             }
 
             // 3-1 형식만jpg인 가짜 파일을 거르기위한 jpg만의 고유바이트 앞자리 두자리를 따는 방법
@@ -59,7 +64,7 @@ public class PhotoUploadController {
                 byte[] header = new byte[2];
                 if (isForCheck.read(header) != 2 || header[0] != (byte) 0xFF || header[1] != (byte) 0xD8) {
                     log.warn("JPEG 파일 시그니처 불일치 (변조되었거나 다른 형식)");
-                    return ResponseEntity.badRequest().body("유효한 JPEG 이미지 파일이 아닙니다.");
+                    throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE, "유효한 JPEG 이미지 파일이 아닙니다.");
                 }
             }
 
@@ -79,7 +84,7 @@ public class PhotoUploadController {
             GpsDirectory gpsDirectory = metadata.getFirstDirectoryOfType(GpsDirectory.class);
             if (gpsDirectory == null || gpsDirectory.getGeoLocation() == null) {
                 log.warn("사진에 GPS 위치 정보가 포함되어 있지 않습니다.");
-                return ResponseEntity.badRequest().body("검증 실패: 사진에 GPS 위치 정보가 없습니다.");
+                throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE, "사진에 GPS 위치 정보가 없습니다.");
             }
 
             double latitude = gpsDirectory.getGeoLocation().getLatitude();
@@ -102,7 +107,7 @@ public class PhotoUploadController {
 
             if (captureDateTime == null) {
                 log.warn("사진에 EXIF 촬영 시각 정보가 없습니다.");
-                return ResponseEntity.badRequest().body("검증 실패: 사진에 촬영 시각 정보가 없습니다.");
+                throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE, "사진에 촬영 시각 정보가 없습니다.");
             }
 
             log.info("[검증 성공] 위도: {}, 경도: {}, 촬영시각: {}", latitude, longitude, captureDateTime);
@@ -111,9 +116,11 @@ public class PhotoUploadController {
                     latitude, longitude, captureDateTime
             ));
 
+        } catch (BusinessException exception) {
+            throw exception;
         } catch (Exception e) {
             log.error("사진 처리 중 오류 발생", e);
-            return ResponseEntity.internalServerError().body("서버 오류 발생: " + e.getMessage());
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
     }
 }

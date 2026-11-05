@@ -1,11 +1,11 @@
 package com.team.sharedcreature.season.application;
 
 import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.season.api.SeasonResponse;
 import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.SeasonRepository;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,8 +33,7 @@ public class SeasonQueryService {
     public Season findCurrentSeason() {
         return seasonRepository.findFirstByStatusOrderByStartAtDesc("ACTIVE")
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.NOT_FOUND,
-                        "RESOURCE_NOT_FOUND",
+                        ErrorCode.RESOURCE_NOT_FOUND,
                         "현재 시즌을 찾을 수 없습니다."
                 ));
     }
@@ -44,8 +43,7 @@ public class SeasonQueryService {
     public Season findCurrentSeasonForShare() {
         return findCurrentSeasonForShareIfPresent()
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.NOT_FOUND,
-                        "RESOURCE_NOT_FOUND",
+                        ErrorCode.RESOURCE_NOT_FOUND,
                         "현재 시즌을 찾을 수 없습니다."
                 ));
     }

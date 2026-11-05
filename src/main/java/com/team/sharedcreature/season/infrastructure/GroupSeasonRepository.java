@@ -52,4 +52,20 @@ public interface GroupSeasonRepository extends JpaRepository<GroupSeason, Long> 
              WHERE gs.id = :groupSeasonId
             """)
     Optional<GroupSeason> findForUpdateById(@Param("groupSeasonId") Long groupSeasonId);
+
+    /**
+     * 그룹의 종료되지 않은 현재 시즌 참여를 쓰기 잠금으로 조회
+     * - 종료된 과거 시즌은 제외
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT
+                gs
+            FROM
+                GroupSeason AS gs
+            WHERE
+                gs.group.id = :groupId
+            AND gs.status IN ('PREPARING', 'ACTIVE')
+""")
+    Optional<GroupSeason> findOpenByGroupIdForUpdate(@Param("groupId") Long groupId);
 }

@@ -1,11 +1,12 @@
 package com.team.sharedcreature.auth.infrastructure;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.application.SocialLoginClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2Error;
@@ -173,30 +174,31 @@ public class GoogleLoginClient implements SocialLoginClient {
     }
 
     private BusinessException invalidToken(String message) {
-        return new BusinessException(HttpStatus.UNAUTHORIZED, "OAUTH_ID_TOKEN_INVALID", message);
+        return new BusinessException(ErrorCode.OAUTH_ID_TOKEN_INVALID, message);
     }
 
     private BusinessException providerUnavailable(String message) {
-        return new BusinessException(HttpStatus.BAD_GATEWAY, "OAUTH_PROVIDER_UNAVAILABLE", message);
+        return new BusinessException(ErrorCode.OAUTH_PROVIDER_UNAVAILABLE, message);
     }
 
     private void requireConfigured() {
         if (properties.clientId() == null || properties.clientId().isBlank()
                 || properties.clientSecret() == null || properties.clientSecret().isBlank()) {
             throw new BusinessException(
-                    HttpStatus.SERVICE_UNAVAILABLE,
-                    "OAUTH_PROVIDER_UNAVAILABLE",
+                    ErrorCode.OAUTH_PROVIDER_UNAVAILABLE,
                     "Google OAuth 환경변수가 설정되지 않았습니다."
             );
         }
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     private record GoogleTokenResponse(
             @JsonProperty("access_token") String accessToken,
             @JsonProperty("id_token") String idToken
     ) {
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     private record GoogleUserInfo(
             @JsonProperty("sub") String subject,
             String email,
