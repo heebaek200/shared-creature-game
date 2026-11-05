@@ -634,7 +634,7 @@ UPDATE game_groups
 
 **주요 규칙**
 
-`season_number`·`start_at` UNIQUE; `status=SCHEDULED/ACTIVE/CLOSING/ENDED`; 시작·종료 Scheduler 재진입 멱등. 장기 중단 뒤에는 최초 시즌의 4주 달력에서 현재 구간을 계산하되 중간 구간 행을 소급 생성하지 않고, 마지막 저장 시즌 번호의 다음 번호로 현재 구간 시즌 하나만 만듭니다. 따라서 `season_number`는 저장된 시즌 사이에서는 연속하지만 모든 과거 4주 구간에 행이 존재함을 뜻하지 않습니다. 현재 구간 시즌은 `SCHEDULED`로 생성하고 기존 활성 그룹의 참여·알·0점 점수 초기화를 전부 완료한 뒤 `ACTIVE`로 전환합니다. `SCHEDULED`와 종료된 과거 시즌에서는 부화하지 않습니다.
+`season_number`·`start_at` UNIQUE; `status=SCHEDULED/ACTIVE/CLOSING/ENDED`; 시작·종료 Scheduler 재진입 멱등. 장기 중단 뒤에는 최초 시즌의 4주 달력에서 현재 구간을 계산하되 중간 구간 행을 소급 생성하지 않고, 마지막 저장 시즌 번호의 다음 번호로 현재 구간 시즌 하나만 만듭니다. 따라서 `season_number`는 저장된 시즌 사이에서는 연속하지만 모든 과거 4주 구간에 행이 존재함을 뜻하지 않습니다. 현재 구간 시즌은 `SCHEDULED`로 생성하고 기존 활성 그룹의 참여·알·0점 점수 초기화를 전부 완료한 뒤 `ACTIVE`로 전환합니다. 만료된 `SCHEDULED`는 활성화하지 않고 `ENDED`로 종결합니다. `SCHEDULED`와 종료된 과거 시즌에서는 부화하지 않습니다.
 
 | 컬럼 | 자료형 | 역할·제약 |
 |---|---|---|
@@ -672,7 +672,7 @@ UPDATE game_groups
 
 **주요 규칙**
 
-`(group_id,season_id)` UNIQUE; `status=PREPARING/ACTIVE/ENDED`; `selection_source=ADMIN/RANDOM`. 기존 활성 그룹의 복구 시즌 참여와 시즌 도중 새 그룹 참여 모두 `selection_deadline_at=created_at+72시간`을 사용합니다. 재실행은 최초 생성된 행과 기한을 유지하며 72시간을 다시 시작하지 않습니다. 관리자 선택의 기존 `selected_at`은 보존하고 미선택 무작위 선택의 `selected_at`, 크리처 `hatched_at`과 각 행의 `updated_at`은 실제 `ACTIVE` 부화 처리 시각을 사용합니다. 종료된 시즌의 미부화 크리처는 알 상태로 보존합니다.
+`(group_id,season_id)` UNIQUE; `status=PREPARING/ACTIVE/ENDED`; `selection_source=ADMIN/RANDOM`. 기존 활성 그룹의 복구 시즌 참여와 시즌 도중 새 그룹 참여 모두 `selection_deadline_at=created_at+72시간`을 사용합니다. 재실행은 최초 생성된 행과 기한을 유지하며 72시간을 다시 시작하지 않습니다. 관리자 선택의 기존 `selected_at`은 보존하고 미선택 무작위 선택의 `selected_at`, 크리처 `hatched_at`과 각 행의 `updated_at`은 실제 `ACTIVE` 부화 처리 시각을 사용합니다. 종료된 시즌의 미부화 크리처는 알 상태로 보존합니다. 만료된 `SCHEDULED`의 기존 행은 값을 유지한 채 `ENDED`로 전환합니다.
 
 | 컬럼 | 자료형 | 역할·제약 |
 |---|---|---|
@@ -776,6 +776,7 @@ UPDATE game_groups
 **주요 규칙**
 
 `(group_season_id,user_id)`·`(group_season_id,rank_number)` UNIQUE; 생성 후 수정하지 않음.
+한 번도 `ACTIVE`가 아니었던 만료 `SCHEDULED` 시즌에는 개인 랭킹 Snapshot을 생성하지 않습니다.
 
 | 컬럼 | 자료형 | 역할·제약 |
 |---|---|---|
@@ -798,6 +799,7 @@ UPDATE game_groups
 **주요 규칙**
 
 `(season_id,group_id)`·`(season_id,rank_number)` UNIQUE; 생성 후 수정하지 않음.
+한 번도 `ACTIVE`가 아니었던 만료 `SCHEDULED` 시즌에는 그룹 랭킹 Snapshot을 생성하지 않습니다.
 
 | 컬럼 | 자료형 | 역할·제약 |
 |---|---|---|
@@ -1211,6 +1213,7 @@ UPDATE game_groups
 - 일일·주간·시즌 종료는 각 논리 경계 시각을 사용합니다. 상태 기반 PG·사진 점검은 지나간 모든 틱을 생성하지 않고 현재 5분 구간 하나로 기한 도달 상태를 스캔합니다.
 - 정상화 결과에는 처리·생략·실패 건수와 생략한 과거 기간 범위를 `result_summary`에 남깁니다. 실행 성공 표시는 관련 업무 트랜잭션이 Commit된 뒤에만 확정합니다.
 - `SEASON_CLOSE`는 저장 상태 기준 Snapshot과 `ENDED` 전환이 Commit된 뒤에만 `SUCCEEDED`로 확정합니다. 현재 시즌 초기화 실행도 누락된 기존 그룹이 0건이고 `ACTIVE` 전환이 Commit된 뒤에만 성공이며 부화 완료를 선행조건으로 삼지 않습니다.
+- 만료된 `SCHEDULED`의 시즌과 기존 `GroupSeason` 종료는 한 트랜잭션으로 처리하며 실패하면 재시도합니다.
 - 시즌 그룹 초기화·일반 `ACTIVE` 부화·사진·결제 대상은 `(status, selection_deadline_at)` 등 기존 상태·기한 인덱스로 100건씩 조회합니다. 새 인덱스는 실제 실행 계획에서 필요성이 확인될 때만 추가합니다.
 
 | 컬럼 | 자료형 | 역할·제약 |

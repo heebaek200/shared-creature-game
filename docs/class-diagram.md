@@ -380,6 +380,7 @@ classDiagram
 - 정상화는 잔여 `CLOSING` 시즌의 저장 상태 Snapshot과 종료, 현재 `SCHEDULED` 시즌 생성, 기존 활성 그룹의 알·점수 전량 초기화, `ACTIVE` 전환, 현재 일일·주간 배정 순으로 실행합니다. 중단 중 만료된 퀘스트와 중간 시즌은 생성하지 않고 종료 시즌의 알도 소급 부화하지 않습니다.
 - 기존 활성 그룹과 시즌 도중 새 그룹의 `selectionDeadlineAt`은 모두 실제 최초 참여 생성 시각+72시간입니다. 기존 그룹의 `GroupSeason`, `GroupCreature`, `SeasonGroupScore` 초기화가 끝나면 시즌을 `ACTIVE`로 바꾸고, 이후 일반 부화 경로가 저장된 기한에 도달한 알만 처리합니다.
 - `SCHEDULED`와 `CLOSING`에서는 부화하지 않습니다. 복구 시즌에서도 사용자가 알 상태와 종 선택 기간을 거치며, 시즌 종료가 72시간보다 먼저면 알 상태로 종료합니다.
+- `SchedulerReconciliationService`는 만료 전 `SCHEDULED`의 초기화를 재개하고, 만료 후에는 기존 기록만 보존해 랭킹 Snapshot 없이 시즌과 참여를 종료합니다.
 - 시즌 의존 Service는 `ACTIVE` 상태와 함께 `startAt <= now < endAt`을 검사하고 정상화 전에는 기존 `CONCURRENT_MODIFICATION`을 반환합니다.
 - 현재 `QuestPeriod`가 없거나 `PENDING/FAILED`이면 현재 퀘스트 관련 Service도 `CONCURRENT_MODIFICATION`을 반환하고, 완성된 `ACTIVE` 배정만 조회합니다.
 
