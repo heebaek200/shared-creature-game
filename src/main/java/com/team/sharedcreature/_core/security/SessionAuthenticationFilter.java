@@ -70,6 +70,10 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
                 ? null
                 : request.getSession(false).getAttribute(LOGIN_USER);
 
+        // 매 요청에서 오래된 인증 객체를 제거합니다.
+        // 유효한 LOGIN_USER가 확인된 경우에만 아래 로직에서 인증을 다시 생성합니다.
+        SecurityContextHolder.clearContext();
+
         Long authenticatedUserId = null;
 
         // 기존 세션의 사용자 상태와 최신 역할을 다시 조회합니다.

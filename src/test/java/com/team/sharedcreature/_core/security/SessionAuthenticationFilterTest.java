@@ -14,9 +14,12 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.CannotCreateTransactionException;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -104,6 +107,14 @@ class SessionAuthenticationFilterTest {
         when(user.getStatus()).thenReturn("SUSPENDED");
 
         MockHttpSession session = new MockHttpSession();
+        // 비활성 회원에게 오래된 PRIMARY 인증이 남아 있는 상황을 재현합니다.
+        SecurityContextHolder.getContext().setAuthentication(
+                UsernamePasswordAuthenticationToken.authenticated(
+                        new LoginUser(1L, "새싹지기", Set.of("PRIMARY")),
+                        "N/A",
+                        List.of(new SimpleGrantedAuthority("ROLE_PRIMARY"))
+                )
+        );
         session.setAttribute(SessionAuthenticationFilter.LOGIN_USER, new LoginUser(1L, "새싹지기", Set.of("PRIMARY")));
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setSession(session);
@@ -267,5 +278,42 @@ class SessionAuthenticationFilterTest {
         ).doFilter(request, response, chain);
 
         return response;
+    }
+
+    /**
+     * 인증 세션이 없는 요청은 이전 인증 객체를 재사용해서는 안 됩니다.
+     *
+     * 다른 요청에서 ROLE_PRIMARY 인증이 남아 있는 상황을 재현합니다.
+     * LOGIN_USER가 없는 요청에서 SecurityContext가 비워지는지 검증합니다.
+     */
+    @Test
+    void 로그인_세션이_없으면_오래된_인증_객체를_제거한다() throws Exception {
+        // 과거 요청의 PRIMARY 인증 객체를 강제로 설정합니다.
+        LoginUser staleUser = new LoginUser(1L, "관리자", Set.of("PRIMARY"));
+
+        SecurityContextHolder.getContext().setAuthentication(
+                UsernamePasswordAuthenticationToken.authenticated(
+                        staleUser,
+                        "N/A",
+                        List.of(new SimpleGrantedAuthority("ROLE_PRIMARY"))
+                )
+        );
+
+        // 이번 요청에는 LOGIN_USER 세션 속성이 없습니다.
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        new SessionAuthenticationFilter(
+                mock(UserRepository.class),
+                mock(GroupMembershipRepository.class),
+                mock(UserActivityService.class)
+        ).doFilter(request, response, chain);
+
+        // 이전 PRIMARY 권한이 재사용되지 않아야 합니다.
+        assertThat(SecurityContextHolder.getContext().getAuthentication())
+                .isNull();
+
+        verify(chain).doFilter(request, response);
     }
 }
