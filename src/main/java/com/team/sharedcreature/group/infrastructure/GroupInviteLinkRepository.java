@@ -30,4 +30,20 @@ public interface GroupInviteLinkRepository extends JpaRepository<GroupInviteLink
             @Param("invitationId") Long invitationId,
             @Param("groupId") Long groupId
     );
+
+    /**
+     * 현재 그룹의 활성 초대 링크를 쓰기 잠금으로 조회함
+     * - 호출하는 곳에서 그룹 행을 먼저 잠금 후 실행해야 함
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT
+                gil
+            FROM
+                GroupInviteLink AS gil
+            WHERE
+                gil.group.id = :groupId
+            AND gil.status = 'ACTIVE'
+""")
+    Optional<GroupInviteLink> findActiveByGroupIdForUpdate(@Param("groupId") Long groupId);
 }

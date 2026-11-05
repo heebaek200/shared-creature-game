@@ -146,5 +146,26 @@ public class GroupMembership {
         this.updatedAt = now;
     }
 
+    /**
+     * 현재 회원의 자진 탈퇴를 기록합니다.
+     *  - 활성 멤버십만 종료할 수 있으며 과거 가입과 역할 기록은 유지함
+     *  - 탈퇴자와 종료 실행자를 동일한 사용자로 기록함
+     */
+    public void leaveBySelf(User actor, Instant now) {
+        if (!"ACTIVE".equals(this.status)) {
+            throw new IllegalStateException("활성 멤버십이 아닙니다.");
+        }
+
+        if (!this.user.getId().equals(actor.getId())) {
+            throw new IllegalArgumentException("본인의 멤버십만 탈퇴할 수 있습니다.");
+        }
+
+        // 멤버십을 삭제하지 않고 종료 상태로 보존한다
+        this.status = "LEFT";
+        this.endedAt = now;
+        this.endedByUser = actor;
+        this.exitReason = "SELF";
+        this.updatedAt = now;
+    }
 
 }

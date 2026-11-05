@@ -9,16 +9,11 @@ import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 
 import java.util.HashSet;
@@ -28,6 +23,7 @@ import java.util.Set;
 /**
  * 공개 그룹 생성과 멤버십 REST 요청을 처리합니다.
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/groups")
 public class GroupController {
@@ -137,5 +133,35 @@ public class GroupController {
                         size
                 )
         );
+    }
+
+    /**
+     * DELETE /api/v1/groups/me/membership
+     * 현재 인증 사용자의 그룹 자진 탈퇴 처리
+     *  - 탈퇴 성공 후 세션에서 그룹 역할만 제거
+     *  - 소셜 로그인 세션 자체는 유지하여 그룹 선택 화면으로 이동
+     */
+    @DeleteMapping("/me/membership")
+    public ApiResponse<LeaveMyGroupResponse> leaveMyGroup(
+            @AuthenticationPrincipal LoginUser loginUser,
+            HttpSession session
+    ) {
+        LeaveMyGroupResponse result = groupMembershipService.leaveMyGroup(loginUser.id());
+
+        // Service 트랜잭션이 정상 commit 된 후 세션에서 역할을 정리함.
+        // 주 관리자, 부 관리자, 회원 역할은 삭제. 전체 관리자는 제외.
+        Set roles = new HashSet<>(loginUser.roles());
+        roles.removeAll(Set.of("PRIMARY", "DEPUTY", "MEMBER"));
+
+        session.setAttribute(
+                SessionAuthenticationFilter.LOGIN_USER,
+                new LoginUser(
+                        loginUser.id(),
+                        loginUser.nickname(),
+                        Set.copyOf(roles)
+                )
+        );
+
+        return ApiResponse.success(result);
     }
 }

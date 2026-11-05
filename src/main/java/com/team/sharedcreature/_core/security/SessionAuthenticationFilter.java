@@ -73,8 +73,7 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
         Long authenticatedUserId = null;
 
         // 기존 세션의 사용자 상태와 최신 역할을 다시 조회합니다.
-        if (attribute instanceof LoginUser sessionUser
-                && SecurityContextHolder.getContext().getAuthentication() == null) {
+        if (attribute instanceof LoginUser sessionUser) {
 
             User user = userRepository.findById(sessionUser.id()).orElse(null);
 

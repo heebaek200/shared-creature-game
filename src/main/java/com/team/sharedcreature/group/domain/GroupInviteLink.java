@@ -65,4 +65,20 @@ public class GroupInviteLink {
     public static GroupInviteLink issue(Group group, String tokenHash, User issuer, Instant now) {
         return new GroupInviteLink(group, tokenHash, issuer, now);
     }
+
+    /**
+     * 그룹 종료 또는 초대 재발급으로 기존 링크를 무효화함
+     *  - 기존 발급 이력은 보종
+     *  - 활성 상태의 링크만 종료 시각을 기록함
+     */
+    public void invalidate(Instant now) {
+        if (!"ACTIVE".equals(this.status)) {
+            return;
+        }
+
+        // 기존 링크를 다시 사용할 수 없도록 처리함
+        this.status = "INVALIDATE";
+        this.invalidatedAt = now;
+    }
+
 }
