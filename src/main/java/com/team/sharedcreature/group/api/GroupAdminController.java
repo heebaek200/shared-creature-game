@@ -3,6 +3,7 @@ package com.team.sharedcreature.group.api;
 import com.team.sharedcreature._core.api.ApiResponse;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.group.application.GroupAdminService;
+import com.team.sharedcreature.group.application.GroupRemovalService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -15,10 +16,15 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/groups/me")
 public class GroupAdminController {
-    private GroupAdminService groupAdminService;
+    private final GroupAdminService groupAdminService;
+    private final GroupRemovalService groupRemovalService;
 
-    public GroupAdminController(GroupAdminService groupAdminService) {
+    public GroupAdminController(
+            GroupAdminService groupAdminService,
+            GroupRemovalService groupRemovalService
+    ) {
         this.groupAdminService = groupAdminService;
+        this.groupRemovalService = groupRemovalService;
     }
 
     /**
@@ -67,5 +73,25 @@ public class GroupAdminController {
                 loginUser.id(),
                 request.targetUserId()
         ));
+    }
+
+    /**
+     * POST /api/v1/groups/me/members/{userId}/removals
+     * 현재 그룹의 비활동 회원에 대한 강퇴 요청을 처리
+     */
+    @PostMapping("/members/{userId}/removals")
+    public ApiResponse<LeaveMyGroupResponse> removeInactiveMember(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @PathVariable @Positive Long userId,
+            @Valid @RequestBody RemoveGroupMemberRequest request
+    ) {
+        // 세션에서 인증 사용자 ID, 요청에서 대상과 사유
+        LeaveMyGroupResponse result = groupRemovalService.removeInactiveMember(
+                loginUser.id(),
+                userId,
+                request.reason()
+        );
+
+        return ApiResponse.success(result);
     }
 }

@@ -168,4 +168,29 @@ public class GroupMembership {
         this.updatedAt = now;
     }
 
+    /**
+     * 비활동 강퇴가 확정된 멤버십을 종료함
+     *  - 주 관리자(PRIMARY)는 강퇴할 수 없음 / 활성 멤버만 종료할 수 있음
+     *  - 과거 역할과 가입 기록은 보존 / 실행 관리자와 종료 사유를 감사 레코드로 남김
+     */
+    public void removeForInactivity(User actor, Instant now) {
+        if (!"ACTIVE".equals(this.status)) {
+            throw new IllegalStateException("활성 멤버십이 아닙니다.");
+        }
+
+        if (!"PRIMARY".equals(this.role)) {
+            throw new IllegalStateException("주 관리자는 강퇴할 수 없습니다.");
+        }
+
+        if (this.user.getId().equals(actor.getId())) {
+            throw new IllegalArgumentException("자기 자신을 강퇴할 수 없습니다.");
+        }
+
+        this.status = "REMOVED";
+        this.endedAt = now;
+        this.endedByUser = actor;
+        this.exitReason = "INACTIVE";
+        this.updatedAt = now;
+    }
+
 }

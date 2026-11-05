@@ -55,4 +55,31 @@ public class ModerationAction {
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
+    /**
+     * 비활동 회원 강퇴에 대한 감사 기록 생성 (팩토리 패턴)
+     */
+    public static ModerationAction inactiveRemoval(
+            Group group,
+            GroupMembership membership,
+            User target,
+            User actor,
+            String reason,
+            Instant now
+    ) {
+        ModerationAction action = new ModerationAction();
+
+        // 신고 심사에 의한 강퇴와의 구분으로 report = null
+        action.report = null;
+        action.group = group;
+        action.membership = membership;
+        action.targetUser = target;
+        action.actorUser = actor;
+        action.actionType = "REMOVE_INACTIVE";
+        action.reason = reason;
+        action.executedAt = now;
+        action.createdAt = now;
+
+        return action;
+    }
 }
