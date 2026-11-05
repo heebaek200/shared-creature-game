@@ -577,6 +577,7 @@
 | 409 | `GROUP_NAME_ALREADY_USED` | 정규화된 그룹명 중복 |
 | 409 | `ALREADY_IN_GROUP` | 이미 활성 그룹 소속 |
 | 409 | `JOIN_COOLDOWN_ACTIVE` | 탈퇴/강퇴 후 24시간 가입 제한 |
+| 409 | `CONCURRENT_MODIFICATION` | 현재 시즌 초기화 중 또는 시간 경계와 상태 불일치 |
 
 ### proofreadGroupDescription — `POST /api/v1/ai/proofreads`
 
@@ -967,6 +968,10 @@
 
 ## 4. 시즌·크리처 API
 
+현재 시즌에 의존하는 API는 `status=ACTIVE`와 `startAt <= now < endAt`을 모두 만족한 시즌만 사용합니다. 서버 기동 정상화 전처럼 상태와 시간이 불일치하면 신규 오류 코드를 추가하지 않고 기존 `409 CONCURRENT_MODIFICATION`과 공통 오류 Envelope을 반환합니다. 이 규칙은 현재 시즌 참여를 함께 생성하는 `createGroup`, 현재 시즌을 기본값으로 사용하는 퀘스트·체크인·사진·랭킹 API에도 적용하며, 과거 시즌 ID를 명시한 조회와 순수 인증·상점 API에는 적용하지 않습니다.
+
+현재 퀘스트 API는 필요한 현재 일일·주간 `QuestPeriod`와 배정이 모두 `ACTIVE`일 때만 성공합니다. 기간이 없거나 `PENDING/FAILED`이면 빈 배열 대신 `409 CONCURRENT_MODIFICATION`을 반환하며 `FAILED`는 운영 경고에도 노출합니다.
+
 ### getCurrentSeason — `GET /api/v1/seasons/current`
 
 - **Operation ID:** `getCurrentSeason` · **요구사항:** `REQ-SEA-001` · **인증·권한:** `AUTHENTICATED` · **성공 HTTP:** `200`
@@ -995,6 +1000,7 @@
 | 401 | `AUTH_REQUIRED` | 세션 인증 없음 |
 | 401 | `SESSION_EXPIRED` | 인증 세션 만료 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
+| 409 | `CONCURRENT_MODIFICATION` | 현재 시즌 정상화 중 또는 시간 경계와 상태 불일치 |
 
 ### getCreatureHome — `GET /api/v1/groups/me/creature-home`
 
@@ -1070,6 +1076,7 @@
 | 401 | `SESSION_EXPIRED` | 인증 세션 만료 |
 | 403 | `ROLE_FORBIDDEN` | 요청자 권한 부족 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
+| 409 | `CONCURRENT_MODIFICATION` | 현재 시즌 정상화 중 또는 시간 경계와 상태 불일치 |
 
 ### listActiveCreatureSpecies — `GET /api/v1/creature-species`
 
@@ -1137,7 +1144,7 @@
 | 400 | `INVALID_FIELD_VALUE` | 필드 타입·길이·값·형식 검증 실패 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
 | 409 | `CREATURE_SELECTION_CLOSED` | 종 선택 72시간 종료 |
-| 409 | `CONCURRENT_MODIFICATION` | 동시 처리 또는 이미 변경된 리소스 |
+| 409 | `CONCURRENT_MODIFICATION` | 현재 시즌 정상화 중, 동시 처리 또는 이미 변경된 리소스 |
 
 ## 5. 퀘스트·체크인 API
 
@@ -1188,6 +1195,7 @@
 | 403 | `ROLE_FORBIDDEN` | 요청자 권한 부족 |
 | 400 | `INVALID_FIELD_VALUE` | 필드 타입·길이·값·형식 검증 실패 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
+| 409 | `CONCURRENT_MODIFICATION` | 현재 시즌 정상화 중, 현재 기간 미생성 또는 배정 `PENDING/FAILED` |
 
 ### completeQuestAssignment — `POST /api/v1/quest-assignments/{assignmentId}/completions`
 
@@ -1230,7 +1238,7 @@
 | 404 | `RESOURCE_NOT_FOUND` | 없거나 요청자에게 노출하지 않는 리소스 |
 | 409 | `QUEST_PERIOD_ENDED` | 퀘스트 유효 기간 밖 |
 | 409 | `QUEST_COMPLETION_NOT_ALLOWED` | 해당 판정 유형 직접 완료 불가 |
-| 409 | `CONCURRENT_MODIFICATION` | 동시 처리 또는 이미 변경된 리소스 |
+| 409 | `CONCURRENT_MODIFICATION` | 현재 시즌·기간 정상화 중, 동시 처리 또는 이미 변경된 리소스 |
 
 ### createCheckIn — `POST /api/v1/check-ins`
 
@@ -1265,7 +1273,7 @@
 | 403 | `CSRF_INVALID` | CSRF 토큰 없음 또는 불일치 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
 | 409 | `QUEST_PERIOD_ENDED` | 퀘스트 유효 기간 밖 |
-| 409 | `CONCURRENT_MODIFICATION` | 동시 처리 또는 이미 변경된 리소스 |
+| 409 | `CONCURRENT_MODIFICATION` | 현재 시즌·기간 정상화 중, 동시 처리 또는 이미 변경된 리소스 |
 
 ### submitQuestPhoto — `POST /api/v1/photo-submissions`
 
@@ -1309,6 +1317,7 @@
 | 413 | `FILE_TOO_LARGE` | 사진 10 MiB 초과 |
 | 409 | `PHOTO_ATTEMPT_LIMIT_EXCEEDED` | 사진 제출 횟수 5회 초과 |
 | 409 | `QUEST_PERIOD_ENDED` | 퀘스트 유효 기간 밖 |
+| 409 | `CONCURRENT_MODIFICATION` | 현재 시즌·기간 정상화 중 또는 이미 변경된 리소스 |
 | 429 | `RATE_LIMIT_EXCEEDED` | 호출량/동시 처리 제한 초과 |
 
 ## 6. 랭킹 API
@@ -1357,6 +1366,7 @@
 | 403 | `ROLE_FORBIDDEN` | 요청자 권한 부족 |
 | 400 | `INVALID_FIELD_VALUE` | 필드 타입·길이·값·형식 검증 실패 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
+| 409 | `CONCURRENT_MODIFICATION` | `seasonId` 미지정 시 현재 시즌 정상화 중 또는 상태 불일치 |
 
 ### getGroupRanking — `GET /api/v1/rankings/groups`
 
@@ -1400,6 +1410,7 @@
 | 401 | `SESSION_EXPIRED` | 인증 세션 만료 |
 | 400 | `INVALID_FIELD_VALUE` | 필드 타입·길이·값·형식 검증 실패 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
+| 409 | `CONCURRENT_MODIFICATION` | `seasonId` 미지정 시 현재 시즌 정상화 중 또는 상태 불일치 |
 
 ## 7. 상점·아바타 API
 
