@@ -6,14 +6,8 @@ import com.team.sharedcreature._core.security.Hashing;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
-import com.team.sharedcreature.group.api.CreateGroupRequest;
-import com.team.sharedcreature.group.api.CreateGroupResponse;
-import com.team.sharedcreature.group.api.GroupSummaryResponse;
-import com.team.sharedcreature.group.api.MembershipResponse;
-import com.team.sharedcreature.group.domain.Group;
-import com.team.sharedcreature.group.domain.GroupAdminChange;
-import com.team.sharedcreature.group.domain.GroupInviteLink;
-import com.team.sharedcreature.group.domain.GroupMembership;
+import com.team.sharedcreature.group.api.*;
+import com.team.sharedcreature.group.domain.*;
 import com.team.sharedcreature.group.infrastructure.*;
 import com.team.sharedcreature.season.domain.GroupCreature;
 import com.team.sharedcreature.season.domain.GroupSeason;
@@ -36,6 +30,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Locale;
+import java.util.Optional;
 
 /**
  * 그룹 생성·가입·탈퇴의 정합성 경계를 소유합니다.
@@ -312,5 +307,132 @@ public class GroupMembershipService {
         public boolean joined() {
             return membership != null;
         }
+    }
+
+    /**
+     * 현재 로그인한 사용자를 소속 그룹에서 자진 탈퇴시킴
+     *  - 사용자 -> 그룹 -> 초대 링크(1인 종료 시) -> 멤버십 -> 가입 제한 순서로 잠금
+     *  - 마지막 주 관리자(PRIMARY)라면 그룹 및 현재 시즌 참여까지 함께 종료
+     */
+    @Transactional
+    public LeaveMyGroupResponse leaveMyGroup(Long userId) {
+        // 1. 잠금 전에는 활성 그룹 ID만 확인함
+        Long groupId = membershipRepository.findActiveGroupIdByUserId(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ROLE_FORBIDDEN));
+
+        // 2. 사용자 행을 먼저 잠금
+        User user = userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REQUIRED));
+
+        // 3. 그룹 행을 잠그고 활성 상태를 확인
+        Group group = groupRepository.findByIdForUpdate(groupId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        if (!"ACTIVE".equals(group.getStatus())) {
+            throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
+        }
+
+        // 4. 유일한 주 관리자(PRIMARY) 라면 링크 무효화 : 먼저 잠금
+        boolean lastPrimaryCandidate =
+                group.getCurrentMemberCount() == 1 &&
+                group.getPrimaryAdminUser() != null &&
+                userId.equals(group.getPrimaryAdminUser().getId());
+
+        Optional<GroupInviteLink> activeInvitation = lastPrimaryCandidate
+                ? inviteLinkRepository.findActiveByGroupIdForUpdate(groupId)
+                : Optional.empty();
+
+        // 5. 활성 멤버십 ID를 재조회하고 쓰기 잠금 획득
+        Long membershipId = membershipRepository
+                .findActiveMembershipId(groupId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CONCURRENT_MODIFICATION));
+
+        GroupMembership membership = membershipRepository
+                .findByIdForUpdate(membershipId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CONCURRENT_MODIFICATION));
+
+        // 6. 잠금 이후 현재 사용자, 그룹, 멤버십의 일치 여부 다시 검사
+        if (!"ACTIVE".equals(membership.getStatus()) ||
+            !userId.equals(membership.getUser().getId()) ||
+            !groupId.equals(membership.getGroup().getId())
+        ) {
+            throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
+        }
+
+        boolean isPrimary = "PRIMARY".equals(membership.getRole());
+        int memberCount = group.getCurrentMemberCount();
+
+        // 7. 다른 활성 구성원이 있다면 주 관리자(PRIMARY)는 이전 후에 탈퇴 가능
+        if (isPrimary && memberCount > 1) {
+            throw new BusinessException(ErrorCode.PRIMARY_TRANSFER_REQUIRED);
+        }
+
+        // 마지막 회원이 주 관리자(PRIMARY)인지 확인
+        if (memberCount < 1 || (memberCount == 1 && !isPrimary)) {
+            throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
+        }
+
+        Instant now = Instant.now(clock);
+
+        // 8. 멤버십을 LEFT로 종료. 기존 이력은 삭제하지 않음
+        membership.leaveBySelf(user, now);
+
+        if (isPrimary) {
+            // 마지막 주 관리자(PRIMARY)의 탈퇴는 그룹 종료로 처리됨
+            group.deactivateAfterLastMemberLeaves(now);
+
+            // 마지막 활성 초대 링크도 무효화시키고 떠나기
+            activeInvitation.ifPresent(link -> link.invalidate(now));
+        } else {
+            // 일반 회원의 탈퇴는 그룹 인원 한 명 감소 갱신
+            group.decrementMemberCount(now);
+        }
+
+        // 10. 24시간 제한 : 사용자별 기존 제한 행이 있으면 재사용
+        GroupJoinRestriction restriction = restrictionRepository
+                .findByUserIdForUpdate(userId)
+                .orElse(null);
+
+        if (restriction == null) {
+            // 최초 탈퇴는 24시간 제한 행을 생성
+            restriction = GroupJoinRestriction.forDeparture(user, membership, "SELF", now);
+            restrictionRepository.save(restriction);
+        } else {
+            // 재탈퇴 시 기존 UNIQUE 행의 근거와 기간을 갱신
+            restriction.renew(membership, "SELF", now);
+        }
+
+        // 11. 마지막 주 관리자(PRIMARY)라면 시즌 참여와 크리처도 종료하기
+        if (isPrimary) {
+            closeCurrentGroupSeason(groupId, now);
+        }
+
+        // Commit
+        return new LeaveMyGroupResponse(
+                groupId, userId, now, "SELF", now.plusSeconds(24L * 60 * 60), isPrimary
+        );
+    }
+
+    /**
+     * 비활성화된 그룹의 현재 시즌 참여와 크리처를 종료함
+     *  - 각각 쓰기 잠금 획득
+     *  - 크리처 경험치, 기존 시즌 점수, 개인 기여 이력은 보존함
+     */
+    private void closeCurrentGroupSeason(Long groupId, Instant now) {
+        // 종료되지 않은 그룹 시즌 참여만 처리
+        groupSeasonRepository.findOpenByGroupIdForUpdate(groupId)
+                .ifPresent(groupSeason -> {
+                    // 현재 시즌에 연결된 크리처도 쓰기 잠금으로 조회
+                    GroupCreature creature = groupCreatureRepository
+                            .findForUpdateByGroupSeasonId(groupSeason.getId())
+                            .orElseThrow(() -> new IllegalStateException(
+                                    "그룹 시즌에 연결된 크리처가 없습니다 : " + groupSeason.getId()
+                            ));
+
+                    // 기존 성장 이력을 보존하고 상태만 종료
+                    groupSeason.endForGroupClosure(now);
+                    creature.archiveForGroupClosure(now);
+                });
+
     }
 }

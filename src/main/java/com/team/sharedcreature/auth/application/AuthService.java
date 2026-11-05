@@ -169,10 +169,17 @@ public class AuthService {
 
         var account = socialAccountRepository.findByProviderAndProviderUserId("GOOGLE", profile.providerUserId());
         if (account.isPresent()) {
+            // 기존 회원 분기
             User user = account.get().getUser();
+
             if (!"ACTIVE".equals(user.getStatus())) {
                 throw new BusinessException(ErrorCode.ACCOUNT_NOT_ACTIVE);
             }
+
+            // 기존 회원의 OAuth 로그인 성공 시각을 갱신합니다.
+            user.recordLogin(now);
+
+            // 로그인 및 초대 가입 처리
             String nickname = userProfileRepository.findByUserId(user.getId()).map(UserProfile::getNickname).orElse("회원");
             joinExistingInvitation(invitationId, user, nickname, session);
             Set<String> roles = currentRoles(user);

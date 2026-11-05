@@ -3,6 +3,7 @@ package com.team.sharedcreature._core.security;
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
 import com.team.sharedcreature._core.exception.RestApiExceptionHandler;
 import com.team.sharedcreature._core.web.RequestIdFilter;
+import com.team.sharedcreature.auth.application.UserActivityService;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -174,7 +175,7 @@ class SecurityFilterChainTest {
                 UserRepository userRepository,
                 GroupMembershipRepository membershipRepository
         ) {
-            return new SessionAuthenticationFilter(userRepository, membershipRepository);
+            return new SessionAuthenticationFilter(userRepository, membershipRepository, mock(UserActivityService.class));
         }
 
         @Bean

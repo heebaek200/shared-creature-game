@@ -916,7 +916,6 @@
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
 | data.groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
-| data.invitationUrl | string(uri) | Y | N | 동일 Origin /invite/{token} | 초대 URL |
 | data.issuedAt | string(date-time) | Y | N | UTC ISO 8601 | 발급 시각 |
 | data.issuedByUserId | integer(int64) | Y | N | 1 이상 | 링크 발급 사용자 ID |
 | data.unlimitedUses | boolean | Y | N | 고정 true | 사용 횟수 무제한 여부 |
@@ -930,6 +929,7 @@
 | 401 | `SESSION_EXPIRED` | 인증 세션 만료 |
 | 403 | `ROLE_FORBIDDEN` | 요청자 권한 부족 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
+| 409 | `CONCURRENT_MODIFICATION` | 활성 그룹에 유효한 초대 링크가 존재하지 않는 비정상 상태 |
 
 ### rotateInvitation — `POST /api/v1/groups/me/invitation/rotate`
 
@@ -963,7 +963,7 @@
 | 403 | `ROLE_FORBIDDEN` | 요청자 권한 부족 |
 | 403 | `CSRF_INVALID` | CSRF 토큰 없음 또는 불일치 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
-| 409 | `CONCURRENT_MODIFICATION` | 동시 처리 또는 이미 변경된 리소스 |
+| 409 | `CONCURRENT_MODIFICATION` | 활성 초대 링크 누락 또는 동시 처리로 인한 상태 불일치 |
 
 ## 4. 시즌·크리처 API
 
