@@ -112,6 +112,47 @@ public class CheckInService {
     }
 
     /**
+     * 현재 주간 배정 중 서비스 체크인으로 진행되는 집계 퀘스트를 찾습니다.
+     *
+     * @return 현재 주간에 배정된 체크인 집계 퀘스트 목록
+     */
+    private ArrayList<QuestAssignment> findCurrentWeeklyCheckInAssignments(Instant now) {
+        ArrayList<QuestAssignment> checkInAssignments = new ArrayList<>();
+
+        // 주간 기간 조회
+        Long seasonId = seasonQueryService.findCurrentSeason().getId();
+        var currentPeriod = periodRepository.findCurrentBySeasonAndType(
+                seasonId,
+                "WEEKLY",
+                now
+        );
+
+        if (currentPeriod.isEmpty()) {
+            return checkInAssignments;
+        }
+
+        // 해당 기간의 퀘스트 할당 정보 전체 조회
+        var assignments = assignmentRepository.findAllWithSnapshotByPeriodId(
+                currentPeriod.get().getId()
+        );
+
+        // 출석 집계 관련 퀘스트 코드 필터
+        for (QuestAssignment assignment : assignments) {
+            String templateCode = assignment.getQuestTemplate().getCode();
+
+            if ("W-L-01".equals(templateCode)
+                    || "W-L-06".equals(templateCode)
+                    || "W-M-01".equals(templateCode)
+                    || "W-H-01".equals(templateCode)
+                    || "W-H-04".equals(templateCode)) {
+                checkInAssignments.add(assignment);
+            }
+        }
+
+        return checkInAssignments;
+    }
+
+    /**
      * 사용자의 활성 그룹 멤버십을 조회합니다.
      *
      * @param userId 멤버십을 확인할 사용자 ID

@@ -26,6 +26,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDate;
+import java.util.Optional;
 
 /**
  * 퀘스트 조회와 완료 처리를 담당합니다.
@@ -636,8 +638,120 @@ public class QuestCompletionService {
     }
 
     /**
+     * 체크인으로 진행되는 주간 집계 퀘스트가 목표에 도달하면 완료와 보상을 반영합니다.
+     *
+     * @param userId 체크인한 사용자 ID
+     * @param assignmentId 확인할 주간 퀘스트 배정 ID
+     * @return 새로 완료한 경우 완료 결과, 아직 완료할 수 없으면 빈 Optional
+     */
+    @Transactional
+    public Optional<QuestCompletionResponse> completeCheckInAggregateIfEligible(
+            Long userId,
+            Long assignmentId
+    ) {
+        // 동시성 제어
+        seasonQueryService.findCurrentSeasonForShare();
+        // 401  AUTH_REQUIRED  세션 인증 없음
+        User user = userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.UNAUTHORIZED,
+                        "AUTH_REQUIRED",
+                        "로그인이 필요합니다."
+                ));
+
+        // 403  ROLE_FORBIDDEN  요청자 권한 부족
+        GroupMembership membership = membershipRepository
+                .findActiveWithGroupByUserId(userId)
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.FORBIDDEN,
+                        "ROLE_FORBIDDEN",
+                        "요청 권한이 없습니다."
+                ));
+
+        // 퀘스트 코드별 목표치 및 조건 확인
+        QuestAssignment assignment =
+                findCompletableAssignment(userId, assignmentId, "AGGREGATE");
+        String templateCode = assignment.getQuestTemplate().getCode();
+        int target;
+        boolean morningOnly;
+
+        if ("W-L-01".equals(templateCode)) {
+            target = 3;
+            morningOnly = false;
+        } else if ("W-L-06".equals(templateCode)) {
+            target = 2;
+            morningOnly = true;
+        } else if ("W-M-01".equals(templateCode)) {
+            target = 5;
+            morningOnly = false;
+        } else if ("W-H-01".equals(templateCode)) {
+            target = 7;
+            morningOnly = false;
+        } else if ("W-H-04".equals(templateCode)) {
+            target = 5;
+            morningOnly = true;
+        } else {
+            return Optional.empty();
+        }
+
+        // 실제 출석일 검증
+        if (!"WEEKLY".equals(assignment.getQuestPeriod().getPeriodType())) {
+            return Optional.empty();
+        }
+        LocalDate weekStart = assignment.getQuestPeriod().getPeriodDate();
+        LocalDate weekEndExclusive = weekStart.plusWeeks(1);
+
+        long current = morningOnly
+                ? serviceCheckInRepository.countMorningCheckInsInDateRange(
+                userId,
+                weekStart,
+                weekEndExclusive
+        )
+                : serviceCheckInRepository.countCheckInsInDateRange(
+                userId,
+                weekStart,
+                weekEndExclusive
+        );
+
+        if (current < target) {
+            return Optional.empty();
+        }
+
+        // 404  RESOURCE_NOT_FOUND  없거나 요청자에게 노출하지 않는 리소스
+        // 중복 완료 방지
+        GroupSeason groupSeason = groupSeasonRepository
+                .findForUpdateByGroupIdAndSeasonId(
+                        membership.getGroup().getId(),
+                        assignment.getQuestPeriod().getSeason().getId()
+                )
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.NOT_FOUND,
+                        "RESOURCE_NOT_FOUND",
+                        "그룹 시즌을 찾을 수 없습니다."
+                ));
+        if (!"ACTIVE".equals(groupSeason.getStatus())) {
+            throw new BusinessException(
+                    HttpStatus.CONFLICT,
+                    "QUEST_PERIOD_ENDED",
+                    "그룹 시즌이 활성 상태가 아닙니다."
+            );
+        }
+        Map<Long, QuestCompletion> existingCompletions =
+                findCompletionsByAssignmentId(userId, List.of(assignment));
+
+        if (existingCompletions.containsKey(assignmentId)) {
+            return Optional.empty();
+        }
+
+        // 조건 충족 시 보상 지급 실행
+        return Optional.of(
+                completeAndReward(user, membership, groupSeason, assignment)
+        );
+    }
+
+    /**
      * 퀘스트 배정 Snapshot의 보상값을 사용해 완료와 보상을 반영합니다.
-     * <p>
+     *
      * 이미 완료된 배정이면 기존 결과를 반환합니다. 새 완료라면 완료 기록,
      * 크리처 경험치, 개인 기여도, 그룹 점수와 보상 원장을 한 트랜잭션에서 저장합니다.
      *
