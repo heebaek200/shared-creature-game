@@ -286,6 +286,29 @@ public class QuestCompletionService {
                             progressTarget
                     );
                 }
+                // W-L-03과 W-M-03은 서로 다른 날짜에 일일 퀘스트를 완료한 일수를 표시
+                // 완료 횟수가 아닌 완료한 날짜 수(Days) 집계
+            } else if ("W-L-03".equals(templateCode)
+                    || "W-M-03".equals(templateCode)) {
+                progressTarget = "W-L-03".equals(templateCode) ? 2 : 4;
+
+                if (completed) {
+                    currentProgress = progressTarget;
+                } else {
+                    var weekStart = assignment.getQuestPeriod().getPeriodDate();
+                    var weekEndExclusive = weekStart.plusWeeks(1);
+
+                    currentProgress = (int) Math.min(
+                            completionRepository.countDailyCompletionDaysInDateRange(
+                                    userId,
+                                    membership.getId(),
+                                    groupSeason.getId(),
+                                    weekStart,
+                                    weekEndExclusive
+                            ),
+                            progressTarget
+                    );
+                }
 
                 // 주간 일반 체크인 횟수 달성 퀘스트 ("W-L-01", "W-M-01", "W-H-01")
             } else if ("W-L-01".equals(templateCode)

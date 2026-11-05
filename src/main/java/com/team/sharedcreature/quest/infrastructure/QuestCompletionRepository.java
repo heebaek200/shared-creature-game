@@ -56,4 +56,33 @@ public interface QuestCompletionRepository extends JpaRepository<QuestCompletion
             @Param("endDateExclusive") LocalDate endDateExclusive
     );
 
+    /**
+     * 지정한 주간 날짜 구간에서 일일 퀘스트를 완료한 서로 다른 날짜 수를 셉니다.
+     *
+     * @param userId 완료 일수를 집계할 사용자 ID
+     * @param membershipId 현재 활성 멤버십 ID
+     * @param groupSeasonId 현재 그룹 시즌 ID
+     * @param startDate 집계 시작 날짜
+     * @return 일일 퀘스트를 하나 이상 완료한 서로 다른 날짜 수
+     */
+    @Query("""
+            SELECT COUNT(DISTINCT p.periodDate)
+            FROM QuestCompletion c
+            JOIN c.questAssignment a
+            JOIN a.questPeriod p
+            WHERE c.user.id = :userId
+            AND c.membership.id = :membershipId
+            AND c.groupSeason.id = :groupSeasonId
+            AND p.periodType = 'DAILY'
+            AND p.periodDate >= :startDate
+            AND p.periodDate < :endDateExclusive
+            """)
+    long countDailyCompletionDaysInDateRange(
+            @Param("userId") Long userId,
+            @Param("membershipId") Long membershipId,
+            @Param("groupSeasonId") Long groupSeasonId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDateExclusive") LocalDate endDateExclusive
+    );
+
 }
