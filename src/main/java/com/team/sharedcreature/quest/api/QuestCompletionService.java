@@ -309,6 +309,77 @@ public class QuestCompletionService {
                             progressTarget
                     );
                 }
+                // W-L-04는 하 난이도 2회, W-M-04는 중 난이도 3회를 기준으로 진행도를 표시
+            } else if ("W-L-04".equals(templateCode)
+                    || "W-M-04".equals(templateCode)) {
+                boolean lowDifficulty = "W-L-04".equals(templateCode);
+                progressTarget = lowDifficulty ? 2 : 3;
+                String difficulty = lowDifficulty ? "LOW" : "MEDIUM";
+
+                if (completed) {
+                    currentProgress = progressTarget;
+                } else {
+                    var weekStart = assignment.getQuestPeriod().getPeriodDate();
+                    var weekEndExclusive = weekStart.plusWeeks(1);
+
+                    currentProgress = (int) Math.min(
+                            completionRepository.countDailyCompletionsByDifficultyInDateRange(
+                                    userId,
+                                    membership.getId(),
+                                    groupSeason.getId(),
+                                    difficulty,
+                                    weekStart,
+                                    weekEndExclusive
+                            ),
+                            progressTarget
+                    );
+                }
+
+                //  "W-L-05"진행도에 "SELF_CHECK" 일일 퀘스트 수 표시
+            } else if ("W-L-05".equals(templateCode)) {
+                progressTarget = 2;
+
+                if (completed) {
+                    currentProgress = progressTarget;
+                } else {
+                    var weekStart = assignment.getQuestPeriod().getPeriodDate();
+                    var weekEndExclusive = weekStart.plusWeeks(1);
+
+                    currentProgress = (int) Math.min(
+                            completionRepository
+                                    .countDailyCompletionsByVerificationTypeInDateRange(
+                                            userId,
+                                            membership.getId(),
+                                            groupSeason.getId(),
+                                            "SELF_CHECK",
+                                            weekStart,
+                                            weekEndExclusive
+                                    ),
+                            progressTarget
+                    );
+                }
+                // "W-H-03" 일일퀘스트 3개를 완료해야 +1일 총 3일 되면 완료
+            } else if ("W-H-03".equals(templateCode)) {
+                progressTarget = 3;
+
+                if (completed) {
+                    currentProgress = progressTarget;
+                } else {
+                    var weekStart = assignment.getQuestPeriod().getPeriodDate();
+                    var weekEndExclusive = weekStart.plusWeeks(1);
+
+                    currentProgress = (int) Math.min(
+                            completionRepository
+                                    .countFullyCompletedDailyQuestDaysInDateRange(
+                                            userId,
+                                            membership.getId(),
+                                            groupSeason.getId(),
+                                            weekStart,
+                                            weekEndExclusive
+                                    ),
+                            progressTarget
+                    );
+                }
 
                 // 주간 일반 체크인 횟수 달성 퀘스트 ("W-L-01", "W-M-01", "W-H-01")
             } else if ("W-L-01".equals(templateCode)
