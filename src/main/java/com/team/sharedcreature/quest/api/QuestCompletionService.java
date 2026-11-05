@@ -890,6 +890,10 @@ public class QuestCompletionService {
                         now
                 )
         ));
+        // 달성 여부를 검사 이후 집계 퀘스트 처리
+        if ("DAILY".equals(assignment.getQuestPeriod().getPeriodType())) {
+            completeDailyCompletionAggregates(user, membership, groupSeason);
+        }
         return new QuestCompletionResponse(
                 completion.getId(),
                 assignment.getId(),
@@ -901,6 +905,72 @@ public class QuestCompletionService {
                 creature.getGrowthStage(),
                 groupScore.getScore()
         );
+    }
+
+    /**
+     * 일일 퀘스트 완료 수를 기준으로 주간 집계 퀘스트를 자동 완료합니다.
+     *
+     *
+     * @param user 완료한 사용자
+     * @param membership 현재 활성 멤버십
+     * @param groupSeason 완료 기록이 귀속된 그룹 시즌
+     */
+    private void completeDailyCompletionAggregates(
+            User user,
+            GroupMembership membership,
+            GroupSeason groupSeason
+    ) {
+        List<QuestAssignment> weeklyAssignments = findCurrentAssignments("WEEKLY");
+
+        // 현재 주간 퀘스트 조회 및 집계형 필터링
+        for (QuestAssignment weeklyAssignment : weeklyAssignments) {
+            if (!"AGGREGATE".equals(weeklyAssignment.getVerificationTypeSnapshot())) {
+                continue;
+            }
+
+            String templateCode = weeklyAssignment.getQuestTemplate().getCode();
+            int target;
+
+            // 코드별 목표치 확인
+            if ("W-L-02".equals(templateCode)) {
+                target = 3;
+            } else if ("W-M-02".equals(templateCode)) {
+                target = 7;
+            } else if ("W-H-02".equals(templateCode)) {
+                target = 14;
+            } else {
+                continue;
+            }
+
+            // 기간별 누적 완료 횟수 집계 및 조건 검사
+            var weekStart = weeklyAssignment.getQuestPeriod().getPeriodDate();
+            var weekEndExclusive = weekStart.plusWeeks(1);
+
+            long current = completionRepository.countDailyCompletionsInDateRange(
+                    user.getId(),
+                    membership.getId(),
+                    groupSeason.getId(),
+                    weekStart,
+                    weekEndExclusive
+            );
+
+            if (current < target) {
+                continue;
+            }
+
+            // 중복 완료 방지 및 자동 보상 지급
+            Map<Long, QuestCompletion> existingCompletions =
+                    findCompletionsByAssignmentId(
+                            user.getId(),
+                            List.of(weeklyAssignment)
+                    );
+
+            if (existingCompletions.containsKey(weeklyAssignment.getId())) {
+                continue;
+            }
+
+            completeAndReward(user, membership, groupSeason, weeklyAssignment);
+        }
     }
 
     /**
