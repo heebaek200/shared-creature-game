@@ -203,11 +203,27 @@ public class QuestCompletionService {
      */
     @Transactional(readOnly = true)
     public List<CurrentQuestResponse> listCurrentQuests(Long userId, String periodType) {
-        membershipRepository.findActiveWithGroupByUserId(userId)
+
+        // 시즌 참여 확인 403  ROLE_FORBIDDEN  요청자 권한 부족
+        GroupMembership membership = membershipRepository
+                .findActiveWithGroupByUserId(userId)
                 .orElseThrow(() -> new BusinessException(
                         HttpStatus.FORBIDDEN,
                         "ROLE_FORBIDDEN",
                         "요청 권한이 없습니다."
+                ));
+
+        // 404  RESOURCE_NOT_FOUND  없거나 요청자에게 노출하지 않는 리소스
+        Long seasonId = seasonQueryService.findCurrentSeason().getId();
+        GroupSeason groupSeason = groupSeasonRepository
+                .findSnapshotByGroupIdAndSeasonId(
+                        membership.getGroup().getId(),
+                        seasonId
+                )
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.NOT_FOUND,
+                        "RESOURCE_NOT_FOUND",
+                        "현재 그룹의 시즌 참여 정보를 찾을 수 없습니다."
                 ));
 
         /**퀘스트 할당과 완료 이력 조회*/
@@ -243,6 +259,34 @@ public class QuestCompletionService {
                 if (checkedInThisMorning) {
                     currentProgress = 1;
                 }
+                // W-L-02, W-M-02, W-H-02가 각각 주간 일일 퀘스트 완료 3·7·14회를 진행도로 표시
+            } else if ("W-L-02".equals(templateCode)
+                    || "W-M-02".equals(templateCode)
+                    || "W-H-02".equals(templateCode)) {
+                progressTarget = "W-L-02".equals(templateCode) ? 3
+                        : "W-M-02".equals(templateCode) ? 7
+                        : 14;
+
+                // 이미 완료된 퀘스트 처리
+                if (completed) {
+                    currentProgress = progressTarget;
+                } else {
+                    // 미완료 퀘스트의 기간별 누적 완료 횟수 집계
+                    var weekStart = assignment.getQuestPeriod().getPeriodDate();
+                    var weekEndExclusive = weekStart.plusWeeks(1);
+
+                    currentProgress = (int) Math.min(
+                            completionRepository.countDailyCompletionsInDateRange(
+                                    userId,
+                                    membership.getId(),
+                                    groupSeason.getId(),
+                                    weekStart,
+                                    weekEndExclusive
+                            ),
+                            progressTarget
+                    );
+                }
+
                 // 주간 일반 체크인 횟수 달성 퀘스트 ("W-L-01", "W-M-01", "W-H-01")
             } else if ("W-L-01".equals(templateCode)
                     || "W-M-01".equals(templateCode)
@@ -640,7 +684,7 @@ public class QuestCompletionService {
     /**
      * 체크인으로 진행되는 주간 집계 퀘스트가 목표에 도달하면 완료와 보상을 반영합니다.
      *
-     * @param userId 체크인한 사용자 ID
+     * @param userId       체크인한 사용자 ID
      * @param assignmentId 확인할 주간 퀘스트 배정 ID
      * @return 새로 완료한 경우 완료 결과, 아직 완료할 수 없으면 빈 Optional
      */
@@ -751,7 +795,7 @@ public class QuestCompletionService {
 
     /**
      * 퀘스트 배정 Snapshot의 보상값을 사용해 완료와 보상을 반영합니다.
-     *
+     * <p>
      * 이미 완료된 배정이면 기존 결과를 반환합니다. 새 완료라면 완료 기록,
      * 크리처 경험치, 개인 기여도, 그룹 점수와 보상 원장을 한 트랜잭션에서 저장합니다.
      *
