@@ -7,6 +7,6 @@ public record LeaveMyGroupResponse (
         Long userId,
         Instant endedAt,
         String exitReason,
-        Instant restrictionUtil,
+        Instant restrictionUntil,
         boolean groupDeactivated
 ) {}

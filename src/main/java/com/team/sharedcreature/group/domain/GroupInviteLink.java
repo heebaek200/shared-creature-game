@@ -77,7 +77,7 @@ public class GroupInviteLink {
         }
 
         // 기존 링크를 다시 사용할 수 없도록 처리함
-        this.status = "INVALIDATE";
+        this.status = "INVALIDATED";
         this.invalidatedAt = now;
     }
 

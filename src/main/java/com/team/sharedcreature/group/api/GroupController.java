@@ -150,7 +150,7 @@ public class GroupController {
 
         // Service 트랜잭션이 정상 commit 된 후 세션에서 역할을 정리함.
         // 주 관리자, 부 관리자, 회원 역할은 삭제. 전체 관리자는 제외.
-        Set roles = new HashSet<>(loginUser.roles());
+        Set<String> roles = new HashSet<>(loginUser.roles());
         roles.removeAll(Set.of("PRIMARY", "DEPUTY", "MEMBER"));
 
         session.setAttribute(
