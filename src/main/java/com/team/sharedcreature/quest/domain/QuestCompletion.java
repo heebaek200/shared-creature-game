@@ -46,6 +46,15 @@ public class QuestCompletion {
     @Column(name = "completed_at", nullable = false)
     private Instant completedAt;
 
+    @Column(name = "creature_total_experience_after")
+    private Long creatureTotalExperienceAfter;
+
+    @Column(name = "creature_growth_stage_after", length = 30)
+    private String creatureGrowthStageAfter;
+
+    @Column(name = "group_season_score_after")
+    private Long groupSeasonScoreAfter;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -76,5 +85,16 @@ public class QuestCompletion {
         completion.completedAt = now;
         completion.createdAt = now;
         return completion;
+    }
+
+    /** 중복 완료 응답을 재현할 수 있도록 최초 보상 확정 결과를 저장합니다. */
+    public void recordResultSnapshot(
+            long creatureTotalExperienceAfter,
+            String creatureGrowthStageAfter,
+            long groupSeasonScoreAfter
+    ) {
+        this.creatureTotalExperienceAfter = creatureTotalExperienceAfter;
+        this.creatureGrowthStageAfter = creatureGrowthStageAfter;
+        this.groupSeasonScoreAfter = groupSeasonScoreAfter;
     }
 }

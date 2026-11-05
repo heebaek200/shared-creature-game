@@ -297,8 +297,6 @@ public class CheckInService {
                         isMorning
                 )
         );
-        ArrayList<Long> completedQuestIds = new ArrayList<>();
-
         // 아침 체크
         if (isMorning) {
             Optional<QuestAssignment> morningQuest =
@@ -306,38 +304,30 @@ public class CheckInService {
 
             //서버 주도 자동 퀘스트 완료
             if (morningQuest.isPresent()) {
-                QuestCompletionResponse completion =
-                        questCompletionService.completeServerEventAssignment(
-                                userId,
-                                morningQuest.get().getId()
-                        );
-
-                completedQuestIds.add(completion.getCompletionId());
+                questCompletionService.completeServerEventAssignment(
+                        userId,
+                        morningQuest.get().getId()
+                );
             }
         }
 
         // 이번 체크인으로 목표를 달성한 주간 집계 퀘스트 완료
         for (QuestAssignment assignment :
                 findCurrentWeeklyCheckInAssignments(checkedInAt)) {
-            Optional<QuestCompletionResponse> completion =
-                    questCompletionService.completeCheckInAggregateIfEligible(
-                            userId,
-                            assignment.getId()
-                    );
-            if (completion.isPresent()) {
-                completedQuestIds.add(completion.get().getCompletionId());
-            }
+            questCompletionService.completeCheckInAggregateIfEligible(
+                    userId,
+                    assignment.getId()
+            );
         }
 
-        // 최신 완료 상태 조회 / 신규 완료 퀘스트 색출
-        completedQuestIds.clear();
-
+        // 체크인 처리 전에는 없었고 처리 후에는 존재하는 완료 기록만 응답합니다.
         var completionsAfter =
                 questCompletionService.findCompletionsByAssignmentId(
                         userId,
                         currentAssignments
                 );
 
+        ArrayList<Long> completedQuestIds = new ArrayList<>();
         for (var entry : completionsAfter.entrySet()) {
             if (!completionsBefore.containsKey(entry.getKey())) {
                 completedQuestIds.add(entry.getValue().getId());

@@ -14,6 +14,8 @@ import com.team.sharedcreature.quest.infrastructure.QuestPeriodRepository;
 import com.team.sharedcreature.quest.infrastructure.QuestRewardLedgerRepository;
 import com.team.sharedcreature.quest.infrastructure.ServiceCheckInRepository;
 import com.team.sharedcreature.season.application.SeasonQueryService;
+import com.team.sharedcreature.season.application.CreatureUpdateEventPublisher;
+import com.team.sharedcreature.season.domain.CreatureExperienceLedger;
 import com.team.sharedcreature.season.domain.GroupCreature;
 import com.team.sharedcreature.season.domain.GroupSeason;
 import com.team.sharedcreature.season.domain.Season;
@@ -40,6 +42,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -58,6 +61,7 @@ class QuestCompletionServiceTest {
     @Mock private GroupMembershipRepository membershipRepository;
     @Mock private ServiceCheckInRepository serviceCheckInRepository;
     @Mock private SeasonQueryService seasonQueryService;
+    @Mock private CreatureUpdateEventPublisher creatureUpdateEventPublisher;
     @Mock private QuestPeriodRepository periodRepository;
     @Mock private QuestAssignmentRepository assignmentRepository;
     @Mock private QuestCompletionRepository completionRepository;
@@ -88,6 +92,7 @@ class QuestCompletionServiceTest {
                 membershipRepository,
                 serviceCheckInRepository,
                 seasonQueryService,
+                creatureUpdateEventPublisher,
                 periodRepository,
                 assignmentRepository,
                 completionRepository,
@@ -136,6 +141,43 @@ class QuestCompletionServiceTest {
         verify(groupScore).addScore(60L, NOW);
         verify(creatureExperienceLedgerRepository).save(any());
         verify(rewardLedgerRepository).saveAll(any());
+        verify(creatureUpdateEventPublisher).publishAfterCommit(any());
+    }
+
+    @Test
+    void 이미_완료한_배정은_시즌이_끝난_뒤에도_기존_결과를_반환한다() {
+        when(user.getId()).thenReturn(7L);
+        when(membership.getId()).thenReturn(41L);
+        when(userRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(user));
+        when(membershipRepository.findActiveWithGroupByUserId(7L))
+                .thenReturn(Optional.of(membership));
+        when(seasonQueryService.findCurrentSeasonForShareIfPresent()).thenReturn(Optional.empty());
+        when(assignment.getId()).thenReturn(11L);
+        when(assignment.getVerificationTypeSnapshot()).thenReturn("SELF_CHECK");
+        when(assignmentRepository.findWithSnapshotById(11L)).thenReturn(Optional.of(assignment));
+        when(completion.getMembership()).thenReturn(membership);
+        when(completion.getId()).thenReturn(101L);
+        when(completion.getQuestAssignment()).thenReturn(assignment);
+        when(completion.getUser()).thenReturn(user);
+        when(completion.getCompletedAt()).thenReturn(NOW.minusSeconds(3600));
+        when(completion.getCreatureTotalExperienceAfter()).thenReturn(800L);
+        when(completion.getCreatureGrowthStageAfter()).thenReturn("MATURE");
+        when(completion.getGroupSeasonScoreAfter()).thenReturn(120L);
+        when(completionRepository.findAllByUserIdAndQuestAssignmentIdIn(7L, List.of(11L)))
+                .thenReturn(List.of(completion));
+        when(rewardLedgerRepository.findAllByQuestCompletionId(101L)).thenReturn(List.of());
+        when(creatureExperienceLedgerRepository.findByQuestCompletionId(101L))
+                .thenReturn(Optional.of(mock(CreatureExperienceLedger.class)));
+
+        QuestCompletionResponse response = service.completeQuestAssignment(7L, 11L);
+
+        assertThat(response.getCompletionId()).isEqualTo(101L);
+        assertThat(response.getCompletedAt()).isEqualTo(NOW.minusSeconds(3600));
+        assertThat(response.getCreatureTotalExperience()).isEqualTo(800L);
+        assertThat(response.getCreatureGrowthStage()).isEqualTo("MATURE");
+        assertThat(response.getGroupSeasonScore()).isEqualTo(120L);
+        verify(seasonQueryService, never()).findCurrentSeason();
+        verify(creatureUpdateEventPublisher, never()).publishAfterCommit(any());
     }
 
     private void givenValidSelfCheckAssignment() {
@@ -145,6 +187,9 @@ class QuestCompletionServiceTest {
         when(season.getId()).thenReturn(3L);
         when(groupSeason.getId()).thenReturn(31L);
         when(groupSeason.getStatus()).thenReturn("ACTIVE");
+        when(groupSeason.getSeason()).thenReturn(season);
+        when(groupSeason.getGroup()).thenReturn(group);
+        when(membership.getId()).thenReturn(41L);
         when(period.getSeason()).thenReturn(season);
         when(period.getStatus()).thenReturn("ACTIVE");
         when(period.getPeriodType()).thenReturn("WEEKLY");
@@ -155,8 +200,11 @@ class QuestCompletionServiceTest {
         when(assignment.getVerificationTypeSnapshot()).thenReturn("SELF_CHECK");
         when(assignment.getCreatureExperienceSnapshot()).thenReturn(300L);
         when(assignment.getContributionScoreSnapshot()).thenReturn(60L);
+        when(creature.getGroupSeason()).thenReturn(groupSeason);
+        when(creature.getId()).thenReturn(51L);
 
-        when(seasonQueryService.findCurrentSeasonForShare()).thenReturn(season);
+        when(seasonQueryService.findCurrentSeasonForShareIfPresent())
+                .thenReturn(Optional.of(season));
         when(seasonQueryService.findCurrentSeason()).thenReturn(season);
         when(userRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(user));
         when(membershipRepository.findActiveWithGroupByUserId(7L))

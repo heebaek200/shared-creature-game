@@ -8,7 +8,10 @@ import com.team.sharedcreature.quest.domain.QuestCompletion;
 import com.team.sharedcreature.quest.domain.QuestRewardLedger;
 import com.team.sharedcreature.quest.infrastructure.*;
 import com.team.sharedcreature.season.application.SeasonQueryService;
+import com.team.sharedcreature.season.application.CreatureUpdateEventPublisher;
+import com.team.sharedcreature.season.application.CreatureUpdatedEvent;
 import com.team.sharedcreature.season.domain.CreatureExperienceLedger;
+import com.team.sharedcreature.season.domain.GroupCreature;
 import com.team.sharedcreature.season.domain.SeasonGroupScore;
 import com.team.sharedcreature.season.infrastructure.*;
 import lombok.RequiredArgsConstructor;
@@ -88,6 +91,9 @@ public class QuestCompletionService {
      * 현재 활성 시즌을 조회합니다.
      */
     private final SeasonQueryService seasonQueryService;
+
+    /** 보상 확정 후 크리처 변경 이벤트를 커밋 이후 발행합니다. */
+    private final CreatureUpdateEventPublisher creatureUpdateEventPublisher;
 
     /**
      * 현재 진행 중인 일일·주간 퀘스트 기간을 조회합니다.
@@ -289,7 +295,9 @@ public class QuestCompletionService {
                 boolean checkedInThisMorning =
                         serviceCheckInRepository.existsByUserIdAndCheckInDateAndIsMorningTrue(
                                 userId,
-                                assignment.getQuestPeriod().getPeriodDate()
+                                assignment.getQuestPeriod().getPeriodDate(),
+                                membership.getId(),
+                                groupSeason.getId()
                         );
 
                 if (checkedInThisMorning) {
@@ -303,155 +311,29 @@ public class QuestCompletionService {
                     currentProgress = progressTarget;
                 } else {
                     var checkInDate = assignment.getQuestPeriod().getPeriodDate();
-                    var nextDate = checkInDate.plusDays(1);
-
-                    long lowDifficultyCompletions =
-                            completionRepository
-                                    .countDailyCompletionsByDifficultyInDateRange(
-                                            userId,
-                                            membership.getId(),
-                                            groupSeason.getId(),
-                                            "LOW",
-                                            checkInDate,
-                                            nextDate
-                                    );
-
-                    long mediumDifficultyCompletions =
-                            completionRepository
-                                    .countDailyCompletionsByDifficultyInDateRange(
-                                            userId,
-                                            membership.getId(),
-                                            groupSeason.getId(),
-                                            "MEDIUM",
-                                            checkInDate,
-                                            nextDate
-                                    );
-
-                    // 조건 달성도 계산 (중,하 퀘스트 둘 다 완료해야함)
-                    currentProgress = (int) (
-                            Math.min(lowDifficultyCompletions, 1L)
-                                    + Math.min(mediumDifficultyCompletions, 1L)
+                    currentProgress = (int) findDailyCompletionAggregateProgress(
+                            userId,
+                            membership.getId(),
+                            groupSeason.getId(),
+                            checkInDate
                     );
                 }
 
-                // W-L-02, W-M-02, W-H-02가 각각 주간 일일 퀘스트 완료 3·7·14회를 진행도로 표시
-            } else if ("W-L-02".equals(templateCode)
-                    || "W-M-02".equals(templateCode)
-                    || "W-H-02".equals(templateCode)) {
-                progressTarget = readTargetFromSnapshot(assignment);
-
-                // 이미 완료된 퀘스트 처리
-                if (completed) {
-                    currentProgress = progressTarget;
-                } else {
-                    // 미완료 퀘스트의 기간별 누적 완료 횟수 집계
-                    var weekStart = assignment.getQuestPeriod().getPeriodDate();
-                    var weekEndExclusive = weekStart.plusWeeks(1);
-
-                    currentProgress = (int) Math.min(
-                            completionRepository.countDailyCompletionsInDateRange(
-                                    userId,
-                                    membership.getId(),
-                                    groupSeason.getId(),
-                                    weekStart,
-                                    weekEndExclusive
-                            ),
-                            progressTarget
-                    );
-                }
-                // W-L-03과 W-M-03은 서로 다른 날짜에 일일 퀘스트를 완료한 일수를 표시
-                // 완료 횟수가 아닌 완료한 날짜 수(Days) 집계
-            } else if ("W-L-03".equals(templateCode)
-                    || "W-M-03".equals(templateCode)) {
+            } else if (isWeeklyCompletionAggregateTemplate(templateCode)) {
                 progressTarget = readTargetFromSnapshot(assignment);
 
                 if (completed) {
                     currentProgress = progressTarget;
                 } else {
-                    var weekStart = assignment.getQuestPeriod().getPeriodDate();
-                    var weekEndExclusive = weekStart.plusWeeks(1);
-
-                    currentProgress = (int) Math.min(
-                            completionRepository.countDailyCompletionDaysInDateRange(
-                                    userId,
-                                    membership.getId(),
-                                    groupSeason.getId(),
-                                    weekStart,
-                                    weekEndExclusive
-                            ),
-                            progressTarget
+                    Long weeklyAggregateProgress = findWeeklyAggregateProgress(
+                            userId,
+                            membership.getId(),
+                            groupSeason.getId(),
+                            templateCode,
+                            assignment.getQuestPeriod().getPeriodDate(),
+                            assignment.getQuestPeriod().getPeriodDate().plusWeeks(1)
                     );
-                }
-                // W-L-04는 하 난이도 2회, W-M-04는 중 난이도 3회를 기준으로 진행도를 표시
-            } else if ("W-L-04".equals(templateCode)
-                    || "W-M-04".equals(templateCode)) {
-                boolean lowDifficulty = "W-L-04".equals(templateCode);
-                progressTarget = readTargetFromSnapshot(assignment);
-                String difficulty = lowDifficulty ? "LOW" : "MEDIUM";
-
-                if (completed) {
-                    currentProgress = progressTarget;
-                } else {
-                    var weekStart = assignment.getQuestPeriod().getPeriodDate();
-                    var weekEndExclusive = weekStart.plusWeeks(1);
-
-                    currentProgress = (int) Math.min(
-                            completionRepository.countDailyCompletionsByDifficultyInDateRange(
-                                    userId,
-                                    membership.getId(),
-                                    groupSeason.getId(),
-                                    difficulty,
-                                    weekStart,
-                                    weekEndExclusive
-                            ),
-                            progressTarget
-                    );
-                }
-
-                //  "W-L-05"진행도에 "SELF_CHECK" 일일 퀘스트 수 표시
-            } else if ("W-L-05".equals(templateCode)) {
-                progressTarget = readTargetFromSnapshot(assignment);
-
-                if (completed) {
-                    currentProgress = progressTarget;
-                } else {
-                    var weekStart = assignment.getQuestPeriod().getPeriodDate();
-                    var weekEndExclusive = weekStart.plusWeeks(1);
-
-                    currentProgress = (int) Math.min(
-                            completionRepository
-                                    .countDailyCompletionsByVerificationTypeInDateRange(
-                                            userId,
-                                            membership.getId(),
-                                            groupSeason.getId(),
-                                            "SELF_CHECK",
-                                            weekStart,
-                                            weekEndExclusive
-                                    ),
-                            progressTarget
-                    );
-                }
-                // "W-H-03" 일일퀘스트 3개를 완료해야 +1일 총 3일 되면 완료
-            } else if ("W-H-03".equals(templateCode)) {
-                progressTarget = readTargetFromSnapshot(assignment);
-
-                if (completed) {
-                    currentProgress = progressTarget;
-                } else {
-                    var weekStart = assignment.getQuestPeriod().getPeriodDate();
-                    var weekEndExclusive = weekStart.plusWeeks(1);
-
-                    currentProgress = (int) Math.min(
-                            completionRepository
-                                    .countFullyCompletedDailyQuestDaysInDateRange(
-                                            userId,
-                                            membership.getId(),
-                                            groupSeason.getId(),
-                                            weekStart,
-                                            weekEndExclusive
-                                    ),
-                            progressTarget
-                    );
+                    currentProgress = (int) Math.min(weeklyAggregateProgress, progressTarget);
                 }
 
                 // 주간 일반 체크인 횟수 달성 퀘스트 ("W-L-01", "W-M-01", "W-H-01")
@@ -467,10 +349,13 @@ public class QuestCompletionService {
                     var weekEndExclusive = weekStart.plusWeeks(1);
 
                     currentProgress = (int) Math.min(
-                            serviceCheckInRepository.countCheckInsInDateRange(
+                            countWeeklyCheckIns(
                                     userId,
+                                    membership.getId(),
+                                    groupSeason.getId(),
                                     weekStart,
-                                    weekEndExclusive
+                                    weekEndExclusive,
+                                    false
                             ),
                             progressTarget
                     );
@@ -487,10 +372,13 @@ public class QuestCompletionService {
                     var weekEndExclusive = weekStart.plusWeeks(1);
 
                     currentProgress = (int) Math.min(
-                            serviceCheckInRepository.countMorningCheckInsInDateRange(
+                            countWeeklyCheckIns(
                                     userId,
+                                    membership.getId(),
+                                    groupSeason.getId(),
                                     weekStart,
-                                    weekEndExclusive
+                                    weekEndExclusive,
+                                    true
                             ),
                             progressTarget
                     );
@@ -598,77 +486,6 @@ public class QuestCompletionService {
     }
 
     /**
-     * 사용자의 현재 그룹 시즌에 퀘스트 완료 기록을 가져오거나 새로 저장합니다.
-     *
-     * 기존 완료 기록이 있으면 재사용합니다. 없으면 활성 멤버십과 그룹 시즌을 확인한 뒤
-     * 배정 Snapshot에 대한 완료 기록을 생성해 저장합니다.
-     *
-     * @param userId 완료를 요청한 사용자 ID
-     * @param assignment 검증을 통과한 퀘스트 배정
-     * @return 기존 또는 새로 저장한 완료 기록
-     */
-
-    /**
-     * 중복 방지
-     */
-    private QuestCompletion getOrCreateCompletion(Long userId, QuestAssignment assignment) {
-        Map<Long, QuestCompletion> existingCompletions =
-                findCompletionsByAssignmentId(userId, List.of(assignment));
-
-        QuestCompletion existingCompletion = existingCompletions.get(assignment.getId());
-        if (existingCompletion != null) {
-            return existingCompletion;
-        }
-
-        /**그룹 소속 검증 403 ROLE_FORBIDDEN	요청자 권한 부족*/
-        var membership = membershipRepository.findActiveWithGroupByUserId(userId)
-                .orElseThrow(() -> new BusinessException(
-                        HttpStatus.FORBIDDEN,
-                        "ROLE_FORBIDDEN",
-                        "요청 권한이 없습니다."
-                ));
-
-        /**그룹 시즌 참여 정보 검증 404 RESOURCE_NOT_FOUND 없거나 요청자에게 노출하지 않는 리소스*/
-        Long seasonId = assignment.getQuestPeriod().getSeason().getId();
-        var groupSeason = groupSeasonRepository.findSnapshotByGroupIdAndSeasonId(
-                        membership.getGroup().getId(),
-                        seasonId
-                )
-                .orElseThrow(() -> new BusinessException(
-                        HttpStatus.NOT_FOUND,
-                        "RESOURCE_NOT_FOUND",
-                        "현재 그룹의 시즌 참여 정보를 찾을 수 없습니다."
-                ));
-
-        /**그룹 시즌 활성 정보 검증 409 QUEST_PERIOD_ENDED 퀘스트 유효 기간 밖*/
-        if (!"ACTIVE".equals(groupSeason.getStatus())) {
-            throw new BusinessException(
-                    HttpStatus.CONFLICT,
-                    "QUEST_PERIOD_ENDED",
-                    "그룹의 현재 시즌이 활성 상태가 아닙니다."
-            );
-        }
-
-        /**유저 확인 및 완료이력 생성 401	AUTH_REQUIRED 세션 인증 없음*/
-        var user = userRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(
-                        HttpStatus.UNAUTHORIZED,
-                        "AUTH_REQUIRED",
-                        "로그인이 필요합니다."
-                ));
-
-        QuestCompletion completion = QuestCompletion.create(
-                user,
-                assignment,
-                groupSeason,
-                membership,
-                Instant.now(clock)
-        );
-
-        return completionRepository.save(completion);
-    }
-
-    /**
      * 현재 그룹 시즌의 사용자 기여도 행을 조회합니다.
      * <p>
      * 기여도 행이 아직 없으면 0점으로 생성해 저장합니다.
@@ -712,11 +529,71 @@ public class QuestCompletionService {
      * @param groupSeasonId 조회할 그룹 시즌 ID
      * @return 해당 그룹 시즌의 점수 행
      */
-    private SeasonGroupScore findGroupScore(Long groupSeasonId) {
-        return groupScoreRepository.findByGroupSeasonId(groupSeasonId)
+    private SeasonGroupScore findGroupScoreForUpdate(Long groupSeasonId) {
+        return groupScoreRepository.findForUpdateByGroupSeasonId(groupSeasonId)
                 .orElseThrow(() -> new IllegalStateException(
                         "초기 데이터 누락 groupSeasonId = " + groupSeasonId
                 ));
+    }
+
+    /**
+     * 보상 관련 행 잠금을 얻은 뒤 기간·시즌·멤버십이 아직 유효한지 최종 확인합니다.
+     *
+     * @param userId 완료를 요청한 사용자 ID
+     * @param membership 완료 요청 시작 시 확인한 활성 멤버십
+     * @param groupSeason 보상이 귀속될 그룹 시즌
+     * @param assignment 완료할 퀘스트 배정
+     */
+    private void validateCompletionStillAllowed(
+            Long userId,
+            GroupMembership membership,
+            GroupSeason groupSeason,
+            QuestAssignment assignment
+    ) {
+        // 퀘스트 유효 기간 및 시즌 상태 검증
+        Instant now = Instant.now(clock);
+        Long assignmentSeasonId = assignment.getQuestPeriod().getSeason().getId();
+
+        boolean currentSeason = seasonQueryService.findCurrentSeasonForShareIfPresent()
+                .map(season -> season.getId().equals(assignmentSeasonId))
+                .orElse(false);
+        boolean activePeriod = "ACTIVE".equals(assignment.getQuestPeriod().getStatus())
+                && !now.isBefore(assignment.getQuestPeriod().getStartAt())
+                && now.isBefore(assignment.getQuestPeriod().getEndAt());
+        boolean activeGroupSeason = "ACTIVE".equals(groupSeason.getStatus())
+                && groupSeason.getSeason().getId().equals(assignmentSeasonId);
+
+        // 409  QUEST_PERIOD_ENDED  퀘스트 유효 기간 밖
+        if (!currentSeason || !activePeriod || !activeGroupSeason) {
+            throw new BusinessException(
+                    HttpStatus.CONFLICT,
+                    "QUEST_PERIOD_ENDED",
+                    "퀘스트 유효 기간이 아닙니다."
+            );
+        }
+
+        // 유저 멤버십 및 그룹 소속 위변조 방지 (보안 검증)
+        // 403  ROLE_FORBIDDEN  요청자 권한 부족
+        GroupMembership activeMembership = membershipRepository
+                .findActiveWithGroupByUserId(userId)
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.FORBIDDEN,
+                        "ROLE_FORBIDDEN",
+                        "요청 권한이 없습니다."
+                ));
+
+        if (!java.util.Objects.equals(activeMembership.getId(), membership.getId())
+                || !java.util.Objects.equals(
+                        activeMembership.getGroup().getId(),
+                        membership.getGroup().getId()
+                )) {
+            // 403  ROLE_FORBIDDEN  요청자 권한 부족
+            throw new BusinessException(
+                    HttpStatus.FORBIDDEN,
+                    "ROLE_FORBIDDEN",
+                    "요청 권한이 없습니다."
+            );
+        }
     }
 
     /**
@@ -735,7 +612,17 @@ public class QuestCompletionService {
      */
     @Transactional
     public QuestCompletionResponse completeQuestAssignment(Long userId, Long assignmentId) {
-        seasonQueryService.findCurrentSeasonForShare();
+        if (assignmentId == null || assignmentId < 1) {
+            throw new BusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_FIELD_VALUE", // 400  INVALID_FIELD_VALUE  필드 타입·길이·값·형식 검증 실패
+                    "퀘스트 배정 ID는 1 이상의 정수여야 합니다."
+            );
+        }
+
+        // 기존 완료 결과 재조회는 시즌이 이미 끝난 뒤에도 허용하되,
+        // 활성 시즌이 있으면 이후 사용자 잠금보다 먼저 공유 잠금을 얻습니다.
+        seasonQueryService.findCurrentSeasonForShareIfPresent();
 
         /**401	AUTH_REQUIRED	세션 인증 없음*/
         var user = userRepository.findByIdForUpdate(userId)
@@ -746,6 +633,36 @@ public class QuestCompletionService {
         var membership = membershipRepository.findActiveWithGroupByUserId(userId)
                 .orElseThrow(() -> new BusinessException(
                         HttpStatus.FORBIDDEN, "ROLE_FORBIDDEN", "요청 권한이 없습니다."));
+
+        QuestAssignment requestedAssignment = assignmentRepository.findWithSnapshotById(assignmentId)
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.NOT_FOUND,
+                        "RESOURCE_NOT_FOUND",
+                        "퀘스트 배정을 찾을 수 없습니다."
+                ));
+
+        if (!"SELF_CHECK".equals(requestedAssignment.getVerificationTypeSnapshot())) {
+            throw new BusinessException(
+                    HttpStatus.CONFLICT,
+                    "QUEST_COMPLETION_NOT_ALLOWED", //409  QUEST_COMPLETION_NOT_ALLOWED  해당 판정 유형 직접 완료 불가
+                    "이 퀘스트는 직접 완료할 수 없습니다."
+            );
+        }
+
+        QuestCompletion existing = findCompletionsByAssignmentId(
+                userId,
+                List.of(requestedAssignment)
+        ).get(assignmentId);
+        if (existing != null) {
+            if (!java.util.Objects.equals(existing.getMembership().getId(), membership.getId())) {
+                throw new BusinessException(
+                        HttpStatus.FORBIDDEN,
+                        "ROLE_FORBIDDEN",
+                        "요청 권한이 없습니다."
+                );
+            }
+            return buildExistingCompletionResponse(existing);
+        }
 
         QuestAssignment assignment = findCompletableAssignment(userId, assignmentId, "SELF_CHECK");
 
@@ -769,7 +686,6 @@ public class QuestCompletionService {
 
     /**
      * 체크인 기록으로 조건을 충족한 SERVER_EVENT 퀘스트를 완료합니다.
-     * <p>
      * 현재 시즌·활성 멤버십·퀘스트 기간을 확인하고, 해당 KST 날짜에
      * 기상 체크인이 실제 기록된 D-M-01 배정만 공통 보상 처리로 전달합니다.
      *
@@ -788,22 +704,43 @@ public class QuestCompletionService {
         User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(
                         HttpStatus.UNAUTHORIZED,
-                        "AUTH_REQUIRED",
+                        "AUTH_REQUIRED", // 401  AUTH_REQUIRED  세션 인증 없음
                         "로그인이 필요합니다."
                 ));
 
+        // 멤버쉽 , 시즌 유효성 검증
         //403	ROLE_FORBIDDEN	요청자 권한 부족
         GroupMembership membership = membershipRepository
                 .findActiveWithGroupByUserId(userId)
                 .orElseThrow(() -> new BusinessException(
                         HttpStatus.FORBIDDEN,
-                        "ROLE_FORBIDDEN",
+                        "ROLE_FORBIDDEN", // 403  ROLE_FORBIDDEN  요청자 권한 부족
                         "요청 권한이 없습니다."
                 ));
 
         QuestAssignment assignment =
                 findCompletableAssignment(userId, assignmentId, "SERVER_EVENT");
 
+        GroupSeason groupSeason = groupSeasonRepository
+                .findForUpdateByGroupIdAndSeasonId(
+                        membership.getGroup().getId(),
+                        assignment.getQuestPeriod().getSeason().getId()
+                )
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.NOT_FOUND,
+                        "RESOURCE_NOT_FOUND", // 404  RESOURCE_NOT_FOUND  없거나 요청자에게 노출하지 않는 리소스
+                        "그룹 시즌을 찾을 수 없습니다."
+                ));
+
+        if (!"ACTIVE".equals(groupSeason.getStatus())) {
+            throw new BusinessException(
+                    HttpStatus.CONFLICT,
+                    "QUEST_PERIOD_ENDED", // 409  QUEST_PERIOD_ENDED  퀘스트 유효 기간 밖
+                    "그룹 시즌이 활성 상태가 아닙니다."
+            );
+        }
+
+        // 실제 기상 퀘스트 체크 이력 검증
         boolean morningQuest = "DAILY".equals(
                 assignment.getQuestPeriod().getPeriodType()
         ) && "D-M-01".equals(assignment.getQuestTemplate().getCode());
@@ -811,7 +748,9 @@ public class QuestCompletionService {
         boolean morningCheckInExists =
                 serviceCheckInRepository.existsByUserIdAndCheckInDateAndIsMorningTrue(
                         userId,
-                        assignment.getQuestPeriod().getPeriodDate()
+                        assignment.getQuestPeriod().getPeriodDate(),
+                        membership.getId(),
+                        groupSeason.getId()
                 );
 
         // 409 QUEST_COMPLETION_NOT_ALLOWED	해당 판정 유형 직접 완료 불가
@@ -823,26 +762,7 @@ public class QuestCompletionService {
             );
         }
 
-        // 404	RESOURCE_NOT_FOUND	없거나 요청자에게 노출하지 않는 리소스
-        GroupSeason groupSeason = groupSeasonRepository
-                .findForUpdateByGroupIdAndSeasonId(
-                        membership.getGroup().getId(),
-                        assignment.getQuestPeriod().getSeason().getId()
-                )
-                .orElseThrow(() -> new BusinessException(
-                        HttpStatus.NOT_FOUND,
-                        "RESOURCE_NOT_FOUND",
-                        "그룹 시즌을 찾을 수 없습니다."
-                ));
-
-        if (!"ACTIVE".equals(groupSeason.getStatus())) {
-            throw new BusinessException(
-                    HttpStatus.CONFLICT,
-                    "QUEST_PERIOD_ENDED",
-                    "그룹 시즌이 활성 상태가 아닙니다."
-            );
-        }
-
+        // 최종 보상 지급
         return completeAndReward(user, membership, groupSeason, assignment);
     }
 
@@ -899,27 +819,7 @@ public class QuestCompletionService {
         if (!"WEEKLY".equals(assignment.getQuestPeriod().getPeriodType())) {
             return Optional.empty();
         }
-        LocalDate weekStart = assignment.getQuestPeriod().getPeriodDate();
-        LocalDate weekEndExclusive = weekStart.plusWeeks(1);
 
-        long current = morningOnly
-                ? serviceCheckInRepository.countMorningCheckInsInDateRange(
-                userId,
-                weekStart,
-                weekEndExclusive
-        )
-                : serviceCheckInRepository.countCheckInsInDateRange(
-                userId,
-                weekStart,
-                weekEndExclusive
-        );
-
-        if (current < target) {
-            return Optional.empty();
-        }
-
-        // 404  RESOURCE_NOT_FOUND  없거나 요청자에게 노출하지 않는 리소스
-        // 중복 완료 방지
         GroupSeason groupSeason = groupSeasonRepository
                 .findForUpdateByGroupIdAndSeasonId(
                         membership.getGroup().getId(),
@@ -937,6 +837,24 @@ public class QuestCompletionService {
                     "그룹 시즌이 활성 상태가 아닙니다."
             );
         }
+
+        LocalDate weekStart = assignment.getQuestPeriod().getPeriodDate();
+        LocalDate weekEndExclusive = weekStart.plusWeeks(1);
+
+        long current = countWeeklyCheckIns(
+                userId,
+                membership.getId(),
+                groupSeason.getId(),
+                weekStart,
+                weekEndExclusive,
+                morningOnly
+        );
+
+        if (current < target) {
+            return Optional.empty();
+        }
+
+        // 중복 완료 방지
         Map<Long, QuestCompletion> existingCompletions =
                 findCompletionsByAssignmentId(userId, List.of(assignment));
 
@@ -979,9 +897,17 @@ public class QuestCompletionService {
             return buildExistingCompletionResponse(existing);
         }
 
-        // 자원 조회 및 동시성 락
-        // 404 RESOURCE_NOT_FOUND 없거나 요청자에게 노출하지 않는 리소스
+        // 문서화된 잠금 순서에 따라 개인 기여도와 그룹 점수를 먼저 조회합니다.
         Instant now = Instant.now(clock);
+        var contribution = getOrCreateMemberContribution(
+                groupSeason,
+                user,
+                membership,
+                now
+        );
+        var groupScore = findGroupScoreForUpdate(groupSeason.getId());
+
+        // 크리처 행 잠금은 기여도와 그룹 점수 뒤에 획득해 공통 잠금 순서를 유지합니다.
         var creature = groupCreatureRepository
                 .findForUpdateByGroupSeasonId(groupSeason.getId())
                 .orElseThrow(() -> new BusinessException(
@@ -989,13 +915,9 @@ public class QuestCompletionService {
                         "RESOURCE_NOT_FOUND",
                         "그룹 크리처를 찾을 수 없습니다."
                 ));
-        var contribution = getOrCreateMemberContribution(
-                groupSeason,
-                user,
-                membership,
-                now
-        );
-        var groupScore = findGroupScore(groupSeason.getId());
+
+        // 모든 보상 관련 잠금 획득 뒤, 실제 보상 확정 직전에 유효 상태를 다시 확인합니다.
+        validateCompletionStillAllowed(userId, membership, groupSeason, assignment);
 
         // 스냅샷 기반 보상 추출 및 완료 처리
         long experience = assignment.getCreatureExperienceSnapshot();
@@ -1015,7 +937,6 @@ public class QuestCompletionService {
         creature.addExperience(experience, now);
         contribution.addContribution(contributionAmount, membership, now);
         groupScore.addScore(contributionAmount, now);
-
         // 최종 응답 반환
         creatureExperienceLedgerRepository.save(
                 CreatureExperienceLedger.grant(
@@ -1049,8 +970,20 @@ public class QuestCompletionService {
         ));
         // 달성 여부를 검사 이후 집계 퀘스트 처리
         if ("DAILY".equals(assignment.getQuestPeriod().getPeriodType())) {
-            completeDailyCompletionAggregates(user, membership, groupSeason);
+            completeEligibleAggregateQuests(user, membership, groupSeason);
         }
+        completion.recordResultSnapshot(
+                creature.getTotalExperience(),
+                creature.getGrowthStage(),
+                groupScore.getScore()
+        );
+        creatureUpdateEventPublisher.publishAfterCommit(new CreatureUpdatedEvent(
+                creature.getGroupSeason().getGroup().getId(),
+                creature.getId(),
+                creature.getGrowthStage(),
+                creature.getTotalExperience(),
+                now
+        ));
         return new QuestCompletionResponse(
                 completion.getId(),
                 assignment.getId(),
@@ -1072,7 +1005,7 @@ public class QuestCompletionService {
      * @param membership 현재 활성 멤버십
      * @param groupSeason 완료 기록이 귀속된 그룹 시즌
      */
-    private void completeDailyCompletionAggregates(
+    private void completeEligibleAggregateQuests(
             User user,
             GroupMembership membership,
             GroupSeason groupSeason
@@ -1092,47 +1025,20 @@ public class QuestCompletionService {
             }
 
             var checkInDate = dailyAssignment.getQuestPeriod().getPeriodDate();
-            var nextDate = checkInDate.plusDays(1);
-
-            long lowDifficultyCompletions =
-                    completionRepository.countDailyCompletionsByDifficultyInDateRange(
-                            user.getId(),
-                            membership.getId(),
-                            groupSeason.getId(),
-                            "LOW",
-                            checkInDate,
-                            nextDate
-                    );
-
-            long mediumDifficultyCompletions =
-                    completionRepository.countDailyCompletionsByDifficultyInDateRange(
-                            user.getId(),
-                            membership.getId(),
-                            groupSeason.getId(),
-                            "MEDIUM",
-                            checkInDate,
-                            nextDate
-                    );
 
             int target = readTargetFromSnapshot(dailyAssignment);
-            long current = Math.min(lowDifficultyCompletions, 1L)
-                    + Math.min(mediumDifficultyCompletions, 1L);
+            long current = findDailyCompletionAggregateProgress(
+                    user.getId(),
+                    membership.getId(),
+                    groupSeason.getId(),
+                    checkInDate
+            );
 
             if (current < target) {
                 continue;
             }
 
-            // 중복 완료 방지 / 자동 보상 지급
-            Map<Long, QuestCompletion> existingDailyCompletions =
-                    findCompletionsByAssignmentId(
-                            user.getId(),
-                            List.of(dailyAssignment)
-                    );
-
-            if (existingDailyCompletions.containsKey(dailyAssignment.getId())) {
-                continue;
-            }
-
+            // 공통 완료 처리에서 기존 완료와 중복 보상을 확인합니다.
             completeAndReward(user, membership, groupSeason, dailyAssignment);
         }
 
@@ -1147,112 +1053,160 @@ public class QuestCompletionService {
             var weekStart = weeklyAssignment.getQuestPeriod().getPeriodDate();
             var weekEndExclusive = weekStart.plusWeeks(1);
 
-            int target = readTargetFromSnapshot(weeklyAssignment);
-            long current;
-
-            // 일일 누적 횟수 퀘스트
-            if ("W-L-02".equals(templateCode)) {
-                current = completionRepository.countDailyCompletionsInDateRange(
-                        user.getId(),
-                        membership.getId(),
-                        groupSeason.getId(),
-                        weekStart,
-                        weekEndExclusive
-                );
-            } else if ("W-M-02".equals(templateCode)) {
-                current = completionRepository.countDailyCompletionsInDateRange(
-                        user.getId(),
-                        membership.getId(),
-                        groupSeason.getId(),
-                        weekStart,
-                        weekEndExclusive
-                );
-            } else if ("W-H-02".equals(templateCode)) {
-                current = completionRepository.countDailyCompletionsInDateRange(
-                        user.getId(),
-                        membership.getId(),
-                        groupSeason.getId(),
-                        weekStart,
-                        weekEndExclusive
-                );
-                // 날짜 수 카운트 퀘스트
-            } else if ("W-L-03".equals(templateCode)) {
-                current = completionRepository.countDailyCompletionDaysInDateRange(
-                        user.getId(),
-                        membership.getId(),
-                        groupSeason.getId(),
-                        weekStart,
-                        weekEndExclusive
-                );
-            } else if ("W-M-03".equals(templateCode)) {
-                current = completionRepository.countDailyCompletionDaysInDateRange(
-                        user.getId(),
-                        membership.getId(),
-                        groupSeason.getId(),
-                        weekStart,
-                        weekEndExclusive
-                );
-                // 난이도별 클리어 퀘스트
-            } else if ("W-L-04".equals(templateCode)) {
-                current = completionRepository.countDailyCompletionsByDifficultyInDateRange(
-                        user.getId(),
-                        membership.getId(),
-                        groupSeason.getId(),
-                        "LOW",
-                        weekStart,
-                        weekEndExclusive
-                );
-            } else if ("W-M-04".equals(templateCode)) {
-                current = completionRepository.countDailyCompletionsByDifficultyInDateRange(
-                        user.getId(),
-                        membership.getId(),
-                        groupSeason.getId(),
-                        "MEDIUM",
-                        weekStart,
-                        weekEndExclusive
-                );
-                // 검증 타입별 퀘스트
-            } else if ("W-L-05".equals(templateCode)) {
-                current =
-                        completionRepository.countDailyCompletionsByVerificationTypeInDateRange(
-                                user.getId(),
-                                membership.getId(),
-                                groupSeason.getId(),
-                                "SELF_CHECK",
-                                weekStart,
-                                weekEndExclusive
-                        );
-                // 일일 퀘스트 클리어 퀘스트
-            } else if ("W-H-03".equals(templateCode)) {
-                current =
-                        completionRepository.countFullyCompletedDailyQuestDaysInDateRange(
-                                user.getId(),
-                                membership.getId(),
-                                groupSeason.getId(),
-                                weekStart,
-                                weekEndExclusive
-                        );
-            } else {
+            Long current = findWeeklyAggregateProgress(
+                    user.getId(),
+                    membership.getId(),
+                    groupSeason.getId(),
+                    templateCode,
+                    weekStart,
+                    weekEndExclusive
+            );
+            if (current == null) {
                 continue;
             }
+
+            int target = readTargetFromSnapshot(weeklyAssignment);
             // 최종 달성 여부 검증
             if (current < target) {
                 continue;
             }
 
-            // 중복 완료 방지 및 자동 보상 지급
-            Map<Long, QuestCompletion> existingCompletions =
-                    findCompletionsByAssignmentId(
-                            user.getId(),
-                            List.of(weeklyAssignment)
-                    );
-
-            if (existingCompletions.containsKey(weeklyAssignment.getId())) {
-                continue;
-            }
-
+            // 공통 완료 처리에서 기존 완료와 중복 보상을 확인합니다.
             completeAndReward(user, membership, groupSeason, weeklyAssignment);
         }
+    }
+
+    /** 해당 날짜에 완료한 하·중 난이도 일일 퀘스트 수를 조건에 맞게 0~2로 계산합니다. */
+    private long findDailyCompletionAggregateProgress(
+            Long userId,
+            Long membershipId,
+            Long groupSeasonId,
+            LocalDate checkInDate
+    ) {
+        LocalDate nextDate = checkInDate.plusDays(1);
+        long lowDifficultyCompletions =
+                completionRepository.countDailyCompletionsByDifficultyInDateRange(
+                        userId,
+                        membershipId,
+                        groupSeasonId,
+                        "LOW",
+                        checkInDate,
+                        nextDate
+                );
+        long mediumDifficultyCompletions =
+                completionRepository.countDailyCompletionsByDifficultyInDateRange(
+                        userId,
+                        membershipId,
+                        groupSeasonId,
+                        "MEDIUM",
+                        checkInDate,
+                        nextDate
+                );
+
+        return Math.min(lowDifficultyCompletions, 1L)
+                + Math.min(mediumDifficultyCompletions, 1L);
+    }
+
+    /** 지정 멤버십·그룹 시즌의 주간 일반 또는 기상 체크인을 셉니다. */
+    private long countWeeklyCheckIns(
+            Long userId,
+            Long membershipId,
+            Long groupSeasonId,
+            LocalDate weekStart,
+            LocalDate weekEndExclusive,
+            boolean morningOnly
+    ) {
+        if (morningOnly) {
+            return serviceCheckInRepository.countMorningCheckInsInDateRange(
+                    userId,
+                    membershipId,
+                    groupSeasonId,
+                    weekStart,
+                    weekEndExclusive
+            );
+        }
+
+        return serviceCheckInRepository.countCheckInsInDateRange(
+                userId,
+                membershipId,
+                groupSeasonId,
+                weekStart,
+                weekEndExclusive
+        );
+    }
+
+    /** 공통 집계 진행도 계산을 사용하는 주간 템플릿인지 확인합니다. */
+    private boolean isWeeklyCompletionAggregateTemplate(String templateCode) {
+        return switch (templateCode) {
+            case "W-L-02", "W-M-02", "W-H-02",
+                    "W-L-03", "W-M-03",
+                    "W-L-04", "W-M-04",
+                    "W-L-05", "W-H-03" -> true;
+            default -> false;
+        };
+    }
+
+    /** Snapshot 조건에 맞는 주간 집계 퀘스트의 현재 진행값을 조회합니다. */
+    private Long findWeeklyAggregateProgress(
+            Long userId,
+            Long membershipId,
+            Long groupSeasonId,
+            String templateCode,
+            LocalDate weekStart,
+            LocalDate weekEndExclusive
+    ) {
+        return switch (templateCode) {
+            case "W-L-02", "W-M-02", "W-H-02" ->
+                    completionRepository.countDailyCompletionsInDateRange(
+                            userId,
+                            membershipId,
+                            groupSeasonId,
+                            weekStart,
+                            weekEndExclusive
+                    );
+            case "W-L-03", "W-M-03" ->
+                    completionRepository.countDailyCompletionDaysInDateRange(
+                            userId,
+                            membershipId,
+                            groupSeasonId,
+                            weekStart,
+                            weekEndExclusive
+                    );
+            case "W-L-04" -> completionRepository.countDailyCompletionsByDifficultyInDateRange(
+                    userId,
+                    membershipId,
+                    groupSeasonId,
+                    "LOW",
+                    weekStart,
+                    weekEndExclusive
+            );
+            case "W-M-04" -> completionRepository.countDailyCompletionsByDifficultyInDateRange(
+                    userId,
+                    membershipId,
+                    groupSeasonId,
+                    "MEDIUM",
+                    weekStart,
+                    weekEndExclusive
+            );
+            case "W-L-05" ->
+                    completionRepository.countDailyCompletionsByVerificationTypeInDateRange(
+                            userId,
+                            membershipId,
+                            groupSeasonId,
+                            "SELF_CHECK",
+                            weekStart,
+                            weekEndExclusive
+                    );
+            case "W-H-03" ->
+                    completionRepository.countFullyCompletedDailyQuestDaysInDateRange(
+                            userId,
+                            membershipId,
+                            groupSeasonId,
+                            weekStart,
+                            weekEndExclusive
+                    );
+            default -> null;
+        };
     }
 
     /**
@@ -1285,12 +1239,29 @@ public class QuestCompletionService {
                 .orElseThrow(() -> new IllegalStateException(
                         "Creature experience ledger is missing. completionId=" + completion.getId()));
 
-        var creature = groupCreatureRepository
-                .findSnapshotByGroupSeasonId(completion.getGroupSeason().getId())
-                .orElseThrow(() -> new IllegalStateException(
-                        "Group creature is missing. groupSeasonId=" + completion.getGroupSeason().getId()));
+        long creatureTotalExperience = completion.getCreatureTotalExperienceAfter() == null
+                ? experienceLedger.getBalanceAfter()
+                : completion.getCreatureTotalExperienceAfter();
+        String creatureGrowthStage = completion.getCreatureGrowthStageAfter();
 
-        var groupScore = findGroupScore(completion.getGroupSeason().getId());
+        if (creatureGrowthStage == null) {
+            var creature = groupCreatureRepository
+                    .findSnapshotByGroupSeasonId(completion.getGroupSeason().getId())
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Group creature is missing. groupSeasonId=" + completion.getGroupSeason().getId()));
+            creatureGrowthStage = creature.getHatchedAt() == null
+                    || completion.getCompletedAt().isBefore(creature.getHatchedAt())
+                    ? "EGG"
+                    : GroupCreature.stageFor(experienceLedger.getBalanceAfter());
+        }
+
+        long groupSeasonScore = completion.getGroupSeasonScoreAfter() == null
+                ? rewardLedgerRepository.sumGroupContributionAtCompletion(
+                        completion.getGroupSeason().getId(),
+                        completion.getCompletedAt(),
+                        completion.getId()
+                )
+                : completion.getGroupSeasonScoreAfter();
 
         // DTO 조립
         return new QuestCompletionResponse(
@@ -1300,9 +1271,9 @@ public class QuestCompletionService {
                 completion.getCompletedAt(),
                 experienceAwarded,
                 contributionAwarded,
-                experienceLedger.getBalanceAfter(),
-                creature.getGrowthStage(),
-                groupScore.getScore()
+                creatureTotalExperience,
+                creatureGrowthStage,
+                groupSeasonScore
         );
     }
 
