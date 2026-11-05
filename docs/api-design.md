@@ -929,6 +929,7 @@
 | 401 | `SESSION_EXPIRED` | 인증 세션 만료 |
 | 403 | `ROLE_FORBIDDEN` | 요청자 권한 부족 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
+| 409 | `CONCURRENT_MODIFICATION` | 활성 그룹에 유효한 초대 링크가 존재하지 않는 비정상 상태 |
 
 ### rotateInvitation — `POST /api/v1/groups/me/invitation/rotate`
 
@@ -962,7 +963,7 @@
 | 403 | `ROLE_FORBIDDEN` | 요청자 권한 부족 |
 | 403 | `CSRF_INVALID` | CSRF 토큰 없음 또는 불일치 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
-| 409 | `CONCURRENT_MODIFICATION` | 동시 처리 또는 이미 변경된 리소스 |
+| 409 | `CONCURRENT_MODIFICATION` | 활성 초대 링크 누락 또는 동시 처리로 인한 상태 불일치 |
 
 ## 4. 시즌·크리처 API
 
