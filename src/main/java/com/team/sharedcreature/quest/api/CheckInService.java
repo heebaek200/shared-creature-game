@@ -305,6 +305,19 @@ public class CheckInService {
             }
         }
 
+        // 이번 체크인으로 목표를 달성한 주간 집계 퀘스트 완료
+        for (QuestAssignment assignment :
+                findCurrentWeeklyCheckInAssignments(checkedInAt)) {
+            Optional<QuestCompletionResponse> completion =
+                    questCompletionService.completeCheckInAggregateIfEligible(
+                            userId,
+                            assignment.getId()
+                    );
+            if (completion.isPresent()) {
+                completedQuestIds.add(completion.get().getCompletionId());
+            }
+        }
+
         // 체크인응답 반환
         return new CheckInResponse(
                 checkIn.getId(),
