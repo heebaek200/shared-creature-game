@@ -12,6 +12,7 @@ import com.team.sharedcreature.season.domain.CreatureExperienceLedger;
 import com.team.sharedcreature.season.domain.SeasonGroupScore;
 import com.team.sharedcreature.season.infrastructure.*;
 import lombok.RequiredArgsConstructor;
+import tools.jackson.core.JacksonException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,8 @@ import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.season.domain.GroupSeason;
 import com.team.sharedcreature.season.domain.SeasonMemberContribution;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -105,6 +108,39 @@ public class QuestCompletionService {
      * 현재 시각을 제공해 기간 경계 판정을 일정하게 처리합니다.
      */
     private final Clock clock;
+
+    /** 배정 Snapshot의 검증 조건 JSON에서 목표값을 읽습니다. */
+    private final ObjectMapper objectMapper;
+
+    /**
+     * 배정 당시 저장한 검증 조건 Snapshot에서 양의 정수 목표값을 읽습니다.
+     *
+     * @param assignment 목표값을 읽을 퀘스트 배정
+     * @return Snapshot의 target 값
+     * @throws IllegalStateException Snapshot JSON이 잘못됐거나 양의 정수 target이 없는 경우
+     */
+    private int readTargetFromSnapshot(QuestAssignment assignment) {
+        try {
+            JsonNode target = objectMapper
+                    .readTree(assignment.getVerificationParametersSnapshot())
+                    .get("target");
+
+            if (target == null || !target.isIntegralNumber()
+                    || !target.canConvertToInt() || target.asInt() < 1) {
+                throw new IllegalStateException(
+                        "검증 Snapshot에 올바른 target이 없습니다. assignmentId="
+                                + assignment.getId()
+                );
+            }
+
+            return target.asInt();
+        } catch (JacksonException e) {
+            throw new IllegalStateException(
+                    "검증 Snapshot JSON을 읽을 수 없습니다. assignmentId="
+                            + assignment.getId(), e
+            );
+        }
+    }
 
     /**
      * 현재 활성 시즌에서 진행 중인 일일 또는 주간 퀘스트 배정을 조회합니다.
@@ -261,7 +297,7 @@ public class QuestCompletionService {
                 }
                 // 난이도별 퀘스트 완료 횟수 조회
             } else if ("D-H-03".equals(templateCode)) {
-                progressTarget = 2;
+                progressTarget = readTargetFromSnapshot(assignment);
 
                 if (completed) {
                     currentProgress = progressTarget;
@@ -302,9 +338,7 @@ public class QuestCompletionService {
             } else if ("W-L-02".equals(templateCode)
                     || "W-M-02".equals(templateCode)
                     || "W-H-02".equals(templateCode)) {
-                progressTarget = "W-L-02".equals(templateCode) ? 3
-                        : "W-M-02".equals(templateCode) ? 7
-                        : 14;
+                progressTarget = readTargetFromSnapshot(assignment);
 
                 // 이미 완료된 퀘스트 처리
                 if (completed) {
@@ -329,7 +363,7 @@ public class QuestCompletionService {
                 // 완료 횟수가 아닌 완료한 날짜 수(Days) 집계
             } else if ("W-L-03".equals(templateCode)
                     || "W-M-03".equals(templateCode)) {
-                progressTarget = "W-L-03".equals(templateCode) ? 2 : 4;
+                progressTarget = readTargetFromSnapshot(assignment);
 
                 if (completed) {
                     currentProgress = progressTarget;
@@ -352,7 +386,7 @@ public class QuestCompletionService {
             } else if ("W-L-04".equals(templateCode)
                     || "W-M-04".equals(templateCode)) {
                 boolean lowDifficulty = "W-L-04".equals(templateCode);
-                progressTarget = lowDifficulty ? 2 : 3;
+                progressTarget = readTargetFromSnapshot(assignment);
                 String difficulty = lowDifficulty ? "LOW" : "MEDIUM";
 
                 if (completed) {
@@ -376,7 +410,7 @@ public class QuestCompletionService {
 
                 //  "W-L-05"진행도에 "SELF_CHECK" 일일 퀘스트 수 표시
             } else if ("W-L-05".equals(templateCode)) {
-                progressTarget = 2;
+                progressTarget = readTargetFromSnapshot(assignment);
 
                 if (completed) {
                     currentProgress = progressTarget;
@@ -399,7 +433,7 @@ public class QuestCompletionService {
                 }
                 // "W-H-03" 일일퀘스트 3개를 완료해야 +1일 총 3일 되면 완료
             } else if ("W-H-03".equals(templateCode)) {
-                progressTarget = 3;
+                progressTarget = readTargetFromSnapshot(assignment);
 
                 if (completed) {
                     currentProgress = progressTarget;
@@ -424,9 +458,7 @@ public class QuestCompletionService {
             } else if ("W-L-01".equals(templateCode)
                     || "W-M-01".equals(templateCode)
                     || "W-H-01".equals(templateCode)) {
-                progressTarget = "W-L-01".equals(templateCode) ? 3
-                        : "W-M-01".equals(templateCode) ? 5
-                        : 7;
+                progressTarget = readTargetFromSnapshot(assignment);
 
                 if (completed) {
                     currentProgress = progressTarget;
@@ -446,7 +478,7 @@ public class QuestCompletionService {
                 // 주간 아침 체크인 횟수 달성 퀘스트 ("W-L-06", "W-H-04")
             } else if ("W-L-06".equals(templateCode)
                     || "W-H-04".equals(templateCode)) {
-                progressTarget = "W-L-06".equals(templateCode) ? 2 : 5;
+                progressTarget = readTargetFromSnapshot(assignment);
 
                 if (completed) {
                     currentProgress = progressTarget;
@@ -849,23 +881,15 @@ public class QuestCompletionService {
         QuestAssignment assignment =
                 findCompletableAssignment(userId, assignmentId, "AGGREGATE");
         String templateCode = assignment.getQuestTemplate().getCode();
-        int target;
+        int target = readTargetFromSnapshot(assignment);
         boolean morningOnly;
 
-        if ("W-L-01".equals(templateCode)) {
-            target = 3;
+        if ("W-L-01".equals(templateCode)
+                || "W-M-01".equals(templateCode)
+                || "W-H-01".equals(templateCode)) {
             morningOnly = false;
-        } else if ("W-L-06".equals(templateCode)) {
-            target = 2;
-            morningOnly = true;
-        } else if ("W-M-01".equals(templateCode)) {
-            target = 5;
-            morningOnly = false;
-        } else if ("W-H-01".equals(templateCode)) {
-            target = 7;
-            morningOnly = false;
-        } else if ("W-H-04".equals(templateCode)) {
-            target = 5;
+        } else if ("W-L-06".equals(templateCode)
+                || "W-H-04".equals(templateCode)) {
             morningOnly = true;
         } else {
             return Optional.empty();
@@ -1090,7 +1114,11 @@ public class QuestCompletionService {
                             nextDate
                     );
 
-            if (lowDifficultyCompletions < 1 || mediumDifficultyCompletions < 1) {
+            int target = readTargetFromSnapshot(dailyAssignment);
+            long current = Math.min(lowDifficultyCompletions, 1L)
+                    + Math.min(mediumDifficultyCompletions, 1L);
+
+            if (current < target) {
                 continue;
             }
 
@@ -1119,12 +1147,11 @@ public class QuestCompletionService {
             var weekStart = weeklyAssignment.getQuestPeriod().getPeriodDate();
             var weekEndExclusive = weekStart.plusWeeks(1);
 
-            int target;
+            int target = readTargetFromSnapshot(weeklyAssignment);
             long current;
 
             // 일일 누적 횟수 퀘스트
             if ("W-L-02".equals(templateCode)) {
-                target = 3;
                 current = completionRepository.countDailyCompletionsInDateRange(
                         user.getId(),
                         membership.getId(),
@@ -1133,7 +1160,6 @@ public class QuestCompletionService {
                         weekEndExclusive
                 );
             } else if ("W-M-02".equals(templateCode)) {
-                target = 7;
                 current = completionRepository.countDailyCompletionsInDateRange(
                         user.getId(),
                         membership.getId(),
@@ -1142,7 +1168,6 @@ public class QuestCompletionService {
                         weekEndExclusive
                 );
             } else if ("W-H-02".equals(templateCode)) {
-                target = 14;
                 current = completionRepository.countDailyCompletionsInDateRange(
                         user.getId(),
                         membership.getId(),
@@ -1152,7 +1177,6 @@ public class QuestCompletionService {
                 );
                 // 날짜 수 카운트 퀘스트
             } else if ("W-L-03".equals(templateCode)) {
-                target = 2;
                 current = completionRepository.countDailyCompletionDaysInDateRange(
                         user.getId(),
                         membership.getId(),
@@ -1161,7 +1185,6 @@ public class QuestCompletionService {
                         weekEndExclusive
                 );
             } else if ("W-M-03".equals(templateCode)) {
-                target = 4;
                 current = completionRepository.countDailyCompletionDaysInDateRange(
                         user.getId(),
                         membership.getId(),
@@ -1171,7 +1194,6 @@ public class QuestCompletionService {
                 );
                 // 난이도별 클리어 퀘스트
             } else if ("W-L-04".equals(templateCode)) {
-                target = 2;
                 current = completionRepository.countDailyCompletionsByDifficultyInDateRange(
                         user.getId(),
                         membership.getId(),
@@ -1181,7 +1203,6 @@ public class QuestCompletionService {
                         weekEndExclusive
                 );
             } else if ("W-M-04".equals(templateCode)) {
-                target = 3;
                 current = completionRepository.countDailyCompletionsByDifficultyInDateRange(
                         user.getId(),
                         membership.getId(),
@@ -1192,7 +1213,6 @@ public class QuestCompletionService {
                 );
                 // 검증 타입별 퀘스트
             } else if ("W-L-05".equals(templateCode)) {
-                target = 2;
                 current =
                         completionRepository.countDailyCompletionsByVerificationTypeInDateRange(
                                 user.getId(),
@@ -1204,7 +1224,6 @@ public class QuestCompletionService {
                         );
                 // 일일 퀘스트 클리어 퀘스트
             } else if ("W-H-03".equals(templateCode)) {
-                target = 3;
                 current =
                         completionRepository.countFullyCompletedDailyQuestDaysInDateRange(
                                 user.getId(),
