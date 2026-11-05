@@ -27,51 +27,81 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**퀘스트 조회와 완료 처리를 담당합니다.*/
+/**
+ * 퀘스트 조회와 완료 처리를 담당합니다.
+ */
 @Service
 @RequiredArgsConstructor
 public class QuestCompletionService {
 
-    /** 사용자의 현재 시즌 기여도 행을 조회하고 갱신합니다. */
+    /**
+     * 사용자의 현재 시즌 기여도 행을 조회하고 갱신합니다.
+     */
     private final SeasonMemberContributionRepository memberContributionRepository;
 
-    /** 현재 그룹 시즌의 점수 행을 조회하고 갱신합니다. */
+    /**
+     * 현재 그룹 시즌의 점수 행을 조회하고 갱신합니다.
+     */
     private final SeasonGroupScoreRepository groupScoreRepository;
 
-    /** 퀘스트 완료별 보상 지급 이력을 저장합니다. */
+    /**
+     * 퀘스트 완료별 보상 지급 이력을 저장합니다.
+     */
     private final QuestRewardLedgerRepository rewardLedgerRepository;
 
-    /** 현재 그룹 시즌의 크리처를 조회하고 경험치 변경을 반영합니다. */
+    /**
+     * 현재 그룹 시즌의 크리처를 조회하고 경험치 변경을 반영합니다.
+     */
     private final GroupCreatureRepository groupCreatureRepository;
 
-    /** 완료별 크리처 경험치 지급 이력을 저장합니다. */
+    /**
+     * 완료별 크리처 경험치 지급 이력을 저장합니다.
+     */
     private final CreatureExperienceLedgerRepository creatureExperienceLedgerRepository;
 
-    /** 완료 기록에 연결할 사용자 정보를 조회합니다. */
+    /**
+     * 완료 기록에 연결할 사용자 정보를 조회합니다.
+     */
     private final UserRepository userRepository;
 
-    /** 사용자의 그룹에 속한 현재 시즌 정보를 조회합니다. */
+    /**
+     * 사용자의 그룹에 속한 현재 시즌 정보를 조회합니다.
+     */
     private final GroupSeasonRepository groupSeasonRepository;
 
-    /**현재 사용자의 활성 그룹 멤버십을 조회합니다.*/
+    /**
+     * 현재 사용자의 활성 그룹 멤버십을 조회합니다.
+     */
     private final GroupMembershipRepository membershipRepository;
 
-    /**사용자의 체크인 기록을 조회합니다.*/
+    /**
+     * 사용자의 체크인 기록을 조회합니다.
+     */
     private final ServiceCheckInRepository serviceCheckInRepository;
 
-    /**현재 활성 시즌을 조회합니다.*/
+    /**
+     * 현재 활성 시즌을 조회합니다.
+     */
     private final SeasonQueryService seasonQueryService;
 
-    /**현재 진행 중인 일일·주간 퀘스트 기간을 조회합니다.*/
+    /**
+     * 현재 진행 중인 일일·주간 퀘스트 기간을 조회합니다.
+     */
     private final QuestPeriodRepository periodRepository;
 
-    /**기간에 배정된 퀘스트와 Snapshot을 조회합니다.*/
+    /**
+     * 기간에 배정된 퀘스트와 Snapshot을 조회합니다.
+     */
     private final QuestAssignmentRepository assignmentRepository;
 
-    /**사용자별 퀘스트 완료 기록을 조회합니다.*/
+    /**
+     * 사용자별 퀘스트 완료 기록을 조회합니다.
+     */
     private final QuestCompletionRepository completionRepository;
 
-    /**현재 시각을 제공해 기간 경계 판정을 일정하게 처리합니다.*/
+    /**
+     * 현재 시각을 제공해 기간 경계 판정을 일정하게 처리합니다.
+     */
     private final Clock clock;
 
     /**
@@ -83,7 +113,9 @@ public class QuestCompletionService {
 
     /**조회 하고자 하는 일일,주간 유형을 받고, 그에 맞는 퀘스트 목록을 리스트로 반환*/
 
-    /**방어 코드 DAILY나 WEEKLY가 아닐경우 400 Bad Request 던짐*/
+    /**
+     * 방어 코드 DAILY나 WEEKLY가 아닐경우 400 Bad Request 던짐
+     */
     public List<QuestAssignment> findCurrentAssignments(String periodType) {
         if (periodType != null
                 && !periodType.equals("DAILY")
@@ -119,11 +151,11 @@ public class QuestCompletionService {
 
     /**
      * 현재 퀘스트 배정에 로그인한 사용자의 완료 기록을 연결합니다.
-     *
+     * <p>
      * 배정 ID 목록으로 해당 사용자의 완료 기록만 조회한 뒤,
      * 각 완료 기록을 퀘스트 배정 ID를 키로 하는 Map에 저장합니다.</p>
      *
-     * @param userId 로그인한 사용자 ID
+     * @param userId      로그인한 사용자 ID
      * @param assignments 현재 기간에 배정된 퀘스트 목록
      * @return 배정 ID별 완료 기록. 완료 기록이 없으면 해당 배정 ID는 Map에 없습니다.
      */
@@ -158,17 +190,15 @@ public class QuestCompletionService {
 
     /**
      * 현재 사용자의 퀘스트 배정과 완료 상태를 조회해 응답 DTO로 변환합니다.
-     *
+     * <p>
      * 먼저 활성 그룹 멤버십이 있는지 확인합니다. 이후 현재 기간의 배정을 조회하고,
      * 로그인한 사용자 ID로 완료 기록을 조회해 각 배정에 연결합니다.
      *
-     * @param userId 로그인한 사용자 ID
+     * @param userId     로그인한 사용자 ID
      * @param periodType 조회할 기간 유형 DAILY, WEEKLY,
      *                   전체 조회를 위한 null
      * @return 배정 퀘스트와 사용자의 완료 상태 목록
      */
-
-    /**권한 검증 403 BusinessException << 400/403계열 Exception 던짐*/
     @Transactional(readOnly = true)
     public List<CurrentQuestResponse> listCurrentQuests(Long userId, String periodType) {
         membershipRepository.findActiveWithGroupByUserId(userId)
@@ -191,15 +221,17 @@ public class QuestCompletionService {
          * */
         List<CurrentQuestResponse> responses = new ArrayList<>();
 
+        // 기본 초기화 및 완료 여부 파악
         for (QuestAssignment assignment : assignments) {
             QuestCompletion completion = completionsByAssignmentId.get(assignment.getId());
             boolean completed = completion != null;
 
+            String templateCode = assignment.getQuestTemplate().getCode();
+            int progressTarget = 1;
             int currentProgress = completed ? 1 : 0;
 
-            /** D-M-01은 해당 KST 날짜의 기상 체크인 기록으로 진행도를 판정합니다. */
-            if ("D-M-01".equals(assignment.getQuestTemplate().getCode())
-                    && !completed) {
+            // 아침 체크인 연동 일일 퀘스트 ("D-M-01")
+            if ("D-M-01".equals(templateCode) && !completed) {
                 boolean checkedInThisMorning =
                         serviceCheckInRepository.existsByUserIdAndCheckInDateAndIsMorningTrue(
                                 userId,
@@ -209,10 +241,57 @@ public class QuestCompletionService {
                 if (checkedInThisMorning) {
                     currentProgress = 1;
                 }
+                // 주간 일반 체크인 횟수 달성 퀘스트 ("W-L-01", "W-M-01", "W-H-01")
+            } else if ("W-L-01".equals(templateCode)
+                    || "W-M-01".equals(templateCode)
+                    || "W-H-01".equals(templateCode)) {
+                progressTarget = "W-L-01".equals(templateCode) ? 3
+                        : "W-M-01".equals(templateCode) ? 5
+                        : 7;
+
+                if (completed) {
+                    currentProgress = progressTarget;
+                } else {
+                    var weekStart = assignment.getQuestPeriod().getPeriodDate();
+                    var weekEndExclusive = weekStart.plusWeeks(1);
+
+                    currentProgress = (int) Math.min(
+                            serviceCheckInRepository.countCheckInsInDateRange(
+                                    userId,
+                                    weekStart,
+                                    weekEndExclusive
+                            ),
+                            progressTarget
+                    );
+                }
+                // 주간 아침 체크인 횟수 달성 퀘스트 ("W-L-06", "W-H-04")
+            } else if ("W-L-06".equals(templateCode)
+                    || "W-H-04".equals(templateCode)) {
+                progressTarget = "W-L-06".equals(templateCode) ? 2 : 5;
+
+                if (completed) {
+                    currentProgress = progressTarget;
+                } else {
+                    var weekStart = assignment.getQuestPeriod().getPeriodDate();
+                    var weekEndExclusive = weekStart.plusWeeks(1);
+
+                    currentProgress = (int) Math.min(
+                            serviceCheckInRepository.countMorningCheckInsInDateRange(
+                                    userId,
+                                    weekStart,
+                                    weekEndExclusive
+                            ),
+                            progressTarget
+                    );
+                }
             }
 
+            //응답 객체 조립
             CurrentQuestResponse.ProgressResponse progress =
-                    new CurrentQuestResponse.ProgressResponse(currentProgress, 1);
+                    new CurrentQuestResponse.ProgressResponse(
+                            currentProgress,
+                            progressTarget
+                    );
 
             responses.add(new CurrentQuestResponse(
                     assignment.getId(),
@@ -251,7 +330,9 @@ public class QuestCompletionService {
      * @return 검증을 통과한 퀘스트 배정
      */
 
-    /**403	ROLE_FORBIDDEN	요청자 권한 부족*/
+    /**
+     * 403	ROLE_FORBIDDEN	요청자 권한 부족
+     */
     @Transactional(readOnly = true)
     public QuestAssignment findCompletableAssignment(Long userId,
                                                      Long assignmentId,
@@ -316,7 +397,9 @@ public class QuestCompletionService {
      * @return 기존 또는 새로 저장한 완료 기록
      */
 
-    /**중복 방지*/
+    /**
+     * 중복 방지
+     */
     private QuestCompletion getOrCreateCompletion(Long userId, QuestAssignment assignment) {
         Map<Long, QuestCompletion> existingCompletions =
                 findCompletionsByAssignmentId(userId, List.of(assignment));
@@ -376,13 +459,13 @@ public class QuestCompletionService {
 
     /**
      * 현재 그룹 시즌의 사용자 기여도 행을 조회합니다.
-     *
+     * <p>
      * 기여도 행이 아직 없으면 0점으로 생성해 저장합니다.
      *
      * @param groupSeason 기여도가 속할 그룹 시즌
-     * @param user 기여도 소유 사용자
-     * @param membership 현재 멤버십
-     * @param now 현재 시각
+     * @param user        기여도 소유 사용자
+     * @param membership  현재 멤버십
+     * @param now         현재 시각
      * @return 기존 또는 새로 저장한 기여도 행
      */
     private SeasonMemberContribution getOrCreateMemberContribution(
@@ -411,7 +494,7 @@ public class QuestCompletionService {
 
     /**
      * 현재 그룹 시즌의 점수 행을 조회합니다.
-     *
+     * <p>
      * 그룹 시즌 생성 과정에서 점수 행도 함께 만들어져야 하므로,
      * 행이 없으면 업무 오류 대신 서버 내부 상태 오류로 처리합니다.
      *
@@ -436,7 +519,9 @@ public class QuestCompletionService {
      * @return 완료 및 보상 반영 결과
      */
 
-    /**동시성 락*/
+    /**
+     * 동시성 락
+     */
     @Transactional
     public QuestCompletionResponse completeQuestAssignment(Long userId, Long assignmentId) {
         seasonQueryService.findCurrentSeasonForShare();
@@ -470,13 +555,14 @@ public class QuestCompletionService {
     }
 
     // << QuestCompletionService.java 471줄 위치에 삽입
+
     /**
      * 체크인 기록으로 조건을 충족한 SERVER_EVENT 퀘스트를 완료합니다.
-     *
+     * <p>
      * 현재 시즌·활성 멤버십·퀘스트 기간을 확인하고, 해당 KST 날짜에
      * 기상 체크인이 실제 기록된 D-M-01 배정만 공통 보상 처리로 전달합니다.
      *
-     * @param userId 체크인한 사용자 ID
+     * @param userId       체크인한 사용자 ID
      * @param assignmentId 완료할 퀘스트 배정 ID
      * @return 완료 및 Snapshot 기준 보상 반영 결과
      */
@@ -551,14 +637,14 @@ public class QuestCompletionService {
 
     /**
      * 퀘스트 배정 Snapshot의 보상값을 사용해 완료와 보상을 반영합니다.
-     *
+     * <p>
      * 이미 완료된 배정이면 기존 결과를 반환합니다. 새 완료라면 완료 기록,
      * 크리처 경험치, 개인 기여도, 그룹 점수와 보상 원장을 한 트랜잭션에서 저장합니다.
      *
-     * @param user 완료한 사용자
-     * @param membership 보상 반영 시점의 활성 멤버십
+     * @param user        완료한 사용자
+     * @param membership  보상 반영 시점의 활성 멤버십
      * @param groupSeason 보상이 귀속될 활성 그룹 시즌
-     * @param assignment 완료할 퀘스트 배정
+     * @param assignment  완료할 퀘스트 배정
      * @return 완료 및 보상 반영 결과
      */
     private QuestCompletionResponse completeAndReward(
@@ -664,6 +750,7 @@ public class QuestCompletionService {
      * 과거에 저장해 둔 보상 (rewardLedgers)과 경험치를 역으로 조회하여
      * 당시 받았던 정확한 보상 값과 현재 크리처/그룹 상태를 조합해 응답을 만들어 줍니다.
      * 버튼을 두번 클릭했을때 방어하는 코드
+     *
      * @param completion 기존 완료 기록
      * @return 기존 지급량과 현재 시즌 상태를 담은 완료 응답
      */
