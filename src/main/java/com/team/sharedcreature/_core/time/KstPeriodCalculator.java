@@ -45,7 +45,7 @@ public class KstPeriodCalculator {
 
     /**
      * 기준 시각이 속한 KST 주간 기간을 계산함
-     *      일요일 자정 (이상) 주간 기간 (미만) 월요일 자정 넘어가는 순간
+     *      월요일 자정 (이상) 주간 기간 (미만) 다음 월요일 자정
      */
     public PeriodWindow weeklyAt(Instant now) {
         LocalDate date = Objects.requireNonNull(now, "now")

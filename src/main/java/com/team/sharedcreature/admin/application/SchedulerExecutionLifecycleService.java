@@ -72,7 +72,7 @@ public class SchedulerExecutionLifecycleService {
     /**
      * 현재 실행의 실패 원인과 상태를 기록한다.
      * 다음 재시도에서 FAILED 상태를 재선점할 수 있다.
-     * Lease를 상실한 진행자는 실패 기록도 덮어쓸 수 있다.
+     * Lease를 상실한 진행자는 실패 기록도 덮어쓸 수 없다.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markFailed(

@@ -1,9 +1,8 @@
 package com.team.sharedcreature.admin.application;
 
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -41,6 +40,7 @@ public class SchedulerJobRunner {
      * 하나의 논리 Scheduler 작업을 실행한다.
      * 선점 실패 시 작업을 건너뛰고 SKIPPED를 반환한다.
      * 업무 예외는 실패 기록을 시도한 뒤 원래 예외를 전파한다.
+     * 기존 트랜잭션 안에서는 호출할 수 없다.
      */
     public ExecutionResult run(
             String jobType,
@@ -51,16 +51,21 @@ public class SchedulerJobRunner {
     ) {
         Objects.requireNonNull(job, "job");
 
+        // 상위 트랜잭션이 열려있으면 성공 기록이 업무 Commit 보다 먼저 확정될 수 있으므로 실행권 선점 전에 차단함.
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("SchedulerJobRunner는 기존 트랜잭션 내부에서 호출될 수 없습니다.");
+        }
+
         // 업무 시작 전 DB 실행권 획득
-        Optional<SchedulerClaimTicket> claimTicketOptionalmed = claimService.tryClaim(
+        Optional<SchedulerClaimTicket> claimTicketOptional = claimService.tryClaim(
                 jobType, scheduledFor, ownerInstanceId, leaseDuration
         );
 
-        if (claimTicketOptionalmed.isEmpty()) {
+        if (claimTicketOptional.isEmpty()) {
             return ExecutionResult.SKIPPED;
         }
 
-        SchedulerClaimTicket ticket = claimTicketOptionalmed.orElseThrow();
+        SchedulerClaimTicket ticket = claimTicketOptional.orElseThrow();
         String resultSummary;
 
         try {

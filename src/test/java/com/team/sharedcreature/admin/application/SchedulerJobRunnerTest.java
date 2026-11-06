@@ -2,6 +2,7 @@
 package com.team.sharedcreature.admin.application;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -228,4 +229,44 @@ class SchedulerJobRunnerTest {
                 JOB_TYPE, SCHEDULED_FOR, OWNER, LEASE
         )).thenReturn(Optional.of(TICKET));
     }
+
+
+    /**
+     * 기존 트랜잭션 내부에서 Scheduler 실행을 요청하면 거절합니다.
+     * 실행권 선점 이전에 예외가 발생해야 합니다.
+     * 업무 실행과 성공·실패 기록 모두 수행되지 않아야 합니다.
+     */
+    @Test
+    void runningInsideExistingTransactionIsRejected() {
+        boolean originalActive =
+                TransactionSynchronizationManager.isActualTransactionActive();
+
+        try {
+            // 외부 트랜잭션이 이미 활성화된 상황을 모의합니다.
+            TransactionSynchronizationManager.setActualTransactionActive(true);
+
+            AtomicBoolean executed = new AtomicBoolean(false);
+
+            IllegalStateException exception = assertThrows(
+                    IllegalStateException.class,
+                    () -> run(() -> {
+                        executed.set(true);
+                        return "{}";
+                    })
+            );
+
+            // 업무와 실행권 선점 모두 시작되지 않아야 합니다.
+            assertTrue(exception.getMessage().contains("트랜잭션"));
+            assertFalse(executed.get());
+
+            verifyNoInteractions(claimService, lifecycleService);
+
+        } finally {
+            // 다른 테스트에 영향을 주지 않도록 스레드 상태를 복원합니다.
+            TransactionSynchronizationManager.setActualTransactionActive(
+                    originalActive
+            );
+        }
+    }
+
 }
