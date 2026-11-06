@@ -37,7 +37,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -77,6 +80,18 @@ class CheckInServiceTest {
         givenSuccessfulCheckIn(now);
 
         CheckInResponse response = service.createCheckIn(1L);
+
+        var lockOrder = inOrder(
+                seasonQueryService,
+                userRepository,
+                membershipRepository,
+                groupSeasonRepository
+        );
+        lockOrder.verify(seasonQueryService).findCurrentSeasonForShare();
+        lockOrder.verify(userRepository).findByIdForUpdate(1L);
+        lockOrder.verify(membershipRepository).findActiveWithGroupByUserId(1L);
+        lockOrder.verify(groupSeasonRepository).findForUpdateByGroupIdAndSeasonId(5L, 9L);
+        verify(seasonQueryService, times(1)).findCurrentSeasonForShare();
 
         assertThat(response.getCheckInDate()).isEqualTo(LocalDate.of(2026, 11, 5));
         assertThat(response.isMorning()).isTrue();

@@ -14,6 +14,7 @@ import com.team.sharedcreature.quest.infrastructure.ServiceCheckInRepository;
 import com.team.sharedcreature.quest.infrastructure.UserActivityEventRepository;
 import com.team.sharedcreature.season.application.SeasonQueryService;
 import com.team.sharedcreature.season.domain.GroupSeason;
+import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.GroupSeasonRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -213,11 +214,10 @@ public class CheckInService {
      * 체크인 처리를 거절합니다.
      *
      * @param membership 사용자의 활성 그룹 멤버십
+     * @param season 체크인 시작 시 공유 잠금을 획득한 현재 시즌
      * @throws BusinessException 현재 그룹 시즌이 활성 상태가 아니면 409 QUEST_PERIOD_ENDED
      */
-    private GroupSeason findActiveGroupSeason(GroupMembership membership) {
-        var season = seasonQueryService.findCurrentSeasonForShare();
-
+    private GroupSeason findActiveGroupSeason(GroupMembership membership, Season season) {
         GroupSeason groupSeason = groupSeasonRepository
                 .findForUpdateByGroupIdAndSeasonId(
                         membership.getGroup().getId(),
@@ -251,9 +251,11 @@ public class CheckInService {
     // 비관적 락, 상태 확인
     @Transactional
     public CheckInResponse createCheckIn(Long userId) {
+        // 퀘스트 완료와 같은 순서로 시즌 공유 잠금을 먼저 획득합니다.
+        Season season = seasonQueryService.findCurrentSeasonForShare();
         User user = findUserForUpdate(userId);
         GroupMembership membership = findActiveMembership(userId);
-        GroupSeason groupSeason = findActiveGroupSeason(membership);
+        GroupSeason groupSeason = findActiveGroupSeason(membership, season);
 
         // 시간 및 날짜 계산
         Instant checkedInAt = Instant.now(clock);
