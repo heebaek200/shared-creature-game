@@ -12,13 +12,13 @@ import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
 import com.team.sharedcreature.group.infrastructure.GroupJoinRestrictionRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
+import com.team.sharedcreature.season.application.SeasonQueryService;
 import com.team.sharedcreature.season.domain.GroupCreature;
 import com.team.sharedcreature.season.domain.GroupSeason;
 import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.GroupCreatureRepository;
 import com.team.sharedcreature.season.infrastructure.GroupSeasonRepository;
 import com.team.sharedcreature.season.infrastructure.SeasonGroupScoreRepository;
-import com.team.sharedcreature.season.infrastructure.SeasonRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,8 +38,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
- * STEP 4 그룹 자진 탈퇴의 업무 규칙을 DB 없이 검증합니다.
- *
+ * 그룹 자진 탈퇴의 업무 규칙을 DB 없이 검증합니다.
  * 실제 도메인 엔티티의 상태 변경과 Mockito Repository 호출을 함께 확인합니다.
  * 트랜잭션 롤백, DB UNIQUE 제약, 병렬 잠금은 통합 테스트의 책임입니다.
  */
@@ -57,34 +56,32 @@ class GroupDepartureServiceTest {
     @Mock private GroupJoinRestrictionRepository restrictionRepository;
     @Mock private GroupInviteLinkRepository inviteLinkRepository;
     @Mock private GroupAdminChangeRepository adminChangeRepository;
-    @Mock private SeasonRepository seasonRepository;
     @Mock private GroupSeasonRepository groupSeasonRepository;
     @Mock private GroupCreatureRepository groupCreatureRepository;
     @Mock private SeasonGroupScoreRepository groupScoreRepository;
+    @Mock private SeasonQueryService seasonQueryService;
 
     private GroupMembershipService service;
 
     /**
      * 테스트마다 고정 UTC 시각과 Service 협력 객체를 초기화합니다.
-     *
-     * 개별 테스트가 실제 DB에 접근하지 않도록 Repository만 모의 처리합니다.
-     * 엔티티 인스턴스는 테스트별로 새로 생성해 상태 간섭을 방지합니다.
+     * Repository와 SeasonQueryService는 Mockito Mock으로 대체합니다.
+     * 생성자 매개변수는 커밋 7488b1f의 실제 시그니처 순서를 따릅니다.
      */
     @BeforeEach
     void setUp() {
-        // 생성자 시그니처는 검토 대상 커밋의 실제 코드와 동일합니다.
+        // 실제 GroupMembershipService 생성자에서 정의한 순서대로 주입합니다.
         service = new GroupMembershipService(
                 userRepository, groupRepository, membershipRepository,
                 restrictionRepository, inviteLinkRepository, adminChangeRepository,
-                seasonRepository, groupSeasonRepository, groupCreatureRepository,
-                groupScoreRepository, Clock.fixed(NOW, ZoneOffset.UTC),
+                groupSeasonRepository, groupCreatureRepository, groupScoreRepository,
+                seasonQueryService, Clock.fixed(NOW, ZoneOffset.UTC),
                 "http://localhost:5173"
         );
     }
 
     /**
      * 일반 회원 탈퇴는 멤버십을 LEFT로 종료하고 인원을 감소시킵니다.
-     *
      * 최초 탈퇴자의 가입 제한을 한 건 생성해야 합니다.
      * 제한 만료 시각은 종료 시각으로부터 정확히 24시간 뒤여야 합니다.
      */
@@ -122,7 +119,6 @@ class GroupDepartureServiceTest {
 
     /**
      * 부 관리자는 별도의 PRIMARY 이전 없이 자진 탈퇴할 수 있습니다.
-     *
      * 탈퇴하더라도 역사적 멤버십 역할은 DEPUTY로 보존합니다.
      * 그룹 자체는 활성 상태를 유지하고 인원만 한 명 줄어듭니다.
      */
@@ -142,7 +138,6 @@ class GroupDepartureServiceTest {
 
     /**
      * 기존에 탈퇴 이력이 있는 사용자는 가입 제한 행을 재사용합니다.
-     *
      * 사용자별 UNIQUE 제약을 고려해 두 번째 행을 만들면 안 됩니다.
      * 제한 근거와 시작·종료 시각만 새로운 탈퇴 정보로 갱신합니다.
      */
@@ -168,7 +163,6 @@ class GroupDepartureServiceTest {
 
     /**
      * 다른 활성 구성원이 있는 PRIMARY는 탈퇴할 수 없습니다.
-     *
      * 서비스가 PRIMARY_TRANSFER_REQUIRED를 반환해야 합니다.
      * 실패한 요청은 멤버십·그룹·가입 제한을 변경하면 안 됩니다.
      */
@@ -188,7 +182,6 @@ class GroupDepartureServiceTest {
 
     /**
      * 마지막 PRIMARY의 탈퇴는 그룹 관련 상태를 모두 종료합니다.
-     *
      * 초대 링크 무효화, 현재 시즌 종료, 크리처 보관을 검증합니다.
      * 경험치나 성장 단계 등 크리처의 역사적 속성은 보존합니다.
      */
@@ -229,7 +222,6 @@ class GroupDepartureServiceTest {
 
     /**
      * 활성 초대가 없는 마지막 PRIMARY도 탈퇴할 수 있어야 합니다.
-     *
      * 현재 시즌 참여가 이미 없다면 그룹 종료만 수행합니다.
      * 과거 종료 이력을 새로 생성하거나 수정하지 않습니다.
      */
@@ -248,7 +240,6 @@ class GroupDepartureServiceTest {
 
     /**
      * 탈퇴 전 이미 종료된 멤버십을 발견하면 중복 처리를 거부합니다.
-     *
      * 잠금 획득 후 최신 상태를 다시 검사하는 로직을 검증합니다.
      * 실패한 요청은 제한 기록 생성과 인원 변경으로 진행되지 않습니다.
      */
@@ -267,7 +258,6 @@ class GroupDepartureServiceTest {
 
     /**
      * 활성 그룹을 찾지 못하면 어떤 DB 변경도 시도하지 않습니다.
-     *
      * 중복 탈퇴나 잘못된 상태의 인증 요청을 재처리하지 않습니다.
      * ROLE_FORBIDDEN 업무 코드가 유지되어야 합니다.
      */
@@ -285,7 +275,6 @@ class GroupDepartureServiceTest {
 
     /**
      * 활성 멤버십이 1건도 없는 그룹에서 MEMBER 탈퇴를 허용하지 않습니다.
-     *
      * 마지막 1명의 역할은 반드시 PRIMARY여야 하는 설계 제약입니다.
      * 손상된 인원·역할 조합을 감지해 더 큰 데이터 불일치를 방지합니다.
      */
@@ -303,7 +292,6 @@ class GroupDepartureServiceTest {
 
     /**
      * 그룹 행 잠금 이후 비활성 상태가 확인되면 탈퇴를 거부합니다.
-     *
      * 사전 조회가 낡은 데이터를 읽은 경우를 재현합니다.
      * 잘못된 상태에서 가입 제한을 만들거나 멤버십을 종료하지 않습니다.
      */
@@ -321,7 +309,6 @@ class GroupDepartureServiceTest {
 
     /**
      * Service의 잠금 조회 순서가 기존 그룹 관리 정책과 일치하는지 확인합니다.
-     *
      * 사용자 → 그룹 → 멤버십 ID 조회 → 멤버십 잠금을 실행해야 합니다.
      * 동시성 안전성 자체는 DB 잠금 통합 테스트로 검증해야 합니다.
      */
@@ -343,9 +330,8 @@ class GroupDepartureServiceTest {
 
     /**
      * 사용자 역할별로 실제 멤버십과 그룹 상태를 구성합니다.
-     *
      * Repository는 실제 생성한 엔티티를 그대로 반환하도록 연결합니다.
-     * ReflectionTestUtils는 DB 생성 ID와 다른 회원 수 설정에만 사용합니다.
+     * ReflectionTestUtils는 DB 생성 ID와 회원 수 설정에만 사용합니다.
      *
      * @param role 요청자의 MEMBER, DEPUTY, PRIMARY 중 하나
      * @param memberCount 현재 그룹의 활성 회원 수

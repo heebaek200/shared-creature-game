@@ -643,6 +643,7 @@ UPDATE game_groups
 | `start_at` | `DATETIME(6)` | — |
 | `end_at` | `DATETIME(6)` | — |
 | `status` | `VARCHAR(30)` | — |
+| `closing_from_status` | `VARCHAR(30) NULL` | CLOSING 진입 직전 상태. ACTIVE 또는 SCHEDULED |
 | `version` | `BIGINT` | 동시 변경 감지 |
 | `created_at` | `DATETIME(6)` | — |
 | `updated_at` | `DATETIME(6)` | — |

@@ -74,11 +74,17 @@ public class CreatureSelectionService {
                         membership.getGroup().getId(), season.getId())
                 .orElseThrow(() -> notFound("현재 그룹의 시즌 참여 정보를 찾을 수 없습니다."));
         Instant now = Instant.now(clock);
-        if (!"ACTIVE".equals(season.getStatus())
-                || !now.isBefore(season.getEndAt())
-                || !groupSeason.isSelectionOpenAt(now)) {
-            throw conflict(ErrorCode.CREATURE_SELECTION_CLOSED, "크리처 선택 시간이 종료됐습니다.");
+
+        // 그룹 시즌 잠금 대기 중에도 시즌 경계를 넘을 수 있으므로 재검사
+        if (! season.isActiveAt(now)) {
+            throw conflict(ErrorCode.CONCURRENT_MODIFICATION, "현재 시즌이 준비되지 않았습니다.");
         }
+
+        // 시즌은 유효하지만 해당 그룹의 종 선택 기한이 지났다면 거절
+        if (! groupSeason.isSelectionOpenAt(now)) {
+            throw conflict(ErrorCode.CREATURE_SELECTION_CLOSED, "크리처 선택 시간이 종료되었습니다.");
+        }
+
         CreatureSpecies species = speciesRepository.findByIdAndStatus(speciesId, "ACTIVE")
                 .orElseThrow(() -> notFound("선택할 수 있는 크리처 종을 찾을 수 없습니다."));
 
@@ -112,10 +118,18 @@ public class CreatureSelectionService {
         GroupCreature creature = groupCreatureRepository.findForUpdateByGroupSeasonId(groupSeason.getId())
                 .orElseThrow(() -> notFound("현재 그룹 크리처를 찾을 수 없습니다."));
         Instant now = Instant.now(clock);
-        if (now.isBefore(groupSeason.getSelectionDeadlineAt())
-                || !"ACTIVE".equals(season.getStatus())
-                || !now.isBefore(season.getEndAt())
-                || !groupSeason.getSelectionDeadlineAt().isBefore(season.getEndAt())) {
+//        if (now.isBefore(groupSeason.getSelectionDeadlineAt())
+//                || !"ACTIVE".equals(season.getStatus())
+//                || !now.isBefore(season.getEndAt())
+//                || !groupSeason.getSelectionDeadlineAt().isBefore(season.getEndAt())) {
+//            return Optional.empty();
+//        }
+
+        // 크리처 행의 잠금을 획득한 후 보화 기한을 재확인함.
+        if (! season.isActiveAt(now) ||
+            now.isBefore(groupSeason.getSelectionDeadlineAt()) ||
+            ! groupSeason.getSelectionDeadlineAt().isBefore(season.getEndAt())
+        ) {
             return Optional.empty();
         }
 
