@@ -51,4 +51,37 @@ public class QuestRewardLedger {
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
+    /**
+     * 완료 기록에 연결된 보상 생성합니다.
+     *
+     * @param completion 보상을 발생시킨 완료 기록
+     * @param rewardType 보상 종류
+     * @param amount 지급한 값
+     * @param groupCreature 경험치 보상이면 대상 크리처, 아니면 null
+     * @param memberContribution 개인 기여도 보상이면 대상 집계, 아니면 null
+     * @param groupScore 그룹 점수 보상이면 대상 집계, 아니면 null
+     * @param now 보상 확정 시각
+     * @return 생성할 보상
+     */
+    public static QuestRewardLedger create(
+            QuestCompletion completion,
+            String rewardType,
+            long amount,
+            GroupCreature groupCreature,
+            SeasonMemberContribution memberContribution,
+            SeasonGroupScore groupScore,
+            Instant now
+    ) {
+        QuestRewardLedger ledger = new QuestRewardLedger();
+        ledger.questCompletion = completion;
+        ledger.rewardType = rewardType;
+        ledger.amount = amount;
+        ledger.groupCreature = groupCreature;
+        ledger.memberContribution = memberContribution;
+        ledger.groupScore = groupScore;
+        ledger.appliedAt = now;
+        ledger.createdAt = now;
+        return ledger;
+    }
 }

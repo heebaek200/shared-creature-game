@@ -52,4 +52,20 @@ public class SeasonGroupScore {
     public static SeasonGroupScore zero(GroupSeason groupSeason, Instant now) {
         return new SeasonGroupScore(groupSeason, now);
     }
+
+    /**
+     * 퀘스트 완료로 얻은 점수를 그룹 시즌 점수에 더합니다.
+     *
+     * @param amount 더할 그룹 점수
+     * @param now 점수 반영 시각
+     */
+    public void addScore(long amount, Instant now) {
+        if (amount <= 0) {
+            throw new IllegalArgumentException("기여도는 0점 이상이여야 합니다.");
+        }
+
+        this.score = Math.addExact(this.score, amount);
+        this.scoreReachedAt = now;
+        this.updatedAt = now;
+    }
 }

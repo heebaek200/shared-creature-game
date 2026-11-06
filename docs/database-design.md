@@ -918,6 +918,9 @@ UPDATE game_groups
 | `group_season_id` | `BIGINT` | — |
 | `membership_id` | `BIGINT` | — |
 | `completed_at` | `DATETIME(6)` | — |
+| `creature_total_experience_after` | `BIGINT` | 완료 직후 크리처 경험치 Snapshot |
+| `creature_growth_stage_after` | `VARCHAR(30)` | 완료 직후 크리처 성장 단계 Snapshot |
+| `group_season_score_after` | `BIGINT` | 완료 직후 그룹 시즌 점수 Snapshot |
 | `created_at` | `DATETIME(6)` | — |
 
 ### 12.6. `quest_reward_ledgers`
