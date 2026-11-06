@@ -122,7 +122,7 @@ class QuestCompletionServiceTest {
                 .thenReturn(Optional.of(creature));
         when(memberContributionRepository.findByGroupSeasonIdAndUserId(31L, 7L))
                 .thenReturn(Optional.of(contribution));
-        when(groupScoreRepository.findByGroupSeasonId(31L)).thenReturn(Optional.of(groupScore));
+        when(groupScoreRepository.findForUpdateByGroupSeasonId(31L)).thenReturn(Optional.of(groupScore));
         when(completionRepository.save(any(QuestCompletion.class))).thenReturn(completion);
         when(completion.getId()).thenReturn(101L);
         when(completion.getCompletedAt()).thenReturn(NOW);

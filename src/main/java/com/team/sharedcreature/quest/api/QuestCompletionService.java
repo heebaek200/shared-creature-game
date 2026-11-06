@@ -1,6 +1,7 @@
 package com.team.sharedcreature.quest.api;
 
 import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.quest.domain.QuestAssignment;
@@ -16,7 +17,6 @@ import com.team.sharedcreature.season.domain.SeasonGroupScore;
 import com.team.sharedcreature.season.infrastructure.*;
 import lombok.RequiredArgsConstructor;
 import tools.jackson.core.JacksonException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.team.sharedcreature.auth.domain.User;
@@ -165,8 +165,7 @@ public class QuestCompletionService {
                 && !periodType.equals("DAILY")
                 && !periodType.equals("WEEKLY")) {
             throw new BusinessException(
-                    HttpStatus.BAD_REQUEST,
-                    "INVALID_FIELD_VALUE",
+                    ErrorCode.INVALID_FIELD_VALUE,
                     "기간 유형이 올바르지 않습니다."
             );
         }
@@ -250,8 +249,7 @@ public class QuestCompletionService {
         GroupMembership membership = membershipRepository
                 .findActiveWithGroupByUserId(userId)
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.FORBIDDEN,
-                        "ROLE_FORBIDDEN",
+                        ErrorCode.ROLE_FORBIDDEN,
                         "요청 권한이 없습니다."
                 ));
 
@@ -263,8 +261,7 @@ public class QuestCompletionService {
                         seasonId
                 )
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.NOT_FOUND,
-                        "RESOURCE_NOT_FOUND",
+                        ErrorCode.RESOURCE_NOT_FOUND,
                         "현재 그룹의 시즌 참여 정보를 찾을 수 없습니다."
                 ));
 
@@ -439,16 +436,14 @@ public class QuestCompletionService {
     ) {
         membershipRepository.findActiveWithGroupByUserId(userId)
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.FORBIDDEN,
-                        "ROLE_FORBIDDEN",
+                        ErrorCode.ROLE_FORBIDDEN,
                         "요청 권한이 없습니다."
                 ));
 
         /**404	RESOURCE_NOT_FOUND	없거나 요청자에게 노출하지 않는 리소스*/
         QuestAssignment assignment = assignmentRepository.findWithSnapshotById(assignmentId)
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.NOT_FOUND,
-                        "RESOURCE_NOT_FOUND",
+                        ErrorCode.RESOURCE_NOT_FOUND,
                         "퀘스트 배정을 찾을 수 없습니다."
                 ));
 
@@ -467,8 +462,7 @@ public class QuestCompletionService {
         /**409	QUEST_PERIOD_ENDED	퀘스트 유효 기간 밖*/
         if (!currentSeason || !activePeriod) {
             throw new BusinessException(
-                    HttpStatus.CONFLICT,
-                    "QUEST_PERIOD_ENDED",
+                    ErrorCode.QUEST_PERIOD_ENDED,
                     "퀘스트 유효 기간이 아닙니다."
             );
         }
@@ -476,8 +470,7 @@ public class QuestCompletionService {
         /**409  QUEST_COMPLETION_NOT_ALLOWED  해당 판정 유형 직접 완료 불가*/
         if (!verificationType.equals(assignment.getVerificationTypeSnapshot())) {
             throw new BusinessException(
-                    HttpStatus.CONFLICT,
-                    "QUEST_COMPLETION_NOT_ALLOWED",
+                    ErrorCode.QUEST_COMPLETION_NOT_ALLOWED,
                     "이 퀘스트는 직접 완료할 수 없습니다."
             );
         }
@@ -566,8 +559,7 @@ public class QuestCompletionService {
         // 409  QUEST_PERIOD_ENDED  퀘스트 유효 기간 밖
         if (!currentSeason || !activePeriod || !activeGroupSeason) {
             throw new BusinessException(
-                    HttpStatus.CONFLICT,
-                    "QUEST_PERIOD_ENDED",
+                    ErrorCode.QUEST_PERIOD_ENDED,
                     "퀘스트 유효 기간이 아닙니다."
             );
         }
@@ -577,8 +569,7 @@ public class QuestCompletionService {
         GroupMembership activeMembership = membershipRepository
                 .findActiveWithGroupByUserId(userId)
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.FORBIDDEN,
-                        "ROLE_FORBIDDEN",
+                        ErrorCode.ROLE_FORBIDDEN,
                         "요청 권한이 없습니다."
                 ));
 
@@ -589,8 +580,7 @@ public class QuestCompletionService {
                 )) {
             // 403  ROLE_FORBIDDEN  요청자 권한 부족
             throw new BusinessException(
-                    HttpStatus.FORBIDDEN,
-                    "ROLE_FORBIDDEN",
+                    ErrorCode.ROLE_FORBIDDEN,
                     "요청 권한이 없습니다."
             );
         }
@@ -614,8 +604,7 @@ public class QuestCompletionService {
     public QuestCompletionResponse completeQuestAssignment(Long userId, Long assignmentId) {
         if (assignmentId == null || assignmentId < 1) {
             throw new BusinessException(
-                    HttpStatus.BAD_REQUEST,
-                    "INVALID_FIELD_VALUE", // 400  INVALID_FIELD_VALUE  필드 타입·길이·값·형식 검증 실패
+                    ErrorCode.INVALID_FIELD_VALUE, // 400  INVALID_FIELD_VALUE  필드 타입·길이·값·형식 검증 실패
                     "퀘스트 배정 ID는 1 이상의 정수여야 합니다."
             );
         }
@@ -627,24 +616,22 @@ public class QuestCompletionService {
         /**401	AUTH_REQUIRED	세션 인증 없음*/
         var user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다."));
+                        ErrorCode.AUTH_REQUIRED, "로그인이 필요합니다."));
 
         /**403	ROLE_FORBIDDEN	요청자 권한 부족*/
         var membership = membershipRepository.findActiveWithGroupByUserId(userId)
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.FORBIDDEN, "ROLE_FORBIDDEN", "요청 권한이 없습니다."));
+                        ErrorCode.ROLE_FORBIDDEN, "요청 권한이 없습니다."));
 
         QuestAssignment requestedAssignment = assignmentRepository.findWithSnapshotById(assignmentId)
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.NOT_FOUND,
-                        "RESOURCE_NOT_FOUND",
+                        ErrorCode.RESOURCE_NOT_FOUND,
                         "퀘스트 배정을 찾을 수 없습니다."
                 ));
 
         if (!"SELF_CHECK".equals(requestedAssignment.getVerificationTypeSnapshot())) {
             throw new BusinessException(
-                    HttpStatus.CONFLICT,
-                    "QUEST_COMPLETION_NOT_ALLOWED", //409  QUEST_COMPLETION_NOT_ALLOWED  해당 판정 유형 직접 완료 불가
+                    ErrorCode.QUEST_COMPLETION_NOT_ALLOWED, //409  QUEST_COMPLETION_NOT_ALLOWED  해당 판정 유형 직접 완료 불가
                     "이 퀘스트는 직접 완료할 수 없습니다."
             );
         }
@@ -656,8 +643,7 @@ public class QuestCompletionService {
         if (existing != null) {
             if (!java.util.Objects.equals(existing.getMembership().getId(), membership.getId())) {
                 throw new BusinessException(
-                        HttpStatus.FORBIDDEN,
-                        "ROLE_FORBIDDEN",
+                        ErrorCode.ROLE_FORBIDDEN,
                         "요청 권한이 없습니다."
                 );
             }
@@ -671,12 +657,12 @@ public class QuestCompletionService {
                         membership.getGroup().getId(),
                         assignment.getQuestPeriod().getSeason().getId())
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "그룹 시즌을 찾을 수 없습니다."));
+                        ErrorCode.RESOURCE_NOT_FOUND, "그룹 시즌을 찾을 수 없습니다."));
 
         /**409	QUEST_PERIOD_ENDED	퀘스트 유효 기간 밖*/
         if (!"ACTIVE".equals(groupSeason.getStatus())) {
             throw new BusinessException(
-                    HttpStatus.CONFLICT, "QUEST_PERIOD_ENDED", "그룹 시즌이 활성 상태가 아닙니다.");
+                    ErrorCode.QUEST_PERIOD_ENDED, "그룹 시즌이 활성 상태가 아닙니다.");
         }
 
         return completeAndReward(user, membership, groupSeason, assignment);
@@ -703,8 +689,7 @@ public class QuestCompletionService {
         //401 AUTH_REQUIRED	세션 인증 없음
         User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.UNAUTHORIZED,
-                        "AUTH_REQUIRED", // 401  AUTH_REQUIRED  세션 인증 없음
+                        ErrorCode.AUTH_REQUIRED, // 401  AUTH_REQUIRED  세션 인증 없음
                         "로그인이 필요합니다."
                 ));
 
@@ -713,8 +698,7 @@ public class QuestCompletionService {
         GroupMembership membership = membershipRepository
                 .findActiveWithGroupByUserId(userId)
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.FORBIDDEN,
-                        "ROLE_FORBIDDEN", // 403  ROLE_FORBIDDEN  요청자 권한 부족
+                        ErrorCode.ROLE_FORBIDDEN, // 403  ROLE_FORBIDDEN  요청자 권한 부족
                         "요청 권한이 없습니다."
                 ));
 
@@ -727,15 +711,13 @@ public class QuestCompletionService {
                         assignment.getQuestPeriod().getSeason().getId()
                 )
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.NOT_FOUND,
-                        "RESOURCE_NOT_FOUND", // 404  RESOURCE_NOT_FOUND  없거나 요청자에게 노출하지 않는 리소스
+                        ErrorCode.RESOURCE_NOT_FOUND, // 404  RESOURCE_NOT_FOUND  없거나 요청자에게 노출하지 않는 리소스
                         "그룹 시즌을 찾을 수 없습니다."
                 ));
 
         if (!"ACTIVE".equals(groupSeason.getStatus())) {
             throw new BusinessException(
-                    HttpStatus.CONFLICT,
-                    "QUEST_PERIOD_ENDED", // 409  QUEST_PERIOD_ENDED  퀘스트 유효 기간 밖
+                    ErrorCode.QUEST_PERIOD_ENDED, // 409  QUEST_PERIOD_ENDED  퀘스트 유효 기간 밖
                     "그룹 시즌이 활성 상태가 아닙니다."
             );
         }
@@ -756,8 +738,7 @@ public class QuestCompletionService {
         // 409 QUEST_COMPLETION_NOT_ALLOWED	해당 판정 유형 직접 완료 불가
         if (!morningQuest || !morningCheckInExists) {
             throw new BusinessException(
-                    HttpStatus.CONFLICT,
-                    "QUEST_COMPLETION_NOT_ALLOWED",
+                    ErrorCode.QUEST_COMPLETION_NOT_ALLOWED,
                     "기상 체크인으로 완료할 수 있는 퀘스트가 아닙니다."
             );
         }
@@ -783,8 +764,7 @@ public class QuestCompletionService {
         // 401  AUTH_REQUIRED  세션 인증 없음
         User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.UNAUTHORIZED,
-                        "AUTH_REQUIRED",
+                        ErrorCode.AUTH_REQUIRED,
                         "로그인이 필요합니다."
                 ));
 
@@ -792,8 +772,7 @@ public class QuestCompletionService {
         GroupMembership membership = membershipRepository
                 .findActiveWithGroupByUserId(userId)
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.FORBIDDEN,
-                        "ROLE_FORBIDDEN",
+                        ErrorCode.ROLE_FORBIDDEN,
                         "요청 권한이 없습니다."
                 ));
 
@@ -826,14 +805,12 @@ public class QuestCompletionService {
                         assignment.getQuestPeriod().getSeason().getId()
                 )
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.NOT_FOUND,
-                        "RESOURCE_NOT_FOUND",
+                        ErrorCode.RESOURCE_NOT_FOUND,
                         "그룹 시즌을 찾을 수 없습니다."
                 ));
         if (!"ACTIVE".equals(groupSeason.getStatus())) {
             throw new BusinessException(
-                    HttpStatus.CONFLICT,
-                    "QUEST_PERIOD_ENDED",
+                    ErrorCode.QUEST_PERIOD_ENDED,
                     "그룹 시즌이 활성 상태가 아닙니다."
             );
         }
@@ -911,8 +888,7 @@ public class QuestCompletionService {
         var creature = groupCreatureRepository
                 .findForUpdateByGroupSeasonId(groupSeason.getId())
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.NOT_FOUND,
-                        "RESOURCE_NOT_FOUND",
+                        ErrorCode.RESOURCE_NOT_FOUND,
                         "그룹 크리처를 찾을 수 없습니다."
                 ));
 

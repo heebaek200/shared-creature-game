@@ -1,14 +1,12 @@
 package com.team.sharedcreature.quest.api;
 
 import com.team.sharedcreature._core.api.ApiResponse;
-import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.security.LoginUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.util.LinkedMultiValueMap;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -16,7 +14,6 @@ import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -41,9 +38,6 @@ class QuestApiControllerTest {
     @Test
     void 현재_퀘스트_조회는_로그인_사용자와_기간_유형을_서비스에_전달한다() {
         LoginUser loginUser = new LoginUser(7L, "테스트 사용자", Set.of("MEMBER"));
-        CurrentQuestsRequest request = new CurrentQuestsRequest();
-        request.setPeriodType("DAILY");
-
         CurrentQuestResponse quest = new CurrentQuestResponse(
                 11L,
                 21L,
@@ -68,31 +62,10 @@ class QuestApiControllerTest {
                 .thenReturn(List.of(quest));
 
         ApiResponse<List<CurrentQuestResponse>> response =
-                questController.listCurrentQuests(loginUser, request, new LinkedMultiValueMap<>());
+                questController.listCurrentQuests(loginUser, "DAILY");
 
         assertThat(response.data()).containsExactly(quest);
         verify(questCompletionService).listCurrentQuests(7L, "DAILY");
-    }
-
-    @Test
-    void 현재_퀘스트_조회는_미등록_중복_및_잘못된_Query를_거부한다() {
-        CurrentQuestsRequest request = new CurrentQuestsRequest();
-
-        LinkedMultiValueMap<String, String> unknown = new LinkedMultiValueMap<>();
-        unknown.add("unexpected", "value");
-        assertThatThrownBy(() -> questController.listCurrentQuests(null, request, unknown))
-                .isInstanceOf(BusinessException.class);
-
-        LinkedMultiValueMap<String, String> duplicate = new LinkedMultiValueMap<>();
-        duplicate.add("periodType", "DAILY");
-        duplicate.add("periodType", "WEEKLY");
-        assertThatThrownBy(() -> questController.listCurrentQuests(null, request, duplicate))
-                .isInstanceOf(BusinessException.class);
-
-        LinkedMultiValueMap<String, String> invalidValue = new LinkedMultiValueMap<>();
-        invalidValue.add("periodType", "MONTHLY");
-        assertThatThrownBy(() -> questController.listCurrentQuests(null, request, invalidValue))
-                .isInstanceOf(BusinessException.class);
     }
 
     @Test

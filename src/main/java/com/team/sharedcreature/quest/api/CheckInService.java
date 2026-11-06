@@ -1,6 +1,7 @@
 package com.team.sharedcreature.quest.api;
 
 import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.domain.GroupMembership;
@@ -17,7 +18,6 @@ import com.team.sharedcreature.season.domain.GroupSeason;
 import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.GroupSeasonRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -165,8 +165,7 @@ public class CheckInService {
         // 403 ROLE_FORBIDDEN 요청자 권한 부족
         return membershipRepository.findActiveWithGroupByUserId(userId)
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.FORBIDDEN,
-                        "ROLE_FORBIDDEN",
+                        ErrorCode.ROLE_FORBIDDEN,
                         "요청 권한이 없습니다."
                 ));
     }
@@ -182,8 +181,7 @@ public class CheckInService {
         // 401 AUTH_REQUIRED 세션 인증 없음
         return userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.UNAUTHORIZED,
-                        "AUTH_REQUIRED",
+                        ErrorCode.AUTH_REQUIRED,
                         "로그인이 필요합니다."
                 ));
     }
@@ -200,8 +198,7 @@ public class CheckInService {
         // 409 CONCURRENT_MODIFICATION 동시 처리 또는 이미 변경된 리소스
         if (serviceCheckInRepository.existsByUserIdAndCheckInDate(userId, checkInDate)) {
             throw new BusinessException(
-                    HttpStatus.CONFLICT,
-                    "CONCURRENT_MODIFICATION",
+                    ErrorCode.CONCURRENT_MODIFICATION,
                     "오늘은 이미 체크인했습니다."
             );
         }
@@ -225,15 +222,13 @@ public class CheckInService {
                 )
                 // 409 QUEST_PERIOD_ENDED 퀘스트 유효 기간 밖
                 .orElseThrow(() -> new BusinessException(
-                        HttpStatus.CONFLICT,
-                        "QUEST_PERIOD_ENDED",
+                        ErrorCode.QUEST_PERIOD_ENDED,
                         "현재 그룹 시즌이 활성 상태가 아닙니다."
                 ));
 
         if (!"ACTIVE".equals(groupSeason.getStatus())) {
             throw new BusinessException(
-                    HttpStatus.CONFLICT,
-                    "QUEST_PERIOD_ENDED",
+                    ErrorCode.QUEST_PERIOD_ENDED,
                     "현재 그룹 시즌이 활성 상태가 아닙니다."
             );
         }
