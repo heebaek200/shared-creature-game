@@ -62,4 +62,45 @@ public class UserActivityEvent {
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
+    /**
+     * 서버에서 확인한 사용자 활동 기록을 생성합니다.
+     *
+     * @param user 활동을 수행한 사용자
+     * @param eventType 활동 종류
+     * @param sourceType 활동이 발생한 기능 또는 출처 종류
+     * @param sourceId 출처 기능에서 사용하는 식별자
+     * @param membership 활동 당시의 그룹 멤버십
+     * @param groupSeason 활동을 귀속할 그룹 시즌
+     * @param businessDate 활동이 속하는 KST 날짜
+     * @param occurredAt 활동 발생 시각
+     * @param deduplicationKey 중복 활동을 구분하는 키
+     * @param metadata 활동에 추가로 기록할 정보
+     */
+    public static UserActivityEvent create(
+            User user,
+            String eventType,
+            String sourceType,
+            Long sourceId,
+            GroupMembership membership,
+            GroupSeason groupSeason,
+            LocalDate businessDate,
+            Instant occurredAt,
+            String deduplicationKey,
+            String metadata
+    ) {
+        UserActivityEvent event = new UserActivityEvent();
+        event.user = user;
+        event.eventType = eventType;
+        event.sourceType = sourceType;
+        event.sourceId = sourceId;
+        event.membership = membership;
+        event.groupSeason = groupSeason;
+        event.businessDate = businessDate;
+        event.occurredAt = occurredAt;
+        event.deduplicationKey = deduplicationKey;
+        event.metadata = metadata;
+        event.createdAt = occurredAt;
+        return event;
+    }
 }
