@@ -2,6 +2,41 @@
 import { ApiError } from '../api/client.js';
 
 let mockMembership = null;
+let nextMockGroupId = 501;
+
+const mockGroups = [
+  {
+    groupId: 1,
+    name: '새싹 키우기',
+    description: '함께 생명체를 키워나가는 그룹입니다.',
+    currentMemberCount: 5,
+    capacity: 20,
+    remainingCapacity: 15,
+    joinable: true,
+    joinBlockedReason: null,
+  },
+  {
+    groupId: 2,
+    name: '매일 성장하기',
+    description: '매일 작은 목표를 달성하는 그룹입니다.',
+    currentMemberCount: 20,
+    capacity: 20,
+    remainingCapacity: 0,
+    joinable: false,
+    joinBlockedReason: 'GROUP_FULL',
+  },
+  {
+    groupId: 3,
+    name: '함께하는 도전',
+    description: '다양한 퀘스트에 도전하는 그룹입니다.',
+    currentMemberCount: 8,
+    capacity: 20,
+    remainingCapacity: 12,
+    joinable: true,
+    joinBlockedReason: null,
+  },
+];
+
 
 /** 실제 API 계약과 같은 정상·오류 시나리오를 제공합니다. */
 export const mockApi = {
@@ -11,13 +46,23 @@ export const mockApi = {
       onboardingState: mockMembership ? 'COMPLETE' : 'GROUP_REQUIRED',
       user: { userId: 101, nickname: '새싹지기' },
       membership: mockMembership,
-      roles: mockMembership ? ['MEMBER'] : [],
+      roles: mockMembership ? [mockMembership.role] : [],
       restrictionUntil: null,
     };
   },
   async createGroup(input) {
     await delay(250);
-    if (input.name.trim() === '중복그룹') {
+
+    const name = input.name.trim();
+    const description = (input.description ?? '').trim();
+
+    // 그룹명 중복 검사
+    if (
+        mockGroups.some(
+            (group) => group.name.normalize('NFKC').trim().toLowerCase()
+                === name.normalize('NFKC').trim().toLowerCase()
+        )
+    ) {
       throw new ApiError(409, {
         code: 'GROUP_NAME_ALREADY_USED',
         message: '이미 사용 중인 그룹 이름입니다.',
@@ -25,22 +70,48 @@ export const mockApi = {
         traceId: 'mock-group-duplicate',
       });
     }
+
+    const groupId = nextMockGroupId++;
+    const now = new Date().toISOString();
+
+    // 그룹 생성 정보
+    const newGroup = {
+      groupId,
+      name,
+      description,
+      currentMemberCount: 1,
+      capacity: 20,
+      remainingCapacity: 19,
+      joinable: true,
+      joinBlockedReason: null,
+    };
+
+    // 그룹 목록에 추가
+    mockGroups.unshift(newGroup);
+
+    // 생성자를 PRIMARY 관리자로 자동 가입 처리
+    mockMembership = {
+      membershipId: Date.now(),
+      groupId,
+      role: 'PRIMARY',
+      joinedAt: now,
+      status: 'ACTIVE',
+    };
+
     return {
       group: {
-        group: {
-          groupId: 501,
-          name: input.name.trim(),
-          description: input.description.trim(),
-          currentMemberCount: 1,
-          capacity: 20,
-          remainingCapacity: 19,
-          joinable: true,
-          joinBlockedReason: null,
+        group: newGroup,
+        primaryAdmin: {
+          userId: 101,
+          nickname: '새싹지기',
+          role: 'PRIMARY',
+          joinedAt: now,
         },
-        primaryAdmin: { userId: 101, nickname: '새싹지기', role: 'PRIMARY', joinedAt: new Date().toISOString() },
-        myMembership: { membershipId: 601, groupId: 501, role: 'PRIMARY', joinedAt: new Date().toISOString(), status: 'ACTIVE' },
+        myMembership: mockMembership,
       },
-      initialInvitationUrl: `${location.origin}/invite/mock-invitation-token`,
+      initialInvitationUrl:
+          `${location.origin}/invite/mock-invitation-token`,
+      nextRoute: '/creature',
     };
   },
 
@@ -48,40 +119,7 @@ export const mockApi = {
   async listPublicGroups({ q = '', page = 0, size = 20 } = {}) {
     await delay(250);
 
-    const groups = [
-      {
-        groupId: 1,
-        name: '새싹 키우기',
-        description: '함께 생명체를 키워나가는 그룹입니다.',
-        currentMemberCount: 5,
-        capacity: 20,
-        remainingCapacity: 15,
-        joinable: true,
-        joinBlockedReason: null,
-      },
-      {
-        groupId: 2,
-        name: '매일 성장하기',
-        description: '매일 작은 목표를 달성하는 그룹입니다.',
-        currentMemberCount: 20,
-        capacity: 20,
-        remainingCapacity: 0,
-        joinable: false,
-        joinBlockedReason: 'GROUP_FULL',
-      },
-      {
-        groupId: 3,
-        name: '함께하는 도전',
-        description: '다양한 퀘스트에 도전하는 그룹입니다.',
-        currentMemberCount: 8,
-        capacity: 20,
-        remainingCapacity: 12,
-        joinable: true,
-        joinBlockedReason: null,
-      },
-    ];
-
-    const filteredGroups = groups.filter((group) =>
+    const filteredGroups = mockGroups.filter((group) =>
         `${group.name} ${group.description}`.includes(q.trim())
     );
 
@@ -105,13 +143,10 @@ export const mockApi = {
   async joinGroup(groupId) {
     await delay(250);
 
-    const groups = [
-      { groupId: 1, name: '새싹 키우기', capacity: 20, currentMemberCount: 5 },
-      { groupId: 2, name: '매일 성장하기', capacity: 20, currentMemberCount: 20 },
-      { groupId: 3, name: '함께하는 도전', capacity: 20, currentMemberCount: 8 },
-    ];
-
-    const group = groups.find((item) => item.groupId === groupId);
+    // 실제 Mock 그룹 목록에서 가입할 그룹 조회
+    const group = mockGroups.find(
+        (item) => item.groupId === groupId
+    );
 
     if (!group) {
       throw new ApiError(404, {
@@ -122,6 +157,17 @@ export const mockApi = {
       });
     }
 
+    // 이미 그룹에 가입했는지 확인
+    if (mockMembership) {
+      throw new ApiError(409, {
+        code: 'ALREADY_IN_GROUP',
+        message: '이미 다른 그룹에 가입되어 있습니다.',
+        fieldErrors: [],
+        traceId: 'mock-already-in-group',
+      });
+    }
+
+    // 정원 확인
     if (group.currentMemberCount >= group.capacity) {
       throw new ApiError(409, {
         code: 'GROUP_FULL',
@@ -131,13 +177,33 @@ export const mockApi = {
       });
     }
 
-    return {
+
+
+    // 가입 처리
+    const now = new Date().toISOString();
+
+    mockMembership = {
       membershipId: Date.now(),
       groupId,
       role: 'MEMBER',
-      joinedAt: new Date().toISOString(),
+      joinedAt: now,
       status: 'ACTIVE',
-      nickname: '새싹지기',
+    };
+
+    // 그룹 인원 갱신
+    group.currentMemberCount += 1;
+    group.remainingCapacity =
+        group.capacity - group.currentMemberCount;
+
+    // 정원이 찼으면 가입 불가 처리
+    if (group.remainingCapacity <= 0) {
+      group.joinable = false;
+      group.joinBlockedReason = 'GROUP_FULL';
+    }
+
+    return {
+      ...mockMembership,
+      nextRoute: '/creature',
     };
   },
 

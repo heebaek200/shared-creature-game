@@ -108,7 +108,7 @@ export function groupSelectPage({navigate}) {
         <nav class="pagination-area" aria-label="그룹 목록 페이지">
             <ul class="pagination justify-content-center mb-3"></ul>
         </nav>        
-        <div class="alert alert-secondary border-0 small mb-0" role="status">가입 제한이나 오류가 발생하면 이 영역에 안내됩니다.</div>
+        <div class="alert alert-secondary border-0 small mb-0" role="status"></div>
     </div>
 </section>
 `;
@@ -129,7 +129,15 @@ export function groupSelectPage({navigate}) {
     const themeButton = element.querySelector('.theme-toggle')
 
     const showAlert = (target, message, type = 'danger') => {
-        target.className = `alert alert-${type}`;
+        target.classList.remove(
+            'd-none',
+            'alert-danger',
+            'alert-success',
+            'alert-warning',
+            'alert-info'
+        );
+
+        target.classList.add('alert', `alert-${type}`);
         target.textContent = message;
     };
 
@@ -153,7 +161,7 @@ export function groupSelectPage({navigate}) {
 
     const getBlockedMessage = (reason) => {
         const messages = {
-            GROUP_FULL: '그룹 정원이 가득 찾습니다.',
+            GROUP_FULL: '그룹 정원이 가득 찼습니다.',
             JOIN_COOLDOWN_ACTIVE: '24시간 가입 제한이 적용 중입니다.',
             ALREADY_IN_GROUP: '이미 다른 그룹에 가입되어 있습니다.',
             GROUP_NOT_FOUND: '존재하지 않는 그룹입니다'
@@ -259,8 +267,212 @@ export function groupSelectPage({navigate}) {
             );
         }
 
+        addPageButton(
+            '다음',
+            currentPage + 1,
+            currentPage >= totalPages - 1
+        );
+    };
 
+    const loadGroup = async () => {
+        if (loading) return;
 
+        loading = true;
+        searchButton.disabled = true;
+
+        hideAlert(listAlert);
+
+        groupList.innerHTML = `<tr>
+                                  <td colspan="4" class="text-center py-4">그룹 목록을 불러오는 중입니다.</td>
+                               </tr>`;
+
+       try {
+           const result = await listPublicGroups({
+               q: currentQuery,
+               page: currentPage,
+               size: PAGE_SIZE
+           });
+           const groups = Array.isArray(result?.data)
+               ? result.data
+               : [];
+
+           const meta = result?.meta ?? {};
+           totalPages = Number(meta.totalPages ?? 0);
+           if (
+               totalPages > 0 &&
+               currentPage >= totalPages
+           ) {
+               currentPage = totalPages - 1;
+               loading = false;
+               await loadGroup();
+               return;
+           }
+           renderGroups(groups);
+           renderPagination();
+
+       } catch (error) {
+           groupList.innerHTML = `<tr>
+                                     <td colspan="4" class="text-center py-4 text-danger">그룹 목록을 불러오지 못했습니다.</td>
+                                   </tr>`;
+
+           showAlert(
+               listAlert,
+               error.message || '그룹 목록 조회 중 오류가 발생했습니다.'
+           );
+
+           totalPages = 0;
+           renderPagination();
+
+       } finally {
+           loading = false;
+           searchButton.disabled = false;
+       }
+    };
+
+    const onSearch = (event) => {
+        event.preventDefault();
+
+        currentQuery = searchInput.value.trim();
+        currentPage = 0;
+
+        loadGroup();
+    };
+
+    const onCreateToggle = () => {
+        const isHidden = createPanel.classList.toggle('d-none');
+
+        createToggle.setAttribute(
+            'aria-expanded',
+            String(!isHidden)
+        );
+
+        createToggle.textContent = isHidden
+            ? '+ 새 그룹 생성'
+            : '- 그룹 생성 닫기';
+    };
+
+    const onCreate = async (event) => {
+        event.preventDefault();
+
+        if (createSubmit.disabled) return;
+
+        if (!createForm.reportValidity()) return;
+
+        createSubmit.disabled = true;
+        hideAlert(createAlert);
+
+        try {
+            const result = await createGroup({
+
+                name: element.querySelector('#group-name').value.trim(),
+                description: element.querySelector('#group-description').value
+            });
+
+            console.log('그룹 생성 응답:', result);
+            console.log('초대 링크:', result.initialInvitationUrl);
+
+            createAlert.className = 'alert alert-success create-alert mt-3 mb-0';
+            createAlert.replaceChildren();
+
+            const message = document.createElement('p');
+            message.className = 'mb-2 fw-semibold';
+            message.textContent = '그룹을 만들었습니다';
+            createAlert.append(message);
+
+            if (result.initialInvitationUrl) {
+                const link = document.createElement('a');
+                link.href = result.initialInvitationUrl;
+                link.textContent = result.initialInvitationUrl;
+                link.target = '_blank'
+                link.rel = 'noopener noreferrer';
+                link.className = 'd-block text-break';
+
+                createAlert.append(link);
+            }
+
+            createForm.reset();
+
+            // 그룹 생성 성공 후 생명체 화면으로 이동
+            navigate(result?.nextRoute || '/creature');
+
+        } catch (error) {
+            showAlert(
+                createAlert,
+                error.message || '그룹 생성에 실패했습니다.'
+            );
+        } finally {
+            createSubmit.disabled = false;
+        }
+    };
+
+    const onJoin = async (event) => {
+        const button = event.target.closest('.join-button');
+
+        if (!button || joining) return;
+
+        const groupId = Number(button.dataset.groupId);
+
+        if (!Number.isInteger(groupId)) return;
+
+        joining = true;
+        button.disabled = true;
+        button.textContent = '가입 중...'
+        
+        try {
+            const result = await joinGroup(groupId);
+            navigate(result?.nextRoute || '/creature');
+
+        } catch (error) {
+            showAlert(
+                listAlert,
+                error.message || '그룹 가입에 실패했습니다.'
+            );
+        } finally {
+            joining = false;
+        }
+    };
+
+    const onPagination = (event) => {
+        const button = event.target.closest('[data-page]');
+
+        if (!button || button.disabled || loading) return;
+
+        const page = Number(button.dataset.page);
+
+        if (!Number.isInteger(page)) return;
+        if (page < 0 || page >= totalPages) return;
+
+        currentPage = page;
+        loadGroup();
+    };
+
+    const onTheme = () => {
+        const current = document.documentElement.dataset.bsTheme;
+        const next = current === 'dark' ? 'light' : 'dark';
+
+        document.documentElement.dataset.bsTheme = next;
+        localStorage.setItem('theme', next);
+    };
+
+    searchForm.addEventListener('submit', onSearch);
+    createToggle.addEventListener('click', onCreateToggle);
+    createForm.addEventListener('submit', onCreate);
+    groupList.addEventListener('click', onJoin);
+    pagination.addEventListener('click', onPagination);
+    themeButton.addEventListener('click', onTheme);
+
+    loadGroup();
+
+    return {
+        element,
+        cleanup: () => {
+            searchForm.removeEventListener('submit', onSearch);
+            createToggle.removeEventListener('click', onCreateToggle);
+            createForm.removeEventListener('submit', onCreate);
+            groupList.removeEventListener('click', onJoin);
+            pagination.removeEventListener('click', onPagination);
+            themeButton.removeEventListener('click', onTheme);
+        },
     };
 }
 
