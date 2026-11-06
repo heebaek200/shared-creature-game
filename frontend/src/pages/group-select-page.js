@@ -76,7 +76,7 @@ export function groupSelectPage({navigate}) {
                     </div>
                     
                     <div class="alert alert-info small py-2">
-                        그룹 소개를 작성하면 다른 사용자들이 그룹의 목적을 쉽게 확인할 수 있습니다.         
+                              
                     </div>                    
                     <button class="btn btn-success create-submit" type="submit">그룹 생성</button>
                     <div class="alert d-none create-alert mt-3 mb-0" role="status" aria-live="polite"></div>
