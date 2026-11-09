@@ -48,7 +48,10 @@ public class SecurityConfiguration {
                 .cors(cors -> { })
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfRepository)
-                        .ignoringRequestMatchers("/oauth2/callback/**"))
+                        .ignoringRequestMatchers(
+                                "/oauth2/callback/**",
+                                "/api/v1/payments/webhooks/portone"
+                        ))
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
                         .sessionFixation(fixation -> fixation.changeSessionId()))
@@ -56,6 +59,7 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/csrf", "/api/v1/me").permitAll()
                         .requestMatchers("/api/v1/auth/oauth-attempts", "/api/v1/auth/signup-context", "/api/v1/auth/signup").permitAll()
                         .requestMatchers("/oauth2/callback/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/webhooks/portone").permitAll()
                         .requestMatchers("/api/v1/invitations/**").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("SUPER_ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/v1/creature-species")

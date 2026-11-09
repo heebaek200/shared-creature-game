@@ -63,4 +63,62 @@ public class Purchase {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    private Purchase(
+            String orderNumber,
+            User user,
+            ShopItem shopItem,
+            String itemCodeSnapshot,
+            String itemNameSnapshot,
+            String slotCodeSnapshot,
+            Long priceKrwSnapshot,
+            Instant now
+    ) {
+        this.orderNumber = orderNumber;
+        this.user = user;
+        this.shopItem = shopItem;
+        this.itemCodeSnapshot = itemCodeSnapshot;
+        this.itemNameSnapshot = itemNameSnapshot;
+        this.slotCodeSnapshot = slotCodeSnapshot;
+        this.priceKrwSnapshot = priceKrwSnapshot;
+        this.currency = "KRW";
+        this.status = PurchaseStatus.READY.name();
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    /** 서버에서 확정한 상품 Snapshot으로 결제 대기 주문을 생성합니다. */
+    public static Purchase ready(String orderNumber, User user, ShopItem shopItem, Instant now) {
+        return new Purchase(
+                orderNumber,
+                user,
+                shopItem,
+                shopItem.getCode(),
+                shopItem.getName(),
+                shopItem.getSlotCode(),
+                shopItem.getPriceKrw(),
+                now
+        );
+    }
+
+    /** 결제 검증이 끝난 주문을 한 번만 결제 완료 상태로 전환합니다. */
+    public void markPaid(Instant now) {
+        if (PurchaseStatus.PAID.name().equals(status)) {
+            return;
+        }
+        if (!PurchaseStatus.READY.name().equals(status)) {
+            throw new IllegalStateException("READY 구매만 PAID로 전환할 수 있습니다.");
+        }
+        status = PurchaseStatus.PAID.name();
+        updatedAt = now;
+    }
+
+    /** 공급자가 명확히 결제 실패를 확정한 주문을 실패 상태로 전환합니다. */
+    public void markFailed(Instant now) {
+        if (!PurchaseStatus.READY.name().equals(status)) {
+            return;
+        }
+        status = PurchaseStatus.FAILED.name();
+        updatedAt = now;
+    }
 }

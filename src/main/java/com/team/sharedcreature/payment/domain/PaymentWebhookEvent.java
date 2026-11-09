@@ -73,4 +73,93 @@ public class PaymentWebhookEvent {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    private PaymentWebhookEvent(
+            String providerEventId,
+            String providerPaymentId,
+            Purchase purchase,
+            String eventType,
+            String payloadHash,
+            String payloadSummary,
+            Instant now
+    ) {
+        this.provider = "PORTONE";
+        this.providerEventId = providerEventId;
+        this.providerPaymentId = providerPaymentId;
+        this.purchase = purchase;
+        this.eventType = eventType;
+        this.payloadHash = payloadHash;
+        this.payloadSummary = payloadSummary;
+        this.processingStatus = WebhookProcessingStatus.PENDING.name();
+        this.receivedAt = now;
+        this.processingStartedAt = now;
+        this.attemptCount = 1;
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    /** 서명 검증을 통과한 PortOne 이벤트를 원문 대신 최소 요약으로 보존합니다. */
+    public static PaymentWebhookEvent received(
+            String providerEventId,
+            String providerPaymentId,
+            Purchase purchase,
+            String eventType,
+            String payloadHash,
+            String payloadSummary,
+            Instant now
+    ) {
+        return new PaymentWebhookEvent(
+                providerEventId,
+                providerPaymentId,
+                purchase,
+                eventType,
+                payloadHash,
+                payloadSummary,
+                now
+        );
+    }
+
+    /** 지원하지 않는 공급자 이벤트를 안전하게 무시 상태로 종료합니다. */
+    public void ignore(Instant now) {
+        processingStatus = WebhookProcessingStatus.IGNORED.name();
+        processedAt = now;
+        updatedAt = now;
+    }
+
+    /** 최신 결제 상태의 정합화가 끝난 이벤트를 완료 처리합니다. */
+    public void complete(Purchase purchase, PaymentTransaction transaction, Instant now) {
+        this.purchase = purchase;
+        paymentTransaction = transaction;
+        processingStatus = WebhookProcessingStatus.PROCESSED.name();
+        failureDetail = null;
+        processedAt = now;
+        updatedAt = now;
+    }
+
+    /** 재처리 가능한 실패 원인을 민감정보 없이 기록합니다. */
+    public void fail(String detail, Instant now) {
+        processingStatus = WebhookProcessingStatus.FAILED.name();
+        failureDetail = detail == null ? null : detail.substring(0, Math.min(detail.length(), 1000));
+        processedAt = now;
+        updatedAt = now;
+    }
+
+    /** 조회 이후 상태가 바뀐 이벤트를 다시 선점하지 않도록 현재 복구 가능 여부를 판정합니다. */
+    public boolean isRecoverable(Instant staleBefore) {
+        if (WebhookProcessingStatus.FAILED.name().equals(processingStatus)) {
+            return true;
+        }
+        return WebhookProcessingStatus.PENDING.name().equals(processingStatus)
+                && processingStartedAt != null
+                && !processingStartedAt.isAfter(staleBefore);
+    }
+
+    /** 고착 이벤트를 다시 처리하도록 선점합니다. */
+    public void retry(Instant now) {
+        processingStatus = WebhookProcessingStatus.PENDING.name();
+        processingStartedAt = now;
+        attemptCount++;
+        processedAt = null;
+        updatedAt = now;
+    }
 }
