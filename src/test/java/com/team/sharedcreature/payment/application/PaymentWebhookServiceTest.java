@@ -1,6 +1,8 @@
 package com.team.sharedcreature.payment.application;
 
 import com.team.sharedcreature.payment.domain.PaymentWebhookEvent;
+import com.team.sharedcreature.payment.domain.PaymentTransaction;
+import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
 import com.team.sharedcreature.payment.infrastructure.PaymentWebhookEventRepository;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
@@ -13,12 +15,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -96,7 +101,40 @@ class PaymentWebhookServiceTest {
     }
 
     @Test
-    void 미등록_주문의_결제_Webhook은_식별자를_보존하고_무시한다() {
+    void 등록된_결제_Webhook은_최신_조회_후_구매와_거래를_연결한다() {
+        String body = """
+                {"type":"Transaction.Paid","timestamp":"2026-11-09T08:00:00Z","data":{
+                  "storeId":"store-test","paymentId":"payment-21","transactionId":"tx-1"
+                }}
+                """;
+        Purchase purchase = mock(Purchase.class);
+        PaymentTransaction transaction = mock(PaymentTransaction.class);
+        AtomicReference<PaymentWebhookEvent> saved = new AtomicReference<>();
+        when(eventRepository.findByProviderAndProviderEventId("PORTONE", "event-1"))
+                .thenReturn(Optional.empty());
+        when(purchaseRepository.findByOrderNumber("payment-21")).thenReturn(Optional.of(purchase));
+        when(eventRepository.save(any(PaymentWebhookEvent.class))).thenAnswer(invocation -> {
+            PaymentWebhookEvent event = invocation.getArgument(0);
+            ReflectionTestUtils.setField(event, "id", 1L);
+            saved.set(event);
+            return event;
+        });
+        when(reconciliationService.reconcileByPaymentId("payment-21"))
+                .thenReturn(new PaymentReconciliationService.ReconciliationResult(10L, 20L, "PAID"));
+        when(eventRepository.findByIdForUpdate(1L)).thenAnswer(invocation -> Optional.of(saved.get()));
+        when(purchaseRepository.findById(10L)).thenReturn(Optional.of(purchase));
+        when(transactionRepository.findById(20L)).thenReturn(Optional.of(transaction));
+        executeTransactionsImmediately();
+
+        service.receive(body, "event-1", "signature", "100");
+
+        assertThat(saved.get().getProcessingStatus()).isEqualTo("PROCESSED");
+        assertThat(saved.get().getPurchase()).isSameAs(purchase);
+        assertThat(saved.get().getPaymentTransaction()).isSameAs(transaction);
+    }
+
+    @Test
+    void 미등록_주문의_결제_Webhook은_식별자를_보존하고_복구대상으로_유지한다() {
         String body = """
                 {"type":"Transaction.Paid","timestamp":"2026-11-09T08:00:00Z","data":{
                   "storeId":"store-test","paymentId":"unknown-payment","transactionId":"tx-1"
@@ -114,8 +152,61 @@ class PaymentWebhookServiceTest {
         ArgumentCaptor<PaymentWebhookEvent> captor = ArgumentCaptor.forClass(PaymentWebhookEvent.class);
         verify(eventRepository).save(captor.capture());
         assertThat(captor.getValue().getProviderPaymentId()).isEqualTo("unknown-payment");
-        assertThat(captor.getValue().getProcessingStatus()).isEqualTo("IGNORED");
+        assertThat(captor.getValue().getProcessingStatus()).isEqualTo("FAILED");
+        assertThat(captor.getValue().getFailureDetail()).isEqualTo("PURCHASE_NOT_FOUND");
         verifyNoInteractions(reconciliationService);
+    }
+
+    @Test
+    void 조회_후_이미_종료된_이벤트는_잠금_후_다시_Pending으로_되돌리지_않는다() {
+        PaymentWebhookEvent event = PaymentWebhookEvent.received(
+                "event-1",
+                "payment-21",
+                null,
+                "Transaction.Paid",
+                "hash",
+                "{}",
+                Instant.parse("2026-11-09T07:50:00Z")
+        );
+        event.ignore(Instant.parse("2026-11-09T07:59:00Z"));
+        when(eventRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
+        executeTransactionsImmediately();
+
+        var outcome = service.recover(1L, Instant.parse("2026-11-09T07:55:00Z"));
+
+        assertThat(outcome).isEqualTo(PaymentWebhookService.RecoveryOutcome.SKIPPED);
+        assertThat(event.getProcessingStatus()).isEqualTo("IGNORED");
+        verifyNoInteractions(reconciliationService);
+    }
+
+    @Test
+    void 미매칭_이벤트는_주문이_확인되면_구매와_거래를_연결해_복구한다() {
+        PaymentWebhookEvent event = PaymentWebhookEvent.received(
+                "event-1",
+                "payment-21",
+                null,
+                "Transaction.Paid",
+                "hash",
+                "{}",
+                Instant.parse("2026-11-09T07:50:00Z")
+        );
+        ReflectionTestUtils.setField(event, "id", 1L);
+        event.fail("PURCHASE_NOT_FOUND", Instant.parse("2026-11-09T07:50:01Z"));
+        Purchase purchase = mock(Purchase.class);
+        PaymentTransaction transaction = mock(PaymentTransaction.class);
+        when(eventRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
+        when(reconciliationService.reconcileByPaymentId("payment-21"))
+                .thenReturn(new PaymentReconciliationService.ReconciliationResult(10L, 20L, "PAID"));
+        when(purchaseRepository.findById(10L)).thenReturn(Optional.of(purchase));
+        when(transactionRepository.findById(20L)).thenReturn(Optional.of(transaction));
+        executeTransactionsImmediately();
+
+        var outcome = service.recover(1L, Instant.parse("2026-11-09T07:55:00Z"));
+
+        assertThat(outcome).isEqualTo(PaymentWebhookService.RecoveryOutcome.PROCESSED);
+        assertThat(event.getProcessingStatus()).isEqualTo("PROCESSED");
+        assertThat(event.getPurchase()).isSameAs(purchase);
+        assertThat(event.getPaymentTransaction()).isSameAs(transaction);
     }
 
     @SuppressWarnings("unchecked")
@@ -124,5 +215,10 @@ class PaymentWebhookServiceTest {
             TransactionCallback<Object> callback = invocation.getArgument(0);
             return callback.doInTransaction(transactionStatus);
         });
+        lenient().doAnswer(invocation -> {
+            Consumer<TransactionStatus> callback = invocation.getArgument(0);
+            callback.accept(transactionStatus);
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
     }
 }

@@ -15,6 +15,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Set;
 
 /** 서명 검증된 PortOne 이벤트를 보존하고 결제 정합화로 전달합니다. */
@@ -83,11 +84,7 @@ public class PaymentWebhookService {
         }
         try {
             var result = reconciliationService.reconcileByPaymentId(parsed.paymentId());
-            transactionTemplate.executeWithoutResult(status -> eventRepository.findByIdForUpdate(eventDatabaseId)
-                    .ifPresent(event -> event.complete(
-                            transactionRepository.findById(result.transactionId()).orElse(null),
-                            clock.instant()
-                    )));
+            complete(eventDatabaseId, result);
         } catch (BusinessException | PaymentGatewayException exception) {
             transactionTemplate.executeWithoutResult(status -> eventRepository.findByIdForUpdate(eventDatabaseId)
                     .ifPresent(event -> event.fail(safeFailure(exception), clock.instant())));
@@ -95,11 +92,13 @@ public class PaymentWebhookService {
     }
 
     /** 저장된 이벤트 식별자만 사용해 PortOne 최신 상태로 고착 처리를 복구합니다. */
-    public void recover(Long eventDatabaseId) {
+    public RecoveryOutcome recover(Long eventDatabaseId, Instant staleBefore) {
         RecoverableEvent recoverable = transactionTemplate.execute(status -> eventRepository
                 .findByIdForUpdate(eventDatabaseId)
                 .map(event -> {
-                    if (isCancellation(event.getEventType()) || event.getProviderPaymentId() == null) {
+                    if (!RECONCILABLE_TYPES.contains(event.getEventType())
+                            || event.getProviderPaymentId() == null
+                            || !event.isRecoverable(staleBefore)) {
                         return null;
                     }
                     event.retry(clock.instant());
@@ -107,19 +106,29 @@ public class PaymentWebhookService {
                 })
                 .orElse(null));
         if (recoverable == null) {
-            return;
+            return RecoveryOutcome.SKIPPED;
         }
         try {
             var result = reconciliationService.reconcileByPaymentId(recoverable.paymentId());
-            transactionTemplate.executeWithoutResult(status -> eventRepository.findByIdForUpdate(recoverable.eventId())
-                    .ifPresent(event -> event.complete(
-                            transactionRepository.findById(result.transactionId()).orElse(null),
-                            clock.instant()
-                    )));
+            complete(recoverable.eventId(), result);
+            return RecoveryOutcome.PROCESSED;
         } catch (BusinessException | PaymentGatewayException exception) {
             transactionTemplate.executeWithoutResult(status -> eventRepository.findByIdForUpdate(recoverable.eventId())
                     .ifPresent(event -> event.fail(safeFailure(exception), clock.instant())));
+            return RecoveryOutcome.FAILED;
         }
+    }
+
+    private void complete(Long eventDatabaseId, PaymentReconciliationService.ReconciliationResult result) {
+        transactionTemplate.executeWithoutResult(status -> {
+            var event = eventRepository.findByIdForUpdate(eventDatabaseId)
+                    .orElseThrow(() -> new IllegalStateException("Webhook 이벤트를 찾을 수 없습니다."));
+            var purchase = purchaseRepository.findById(result.purchaseId())
+                    .orElseThrow(() -> new IllegalStateException("Webhook 구매를 찾을 수 없습니다."));
+            var transaction = transactionRepository.findById(result.transactionId())
+                    .orElseThrow(() -> new IllegalStateException("Webhook 결제 거래를 찾을 수 없습니다."));
+            event.complete(purchase, transaction, clock.instant());
+        });
     }
 
     private Long persist(String eventId, ParsedWebhook parsed, String body) {
@@ -139,9 +148,13 @@ public class PaymentWebhookService {
                 parsed.summary(),
                 clock.instant()
         ));
-        if (purchase == null && !parsed.cancellationEvent()) {
-            // 미등록 결제 이벤트는 식별자와 요약을 남기되 반복 조회 대상에서는 제외합니다.
+        if (!parsed.knownPaymentEvent()) {
             event.ignore(clock.instant());
+            return null;
+        }
+        if (purchase == null && !parsed.cancellationEvent()) {
+            // 주문보다 먼저 도착했거나 일시적으로 매칭하지 못한 이벤트는 복구 대상으로 유지합니다.
+            event.fail("PURCHASE_NOT_FOUND", clock.instant());
             return null;
         }
         return event.getId();
@@ -205,5 +218,16 @@ public class PaymentWebhookService {
     }
 
     private record RecoverableEvent(Long eventId, String paymentId) {
+    }
+
+    /** 단건 Webhook 복구 결과입니다. */
+    public enum RecoveryOutcome {
+        PROCESSED,
+        SKIPPED,
+        FAILED
+    }
+
+    static Set<String> reconcilableTypes() {
+        return RECONCILABLE_TYPES;
     }
 }

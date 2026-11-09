@@ -127,7 +127,8 @@ public class PaymentWebhookEvent {
     }
 
     /** 최신 결제 상태의 정합화가 끝난 이벤트를 완료 처리합니다. */
-    public void complete(PaymentTransaction transaction, Instant now) {
+    public void complete(Purchase purchase, PaymentTransaction transaction, Instant now) {
+        this.purchase = purchase;
         paymentTransaction = transaction;
         processingStatus = WebhookProcessingStatus.PROCESSED.name();
         failureDetail = null;
@@ -141,6 +142,16 @@ public class PaymentWebhookEvent {
         failureDetail = detail == null ? null : detail.substring(0, Math.min(detail.length(), 1000));
         processedAt = now;
         updatedAt = now;
+    }
+
+    /** 조회 이후 상태가 바뀐 이벤트를 다시 선점하지 않도록 현재 복구 가능 여부를 판정합니다. */
+    public boolean isRecoverable(Instant staleBefore) {
+        if (WebhookProcessingStatus.FAILED.name().equals(processingStatus)) {
+            return true;
+        }
+        return WebhookProcessingStatus.PENDING.name().equals(processingStatus)
+                && processingStartedAt != null
+                && !processingStartedAt.isAfter(staleBefore);
     }
 
     /** 고착 이벤트를 다시 처리하도록 선점합니다. */

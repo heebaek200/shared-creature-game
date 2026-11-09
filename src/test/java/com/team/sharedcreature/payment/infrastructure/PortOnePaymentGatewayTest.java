@@ -88,4 +88,57 @@ class PortOnePaymentGatewayTest {
                         assertThat(exception.kind()).isEqualTo(PaymentGatewayException.Kind.NOT_FOUND));
         server.verify();
     }
+
+    @Test
+    void PortOne_PENDING_상태를_내부_대기상태로_유지한다() {
+        server.expect(once(), requestTo("https://api.portone.io/payments/" + PAYMENT_ID))
+                .andRespond(withSuccess("""
+                        {
+                          "id": "%s",
+                          "storeId": "store-test",
+                          "transactionId": "tx-pending",
+                          "status": "PENDING",
+                          "amount": {"total": 1000},
+                          "currency": "KRW"
+                        }
+                        """.formatted(PAYMENT_ID), MediaType.APPLICATION_JSON));
+
+        PaymentSnapshot result = gateway.getPayment(PAYMENT_ID);
+
+        assertThat(result.status()).isEqualTo(PaymentSnapshot.Status.PENDING);
+        server.verify();
+    }
+
+    @Test
+    void 취소_목록을_환불_복구용_Snapshot으로_변환한다() {
+        server.expect(once(), requestTo("https://api.portone.io/payments/" + PAYMENT_ID))
+                .andRespond(withSuccess("""
+                        {
+                          "id": "%s",
+                          "storeId": "store-test",
+                          "transactionId": "tx-1",
+                          "status": "PARTIAL_CANCELLED",
+                          "amount": {"total": 1000},
+                          "currency": "KRW",
+                          "cancellations": [{
+                            "id": "cancel-1",
+                            "status": "SUCCEEDED",
+                            "totalAmount": 1000,
+                            "requestedAt": "2026-11-09T08:00:00Z",
+                            "cancelledAt": "2026-11-09T08:01:00Z"
+                          }]
+                        }
+                        """.formatted(PAYMENT_ID), MediaType.APPLICATION_JSON));
+
+        PaymentSnapshot result = gateway.getPayment(PAYMENT_ID);
+
+        assertThat(result.cancellations()).singleElement().satisfies(cancellation -> {
+            assertThat(cancellation.cancellationId()).isEqualTo("cancel-1");
+            assertThat(cancellation.status()).isEqualTo("SUCCEEDED");
+            assertThat(cancellation.cancelledAmount()).isEqualTo(1000L);
+            assertThat(cancellation.requestedAt()).isEqualTo(Instant.parse("2026-11-09T08:00:00Z"));
+            assertThat(cancellation.cancelledAt()).isEqualTo(Instant.parse("2026-11-09T08:01:00Z"));
+        });
+        server.verify();
+    }
 }

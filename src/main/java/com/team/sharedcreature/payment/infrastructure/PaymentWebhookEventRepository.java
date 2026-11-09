@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,9 +26,14 @@ public interface PaymentWebhookEventRepository extends JpaRepository<PaymentWebh
     @Query("""
             SELECT event
               FROM PaymentWebhookEvent event
-             WHERE event.processingStatus = 'FAILED'
-                OR (event.processingStatus = 'PENDING' AND event.processingStartedAt <= :staleBefore)
+             WHERE event.eventType IN :eventTypes
+               AND (event.processingStatus = 'FAILED'
+                 OR (event.processingStatus = 'PENDING' AND event.processingStartedAt <= :staleBefore))
              ORDER BY event.processingStartedAt ASC, event.id ASC
             """)
-    List<PaymentWebhookEvent> findRecoverable(@Param("staleBefore") Instant staleBefore, Pageable pageable);
+    List<PaymentWebhookEvent> findRecoverable(
+            @Param("eventTypes") Collection<String> eventTypes,
+            @Param("staleBefore") Instant staleBefore,
+            Pageable pageable
+    );
 }

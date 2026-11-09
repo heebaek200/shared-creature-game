@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -48,15 +49,21 @@ class PaymentReconciliationServiceTest {
 
     private PaymentReconciliationService service;
     private Purchase purchase;
+    private User user;
+    private ShopItem shopItem;
 
     @BeforeEach
     void setUp() {
-        ShopItem shopItem = mock(ShopItem.class);
+        shopItem = mock(ShopItem.class);
+        user = mock(User.class);
         when(shopItem.getCode()).thenReturn("HAIR-01");
         when(shopItem.getName()).thenReturn("테스트 헤어");
         when(shopItem.getSlotCode()).thenReturn("HEAD");
         when(shopItem.getPriceKrw()).thenReturn(1000L);
-        purchase = Purchase.ready(PAYMENT_ID, mock(User.class), shopItem, NOW.minusSeconds(60));
+        lenient().when(shopItem.getId()).thenReturn(101L);
+        lenient().when(user.getId()).thenReturn(7L);
+        purchase = Purchase.ready(PAYMENT_ID, user, shopItem, NOW.minusSeconds(60));
+        ReflectionTestUtils.setField(purchase, "id", 10L);
 
         PortOneProperties properties = new PortOneProperties(
                 "store-test",
@@ -82,13 +89,13 @@ class PaymentReconciliationServiceTest {
         PaymentSnapshot snapshot = paidSnapshot(1000L, "EASY_PAY", "KAKAOPAY", "TEST");
         PurchaseResponse expected = mock(PurchaseResponse.class);
         when(purchaseRepository.findByIdAndUserId(10L, 7L)).thenReturn(Optional.of(purchase));
-        when(purchaseRepository.findByIdForUpdate(null)).thenReturn(Optional.of(purchase));
+        when(purchaseRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(purchase));
         when(paymentGateway.getPayment(PAYMENT_ID)).thenReturn(snapshot);
         when(transactionRepository.findByProviderAndProviderTransactionId("PORTONE", "tx-1"))
                 .thenReturn(Optional.empty());
         when(transactionRepository.save(any(PaymentTransaction.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        when(ownedItemRepository.findByPurchaseId(null)).thenReturn(Optional.empty());
+        when(ownedItemRepository.findByPurchaseId(10L)).thenReturn(Optional.empty());
         when(ownedItemRepository.save(any(OwnedItem.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(queryService.get(7L, 10L)).thenReturn(expected);
@@ -164,6 +171,64 @@ class PaymentReconciliationServiceTest {
         verifyNoInteractions(transactionTemplate, ownedItemRepository);
     }
 
+    @Test
+    void 이미_PAID인_주문은_기존_승인거래와_아이템이_모두_일치해야_멱등_성공한다() {
+        purchase.markPaid(NOW.minusSeconds(30));
+        PaymentTransaction transaction = PaymentTransaction.approved(
+                purchase, "tx-1", 1000L, NOW.minusSeconds(30), NOW.minusSeconds(30)
+        );
+        ReflectionTestUtils.setField(transaction, "id", 20L);
+        OwnedItem ownedItem = OwnedItem.grant(purchase, NOW.minusSeconds(30));
+        PurchaseResponse expected = mock(PurchaseResponse.class);
+        when(purchaseRepository.findByIdAndUserId(10L, 7L)).thenReturn(Optional.of(purchase));
+        when(purchaseRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(purchase));
+        when(paymentGateway.getPayment(PAYMENT_ID)).thenReturn(paidSnapshot(1000L, "EASY_PAY", "KAKAOPAY", "TEST"));
+        when(transactionRepository.findByProviderAndProviderTransactionId("PORTONE", "tx-1"))
+                .thenReturn(Optional.of(transaction));
+        when(ownedItemRepository.findByPurchaseId(10L)).thenReturn(Optional.of(ownedItem));
+        when(queryService.get(7L, 10L)).thenReturn(expected);
+        executeTransactionsImmediately();
+
+        assertThat(service.reconcileForUser(7L, 10L, PAYMENT_ID)).isSameAs(expected);
+        verify(transactionRepository, never()).save(any());
+        verify(ownedItemRepository, never()).save(any());
+    }
+
+    @Test
+    void PAID인데_아이템이_없으면_자동_재지급하지_않는다() {
+        purchase.markPaid(NOW.minusSeconds(30));
+        PaymentTransaction transaction = PaymentTransaction.approved(
+                purchase, "tx-1", 1000L, NOW.minusSeconds(30), NOW.minusSeconds(30)
+        );
+        when(purchaseRepository.findByIdAndUserId(10L, 7L)).thenReturn(Optional.of(purchase));
+        when(purchaseRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(purchase));
+        when(paymentGateway.getPayment(PAYMENT_ID)).thenReturn(paidSnapshot(1000L, "EASY_PAY", "KAKAOPAY", "TEST"));
+        when(transactionRepository.findByProviderAndProviderTransactionId("PORTONE", "tx-1"))
+                .thenReturn(Optional.of(transaction));
+        when(ownedItemRepository.findByPurchaseId(10L)).thenReturn(Optional.empty());
+        executeTransactionsImmediately();
+
+        assertThatThrownBy(() -> service.reconcileForUser(7L, 10L, PAYMENT_ID))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.PAYMENT_RESULT_UNKNOWN));
+        verify(ownedItemRepository, never()).save(any());
+    }
+
+    @Test
+    void PAID_주문에_FAILED_Snapshot이_와도_실패거래를_추가하지_않는다() {
+        purchase.markPaid(NOW.minusSeconds(30));
+        when(purchaseRepository.findByIdAndUserId(10L, 7L)).thenReturn(Optional.of(purchase));
+        when(purchaseRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(purchase));
+        when(paymentGateway.getPayment(PAYMENT_ID)).thenReturn(failedSnapshot());
+        executeTransactionsImmediately();
+
+        assertThatThrownBy(() -> service.reconcileForUser(7L, 10L, PAYMENT_ID))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.PAYMENT_RESULT_UNKNOWN));
+        assertThat(purchase.getStatus()).isEqualTo("PAID");
+        verify(transactionRepository, never()).save(any());
+    }
+
     @SuppressWarnings("unchecked")
     private void executeTransactionsImmediately() {
         when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
@@ -184,6 +249,22 @@ class PaymentReconciliationServiceTest {
                 provider,
                 channelType,
                 NOW,
+                List.of()
+        );
+    }
+
+    private PaymentSnapshot failedSnapshot() {
+        return new PaymentSnapshot(
+                PAYMENT_ID,
+                "store-test",
+                "tx-failed",
+                PaymentSnapshot.Status.FAILED,
+                1000L,
+                "KRW",
+                null,
+                null,
+                null,
+                null,
                 List.of()
         );
     }

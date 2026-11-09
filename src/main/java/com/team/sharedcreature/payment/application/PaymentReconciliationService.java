@@ -6,6 +6,7 @@ import com.team.sharedcreature.avatar.domain.OwnedItem;
 import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
 import com.team.sharedcreature.payment.api.PurchaseResponse;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
+import com.team.sharedcreature.payment.domain.PaymentTransactionStatus;
 import com.team.sharedcreature.payment.domain.PaymentTransactionType;
 import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.domain.PurchaseStatus;
@@ -103,47 +104,98 @@ public class PaymentReconciliationService {
             Purchase locked = purchaseRepository.findByIdForUpdate(purchaseId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
             if (actual.status() == PaymentSnapshot.Status.FAILED) {
-                locked.markFailed(clock.instant());
-                PaymentTransaction transaction = transactionRepository
-                        .findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDesc(
-                                purchaseId,
-                                PaymentTransactionType.APPROVAL.name()
-                        )
-                        .orElseGet(() -> transactionRepository.save(PaymentTransaction.failed(
-                                locked,
-                                locked.getPriceKrwSnapshot(),
-                                clock.instant()
-                        )));
-                return new ReconciliationResult(locked.getId(), transaction.getId(), locked.getStatus());
+                return reconcileFailed(locked);
             }
-
-            if (PurchaseStatus.FAILED.name().equals(locked.getStatus())
-                    || PurchaseStatus.CANCELLED.name().equals(locked.getStatus())) {
-                throw new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN);
-            }
-            if (!PurchaseStatus.PAID.name().equals(locked.getStatus())) {
-                locked.markPaid(clock.instant());
-            }
-            PaymentTransaction transaction = transactionRepository
-                    .findByProviderAndProviderTransactionId("PORTONE", actual.transactionId())
-                    .orElseGet(() -> transactionRepository.save(PaymentTransaction.approved(
-                            locked,
-                            actual.transactionId(),
-                            actual.totalAmount(),
-                            actual.paidAt() == null ? clock.instant() : actual.paidAt(),
-                            clock.instant()
-                    )));
-            if (!Objects.equals(transaction.getPurchase().getId(), locked.getId())) {
-                throw new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN);
-            }
-            ownedItemRepository.findByPurchaseId(purchaseId)
-                    .orElseGet(() -> ownedItemRepository.save(OwnedItem.grant(locked, clock.instant())));
-            return new ReconciliationResult(locked.getId(), transaction.getId(), locked.getStatus());
+            return reconcilePaid(locked, actual);
         });
         if (result == null) {
             throw new IllegalStateException("결제 정합화 트랜잭션 결과가 없습니다.");
         }
         return result;
+    }
+
+    private ReconciliationResult reconcileFailed(Purchase locked) {
+        if (PurchaseStatus.READY.name().equals(locked.getStatus())) {
+            locked.markFailed(clock.instant());
+            PaymentTransaction transaction = transactionRepository.save(PaymentTransaction.failed(
+                    locked,
+                    locked.getPriceKrwSnapshot(),
+                    clock.instant()
+            ));
+            return result(locked, transaction);
+        }
+        if (PurchaseStatus.FAILED.name().equals(locked.getStatus())) {
+            PaymentTransaction transaction = transactionRepository
+                    .findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDesc(
+                            locked.getId(),
+                            PaymentTransactionType.APPROVAL.name()
+                    )
+                    .filter(candidate -> isFailureConsistent(locked, candidate))
+                    .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN));
+            return result(locked, transaction);
+        }
+        throw new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN);
+    }
+
+    private ReconciliationResult reconcilePaid(Purchase locked, PaymentSnapshot actual) {
+        if (PurchaseStatus.READY.name().equals(locked.getStatus())) {
+            if (transactionRepository.findByProviderAndProviderTransactionId(
+                    "PORTONE",
+                    actual.transactionId()
+            ).isPresent() || ownedItemRepository.findByPurchaseId(locked.getId()).isPresent()) {
+                throw new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN);
+            }
+            locked.markPaid(clock.instant());
+            PaymentTransaction transaction = transactionRepository.save(PaymentTransaction.approved(
+                    locked,
+                    actual.transactionId(),
+                    actual.totalAmount(),
+                    actual.paidAt() == null ? clock.instant() : actual.paidAt(),
+                    clock.instant()
+            ));
+            ownedItemRepository.save(OwnedItem.grant(locked, clock.instant()));
+            return result(locked, transaction);
+        }
+        if (PurchaseStatus.PAID.name().equals(locked.getStatus())) {
+            PaymentTransaction transaction = transactionRepository
+                    .findByProviderAndProviderTransactionId("PORTONE", actual.transactionId())
+                    .filter(candidate -> isApprovalConsistent(locked, candidate, actual))
+                    .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN));
+            ownedItemRepository.findByPurchaseId(locked.getId())
+                    .filter(item -> isGrantConsistent(locked, item))
+                    .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN));
+            return result(locked, transaction);
+        }
+        throw new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN);
+    }
+
+    private boolean isFailureConsistent(Purchase purchase, PaymentTransaction transaction) {
+        return Objects.equals(transaction.getPurchase().getId(), purchase.getId())
+                && PaymentTransactionType.APPROVAL.name().equals(transaction.getTransactionType())
+                && PaymentTransactionStatus.DEFINITIVE_FAILURE.name().equals(transaction.getStatus())
+                && Objects.equals(transaction.getAmountKrw(), purchase.getPriceKrwSnapshot());
+    }
+
+    private boolean isApprovalConsistent(
+            Purchase purchase,
+            PaymentTransaction transaction,
+            PaymentSnapshot actual
+    ) {
+        return Objects.equals(transaction.getPurchase().getId(), purchase.getId())
+                && "PORTONE".equals(transaction.getProvider())
+                && PaymentTransactionType.APPROVAL.name().equals(transaction.getTransactionType())
+                && PaymentTransactionStatus.SUCCESS.name().equals(transaction.getStatus())
+                && Objects.equals(transaction.getAmountKrw(), actual.totalAmount());
+    }
+
+    private boolean isGrantConsistent(Purchase purchase, OwnedItem item) {
+        return Objects.equals(item.getPurchase().getId(), purchase.getId())
+                && Objects.equals(item.getUser().getId(), purchase.getUser().getId())
+                && Objects.equals(item.getShopItem().getId(), purchase.getShopItem().getId());
+    }
+
+    private ReconciliationResult result(Purchase purchase, PaymentTransaction transaction) {
+        return new ReconciliationResult(purchase.getId(), transaction.getId(), purchase.getStatus());
     }
 
     private void validate(ExpectedPurchase expected, PaymentSnapshot actual) {
