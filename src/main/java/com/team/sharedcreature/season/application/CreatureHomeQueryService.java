@@ -61,28 +61,24 @@ public class CreatureHomeQueryService {
         CreatureHomeSupplementProvider.Supplement supplement = supplementProvider
                 .getSupplement(creature, userId, now);
 
-        CreatureSpecies visibleSpecies = creature.getSpecies() != null
-                ? creature.getSpecies()
-                : groupSeason.getSelectedSpecies();
-        Instant hatchesAt = "EGG".equals(creature.getGrowthStage()) && !"ENDED".equals(groupSeason.getStatus())
-                ? groupSeason.getSelectionDeadlineAt()
-                : null;
+        CreatureSpecies visibleSpecies = creature.getSpecies();
         var creatureResponse = new CreatureHomeResponse.CreatureResponse(
+                creature.getId(),
                 visibleSpecies == null ? null : visibleSpecies.getId(),
-                visibleSpecies == null ? null : visibleSpecies.getName(),
                 creature.getGrowthStage(),
-                hatchesAt,
                 creature.getTotalExperience(),
-                creature.currentStageThreshold(),
-                creature.nextStageThreshold()
+                creature.nextStageThreshold(),
+                groupSeason.getSelectionDeadlineAt()
         );
         return new CreatureHomeResponse(
                 membership.getGroup().getId(),
+                membership.getGroup().getName(),
                 SeasonResponse.from(season),
                 creatureResponse,
                 supplement.todayExperience(),
+                supplement.onlineMembers(),
                 supplement.recentContributions(),
-                supplement.presentAvatars(),
+                now,
                 supplement.streamInstanceId(),
                 supplement.sequence()
         );

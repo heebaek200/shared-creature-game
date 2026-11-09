@@ -1064,9 +1064,11 @@
 | data.recentContributions | array<object> | Y | N | 빈 값 [] | 최근 기여 내역 목록 |
 | data.recentContributions[].userId | integer(int64) | Y | N | 1 이상 | 사용자 ID |
 | data.recentContributions[].nickname | string | Y | N | 2~20자 | 닉네임 |
-| data.recentContributions[].amount | integer(int64) | Y | N | 1 이상 | 금액 |
+| data.recentContributions[].amount | integer(int64) | Y | N | 1 이상 | 획득 크리처 경험치 |
 | data.recentContributions[].occurredAt | string(date-time) | Y | N | UTC ISO 8601 | 발생 시각 |
 | data.snapshotAt | string(date-time) | Y | N | UTC ISO 8601 | Snapshot 생성 시각 |
+| data.streamInstanceId | string(uuid) | Y | N | 서버 실행 인스턴스별 UUID | Stream 인스턴스 식별자 |
+| data.sequence | integer(int64) | Y | N | 0 이상; Stream 내 단조 증가 | Snapshot 반영 완료 이벤트 순번 |
 
 **오류 응답**
 
@@ -2687,12 +2689,14 @@
 | 필드 | 타입 | 필수 | null | 제약 |
 |---|---|---|---|---|
 | eventId | string(uuid) | Y | N | UUID 36자, 이벤트 중복 제거 식별자 [보완안] |
+| streamInstanceId | string(uuid) | Y | N | 서버 실행 인스턴스별 UUID |
+| sequence | integer(int64) | Y | N | 1 이상; Stream 내 단조 증가 |
 | eventType | string(enum) | Y | N | 아래 4종 [보완안] |
 | groupId | integer(int64) | Y | N | 1 이상, 구독 그룹과 일치 |
 | occurredAt | string(date-time) | Y | N | UTC ISO 8601 |
 | payload | object | Y | N | 이벤트별 Payload 스키마 |
 
-**확인 필요 — 메시지 순서·스트림 식별:** 이슈 #23·#28·#38은 `sequence` 누락 및 `streamInstanceId` 변경 감지에 따른 재조회 동작을 요구하지만, 현재 이벤트 Envelope과 `getCreatureHome` Snapshot 필드에는 두 값의 전달 경로가 정의되어 있지 않습니다. 두 식별자의 자료형·생성 주기·시퀀스 범위·Snapshot 포함 여부를 합의하기 전까지는 새 필드를 임의 추가하지 않으며, 재연결 시 REST Snapshot 재조회 계약은 유지합니다.
+**메시지 순서·스트림 식별:** `getCreatureHome` Snapshot과 실시간 이벤트는 `streamInstanceId`, `sequence`를 공유합니다. 클라이언트는 인스턴스 변경 또는 순번 누락 시 Snapshot을 다시 조회합니다.
 
 ### 10.2. `PRESENCE_JOINED`
 
@@ -2738,6 +2742,8 @@
 ```json
 {
   "eventId": "550e8400-e29b-41d4-a716-446655440000",
+  "streamInstanceId": "74eddf9c-5e53-47e2-853d-274dc09b74e4",
+  "sequence": 42,
   "eventType": "CREATURE_UPDATED",
   "groupId": 501,
   "occurredAt": "2026-11-03T06:00:00Z",
