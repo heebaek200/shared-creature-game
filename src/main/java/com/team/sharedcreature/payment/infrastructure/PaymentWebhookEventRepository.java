@@ -19,6 +19,8 @@ import java.util.Optional;
 public interface PaymentWebhookEventRepository extends JpaRepository<PaymentWebhookEvent, Long> {
     Optional<PaymentWebhookEvent> findByProviderAndProviderEventId(String provider, String providerEventId);
 
+    boolean existsByProviderAndProviderEventId(String provider, String providerEventId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT event FROM PaymentWebhookEvent event WHERE event.id = :eventId")
     Optional<PaymentWebhookEvent> findByIdForUpdate(@Param("eventId") Long eventId);

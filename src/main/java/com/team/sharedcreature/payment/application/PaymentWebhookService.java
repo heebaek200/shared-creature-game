@@ -67,8 +67,11 @@ public class PaymentWebhookService {
         try {
             eventDatabaseId = transactionTemplate.execute(status -> persist(eventId, parsed, body));
         } catch (DataIntegrityViolationException exception) {
-            // 동시에 같은 공급자 이벤트를 저장한 요청은 중복 수신으로 처리합니다.
-            return;
+            // UNIQUE 경합으로 실제 중복 행이 확정된 경우에만 정상적인 재수신으로 처리합니다.
+            if (eventRepository.existsByProviderAndProviderEventId("PORTONE", eventId)) {
+                return;
+            }
+            throw exception;
         }
         if (eventDatabaseId == null) {
             return;
@@ -116,17 +119,21 @@ public class PaymentWebhookService {
             transactionTemplate.executeWithoutResult(status -> eventRepository.findByIdForUpdate(recoverable.eventId())
                     .ifPresent(event -> event.fail(safeFailure(exception), clock.instant())));
             return RecoveryOutcome.FAILED;
+        } catch (PaymentWebhookConsistencyException exception) {
+            transactionTemplate.executeWithoutResult(status -> eventRepository.findByIdForUpdate(recoverable.eventId())
+                    .ifPresent(event -> event.fail("PAYMENT_WEBHOOK_INCONSISTENT", clock.instant())));
+            return RecoveryOutcome.FAILED;
         }
     }
 
     private void complete(Long eventDatabaseId, PaymentReconciliationService.ReconciliationResult result) {
         transactionTemplate.executeWithoutResult(status -> {
             var event = eventRepository.findByIdForUpdate(eventDatabaseId)
-                    .orElseThrow(() -> new IllegalStateException("Webhook 이벤트를 찾을 수 없습니다."));
+                    .orElseThrow(() -> new PaymentWebhookConsistencyException("Webhook 이벤트를 찾을 수 없습니다."));
             var purchase = purchaseRepository.findById(result.purchaseId())
-                    .orElseThrow(() -> new IllegalStateException("Webhook 구매를 찾을 수 없습니다."));
+                    .orElseThrow(() -> new PaymentWebhookConsistencyException("Webhook 구매를 찾을 수 없습니다."));
             var transaction = transactionRepository.findById(result.transactionId())
-                    .orElseThrow(() -> new IllegalStateException("Webhook 결제 거래를 찾을 수 없습니다."));
+                    .orElseThrow(() -> new PaymentWebhookConsistencyException("Webhook 결제 거래를 찾을 수 없습니다."));
             event.complete(purchase, transaction, clock.instant());
         });
     }
@@ -229,5 +236,12 @@ public class PaymentWebhookService {
 
     static Set<String> reconcilableTypes() {
         return RECONCILABLE_TYPES;
+    }
+
+    /** 복구 대상 한 건의 저장 연결이 확정 결과와 모순될 때 사용하는 내부 예외입니다. */
+    private static final class PaymentWebhookConsistencyException extends RuntimeException {
+        private PaymentWebhookConsistencyException(String message) {
+            super(message);
+        }
     }
 }

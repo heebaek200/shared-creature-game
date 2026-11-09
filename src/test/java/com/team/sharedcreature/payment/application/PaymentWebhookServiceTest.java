@@ -12,6 +12,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -26,6 +27,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -98,6 +100,36 @@ class PaymentWebhookServiceTest {
 
         verify(eventRepository, never()).save(any());
         verifyNoInteractions(reconciliationService);
+    }
+
+    @Test
+    void 저장_제약위반_후_동일_이벤트가_확인되면_중복수신으로_종료한다() {
+        String body = """
+                {"type":"Transaction.Paid","timestamp":"2026-11-09T08:00:00Z","data":{
+                  "storeId":"store-test","paymentId":"payment-21","transactionId":"tx-1"
+                }}
+                """;
+        when(transactionTemplate.execute(any())).thenThrow(new DataIntegrityViolationException("duplicate"));
+        when(eventRepository.existsByProviderAndProviderEventId("PORTONE", "event-1")).thenReturn(true);
+
+        service.receive(body, "event-1", "signature", "100");
+
+        verifyNoInteractions(reconciliationService);
+    }
+
+    @Test
+    void 저장_제약위반이_이벤트_중복이_아니면_예외를_전파한다() {
+        String body = """
+                {"type":"Transaction.Paid","timestamp":"2026-11-09T08:00:00Z","data":{
+                  "storeId":"store-test","paymentId":"payment-21","transactionId":"tx-1"
+                }}
+                """;
+        DataIntegrityViolationException failure = new DataIntegrityViolationException("not duplicate");
+        when(transactionTemplate.execute(any())).thenThrow(failure);
+        when(eventRepository.existsByProviderAndProviderEventId("PORTONE", "event-1")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.receive(body, "event-1", "signature", "100"))
+                .isSameAs(failure);
     }
 
     @Test
@@ -207,6 +239,32 @@ class PaymentWebhookServiceTest {
         assertThat(event.getProcessingStatus()).isEqualTo("PROCESSED");
         assertThat(event.getPurchase()).isSameAs(purchase);
         assertThat(event.getPaymentTransaction()).isSameAs(transaction);
+    }
+
+    @Test
+    void 복구_결과의_구매_연결이_누락되면_단건_실패로_기록한다() {
+        PaymentWebhookEvent event = PaymentWebhookEvent.received(
+                "event-1",
+                "payment-21",
+                null,
+                "Transaction.Paid",
+                "hash",
+                "{}",
+                Instant.parse("2026-11-09T07:50:00Z")
+        );
+        ReflectionTestUtils.setField(event, "id", 1L);
+        event.fail("PURCHASE_NOT_FOUND", Instant.parse("2026-11-09T07:50:01Z"));
+        when(eventRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
+        when(reconciliationService.reconcileByPaymentId("payment-21"))
+                .thenReturn(new PaymentReconciliationService.ReconciliationResult(10L, 20L, "PAID"));
+        when(purchaseRepository.findById(10L)).thenReturn(Optional.empty());
+        executeTransactionsImmediately();
+
+        var outcome = service.recover(1L, Instant.parse("2026-11-09T07:55:00Z"));
+
+        assertThat(outcome).isEqualTo(PaymentWebhookService.RecoveryOutcome.FAILED);
+        assertThat(event.getProcessingStatus()).isEqualTo("FAILED");
+        assertThat(event.getFailureDetail()).isEqualTo("PAYMENT_WEBHOOK_INCONSISTENT");
     }
 
     @SuppressWarnings("unchecked")

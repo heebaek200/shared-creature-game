@@ -4,6 +4,9 @@ import com.team.sharedcreature.payment.application.PaymentGatewayException;
 import com.team.sharedcreature.payment.application.PaymentSnapshot;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -140,5 +143,20 @@ class PortOnePaymentGatewayTest {
             assertThat(cancellation.cancelledAt()).isEqualTo(Instant.parse("2026-11-09T08:01:00Z"));
         });
         server.verify();
+    }
+
+    @Test
+    void Spring_Context가_주입_생성자로_PortOne_Adapter를_생성한다() {
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(RestClientAutoConfiguration.class))
+                .withUserConfiguration(PortOnePaymentGateway.class)
+                .withPropertyValues(
+                        "portone.store-id=store-test",
+                        "portone.channel-key=channel-test",
+                        "portone.api-secret=api-secret",
+                        "portone.webhook-secret=webhook-secret",
+                        "portone.api-base-url=https://api.portone.io"
+                )
+                .run(context -> assertThat(context).hasSingleBean(PortOnePaymentGateway.class));
     }
 }

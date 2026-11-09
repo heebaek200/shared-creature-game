@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.data.domain.Pageable;
 
 import java.time.Clock;
@@ -16,10 +17,12 @@ import java.util.Collection;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -65,6 +68,24 @@ class PaymentWebhookRecoveryServiceTest {
                 "Transaction.PayPending"
         );
         assertThat(types.getValue()).noneMatch(type -> type.contains("Cancel"));
+    }
+
+    @Test
+    void DB_접근_오류는_숨기지_않고_배치를_중단한다() {
+        PaymentWebhookEvent first = event(1L);
+        PaymentWebhookEvent second = mock(PaymentWebhookEvent.class);
+        when(eventRepository.findRecoverable(any(), eq(NOW.minusSeconds(300)), any(Pageable.class)))
+                .thenReturn(List.of(first, second));
+        DataAccessResourceFailureException failure = new DataAccessResourceFailureException("database unavailable");
+        when(webhookService.recover(1L, NOW.minusSeconds(300))).thenThrow(failure);
+        PaymentWebhookRecoveryService service = new PaymentWebhookRecoveryService(
+                eventRepository,
+                webhookService,
+                Clock.fixed(NOW, ZoneOffset.UTC)
+        );
+
+        assertThatThrownBy(service::recoverStaleWebhooks).isSameAs(failure);
+        verify(webhookService, never()).recover(2L, NOW.minusSeconds(300));
     }
 
     private PaymentWebhookEvent event(Long id) {

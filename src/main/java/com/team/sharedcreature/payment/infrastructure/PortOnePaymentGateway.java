@@ -4,6 +4,7 @@ import tools.jackson.databind.JsonNode;
 import com.team.sharedcreature.payment.application.PaymentGateway;
 import com.team.sharedcreature.payment.application.PaymentGatewayException;
 import com.team.sharedcreature.payment.application.PaymentSnapshot;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
@@ -25,6 +26,7 @@ public class PortOnePaymentGateway implements PaymentGateway {
     private final RestClient restClient;
 
     /** 환경별 PortOne Endpoint와 인증 Header를 구성합니다. */
+    @Autowired
     public PortOnePaymentGateway(PortOneProperties properties, RestClient.Builder builder) {
         this(properties, builder.baseUrl(properties.apiBaseUrl()).build());
     }
