@@ -164,4 +164,44 @@ public class Season {
         throw new IllegalStateException("시즌 종료 이전 상태를 확인할 수 없습니다.");
     }
 
+    /**
+     * 현재 달력 구간의 SCHEDULED 시즌을 신규 생성합니다.
+     * 실제 최초 생성 시각을 기록하고 달력상 4주 구간은 별도로 유지합니다.
+     * 만료된 과거 구간이나 잘못된 28일 간격은 생성하지 않습니다.
+     *
+     * @param seasonNumber 마지막 DB 시즌 번호 + 1
+     * @param startAt 최초 시즌 달력 기준 현재 구간 시작
+     * @param endAt 28일 뒤 구간 종료
+     * @param now 실제 생성 시각
+     * @return 아직 그룹 초기화를 수행하지 않은 SCHEDULED 시즌
+     */
+    public static Season schedule(
+            int seasonNumber,
+            Instant startAt,
+            Instant endAt,
+            Instant now
+    ) {
+        Objects.requireNonNull(startAt, "startAt");
+        Objects.requireNonNull(endAt, "endAt");
+        Objects.requireNonNull(now, "now");
+
+        // 종료된 달력을 소급 생성하지 않으며 정확한 28일 기간만 인정합니다.
+        if (seasonNumber < 1
+                || !endAt.equals(startAt.plus(java.time.Duration.ofDays(28)))
+                || now.isBefore(startAt)
+                || !now.isBefore(endAt)) {
+            throw new IllegalArgumentException("유효하지 않은 신규 시즌 구간입니다.");
+        }
+
+        Season season = new Season();
+        season.seasonNumber = seasonNumber;
+        season.startAt = startAt;
+        season.endAt = endAt;
+        season.status = "SCHEDULED";
+        season.closingFromStatus = null;
+        season.createdAt = now;
+        season.updatedAt = now;
+        return season;
+    }
+
 }

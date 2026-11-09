@@ -38,3 +38,7 @@ auth:
   initial-super-admin:
     provider: ${INITIAL_SUPER_ADMIN_PROVIDER:}
     provider-user-id: ${INITIAL_SUPER_ADMIN_PROVIDER_USER_ID:}
+
+app:
+  scheduler:
+    enabled: ${APP_SCHEDULER_ENABLED:false}   # 스케쥴러(이 프로젝트에서는 시즌 및 퀘스트 갱신 역할) 기능 활성화 여부

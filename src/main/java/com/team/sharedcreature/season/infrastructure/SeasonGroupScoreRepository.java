@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -28,5 +29,18 @@ public interface SeasonGroupScoreRepository extends JpaRepository<SeasonGroupSco
     Optional<SeasonGroupScore> findForUpdateByGroupSeasonId(
             @Param("groupSeasonId") Long groupSeasonId
     );
+
+    /**
+     * 한 시즌에 기록된 모든 그룹 점수를 조회합니다.
+     * GroupSeason과 관계를 함께 읽어 Snapshot 정합성을 확인합니다.
+     * 시즌 종료 배타 잠금을 확보한 서비스에서 사용합니다.
+     */
+    @Query("""
+            SELECT score
+              FROM SeasonGroupScore score
+              JOIN FETCH score.groupSeason
+             WHERE score.groupSeason.season.id = :seasonId
+            """)
+    List<SeasonGroupScore> findAllForSeasonSnapshot(@Param("seasonId") Long seasonId);
 
 }

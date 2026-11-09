@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -68,4 +69,19 @@ public interface GroupSeasonRepository extends JpaRepository<GroupSeason, Long> 
             AND gs.status IN ('PREPARING', 'ACTIVE')
 """)
     Optional<GroupSeason> findOpenByGroupIdForUpdate(@Param("groupId") Long groupId);
+
+    /**
+     * 종료 랭킹에 포함할 전체 그룹 시즌을 조회합니다.
+     * 탈퇴나 그룹 비활성화로 이미 종료된 그룹 시즌도 포함합니다.
+     * 시즌 배타 잠금을 획득한 서비스에서 호출합니다.
+     */
+    @Query("""
+            SELECT gs
+              FROM GroupSeason AS gs
+              JOIN FETCH gs.group
+             WHERE gs.season.id = :seasonId
+             ORDER BY
+                   gs.group.id ASC
+            """)
+    List<GroupSeason> findAllForSeasonSnapshot(@Param("seasonId") Long seasonId);
 }
