@@ -2,6 +2,7 @@
 import { getActiveCreatureSpecies, getCreatureHome } from '../features/creature/api.js';
 import { renderCreatureGrowth } from '../features/creature/render.js';
 import { getCurrentSeason } from '../features/season/api.js';
+import { getCurrentUser } from '../features/auth/api.js';
 import { ApiError } from '../api/client.js';
 import creatureLv0 from '../../assets/creature/lv0.png';
 
@@ -211,6 +212,7 @@ export function creaturePage(context) {
   `;
 
     // 2. DOM 요소 참조 및 이벤트 바인딩
+    // 화면 요소를 조회하고 버튼 및 바깥 영역 이벤트 연결
     const btnQuest = element.querySelector('#btn-quest');
     const avatarInfoCard = element.querySelector('#avatar-info-card');
     const avatarToggleTitle = element.querySelector('#avatar-toggle-title');
@@ -224,6 +226,7 @@ export function creaturePage(context) {
     const retryButton = element.querySelector('#creature-error-retry');
     const loginButton = element.querySelector('#creature-error-login');
 
+    // API 오류를 사용자 안내 문구로 변환 및 재시도 가능 여부 판단
     function getApiErrorMessage(error) {
         if (!(error instanceof ApiError)) {
             return '서버에 연결하지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.';
@@ -303,14 +306,28 @@ export function creaturePage(context) {
     };
     btnToggleMovement?.addEventListener('click', onToggleMovement);
 
+    const onMovementFocus = () => {
+        if (!btnToggleMovement) return;
+        btnToggleMovement.style.outline = '3px solid #146c43';
+        btnToggleMovement.style.outlineOffset = '0';
+    };
+    const onMovementBlur = () => {
+        if (!btnToggleMovement) return;
+        btnToggleMovement.style.outline = '';
+        btnToggleMovement.style.outlineOffset = '';
+    };
+    btnToggleMovement?.addEventListener('focus', onMovementFocus);
+    btnToggleMovement?.addEventListener('blur', onMovementBlur);
+
     avatarContainer?.addEventListener('click', (e) => {
         if (e.target === avatarContainer || e.target.closest('.d-flex.flex-column.align-items-center.justify-content-center')) {
             avatarInfoCard?.classList.add('d-none');
         }
     });
 
-    // 3. API 및 성장 단계 계산 로직 (단계별 순차 진화 연출 포함)
+    // 3. API 조회, 크리처 성장 렌더링 및 마감 감시 로직
     let isMounted = true;
+    let currentUserId = null;
     let countdownIntervalId = null;
     let deadlineTimeoutId = null;
     /** @type {Set<number>} */
@@ -325,6 +342,7 @@ export function creaturePage(context) {
         return timeoutId;
     }
 
+    // 72시간까지 남은 시각(크리처 선택 마감 기간)
     function updateRemainingTimeLabels(seasonData, hatchDeadlineAt) {
         const now = Date.now();
         const groupSeasonInfo = element.querySelector('#group-season-info');
@@ -371,6 +389,7 @@ export function creaturePage(context) {
         }
     }
 
+    // 72시간 마감 시각에 크리처 Snapshot을 조회하고 미배정 시 재시도
     function startRemainingTimeUpdates(seasonData, hatchDeadlineAt, hasAssignedSpecies) {
         if (countdownIntervalId !== null) clearInterval(countdownIntervalId);
         if (deadlineTimeoutId !== null) clearTimeout(deadlineTimeoutId);
@@ -413,7 +432,7 @@ export function creaturePage(context) {
                             assignmentRetryDelayMs
                         );
                     } else if (hatchCountdown) {
-                        hatchCountdown.textContent = '크리처 배정이 아직 완료되지 않았습니다. 잠시 후 다시 확인해 주세요.';
+                        hatchCountdown.textContent = '배정 미완료. 잠시만 기다려주세요';
                     }
                     return;
                 }
@@ -441,15 +460,13 @@ export function creaturePage(context) {
         }
     }
 
+    // snapshot 데이터를 그룹/경험치/기여/아바타 화면에 반영
     function updateUI(creatureData, seasonData, speciesList = []) {
         if (!creatureData) return;
         clearLoadError();
 
         const onlineMembers = creatureData.onlineMembers || [];
         const recentContributions = creatureData.recentContributions || [];
-        // TODO(identity issue): currentUserId는 임시 크리처 홈 응답 필드입니다.
-        // 사용자 정보 API 연동이 정리되면 그 응답의 user.userId를 사용하고 이 의존성을 제거합니다.
-        const currentUserId = creatureData.currentUserId ?? null;
         const isCurrentUser = (userId) =>
             currentUserId !== null
             && userId !== null
@@ -503,9 +520,11 @@ export function creaturePage(context) {
             });
         }
 
+        // TODO - 추후 테두리 삭제. 현재는 개발 편의성을 위해 영역 테두리 표기
         // 공동 영역에 10개 구역 테두리를 표시하고, 각 구역에 최대 2명씩 배치합니다.
         avatarContainer?.querySelectorAll('.avatar-zone').forEach(el => el.remove());
 
+        // 아바타 영역을 10분할, 각 영역에 이름표 배치 TODO - 추후 아바타 구현 필요
         const avatarZones = [
             { top: '1%', left: '1%' },
             { top: '1%', left: '34%' },
@@ -582,6 +601,27 @@ export function creaturePage(context) {
             spot.style.color = isMe ? '#ffffff' : 'var(--app-text)';
             spot.style.borderColor = 'var(--app-border)';
 
+            spot.style.backgroundColor = isMe ? 'var(--app-primary)' : 'var(--app-surface)';
+            spot.style.color = isMe ? '#ffffff' : 'var(--app-text)';
+            spot.style.borderColor = 'var(--app-border)';
+
+            // 키보드 tab을 통한 이름표 포커스를 선명하게
+            const originalBorderColor = spot.style.borderColor;
+            const originalFontWeight = spot.style.fontWeight;
+
+            spot.addEventListener('focus', () => {
+                spot.style.fontWeight = '800';
+            });
+
+            spot.addEventListener('blur', () => {
+                spot.style.fontWeight = originalFontWeight;
+                spot.style.borderColor = originalBorderColor;
+            });
+
+            spot.addEventListener('blur', () => {
+                spot.style.boxShadow = '';
+            });
+
             const dot = document.createElement('span');
             dot.className = 'rounded-circle d-inline-block flex-shrink-0';
             dot.style.width = '8px';
@@ -627,15 +667,19 @@ export function creaturePage(context) {
         });
     }
 
+    // 크리처 홈에 필요한 API 데이터 병렬 조회 및 첫 화면 갱신
     async function loadCreaturePageData() {
         if (retryButton) retryButton.disabled = true;
         try {
-            const [creatureData, seasonData, speciesList] = await Promise.all([
+            const [creatureData, seasonData, speciesList, currentUserData] = await Promise.all([
                 getCreatureHome(),
                 getCurrentSeason(),
-                getActiveCreatureSpecies()
+                getActiveCreatureSpecies(),
+                getCurrentUser()
             ]);
             if (!isMounted) return;
+            const authenticatedUser = currentUserData.data || currentUserData;
+            currentUserId = authenticatedUser?.user?.userId ?? null;
             updateUI(
                 creatureData.data || creatureData,
                 seasonData.data || seasonData,
@@ -656,6 +700,7 @@ export function creaturePage(context) {
 
     return {
         element,
+        // 페이지를 벗어날 때 타이머와 이벤트를 정리
         cleanup: () => {
             isMounted = false;
             if (countdownIntervalId !== null) clearInterval(countdownIntervalId);
@@ -668,6 +713,8 @@ export function creaturePage(context) {
             btnQuest?.removeEventListener('click', onQuestClick);
             btnGotoShop?.removeEventListener('click', onShopClick);
             btnToggleMovement?.removeEventListener('click', onToggleMovement);
+            btnToggleMovement?.removeEventListener('focus', onMovementFocus);
+            btnToggleMovement?.removeEventListener('blur', onMovementBlur);
         },
     };
 }

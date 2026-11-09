@@ -45,6 +45,7 @@ export function renderCreatureGrowth({
     const selectedSpeciesId = creatureInfo.creatureSpeciesId ?? null;
     const selectedSpecies = speciesList.find((species) =>
         String(species.creatureSpeciesId) === String(selectedSpeciesId));
+
     const getCreatureImage = (level) => {
         const assetKey = selectedSpecies?.assetKey;
         return assetKey
@@ -98,7 +99,7 @@ export function renderCreatureGrowth({
         speciesSubtitle.textContent = shouldRevealSpeciesName ? speciesName : '???';
     }
 
-    function getStageConfig(stage) {
+    function getStageConfig(stage, useNextStageThreshold = false) {
         const configured = (() => {
             switch (stage) {
                 case 'EGG':
@@ -114,7 +115,11 @@ export function renderCreatureGrowth({
                     return { name: '유년기', min: 0, max: 45000, img: getCreatureImage(2), width: '130px' };
             }
         })();
-        if (stage !== 'COMPLETE' && Number.isFinite(creatureInfo.nextStageAtExperience)) {
+        if (
+            useNextStageThreshold
+            && stage !== 'COMPLETE'
+            && Number.isFinite(creatureInfo.nextStageAtExperience)
+        ) {
             configured.max = creatureInfo.nextStageAtExperience;
         }
         return configured;
@@ -155,7 +160,8 @@ export function renderCreatureGrowth({
         function playEvolutionStep() {
             if (!isMounted()) return;
             const stageKey = stagesToVisit[currentStepIndex];
-            const config = getStageConfig(stageKey);
+            const isLastStep = currentStepIndex === stagesToVisit.length - 1;
+            const config = getStageConfig(stageKey, isLastStep);
 
             if (creatureImageEl) {
                 creatureImageEl.setAttribute('src', config.img);
@@ -165,7 +171,6 @@ export function renderCreatureGrowth({
 
             let percent = 0;
             let displayText = '';
-            const isLastStep = currentStepIndex === stagesToVisit.length - 1;
             if (isLastStep) {
                 if (stageKey === 'COMPLETE') {
                     percent = 100;
@@ -215,7 +220,7 @@ export function renderCreatureGrowth({
 
         scheduleTimeout(playEvolutionStep, 800);
     } else {
-        const finalConfig = getStageConfig(targetGrowthStage);
+        const finalConfig = getStageConfig(targetGrowthStage, true);
         const finalPercent = targetGrowthStage === 'COMPLETE'
             ? 100
             : Math.min(100, Math.max(0,

@@ -4,36 +4,33 @@
  * 크리처 홈 화면 Mock 데이터 (DB 스키마 및 비즈니스 규칙 반영)
  */
 export const mockCreatureHomeData = {
-    groupId: 501,
+    groupId: 5031,
     groupName: "새싹 연구소",
-    // TODO(identity issue): 임시 응답 필드. 사용자 정보 API 연동 완료 후 제거 예정.
-    currentUserId: 101,
-    selectedSpeciesId: 3,
     season: {
         seasonId: 1,
         seasonNumber: 1,
         status: "ACTIVE",
-        startAt: "2026-11-01T00:00:00Z",
-        endAt: "2026-11-30T03:45:59Z",
+        startAt: "2026-11-04T23:59:59Z",
+        endAt: "2026-12-06T23:59:59Z",
         seasonName: "시즌 1",
         labName: "새싹 연구소"
     },
     creature: {
         groupCreatureId: 701,
-        creatureSpeciesId: 3,
-        speciesName: "이끼 낀 바위 골렘",
-        assetKey: "moss-golem",
-        growthStage: "MATURE", // EGG / HATCHLING / GROWING / MATURE / COMPLETE
+        creatureSpeciesId: 1, // 2
+        speciesName: "이끼 낀 바위 골렘", // 공허 속 우주 해파리 /
+        assetKey: "moss-golem", // abyss-jellyfish /
+        growthStage: "COMPLETE", // EGG / HATCHLING / GROWING / MATURE / COMPLETE
         level: null,
-        totalExperience: 100000,
-        nextStageAtExperience: 150000,
+        totalExperience: 200000,
+        nextStageAtExperience: null,
         progress: 4.76,
-        selectionDeadlineAt: "2026-11-05T00:00:00Z",
+        selectionDeadlineAt: "2026-11-07T00:00:00Z",
         selectionSource: "ADMIN_SELECTED"
     },
     onlineMembers: [
         {
-            userId: 101,
+            userId: 1,
             nickname: "본인",
             rank: 2,
             contributionScore: 2100,
@@ -246,10 +243,10 @@ export const mockCreatureHomeData = {
     ],
     todayExperience: 2400,
     recentContributions: [
-        { userId: 101, nickname: "본인", amount: 200, occurredAt: "2026-11-04T05:30:00Z" },
+        { userId: 1, nickname: "본인", amount: 200, occurredAt: "2026-11-04T05:30:00Z" },
         { userId: 102, nickname: "푸른잎", amount: 100, occurredAt: "2026-11-04T04:00:00Z" },
         { userId: 103, nickname: "별빛요정", amount: 300, occurredAt: "2026-11-04T05:00:00Z" },
-        { userId: 101, nickname: "본인", amount: 400, occurredAt: "2026-11-04T05:00:00Z" }
+        { userId: 1, nickname: "본인", amount: 400, occurredAt: "2026-11-04T05:00:00Z" }
     ],
     snapshotAt: "2026-11-04T06:00:00Z"
 };

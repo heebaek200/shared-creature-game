@@ -2,7 +2,7 @@
 import { apiRequest } from '../../api/client.js';
 import { mockApi } from '../../mocks/mock-api.js';
 
-const USE_MOCK = true;
+const USE_MOCK = import.meta.env.VITE_USE_MOCK_API === 'true';
 
 /**
  * 현재 진행 중인 시즌 정보를 조회합니다.

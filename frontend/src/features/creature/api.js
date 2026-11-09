@@ -2,9 +2,7 @@
 import { apiRequest } from '../../api/client.js';
 import { mockApi } from '../../mocks/mock-api.js';
 
-// const USE_MOCK = import.meta.env.VITE_USE_MOCK_API === 'true';
-// 강제 true 진행
-const USE_MOCK = true;
+const USE_MOCK = import.meta.env.VITE_USE_MOCK_API === 'true';
 
 /**
  * 현재 그룹의 크리처 홈 Snapshot 정보를 조회합니다.

@@ -9,7 +9,7 @@ export const mockApi = {
       authenticationState: 'AUTHENTICATED',
       onboardingState: 'GROUP_REQUIRED',
       user: { userId: 101, nickname: '새싹지기' },
-      membership: null,
+      membership: 501,
       roles: [],
       restrictionUntil: null,
     };
