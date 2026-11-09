@@ -54,4 +54,53 @@ public class PaymentTransaction {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    private PaymentTransaction(
+            Purchase purchase,
+            String providerTransactionId,
+            Long amountKrw,
+            String status,
+            Instant processedAt,
+            Instant now
+    ) {
+        this.purchase = purchase;
+        this.provider = "PORTONE";
+        this.providerTransactionId = providerTransactionId;
+        this.transactionType = PaymentTransactionType.APPROVAL.name();
+        this.amountKrw = amountKrw;
+        this.status = status;
+        this.processedAt = processedAt;
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    /** 검증된 PortOne 승인 거래를 생성합니다. */
+    public static PaymentTransaction approved(
+            Purchase purchase,
+            String providerTransactionId,
+            Long amountKrw,
+            Instant processedAt,
+            Instant now
+    ) {
+        return new PaymentTransaction(
+                purchase,
+                providerTransactionId,
+                amountKrw,
+                PaymentTransactionStatus.SUCCESS.name(),
+                processedAt,
+                now
+        );
+    }
+
+    /** 공급자가 명확히 실패로 확정한 승인 시도를 생성합니다. */
+    public static PaymentTransaction failed(Purchase purchase, Long amountKrw, Instant now) {
+        return new PaymentTransaction(
+                purchase,
+                null,
+                amountKrw,
+                PaymentTransactionStatus.DEFINITIVE_FAILURE.name(),
+                now,
+                now
+        );
+    }
 }
