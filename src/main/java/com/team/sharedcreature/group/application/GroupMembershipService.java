@@ -9,6 +9,7 @@ import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.api.*;
 import com.team.sharedcreature.group.domain.*;
 import com.team.sharedcreature.group.infrastructure.*;
+import com.team.sharedcreature.season.application.SeasonContributionMembershipService;
 import com.team.sharedcreature.season.application.SeasonQueryService;
 import com.team.sharedcreature.season.domain.GroupCreature;
 import com.team.sharedcreature.season.domain.GroupSeason;
@@ -48,6 +49,7 @@ public class GroupMembershipService {
     private final GroupCreatureRepository groupCreatureRepository;
     private final SeasonGroupScoreRepository groupScoreRepository;
     private final SeasonQueryService seasonQueryService;
+    private final SeasonContributionMembershipService contributionMembershipService;
 
     private final Clock clock;
     private final String appBaseUrl;
@@ -65,6 +67,7 @@ public class GroupMembershipService {
             GroupCreatureRepository groupCreatureRepository,
             SeasonGroupScoreRepository groupScoreRepository,
             SeasonQueryService seasonQueryService,
+            SeasonContributionMembershipService contributionMembershipService,
             Clock clock,
             @Value("${APP_BASE_URL:http://localhost:5173}") String appBaseUrl
     ) {
@@ -78,6 +81,7 @@ public class GroupMembershipService {
         this.groupCreatureRepository = groupCreatureRepository;
         this.groupScoreRepository = groupScoreRepository;
         this.seasonQueryService = seasonQueryService;
+        this.contributionMembershipService = contributionMembershipService;
         this.clock = clock;
         this.appBaseUrl = appBaseUrl;
     }
@@ -224,6 +228,9 @@ public class GroupMembershipService {
     }
 
     private MembershipResponse joinGroup(Long userId, String nickname, Long groupId, Long invitationId) {
+        // 사용자·그룹 잠금 전에 현재 시즌을 공유 잠금으로 확인합니다.
+        Optional<Season> currentSeason = seasonQueryService.findCurrentSeasonForShareIfPresent();
+
         User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REQUIRED));
         Group group = groupRepository.findByIdForUpdate(groupId)
@@ -246,6 +253,10 @@ public class GroupMembershipService {
             throw conflict(ErrorCode.GROUP_FULL, "그룹 정원이 가득 찼습니다.");
         }
         GroupMembership membership = membershipRepository.save(GroupMembership.member(group, user, now));
+
+        // 같은 그룹의 기존 기여도만 ACTIVE로 복구하며 점수는 유지합니다.
+        contributionMembershipService.synchronizeIfPresent(currentSeason, membership, now);
+
         return new MembershipResponse(
                 membership.getId(),
                 group.getId(),
@@ -324,6 +335,9 @@ public class GroupMembershipService {
         Long groupId = membershipRepository.findActiveGroupIdByUserId(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ROLE_FORBIDDEN));
 
+        // 탈퇴 시에도 사용자·그룹 잠금보다 먼저 시즌 공유 잠금을 잡습니다.
+        Optional<Season> currentSeason = seasonQueryService.findCurrentSeasonForShareIfPresent();
+
         // 2. 사용자 행을 먼저 잠금
         User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REQUIRED));
@@ -381,6 +395,9 @@ public class GroupMembershipService {
         // 8. 멤버십을 LEFT로 종료. 기존 이력은 삭제하지 않음
         membership.leaveBySelf(user, now);
 
+        // 멤버십·기여도 상태가 같은 트랜잭션에서 Commit되게 합니다.
+        contributionMembershipService.synchronizeIfPresent(currentSeason, membership, now);
+
         if (isPrimary) {
             // 마지막 주 관리자(PRIMARY)의 탈퇴는 그룹 종료로 처리됨
             group.deactivateAfterLastMemberLeaves(now);
@@ -424,7 +441,7 @@ public class GroupMembershipService {
      */
     private void closeCurrentGroupSeason(Long groupId, Instant now) {
         // 종료되지 않은 그룹 시즌 참여만 처리
-        groupSeasonRepository.findOpenByGroupIdForUpdate(groupId)
+        groupSeasonRepository.findOpenByGroupIdForUpdate(groupId, now)
                 .ifPresent(groupSeason -> {
                     // 현재 시즌에 연결된 크리처도 쓰기 잠금으로 조회
                     GroupCreature creature = groupCreatureRepository

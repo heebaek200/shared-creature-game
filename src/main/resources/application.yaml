@@ -41,4 +41,4 @@ auth:
 
 app:
   scheduler:
-    enabled: ${APP_SCHEDULER_ENABLED:false}   # 스케쥴러(이 프로젝트에서는 시즌 및 퀘스트 갱신 역할) 기능 활성화 여부
+    enabled: false  # 스케쥴러(이 프로젝트에서는 시즌 및 퀘스트 갱신 역할) 기능 활성화 여부

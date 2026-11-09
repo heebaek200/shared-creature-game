@@ -31,3 +31,7 @@ spring:
     init:
       data-locations:
         - classpath:db/data.sql
+
+app:
+  scheduler:
+    enabled: true  # 스케쥴러(이 프로젝트에서는 시즌 및 퀘스트 갱신 역할) 기능 활성화 여부

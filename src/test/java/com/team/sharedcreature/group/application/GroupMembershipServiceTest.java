@@ -13,6 +13,7 @@ import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
 import com.team.sharedcreature.group.infrastructure.GroupJoinRestrictionRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
+import com.team.sharedcreature.season.application.SeasonContributionMembershipService;
 import com.team.sharedcreature.season.application.SeasonQueryService;
 import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.GroupCreatureRepository;
@@ -60,6 +61,7 @@ class GroupMembershipServiceTest {
     @Mock GroupCreatureRepository groupCreatureRepository;
     @Mock SeasonGroupScoreRepository groupScoreRepository;
     @Mock SeasonQueryService seasonQueryService;
+    @Mock SeasonContributionMembershipService contributionMembershipService;
 
     private GroupMembershipService service;
     private User user;
@@ -84,6 +86,7 @@ class GroupMembershipServiceTest {
                 groupCreatureRepository,
                 groupScoreRepository,
                 seasonQueryService,
+                contributionMembershipService,
                 clock,
                 "http://localhost:5173"
         );

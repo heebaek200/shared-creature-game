@@ -12,6 +12,7 @@ import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
 import com.team.sharedcreature.group.infrastructure.GroupJoinRestrictionRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
+import com.team.sharedcreature.season.application.SeasonContributionMembershipService;
 import com.team.sharedcreature.season.application.SeasonQueryService;
 import com.team.sharedcreature.season.domain.GroupCreature;
 import com.team.sharedcreature.season.domain.GroupSeason;
@@ -60,6 +61,7 @@ class GroupDepartureServiceTest {
     @Mock private GroupCreatureRepository groupCreatureRepository;
     @Mock private SeasonGroupScoreRepository groupScoreRepository;
     @Mock private SeasonQueryService seasonQueryService;
+    @Mock private SeasonContributionMembershipService contributionMembershipService;
 
     private GroupMembershipService service;
 
@@ -75,7 +77,8 @@ class GroupDepartureServiceTest {
                 userRepository, groupRepository, membershipRepository,
                 restrictionRepository, inviteLinkRepository, adminChangeRepository,
                 groupSeasonRepository, groupCreatureRepository, groupScoreRepository,
-                seasonQueryService, Clock.fixed(NOW, ZoneOffset.UTC),
+                seasonQueryService, contributionMembershipService,
+                Clock.fixed(NOW, ZoneOffset.UTC),
                 "http://localhost:5173"
         );
     }
@@ -198,7 +201,7 @@ class GroupDepartureServiceTest {
                 fixture.group(), mock(Season.class), JOINED);
         ReflectionTestUtils.setField(groupSeason, "id", 55L);
         GroupCreature creature = GroupCreature.egg(groupSeason, JOINED);
-        when(groupSeasonRepository.findOpenByGroupIdForUpdate(GROUP_ID))
+        when(groupSeasonRepository.findOpenByGroupIdForUpdate(GROUP_ID, NOW))
                 .thenReturn(Optional.of(groupSeason));
         when(groupCreatureRepository.findForUpdateByGroupSeasonId(55L))
                 .thenReturn(Optional.of(creature));
@@ -228,7 +231,7 @@ class GroupDepartureServiceTest {
     @Test
     void 마지막_PRIMARY는_초대나_진행중_시즌이_없어도_탈퇴한다() {
         Fixture fixture = arrange("PRIMARY", 1);
-        when(groupSeasonRepository.findOpenByGroupIdForUpdate(GROUP_ID))
+        when(groupSeasonRepository.findOpenByGroupIdForUpdate(GROUP_ID, NOW))
                 .thenReturn(Optional.empty());
 
         // 선택적 부가 데이터가 없어도 탈퇴는 성공해야 합니다.
