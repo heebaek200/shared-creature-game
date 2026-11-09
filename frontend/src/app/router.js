@@ -1,5 +1,6 @@
 // @ts-check
 import { getCurrentUser } from '../features/auth/api.js';
+import { statusPage } from '../pages/status-page.js';
 
 /** @typedef {{ path: string, access: string, page: (context: {navigate: (path: string) => void}) => {element: HTMLElement, cleanup?: () => void} }} Route */
 
@@ -11,12 +12,10 @@ import { getCurrentUser } from '../features/auth/api.js';
 export function createRouter(root, routes) {
   let cleanup = () => {};
 
+
   async function render() {
     cleanup();
 
-    /**
-     * 정확한 문자열 비교가 아닌 정규식으로 경로를 확인하도록 수정
-     */
     const route = routes.find((candidate) => {
       if (candidate.path === '/invite/:token') {
         return /^\/invite\/[^/]+$/.test(location.pathname);
@@ -24,16 +23,40 @@ export function createRouter(root, routes) {
       return candidate.path === location.pathname;
     }) ?? routes.find((candidate) => candidate.path === '*');
 
+    // 사용자 정보는 필요한 경우 한 번만 조회합니다.
+
+    let me = null;
+
+    if (
+        route.access === 'HOME' ||
+        route.path === '/signup' ||
+        route.access !== 'PUBLIC'
+    ) {
+      try {
+        me = await getCurrentUser();
+      } catch (error) {
+        console.error('사용자 정보 조회 실패:', error);
+
+        const errorPage = statusPage(
+            '일시적인 오류가 발생했습니다',
+            '사용자 정보를 확인하지 못했습니다. 잠시 후 페이지를 새로고침해 주세요.'
+        );
+
+        const mounted = errorPage({ navigate });
+        root.replaceChildren(mounted.element);
+        cleanup = mounted.cleanup ?? (() => {});
+        return;
+      }
+    }
+
+
     if (route.access === 'HOME') {
-      const me = await getCurrentUser();
       replace(defaultRoute(me));
       return;
     }
 
-    // 회원가입 화면에 접근할 수 있는지 검사합니다.
+    // 회원가입 화면 접근 검사
     if (route.path === '/signup') {
-      const me = await getCurrentUser();
-
       const canSignup =
           me.authenticationState === 'SIGNUP_PENDING' &&
           me.onboardingState === 'SIGNUP_REQUIRED';
@@ -44,20 +67,30 @@ export function createRouter(root, routes) {
       }
     }
 
+    // 보호된 페이지 접근 검사
     if (route.access !== 'PUBLIC') {
-      const me = await getCurrentUser();
       if (me.authenticationState !== 'AUTHENTICATED') {
-        replace(me.onboardingState === 'SIGNUP_REQUIRED' ? '/signup' : '/login');
+        replace(
+            me.onboardingState === 'SIGNUP_REQUIRED'
+                ? '/signup'
+                : '/login'
+        );
         return;
       }
+
       if (route.access === 'GROUP_MEMBER' && !me.membership) {
         replace('/groups/select');
         return;
       }
-      if (route.access === 'SUPER_ADMIN' && !me.roles.includes('SUPER_ADMIN')) {
+
+      if (
+          route.access === 'SUPER_ADMIN' &&
+          !me.roles.includes('SUPER_ADMIN')
+      ) {
         replace('/403');
         return;
       }
+
       if (route.path === '/groups/select' && me.membership) {
         replace('/creature');
         return;
@@ -68,6 +101,7 @@ export function createRouter(root, routes) {
     root.replaceChildren(mounted.element);
     cleanup = mounted.cleanup ?? (() => {});
   }
+
 
   function navigate(path) {
     history.pushState({}, '', path);

@@ -17,6 +17,7 @@ export function groupSelectPage({navigate}) {
     let currentPage = 0;
     let currentQuery = '';
     let loading = false;
+    let pendingLoad = false;
     let joining = false;
     let totalPages = 0;
 
@@ -275,7 +276,10 @@ export function groupSelectPage({navigate}) {
     };
 
     const loadGroup = async () => {
-        if (loading) return;
+        if (loading) {
+            pendingLoad = true;
+            return;
+        }
 
         loading = true;
         searchButton.disabled = true;
@@ -283,50 +287,63 @@ export function groupSelectPage({navigate}) {
         hideAlert(listAlert);
 
         groupList.innerHTML = `<tr>
-                                  <td colspan="4" class="text-center py-4">그룹 목록을 불러오는 중입니다.</td>
-                               </tr>`;
+        <td colspan="4" class="text-center py-4">
+            그룹 목록을 불러오는 중입니다.
+        </td>
+    </tr>`;
 
-       try {
-           const result = await listPublicGroups({
-               q: currentQuery,
-               page: currentPage,
-               size: PAGE_SIZE
-           });
-           const groups = Array.isArray(result?.data)
-               ? result.data
-               : [];
+        try {
+            const result = await listPublicGroups({
+                q: currentQuery,
+                page: currentPage,
+                size: PAGE_SIZE
+            });
 
-           const meta = result?.meta ?? {};
-           totalPages = Number(meta.totalPages ?? 0);
-           if (
-               totalPages > 0 &&
-               currentPage >= totalPages
-           ) {
-               currentPage = totalPages - 1;
-               loading = false;
-               await loadGroup();
-               return;
-           }
-           renderGroups(groups);
-           renderPagination();
+            const groups = Array.isArray(result?.data)
+                ? result.data
+                : [];
 
-       } catch (error) {
-           groupList.innerHTML = `<tr>
-                                     <td colspan="4" class="text-center py-4 text-danger">그룹 목록을 불러오지 못했습니다.</td>
-                                   </tr>`;
+            const meta = result?.meta ?? {};
+            totalPages = Number(meta.totalPages ?? 0);
 
-           showAlert(
-               listAlert,
-               error.message || '그룹 목록 조회 중 오류가 발생했습니다.'
-           );
+            if (totalPages > 0 && currentPage >= totalPages) {
+                currentPage = totalPages - 1;
+                pendingLoad = true;
+                return;
+            }
 
-           totalPages = 0;
-           renderPagination();
+            renderGroups(groups);
+            renderPagination();
 
-       } finally {
-           loading = false;
-           searchButton.disabled = false;
-       }
+        } catch (error) {
+            groupList.innerHTML = `<tr>
+    <td colspan="4" class="text-center py-4 text-danger">
+        그룹 목록을 불러오지 못했습니다.
+        <button
+            type="button"
+            class="btn btn-outline-primary btn-sm ms-2 retry-button"
+        >
+            재시도
+        </button>
+    </td>
+</tr>`;
+            showAlert(
+                listAlert,
+                error.message || '그룹 목록 조회 중 오류가 발생했습니다.'
+            );
+
+            totalPages = 0;
+            renderPagination();
+
+        } finally {
+            loading = false;
+            searchButton.disabled = false;
+
+            if (pendingLoad) {
+                pendingLoad = false;
+                loadGroup();
+            }
+        }
     };
 
     const onSearch = (event) => {
@@ -351,49 +368,111 @@ export function groupSelectPage({navigate}) {
             : '- 그룹 생성 닫기';
     };
 
+
     const onCreate = async (event) => {
         event.preventDefault();
 
         if (createSubmit.disabled) return;
-
         if (!createForm.reportValidity()) return;
 
         createSubmit.disabled = true;
         hideAlert(createAlert);
 
+        let creationSucceeded = false;
+
         try {
             const result = await createGroup({
-
                 name: element.querySelector('#group-name').value.trim(),
                 description: element.querySelector('#group-description').value
             });
 
-            console.log('그룹 생성 응답:', result);
-            console.log('초대 링크:', result.initialInvitationUrl);
+            creationSucceeded = true;
 
-            createAlert.className = 'alert alert-success create-alert mt-3 mb-0';
+            createAlert.className =
+                'alert alert-success create-alert mt-3 mb-0';
+
             createAlert.replaceChildren();
 
+            // 그룹 생성 성공 메시지
             const message = document.createElement('p');
-            message.className = 'mb-2 fw-semibold';
-            message.textContent = '그룹을 만들었습니다';
+            message.className = 'mb-3 fw-semibold';
+            message.textContent = '그룹을 성공적으로 만들었습니다!';
             createAlert.append(message);
 
-            if (result.initialInvitationUrl) {
-                const link = document.createElement('a');
-                link.href = result.initialInvitationUrl;
-                link.textContent = result.initialInvitationUrl;
-                link.target = '_blank'
-                link.rel = 'noopener noreferrer';
-                link.className = 'd-block text-break';
+            // 초대 링크 표시
+            const invitationUrl = result?.initialInvitationUrl;
 
-                createAlert.append(link);
+            if (typeof invitationUrl === 'string' && invitationUrl.trim()) {
+                const linkLabel = document.createElement('label');
+                linkLabel.className = 'form-label fw-semibold';
+                linkLabel.textContent = '초대 링크';
+
+                const linkArea = document.createElement('div');
+                linkArea.className = 'd-flex align-items-center gap-2 mb-2';
+
+                // 일반 div로 링크 표시
+                const linkDisplay = document.createElement('div');
+                linkDisplay.className =
+                    'border rounded p-2 bg-body text-body flex-grow-1';
+
+                linkDisplay.textContent = invitationUrl;
+                linkDisplay.style.minWidth = '0';
+                linkDisplay.style.overflowWrap = 'anywhere';
+
+                // 링크 복사 버튼
+                const copyButton = document.createElement('button');
+                copyButton.type = 'button';
+                copyButton.className =
+                    'btn btn-outline-success flex-shrink-0';
+                copyButton.textContent = '링크 복사';
+
+                const copyStatus = document.createElement('p');
+                copyStatus.className = 'small mb-3';
+                copyStatus.setAttribute('aria-live', 'polite');
+
+                copyButton.addEventListener('click', async () => {
+                    try {
+                        await navigator.clipboard.writeText(invitationUrl);
+
+                        copyStatus.textContent =
+                            '초대 링크가 복사되었습니다.';
+                    } catch (error) {
+                        const selection = window.getSelection();
+                        const range = document.createRange();
+
+                        range.selectNodeContents(linkDisplay);
+                        selection.removeAllRanges();
+                        selection.addRange(range);
+
+                        copyStatus.textContent =
+                            '자동 복사에 실패했습니다. 선택된 링크를 직접 복사해 주세요.';
+                    }
+                });
+
+                linkArea.append(linkDisplay, copyButton);
+                createAlert.append(linkLabel, linkArea, copyStatus);
+
+            } else {
+                const warning = document.createElement('p');
+                warning.className = 'small mb-3';
+                warning.textContent = '초대 링크를 가져오지 못했습니다.';
+
+                createAlert.append(warning);
             }
 
-            createForm.reset();
+            // 크리쳐 화면 이동 버튼
+            const moveButton = document.createElement('button');
+            moveButton.type = 'button';
+            moveButton.className = 'btn btn-success mt-2';
+            moveButton.textContent = '크리쳐 화면으로 이동';
 
-            // 그룹 생성 성공 후 생명체 화면으로 이동
-            navigate(result?.nextRoute || '/creature');
+            moveButton.addEventListener('click', () => {
+                navigate(result?.nextRoute || '/creature');
+            });
+
+            createAlert.append(moveButton);
+
+            createForm.reset();
 
         } catch (error) {
             showAlert(
@@ -401,9 +480,11 @@ export function groupSelectPage({navigate}) {
                 error.message || '그룹 생성에 실패했습니다.'
             );
         } finally {
-            createSubmit.disabled = false;
+            createSubmit.disabled = creationSucceeded;
         }
     };
+
+
 
     const onJoin = async (event) => {
         const button = event.target.closest('.join-button');
@@ -429,8 +510,16 @@ export function groupSelectPage({navigate}) {
             );
         } finally {
             joining = false;
+            button.disabled = false;
+            button.textContent = '가입';
         }
     };
+
+    const onRetry = () => {
+        loadGroup();
+    };
+    groupList.addEventListener('click', onJoin);
+    groupList.addEventListener('click', onRetry);
 
     const onPagination = (event) => {
         const button = event.target.closest('[data-page]');
@@ -454,7 +543,7 @@ export function groupSelectPage({navigate}) {
         localStorage.setItem('theme', next);
     };
 
-    searchForm.addEventListener('submit', onSearch);
+    searchForm.addEventListener('input', onSearch);
     createToggle.addEventListener('click', onCreateToggle);
     createForm.addEventListener('submit', onCreate);
     groupList.addEventListener('click', onJoin);

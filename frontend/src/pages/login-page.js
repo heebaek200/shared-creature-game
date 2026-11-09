@@ -23,7 +23,7 @@ export function loginPage() {
                     type="button"
                     class="btn btn-outline-secondary btn-sm theme-toggle"
                     aria-label="테마 전환">
-                    <span class="theme-icon">🌙</span>
+                    <span class="theme-icon"></span>
                     <span class="theme-label">다크 모드</span>
                 </button>
             </header>
@@ -33,7 +33,7 @@ export function loginPage() {
                 <div class="card-body p-3 p-md-4">
                     <div class="bg-body-secondary rounded-3 d-flex flex-column align-items-center justify-content-center text-center py-5 mb-4"
                          style="min-height: 180px;">
-                        <div class="display-3 mb-2" aria-hidden="true">🌱</div>
+                        <div class="display-3 mb-2" aria-hidden="true"></div>
                         <p class="text-success fw-semibold mb-1">
                             공동 크리처 얼리스트
                         </p>
@@ -72,18 +72,16 @@ export function loginPage() {
                     </button>
 
                     <!-- 로그인 오류 안내 -->
+<!-- 로그인 오류 안내 -->
                     <div
-                        class="alert alert-light border-start border-4 border-secondary mb-3"
-                        role="status"
+                        class="alert alert-danger mb-3 d-none login-error"
+                        role="alert"
                         aria-live="polite">
-                        <span class="fw-semibold">
-                            
-                        </span>
-                        <p class="feedback small text-body-secondary mb-0 mt-2"></p>
+                        <p class="feedback small mb-0"></p>
                     </div>
 
                     <p class="text-secondary small mb-0">
-                        소셜 계정으로 로그인하여 서비스를 시작하세요.
+                        
                     </p>
 
                 </div>
@@ -94,11 +92,12 @@ export function loginPage() {
 
   const button = element.querySelector('#google-login-button');
   const feedback = element.querySelector('.feedback');
+  const loginError = element.querySelector('.login-error');
   const themeButton = element.querySelector('.theme-toggle');
   const themeIcon = element.querySelector('.theme-icon');
   const themeLabel = element.querySelector('.theme-label');
 
-  if (!button || !feedback || !themeButton || !themeIcon || !themeLabel) {
+  if (!button || !feedback || !loginError || !themeButton || !themeIcon || !themeLabel) {
     throw new Error('로그인 화면 요소를 찾을 수 없습니다.');
   }
 
@@ -106,8 +105,7 @@ export function loginPage() {
   const updateThemeButton = () => {
     const isDark = document.documentElement.dataset.bsTheme === 'dark';
 
-    themeIcon.textContent = isDark ? '☀️' : '🌙';
-    themeLabel.textContent = isDark ? '라이트 모드' : '다크 모드';
+    themeLabel.textContent = isDark ? '테마 변환' : '테마 변환';
   };
 
   updateThemeButton();
@@ -128,6 +126,8 @@ export function loginPage() {
     button.disabled = true;
     button.textContent = '로그인 연결 중...';
     feedback.textContent = '';
+    loginError.classList.add('d-none');
+
 
     try {
       const result = await createOAuthAttempt();
@@ -137,6 +137,8 @@ export function loginPage() {
           error instanceof Error
               ? error.message
               : '로그인 중 오류가 발생했습니다.';
+
+      loginError.classList.remove('d-none');
 
       button.disabled = false;
       button.textContent = 'Google로 계속하기';

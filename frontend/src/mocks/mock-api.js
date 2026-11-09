@@ -35,7 +35,50 @@ const mockGroups = [
     joinable: true,
     joinBlockedReason: null,
   },
+
+  {
+    groupId: 4,
+    name: '초록빛 정원',
+    description: '함께 초록빛 정원을 가꾸는 그룹입니다.',
+    currentMemberCount: 3,
+    capacity: 20,
+    remainingCapacity: 17,
+    joinable: true,
+    joinBlockedReason: null
+  },
+  {
+    groupId: 5,
+    name: '행복한 새싹들',
+    description: '매일 함께 성장하는 그룹입니다.',
+    currentMemberCount: 7,
+    capacity: 20,
+    remainingCapacity: 13,
+    joinable: true,
+    joinBlockedReason: null
+  },
+  {
+    groupId: 6,
+    name: '성장하는 우리',
+    description: '서로 응원하며 성장하는 그룹입니다.',
+    currentMemberCount: 12,
+    capacity: 20,
+    remainingCapacity: 8,
+    joinable: true,
+    joinBlockedReason: null
+  },
+  {
+    groupId: 7,
+    name: '생명의 숲',
+    description: '함께 생명체를 키우는 그룹입니다.',
+    currentMemberCount: 15,
+    capacity: 20,
+    remainingCapacity: 5,
+    joinable: true,
+    joinBlockedReason: null
+  }
 ];
+
+
 
 
 /** 실제 API 계약과 같은 정상·오류 시나리오를 제공합니다. */
@@ -115,7 +158,6 @@ export const mockApi = {
     };
   },
 
-
   async listPublicGroups({ q = '', page = 0, size = 20 } = {}) {
     await delay(250);
 
@@ -166,6 +208,7 @@ export const mockApi = {
         traceId: 'mock-already-in-group',
       });
     }
+
 
     // 정원 확인
     if (group.currentMemberCount >= group.capacity) {
@@ -253,6 +296,17 @@ export const mockApi = {
   async acceptInvitation(token) {
     await delay(250);
 
+    // 이미 그룹에 가입되어 있는지 먼저 확인
+    if (mockMembership) {
+      throw new ApiError(409, {
+        code: 'ALREADY_IN_GROUP',
+        message: '이미 그룹에 가입되어 있습니다.',
+        fieldErrors: [],
+        traceId: 'mock-invitation-already-in-group',
+      });
+    }
+
+    // 초대 링크 유효성 확인
     if (!['test-token', 'mock-invitation-token'].includes(token)) {
       throw new ApiError(404, {
         code: 'INVITE_INVALID',
@@ -282,6 +336,7 @@ export const mockApi = {
   async rejectInvitation(token) {
     await delay(250);
 
+
     if (!['test-token', 'mock-invitation-token'].includes(token)) {
       throw new ApiError(404, {
         code: 'INVITE_INVALID',
@@ -290,13 +345,10 @@ export const mockApi = {
         traceId: 'mock-invitation-invalid',
       });
     }
-
     return {
       nextRoute: '/groups/select',
     };
   },
-
-
 };
 
 function delay(milliseconds) {
