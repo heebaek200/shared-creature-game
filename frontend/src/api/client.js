@@ -22,8 +22,15 @@ export async function apiRequest(path, options = {}) {
   return executeRequest(path, options, true);
 }
 
+/**
+ * 목록 응답에서 data와 meta를 함께 반환합니다.
+ */
+export async function apiRequestWithMeta(path, options = {}) {
+  return executeRequest(path, options, true, true);
+}
+
 /** CSRF 실패 시 새 Token으로 한 번만 안전하게 재시도합니다. */
-async function executeRequest(path, options, allowCsrfRetry) {
+async function executeRequest(path, options, allowCsrfRetry, includeMeta = false) {
   const method = options.method ?? 'GET';
   const headers = new Headers({ Accept: 'application/json' });
   let body;
@@ -39,10 +46,12 @@ async function executeRequest(path, options, allowCsrfRetry) {
   const payload = response.status === 204 ? null : await response.json().catch(() => null);
   if (!response.ok && allowCsrfRetry && payload?.code === 'CSRF_INVALID') {
     clearCsrfToken();
-    return executeRequest(path, options, false);
+    return executeRequest(path, options, false, includeMeta);
   }
   if (!response.ok) throw new ApiError(response.status, payload);
-  return payload?.data;
+  return includeMeta ? {
+    data: payload.data, meta: payload.meta
+  } : payload?.data;
 }
 
 /** 상태 변경 요청에 사용할 현재 세션 CSRF Token을 메모리에만 보관합니다. */

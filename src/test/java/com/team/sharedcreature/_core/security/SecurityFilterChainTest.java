@@ -19,6 +19,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.test.context.web.WebAppConfiguration;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -40,6 +41,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -58,6 +60,12 @@ class SecurityFilterChainTest {
     @Autowired
     @Qualifier("sessionAuthenticationFilterRegistration")
     private FilterRegistrationBean<SessionAuthenticationFilter> sessionAuthenticationFilterRegistration;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private GroupMembershipRepository membershipRepository;
 
     private MockMvc mockMvc;
 
@@ -107,7 +115,7 @@ class SecurityFilterChainTest {
     @Test
     void CSRF_오류도_Request_ID와_공통_Envelope를_반환한다() throws Exception {
         mockMvc.perform(post("/api/v1/protected")
-                        .with(user("member").roles("MEMBER"))
+                        .session(authenticatedSession(1L, "MEMBER"))
                         .header("X-Request-Id", "csrf-invalid"))
                 .andExpect(status().isForbidden())
                 .andExpect(header().string("X-Request-Id", "csrf-invalid"))
@@ -138,6 +146,30 @@ class SecurityFilterChainTest {
                 .andExpect(header().string("X-Request-Id", "role-forbidden"))
                 .andExpect(jsonPath("$.code").value("ROLE_FORBIDDEN"))
                 .andExpect(jsonPath("$.traceId").value("role-forbidden"));
+    }
+
+    @Test
+    void 일반_그룹원은_활성_크리처_종을_조회할_수_있다() throws Exception {
+        mockMvc.perform(get("/api/v1/creature-species")
+                        .session(authenticatedSession(3L, "MEMBER")))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void 일반_그룹원은_크리처_종을_선택할_수_없다() throws Exception {
+        mockMvc.perform(put("/api/v1/groups/me/seasons/current/creature-selection")
+                        .session(authenticatedSession(4L, "MEMBER"))
+                        .with(csrf()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ROLE_FORBIDDEN"));
+    }
+
+    @Test
+    void 부_관리자는_크리처_종을_선택할_수_있다() throws Exception {
+        mockMvc.perform(put("/api/v1/groups/me/seasons/current/creature-selection")
+                        .session(authenticatedSession(5L, "DEPUTY"))
+                        .with(csrf()))
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -239,6 +271,16 @@ class SecurityFilterChainTest {
 
         @PostMapping("/api/v1/protected")
         void protectedPost() {
+        }
+
+        @GetMapping("/api/v1/creature-species")
+        void creatureSpecies() {
+        }
+
+        @org.springframework.web.bind.annotation.PutMapping(
+                "/api/v1/groups/me/seasons/current/creature-selection"
+        )
+        void selectCreatureSpecies() {
         }
 
         @GetMapping("/api/v1/admin/test")

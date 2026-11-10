@@ -798,3 +798,13 @@
 - 대체한 결정: 일별 관리자 활동 통계를 최종 `last_active_at`만으로 계산하고 업무 테이블을 40개로 유지한 구성
 - 근거: 기간 전체와 날짜별 고유 활동 사용자 및 활동 당시 그룹 집계를 과거 시점 기준으로 재현하기 위함입니다.
 - 영향 문서: requirements.md, business-rules.md, api-design.md, database-design.md, screen-design.md, class-diagram.md, decision-log.md
+
+## 2026-11-10 PHOTO_EXIF 보상 실패 이력 정책 간소화
+
+- 결정: 확정된 업무 조건 실패는 사진 제출을 `INVALID`로 기록합니다. 기간 종료에는 기존 `QUEST_PERIOD_ENDED`, 그 밖의 확정된 업무 오류에는 `QUEST_COMPLETION_FAILED`를 사용합니다.
+- 결정: 서버 내부 오류로 보상 결과가 불확실하면 `PENDING`을 유지할 수 있습니다. 1시간을 넘긴 미확정 `PENDING`은 기존 Scheduler가 `PHOTO_PROCESSING_FAILED`로 `INVALID` 확정하며, 5초 EXIF 파싱 Timeout에는 기존 `PHOTO_PROCESSING_TIMEOUT`을 사용합니다.
+- 결정: `QUEST_COMPLETION_FAILED`와 `PHOTO_PROCESSING_FAILED`는 HTTP 오류 코드가 아닌 사진 제출 이력의 실패 사유입니다. 기존 업무 오류의 HTTP 응답을 유지하며 별도 복구·재지급 시스템은 MVP 범위에 포함하지 않습니다.
+- 상태: confirmed
+- 근거: 2주·4인 MVP의 구현 범위를 늘리지 않으면서 보상 실패를 EXIF 파싱 Timeout으로 잘못 기록하는 문제를 방지하기 위함입니다.
+- 영향 문서: api-design.md, business-rules.md, decision-log.md
+- 연관: Issue #18, PR #76

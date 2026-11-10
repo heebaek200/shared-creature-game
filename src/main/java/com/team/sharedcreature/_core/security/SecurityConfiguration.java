@@ -2,6 +2,7 @@ package com.team.sharedcreature._core.security;
 
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.web.RequestIdFilter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,13 +18,13 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
+import java.util.ArrayList;
 
 /**
  * 설계된 공개·인증·관리자 경로와 세션·CSRF 정책을 적용합니다.
  */
 @Configuration
 public class SecurityConfiguration {
-
     /**
      * REST 경로 등급과 인증·인가 실패 응답을 구성합니다.
      *
@@ -63,7 +64,7 @@ public class SecurityConfiguration {
                         .requestMatchers("/api/v1/invitations/**").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("SUPER_ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/v1/creature-species")
-                        .hasAnyRole("PRIMARY", "DEPUTY")
+                        .hasAnyRole("PRIMARY", "DEPUTY", "MEMBER")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/groups/me/seasons/current/creature-selection")
                         .hasAnyRole("PRIMARY", "DEPUTY")
                         .requestMatchers(
@@ -135,9 +136,21 @@ public class SecurityConfiguration {
      * @return CORS 설정 원본
      */
     @Bean
-    CorsConfigurationSource corsConfigurationSource() {
+    CorsConfigurationSource corsConfigurationSource(
+            @Value("${ngrok.domain-uri:}") String ngrokDomainUri
+    ) {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:5173"));
+
+        // 기본적으로 로컬 프런트엔드 Origin을 허용합니다.
+        List<String> allowedOrigins =
+                new ArrayList<>(List.of("http://localhost:5173"));
+
+        // ngrok 주소가 설정된 경우에만 허용 목록에 추가합니다.
+        if (ngrokDomainUri != null && !ngrokDomainUri.isBlank()) {
+            allowedOrigins.add(ngrokDomainUri.trim());
+        }
+
+        configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Accept", "Content-Type", "X-CSRF-TOKEN", "X-Request-Id", "Idempotency-Key"));
         configuration.setExposedHeaders(List.of("X-Request-Id"));

@@ -11,14 +11,30 @@ export function getCurrentUser() {
 }
 
 /** Google 소셜 로그인 시작 URL을 생성합니다. */
-export function createOAuthAttempt() {
-  return apiRequest('/api/v1/auth/oauth-attempts', {
-    method: 'POST',
-    body: { provider: 'GOOGLE', returnRoute: 'DEFAULT' },
-  });
+export function createOAuthAttempt(returnRoute = 'DEFAULT') {
+  return useMock
+      ? mockApi.createOAuthAttempt(returnRoute)
+      : apiRequest('/api/v1/auth/oauth-attempts', {
+        method: 'POST',
+        body: { provider: 'GOOGLE', returnRoute },
+      });
 }
 
 /** 가입 대기 사용자의 닉네임을 확정합니다. */
 export function completeSignup(nickname) {
-  return apiRequest('/api/v1/auth/signup', { method: 'POST', body: { nickname } });
+  return useMock
+      ? mockApi.completeSignup(nickname)
+      : apiRequest('/api/v1/auth/signup', {
+        method: 'POST',
+        body: { nickname },
+      });
+}
+
+/**
+ * 현재 세션에 저장된 가입 대기 정보를 조회합니다
+ */
+export function getSignupContext() {
+  return useMock
+      ? mockApi.getSignupContext()
+      : apiRequest('/api/v1/auth/signup-context');
 }
