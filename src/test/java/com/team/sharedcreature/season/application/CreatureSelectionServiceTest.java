@@ -86,7 +86,7 @@ class CreatureSelectionServiceTest {
     }
 
     @Test
-    void 주_관리자와_부_관리자는_활성_종을_조회하고_일반_회원은_거절한다() {
+    void 모든_활성_그룹_구성원은_활성_종을_조회할_수_있다() {
         Group group = group(10L);
         GroupMembership primary = membership("PRIMARY", group);
         GroupMembership deputy = membership("DEPUTY", group);
@@ -98,12 +98,44 @@ class CreatureSelectionServiceTest {
                 .thenReturn(Optional.of(deputy));
         when(membershipRepository.findActiveWithGroupByUserId(3L))
                 .thenReturn(Optional.of(member));
+        when(membershipRepository.findActiveWithGroupByUserId(4L))
+                .thenReturn(Optional.empty());
 
         assertThatCode(() -> service.listActiveSpecies(1L)).doesNotThrowAnyException();
         assertThatCode(() -> service.listActiveSpecies(2L)).doesNotThrowAnyException();
-        assertThatThrownBy(() -> service.listActiveSpecies(3L))
+        assertThatCode(() -> service.listActiveSpecies(3L)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> service.listActiveSpecies(4L))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.code()).isEqualTo("ROLE_FORBIDDEN"));
+    }
+
+    @Test
+    void 관리자의_종_선택은_공개_계약의_그룹_시즌_사용자_ID를_반환한다() {
+        Group group = group(10L);
+        Season season = season(1L, "ACTIVE", Instant.parse("2026-12-01T00:00:00Z"));
+        GroupSeason groupSeason = groupSeason(100L, group, season);
+        GroupMembership membership = membership("PRIMARY", group);
+        User selectedBy = membership.getUser();
+        when(selectedBy.getId()).thenReturn(7L);
+        CreatureSpecies species = org.mockito.Mockito.mock(CreatureSpecies.class);
+        when(species.getId()).thenReturn(5L);
+        GroupCreature creature = GroupCreature.egg(groupSeason, clock.instant());
+        ReflectionTestUtils.setField(creature, "id", 200L);
+        when(membershipRepository.findActiveWithGroupByUserId(7L)).thenReturn(Optional.of(membership));
+        when(seasonQueryService.findCurrentSeasonForShare()).thenReturn(season);
+        when(groupSeasonRepository.findForUpdateByGroupIdAndSeasonId(10L, 1L))
+                .thenReturn(Optional.of(groupSeason));
+        when(speciesRepository.findByIdAndStatus(5L, "ACTIVE")).thenReturn(Optional.of(species));
+        when(groupCreatureRepository.findSnapshotByGroupSeasonId(100L)).thenReturn(Optional.of(creature));
+
+        var response = service.selectSpecies(7L, 5L);
+
+        assertThat(response.groupId()).isEqualTo(10L);
+        assertThat(response.seasonId()).isEqualTo(1L);
+        assertThat(response.creatureSpeciesId()).isEqualTo(5L);
+        assertThat(response.selectedByUserId()).isEqualTo(7L);
+        assertThat(response.selectedAt()).isEqualTo(clock.instant());
+        assertThat(response.selectionDeadlineAt()).isEqualTo(groupSeason.getSelectionDeadlineAt());
     }
 
     @Test
@@ -133,7 +165,12 @@ class CreatureSelectionServiceTest {
             return Optional.of(creature);
         });
 
-        assertThat(service.hatchIfDue(100L)).isPresent();
+        var result = service.hatchIfDue(100L);
+
+        assertThat(result).isPresent();
+        assertThat(result.orElseThrow().groupSeasonId()).isEqualTo(100L);
+        assertThat(result.orElseThrow().groupCreatureId()).isEqualTo(200L);
+        assertThat(result.orElseThrow().creatureSpeciesId()).isEqualTo(5L);
 
         InOrder locks = inOrder(seasonQueryService, groupSeasonRepository, groupCreatureRepository);
         locks.verify(seasonQueryService).findCurrentSeasonForShareIfPresent();

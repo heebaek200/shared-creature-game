@@ -635,7 +635,6 @@ public class QuestCompletionService {
                     "이 퀘스트는 직접 완료할 수 없습니다."
             );
         }
-
         QuestCompletion existing = findCompletionsByAssignmentId(
                 userId,
                 List.of(requestedAssignment)
@@ -744,6 +743,101 @@ public class QuestCompletionService {
         }
 
         // 최종 보상 지급
+        return completeAndReward(user, membership, groupSeason, assignment);
+    }
+
+    /**
+     * EXIF 검증을 통과한 PHOTO_EXIF 퀘스트를 공통 완료·보상 로직으로 처리합니다.
+     *
+     * 현재 시즌 잠금, 사용자 멤버십, 배정 유형, 퀘스트 기간과 그룹 시즌 상태를 확인합니다.
+     * 이미 완료된 배정이면 기존 완료·보상 결과를 반환해 중복 보상을 방지합니다.
+     *
+     * @param userId 사진을 제출한 사용자 ID
+     * @param assignmentId 완료할 퀘스트 배정 ID
+     * @return 기존 또는 새로 생성된 완료·보상 결과
+     */
+    @Transactional
+    public QuestCompletionResponse completePhotoExifAssignment(
+            Long userId,
+            Long assignmentId
+    ) {
+        // 시즌 종료 처리와 경합하지 않도록 시즌 공유 잠금을 먼저 획득합니다.
+        seasonQueryService.findCurrentSeasonForShare();
+
+        // 사용자 행 잠금으로 같은 사용자의 동시 보상 처리를 직렬화합니다.
+        User user = userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.AUTH_REQUIRED,
+                        "로그인이 필요합니다."
+                ));
+
+        // 보상 확정 시점에도 활성 그룹 멤버십을 확인합니다.
+        GroupMembership membership = membershipRepository
+                .findActiveWithGroupByUserId(userId)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.ROLE_FORBIDDEN,
+                        "요청 권한이 없습니다."
+                ));
+
+        // 배정 존재 여부와 검증 유형을 확인합니다.
+        QuestAssignment requestedAssignment =
+                assignmentRepository.findWithSnapshotById(assignmentId)
+                        .orElseThrow(() -> new BusinessException(
+                                ErrorCode.RESOURCE_NOT_FOUND,
+                                "퀘스트 배정을 찾을 수 없습니다."
+                        ));
+
+        if (!"PHOTO_EXIF".equals(
+                requestedAssignment.getVerificationTypeSnapshot()
+        )) {
+            throw new BusinessException(
+                    ErrorCode.QUEST_COMPLETION_NOT_ALLOWED,
+                    "사진 EXIF 인증 퀘스트가 아닙니다."
+            );
+        }
+
+        // 재호출 시 기존 완료를 반환해 보상을 중복 지급하지 않습니다.
+        QuestCompletion existing = findCompletionsByAssignmentId(
+                userId,
+                List.of(requestedAssignment)
+        ).get(assignmentId);
+
+        if (existing != null) {
+            if (!java.util.Objects.equals(
+                    existing.getMembership().getId(),
+                    membership.getId()
+            )) {
+                throw new BusinessException(
+                        ErrorCode.ROLE_FORBIDDEN,
+                        "요청 권한이 없습니다."
+                );
+            }
+            return buildExistingCompletionResponse(existing);
+        }
+
+        // 촬영·접수 이후 보상 시점에도 배정 기간과 현재 시즌을 재검증합니다.
+        QuestAssignment assignment =
+                findCompletableAssignment(userId, assignmentId, "PHOTO_EXIF");
+
+        // 보상 대상 그룹 시즌을 잠그고 활성 상태를 확인합니다.
+        GroupSeason groupSeason = groupSeasonRepository
+                .findForUpdateByGroupIdAndSeasonId(
+                        membership.getGroup().getId(),
+                        assignment.getQuestPeriod().getSeason().getId()
+                )
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.RESOURCE_NOT_FOUND,
+                        "그룹 시즌을 찾을 수 없습니다."
+                ));
+
+        if (!"ACTIVE".equals(groupSeason.getStatus())) {
+            throw new BusinessException(
+                    ErrorCode.QUEST_PERIOD_ENDED,
+                    "그룹 시즌이 활성 상태가 아닙니다."
+            );
+        }
+
+        // 공통 완료 처리에서 완료 기록과 보상을 한 트랜잭션으로 반영합니다.
         return completeAndReward(user, membership, groupSeason, assignment);
     }
 

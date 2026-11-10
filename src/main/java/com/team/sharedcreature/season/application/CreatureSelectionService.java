@@ -56,10 +56,10 @@ public class CreatureSelectionService {
         this.clock = clock;
     }
 
-    /** 주·부 관리자에게 현재 선택 가능한 활성 종을 안정적인 표시 순서로 반환합니다. */
+    /** 활성 그룹 구성원에게 선택 가능한 종을 안정적인 표시 순서로 반환합니다. */
     @Transactional(readOnly = true)
     public List<CreatureSpeciesResponse> listActiveSpecies(Long userId) {
-        requireAdminMembership(userId);
+        requireActiveMembership(userId);
         return speciesRepository.findAllByStatusOrderByDisplayOrderAscIdAsc("ACTIVE").stream()
                 .map(CreatureSpeciesResponse::from)
                 .toList();
@@ -94,7 +94,7 @@ public class CreatureSelectionService {
                     .orElseThrow(() -> notFound("현재 그룹 크리처를 찾을 수 없습니다."));
             publish(groupSeason, creature, now);
         }
-        return CreatureSelectionResponse.from(groupSeason);
+        return CreatureSelectionResponse.fromAdminSelection(groupSeason);
     }
 
     /**
@@ -102,7 +102,7 @@ public class CreatureSelectionService {
      * 시즌 종료가 먼저이거나 아직 기한 전이면 상태를 변경하지 않습니다.
      */
     @Transactional
-    public Optional<CreatureSelectionResponse> hatchIfDue(Long groupSeasonId) {
+    public Optional<HatchResult> hatchIfDue(Long groupSeasonId) {
         Optional<Season> currentSeason = seasonQueryService.findCurrentSeasonForShareIfPresent();
         if (currentSeason.isEmpty()) {
             return Optional.empty();
@@ -145,12 +145,21 @@ public class CreatureSelectionService {
         creature.hatch(groupSeason.getSelectedSpecies(), groupSeason.getSelectionSource(), now);
         groupSeason.activate(now);
         publish(groupSeason, creature, now);
-        return Optional.of(CreatureSelectionResponse.from(groupSeason));
+        return Optional.of(new HatchResult(
+                groupSeason.getId(),
+                creature.getId(),
+                groupSeason.getSelectedSpecies().getId(),
+                now
+        ));
+    }
+
+    private GroupMembership requireActiveMembership(Long userId) {
+        return membershipRepository.findActiveWithGroupByUserId(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ROLE_FORBIDDEN));
     }
 
     private GroupMembership requireAdminMembership(Long userId) {
-        GroupMembership membership = membershipRepository.findActiveWithGroupByUserId(userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.ROLE_FORBIDDEN));
+        GroupMembership membership = requireActiveMembership(userId);
         if (!"PRIMARY".equals(membership.getRole()) && !"DEPUTY".equals(membership.getRole())) {
             throw new BusinessException(ErrorCode.ROLE_FORBIDDEN);
         }
@@ -173,5 +182,14 @@ public class CreatureSelectionService {
 
     private BusinessException notFound(String message) {
         return new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, message);
+    }
+
+    /** Scheduler 내부에서 사용하는 무작위·관리자 부화 처리 결과입니다. */
+    public record HatchResult(
+            Long groupSeasonId,
+            Long groupCreatureId,
+            Long creatureSpeciesId,
+            Instant hatchedAt
+    ) {
     }
 }
