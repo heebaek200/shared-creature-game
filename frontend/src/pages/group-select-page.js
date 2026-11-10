@@ -75,10 +75,7 @@ export function groupSelectPage({navigate}) {
                         <label class="form-label" for="group-description">그룹 소개</label>
                         <textarea class="form-control" id="group-description" name="description" maxlength="500" rows="4" placeholder="그룹 소개 (선택 · 최대 500자)"></textarea>
                     </div>
-                    
-                    <div class="alert alert-info small py-2">
-                              
-                    </div>                    
+                                                   
                     <button class="btn btn-success create-submit" type="submit">그룹 생성</button>
                     <div class="alert d-none create-alert mt-3 mb-0" role="status" aria-live="polite"></div>
                     
@@ -90,7 +87,7 @@ export function groupSelectPage({navigate}) {
         <div class="table-responsive">
             <table class="table align-middle mb-3">
             <thead class="table-light">
-            <tr>
+            <tr> 
                 <th scope="col">그룹</th>
                 <th scope="col">현재 인원</th>
                 <th scope="col">남은 자리</th>
