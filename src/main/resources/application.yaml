@@ -52,17 +52,3 @@ ngrok:
 app:
   scheduler:
     enabled: false  # 스케쥴러(이 프로젝트에서는 시즌 및 퀘스트 갱신 역할) 기능 활성화 여부
-
-portone:
-  store-id: ${PORTONE_STORE_ID:}
-  channel-key: ${PORTONE_CHANNEL_KEY:}
-  api-secret: ${PORTONE_API_SECRET:}
-  webhook-secret: ${PORTONE_WEBHOOK_SECRET:}
-  api-base-url: ${PORTONE_API_BASE_URL:https://api.portone.io}
-
-ngrok:
-  domain-uri: ${NGROK_DOMAIN_URI:}
-
-app:
-  scheduler:
-    enabled: false  # 스케쥴러(이 프로젝트에서는 시즌 및 퀘스트 갱신 역할) 기능 활성화 여부
