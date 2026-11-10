@@ -53,19 +53,18 @@ export function renderCreatureGrowth({
             : creatureLv0;
     };
 
-    // 시즌 시작 시각으로부터 72시간이 지난 뒤에만 경험치/성장 연출을 허용합니다.
+    // 서버에서 전달받은 기준 시각(72시간)이 지난 뒤에만 경험치/성장 연출을 허용합니다.
     const isSelected = selectedSpeciesId !== null && selectedSpeciesId !== undefined;
     const nowTime = Date.now();
-    const seasonStartAt = seasonData?.startAt ? new Date(seasonData.startAt).getTime() : NaN;
-    const fallbackDeadlineAt = creatureInfo.selectionDeadlineAt
+
+    // 서버에서 기간을 받아서 사용
+    const growthUnlockAt = creatureInfo.selectionDeadlineAt
         ? new Date(creatureInfo.selectionDeadlineAt).getTime()
         : NaN;
-    const growthUnlockAt = Number.isFinite(seasonStartAt)
-        ? seasonStartAt + 72 * 60 * 60 * 1000
-        : fallbackDeadlineAt;
+
     const isDeadlinePassed = Number.isFinite(growthUnlockAt) && nowTime >= growthUnlockAt;
-    const isWaitingForAssignment = isDeadlinePassed && !isSelected;
-    const isTrulyEggState = !isDeadlinePassed || isWaitingForAssignment;
+    const isTrulyEggState = creatureInfo.growthStage === 'EGG';
+
     const hasSpeciesName = typeof selectedSpecies?.name === 'string'
         && selectedSpecies.name.trim().length > 0;
     const shouldRevealSpeciesName = isSelected || (isDeadlinePassed && hasSpeciesName);
@@ -83,9 +82,14 @@ export function renderCreatureGrowth({
     }
 
     const targetExp = creatureInfo.totalExperience ?? 0;
-    const targetGrowthStage = creatureInfo.growthStage === 'EGG'
-        ? 'HATCHLING'
-        : (creatureInfo.growthStage || 'HATCHLING');
+
+    const targetGrowthStage = creatureInfo.growthStage;
+    const isHatchedGrowthStage = [
+        'HATCHLING',
+        'GROWING',
+        'MATURE',
+        'COMPLETE',
+    ].includes(targetGrowthStage);
 
     const speciesName = shouldRevealSpeciesName && hasSpeciesName
         ? selectedSpecies.name
@@ -139,7 +143,7 @@ export function renderCreatureGrowth({
             expBar.setAttribute('aria-valuenow', '0');
             expBar.setAttribute('aria-valuetext', `${targetExp.toLocaleString()} XP, 부화 대기 중`);
         }
-    } else if (!hasPlayedGrowthAnimation) {
+    } else if (isHatchedGrowthStage && !hasPlayedGrowthAnimation) {
         const stageOrder = ['HATCHLING', 'GROWING', 'MATURE', 'COMPLETE'];
         const targetStageIndex = Math.max(0, stageOrder.indexOf(targetGrowthStage));
         const stagesToVisit = stageOrder.slice(0, targetStageIndex + 1);
@@ -219,7 +223,7 @@ export function renderCreatureGrowth({
         }
 
         scheduleTimeout(playEvolutionStep, 800);
-    } else {
+    } else if (isHatchedGrowthStage) {
         const finalConfig = getStageConfig(targetGrowthStage, true);
         const finalPercent = targetGrowthStage === 'COMPLETE'
             ? 100
@@ -241,8 +245,30 @@ export function renderCreatureGrowth({
             expBar.setAttribute('aria-valuenow', String(finalPercent));
             expBar.setAttribute('aria-valuetext', finalDisplayText);
         }
-    }
+    } else {
+        console.error(
+            '크리처 성장 단계를 확인할 수 없습니다.',
+            creatureInfo.growthStage
+        );
 
+        if (creatureImageEl) {
+            creatureImageEl.removeAttribute('src');
+        }
+        if (growthStageEl) {
+            growthStageEl.textContent = '성장 정보 확인 불가';
+        }
+        if (expText) {
+            expText.textContent = '경험치 표시 불가';
+        }
+        if (expBar) {
+            expBar.style.width = '0%';
+            expBar.setAttribute('aria-valuenow', '0');
+            expBar.setAttribute(
+                'aria-valuetext',
+                '성장 단계 정보를 확인할 수 없습니다'
+            );
+        }
+    }
     if (creatureDisplay) creatureDisplay.style.visibility = 'visible';
     return growthUnlockAt;
 }

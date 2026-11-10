@@ -48,10 +48,10 @@ export function creaturePage(context) {
             <a href="/quests" class="nav-link py-2 px-3" style="color: var(--app-text);" data-link>퀘스트</a>
           </li>
           <li class="nav-item">
-            <a href="/ranking" class="nav-link py-2 px-3" style="color: var(--app-text);" data-link>랭킹</a>
+            <a href="/rankings" class="nav-link py-2 px-3" style="color: var(--app-text);" data-link>랭킹</a>
           </li>
           <li class="nav-item">
-            <a href="/groups" class="nav-link py-2 px-3" style="color: var(--app-text);" data-link>그룹</a>
+            <a href="/group" class="nav-link py-2 px-3" style="color: var(--app-text);" data-link>그룹</a>
           </li>
           <li class="nav-item">
             <a href="/shop" class="nav-link py-2 px-3" style="color: var(--app-text);" data-link>상점</a>
@@ -60,10 +60,10 @@ export function creaturePage(context) {
             <a href="/avatar" class="nav-link py-2 px-3" style="color: var(--app-text);" data-link>아바타</a>
           </li>
           <li class="nav-item">
-            <a href="/billing" class="nav-link py-2 px-3" style="color: var(--app-text);" data-link>결제 내역</a>
+            <a href="/payments" class="nav-link py-2 px-3" style="color: var(--app-text);" data-link>결제 내역</a>
           </li>
           <li class="nav-item">
-            <a href="/group-manage" class="nav-link py-2 px-3" style="color: var(--app-text);" data-link>그룹 관리</a>
+            <a href="/group-admin" class="nav-link py-2 px-3" style="color: var(--app-text);" data-link>그룹 관리</a>
           </li>
         </ul>
       </nav>
@@ -343,7 +343,7 @@ export function creaturePage(context) {
     }
 
     // 72시간까지 남은 시각(크리처 선택 마감 기간)
-    function updateRemainingTimeLabels(seasonData, hatchDeadlineAt) {
+    function updateRemainingTimeLabels(seasonData, hatchDeadlineAt, growthStage, hatchStatusMessage = null) {
         const now = Date.now();
         const groupSeasonInfo = element.querySelector('#group-season-info');
         const hatchCountdown = element.querySelector('#hatch-countdown');
@@ -368,8 +368,12 @@ export function creaturePage(context) {
         }
 
         if (hatchCountdown) {
-            if (!Number.isFinite(hatchDeadlineAt)) {
+            if (growthStage !== 'EGG') {
                 hatchCountdown.textContent = '';
+            }else if (hatchStatusMessage !== null) {
+                hatchCountdown.textContent = hatchStatusMessage;
+            } else if (!Number.isFinite(hatchDeadlineAt)) {
+                hatchCountdown.textContent = '남은 시간 확인 불가';
             } else {
                 const diffMs = hatchDeadlineAt - now;
                 if (diffMs <= 0) {
@@ -390,13 +394,42 @@ export function creaturePage(context) {
     }
 
     // 72시간 마감 시각에 크리처 Snapshot을 조회하고 미배정 시 재시도
-    function startRemainingTimeUpdates(seasonData, hatchDeadlineAt, hasAssignedSpecies) {
+    function startRemainingTimeUpdates(seasonData, hatchDeadlineAt, growthStage, groupSeasonStatus) {
         if (countdownIntervalId !== null) clearInterval(countdownIntervalId);
         if (deadlineTimeoutId !== null) clearTimeout(deadlineTimeoutId);
 
-        updateRemainingTimeLabels(seasonData, hatchDeadlineAt);
+        updateRemainingTimeLabels(seasonData, hatchDeadlineAt, growthStage);
+
+        // 그룹 시즌이 종료됐으면 부화 타이머나 재조회를 설정하지 않습니다.
+        if (groupSeasonStatus === 'ENDED') {
+            const hatchCountdown = element.querySelector('#hatch-countdown');
+
+            if (hatchCountdown) {
+                hatchCountdown.textContent = growthStage === 'EGG'
+                    ? '시즌이 종료되었습니다.'
+                    : '';
+            }
+            return;
+        }
+
+        let hatchStatusMessage = null;
+
+        updateRemainingTimeLabels(
+            seasonData,
+            hatchDeadlineAt,
+            growthStage,
+            hatchStatusMessage
+        );
+
         countdownIntervalId = window.setInterval(() => {
-            if (isMounted) updateRemainingTimeLabels(seasonData, hatchDeadlineAt);
+            if (isMounted) {
+                updateRemainingTimeLabels(
+                    seasonData,
+                    hatchDeadlineAt,
+                    growthStage,
+                    hatchStatusMessage
+                );
+            }
         }, 60 * 1000);
 
         if (!Number.isFinite(hatchDeadlineAt)) return;
@@ -413,27 +446,54 @@ export function creaturePage(context) {
                     getCurrentSeason(),
                     getActiveCreatureSpecies()
                 ]);
+
                 if (!isMounted) return;
 
                 const creatureData = creatureRes.data || creatureRes;
                 const currentSeasonData = seasonRes.data || seasonRes;
                 const speciesList = speciesRes.data || speciesRes;
-                const refreshedCreature = creatureData.creature || {};
-                const hasAssignedSpecies = refreshedCreature.creatureSpeciesId !== null
-                    && refreshedCreature.creatureSpeciesId !== undefined;
 
-                if (!hasAssignedSpecies) {
+                const refreshedCreature = creatureData.creature || {};
+                const isStillEgg = refreshedCreature.growthStage === 'EGG';
+                const groupSeasonEnded = creatureData.season?.status === 'ENDED';
+
+                if (isStillEgg && groupSeasonEnded) {
                     clearLoadError();
+
+                    if (countdownIntervalId !== null) {
+                        clearInterval(countdownIntervalId);
+                        countdownIntervalId = null;
+                    }
+
+                    const hatchCountdown = element.querySelector('#hatch-countdown');
+                    if (hatchCountdown) {
+                        hatchCountdown.textContent =
+                            '시즌이 종료되었습니다.';
+                    }
+                    return;
+                }
+
+                if (isStillEgg) {
+                    clearLoadError();
+
                     const hatchCountdown = element.querySelector('#hatch-countdown');
                     if (retryCount < maxAssignmentRetries) {
-                        if (hatchCountdown) hatchCountdown.textContent = '크리처 배정 확인 중...';
+                        hatchStatusMessage = '부화 처리 확인 중...';
+                        if (hatchCountdown) {
+                            hatchCountdown.textContent = hatchStatusMessage;
+                        }
+
                         deadlineTimeoutId = window.setTimeout(
                             () => refreshAtDeadline(retryCount + 1),
                             assignmentRetryDelayMs
                         );
-                    } else if (hatchCountdown) {
-                        hatchCountdown.textContent = '배정 미완료. 잠시만 기다려주세요';
+                    } else {
+                        hatchStatusMessage = '부화 처리 지연 중. 페이지를 새로고침해 주세요.';
+                        if (hatchCountdown) {
+                            hatchCountdown.textContent = hatchStatusMessage;
+                        }
                     }
+
                     return;
                 }
 
@@ -454,8 +514,7 @@ export function creaturePage(context) {
                 () => refreshAtDeadline(),
                 hatchDeadlineAt - Date.now()
             );
-        } else if (!hasAssignedSpecies) {
-            // 마감 이후 첫 접속에서도 배정 결과를 즉시 조회하고, 필요하면 짧게 재시도합니다.
+        } else if (growthStage === 'EGG') {
             void refreshAtDeadline();
         }
     }
@@ -485,9 +544,10 @@ export function creaturePage(context) {
             isMounted: () => isMounted,
             scheduleTimeout: scheduleGrowthAnimationTimeout,
         });
-        const hasAssignedSpecies = creatureData.creature?.creatureSpeciesId !== null
-            && creatureData.creature?.creatureSpeciesId !== undefined;
-        startRemainingTimeUpdates(seasonData, growthUnlockAt, hasAssignedSpecies);
+
+        const growthStage = creatureData.creature?.growthStage;
+        const groupSeasonStatus = creatureData.season?.status;
+        startRemainingTimeUpdates(seasonData, growthUnlockAt, growthStage, groupSeasonStatus);
 
         const todayExp = element.querySelector('#today-exp');
         // 기타 UI (온라인 멤버 및 최근 기여 목록 렌더링)

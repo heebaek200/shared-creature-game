@@ -17,7 +17,7 @@ export const mockCreatureHomeData = {
     },
     creature: {
         groupCreatureId: 701,
-        creatureSpeciesId: 1, // 2
+        creatureSpeciesId: 1, // null / 1 / 2
         speciesName: "이끼 낀 바위 골렘", // 공허 속 우주 해파리 /
         assetKey: "moss-golem", // abyss-jellyfish /
         growthStage: "COMPLETE", // EGG / HATCHLING / GROWING / MATURE / COMPLETE
