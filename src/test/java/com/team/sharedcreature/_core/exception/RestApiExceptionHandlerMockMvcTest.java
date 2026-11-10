@@ -100,17 +100,17 @@ class RestApiExceptionHandlerMockMvcTest {
     }
 
     @Test
-    void 중복_Query는_400_INVALID_FIELD_VALUE로_응답한다() throws Exception {
+    void 중복_Query는_400_INVALID_REQUEST로_응답한다() throws Exception {
         mockMvc.perform(get("/required?q=first&q=second"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_FIELD_VALUE"));
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 
     @Test
-    void 미등록_Query는_400_INVALID_FIELD_VALUE로_응답한다() throws Exception {
+    void 미등록_Query는_400_INVALID_REQUEST로_응답한다() throws Exception {
         mockMvc.perform(get("/required?q=value&unknown=value"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_FIELD_VALUE"));
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 
     @Test

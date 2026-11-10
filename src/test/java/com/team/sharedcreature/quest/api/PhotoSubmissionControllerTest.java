@@ -5,6 +5,7 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.quest.application.PhotoVerificationService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,11 +38,16 @@ class PhotoSubmissionControllerTest {
     @Mock
     private PhotoVerificationService photoVerificationService;
 
+    @Mock
+    private HttpServletRequest request;
+
     private PhotoSubmissionController controller;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         controller = new PhotoSubmissionController(photoVerificationService);
+        when(request.getQueryString()).thenReturn(null);
+        when(request.getParts()).thenReturn(List.of());
     }
 
     @Test
@@ -82,7 +89,7 @@ class PhotoSubmissionControllerTest {
         )).thenReturn(expected);
 
         ApiResponse<PhotoSubmissionResponse> response =
-                controller.submitPhoto(loginUser, 11L, file);
+                controller.submitPhoto(loginUser, 11L, file, request);
 
         assertThat(response.data()).isSameAs(expected);
 
@@ -112,7 +119,7 @@ class PhotoSubmissionControllerTest {
                 new byte[]{1, 2, 3}
         );
 
-        assertThatThrownBy(() -> controller.submitPhoto(loginUser, 0L, file))
+        assertThatThrownBy(() -> controller.submitPhoto(loginUser, 0L, file, request))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> assertThat(
                         ((BusinessException) exception).errorCode()
@@ -135,7 +142,7 @@ class PhotoSubmissionControllerTest {
                 new byte[TEN_MIB + 1]
         );
 
-        assertThatThrownBy(() -> controller.submitPhoto(loginUser, 11L, file))
+        assertThatThrownBy(() -> controller.submitPhoto(loginUser, 11L, file, request))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> assertThat(
                         ((BusinessException) exception).errorCode()

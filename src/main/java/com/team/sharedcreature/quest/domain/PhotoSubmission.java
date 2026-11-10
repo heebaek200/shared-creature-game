@@ -173,9 +173,9 @@ public class PhotoSubmission {
     public void markPendingTimedOut(Instant failedAt) {
         requirePending();
 
-        // 응답 계약에 정의된 Timeout 사유를 사용해 실패 이력을 남깁니다.
+        // 한 시간 안에 결과가 확정되지 않은 제출을 처리 실패로 종료합니다.
         markInvalid(
-                "PHOTO_PROCESSING_TIMEOUT",
+                "PHOTO_PROCESSING_FAILED",
                 null,
                 null,
                 null,

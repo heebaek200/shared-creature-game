@@ -18,6 +18,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
+import java.util.ArrayList;
 
 /**
  * 설계된 공개·인증·관리자 경로와 세션·CSRF 정책을 적용합니다.
@@ -131,13 +132,20 @@ public class SecurityConfiguration {
      */
     @Bean
     CorsConfigurationSource corsConfigurationSource(
-            @Value("${ngrok.domain-uri}") String ngrokDomainUri
+            @Value("${ngrok.domain-uri:}") String ngrokDomainUri
     ) {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(
-                "http://localhost:5173",
-                ngrokDomainUri
-        ));
+
+        // 기본적으로 로컬 프런트엔드 Origin을 허용합니다.
+        List<String> allowedOrigins =
+                new ArrayList<>(List.of("http://localhost:5173"));
+
+        // ngrok 주소가 설정된 경우에만 허용 목록에 추가합니다.
+        if (ngrokDomainUri != null && !ngrokDomainUri.isBlank()) {
+            allowedOrigins.add(ngrokDomainUri.trim());
+        }
+
+        configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Accept", "Content-Type", "X-CSRF-TOKEN", "X-Request-Id", "Idempotency-Key"));
         configuration.setExposedHeaders(List.of("X-Request-Id"));

@@ -5,6 +5,9 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.quest.application.PhotoVerificationService;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.Part;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -14,6 +17,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * 사진 EXIF 퀘스트 제출 요청을 처리합니다.
@@ -38,8 +46,12 @@ public class PhotoSubmissionController {
     public ApiResponse<PhotoSubmissionResponse> submitPhoto(
             @AuthenticationPrincipal LoginUser loginUser,
             @RequestParam("assignmentId") Long assignmentId,
-            @RequestPart("file") MultipartFile file
+            @RequestPart("file") MultipartFile file,
+            HttpServletRequest request
     ) {
+        validateMultipartRequest(request);
+
+        // 기존 assignmentId·파일 검증과 Service 호출은 그대로 둡니다.
         // 배정 ID는 양수만 허용합니다.
         if (assignmentId == null || assignmentId < 1) {
             throw new BusinessException(
@@ -74,6 +86,39 @@ public class PhotoSubmissionController {
             throw new BusinessException(
                     ErrorCode.INTERNAL_SERVER_ERROR,
                     "업로드된 사진을 읽지 못했습니다."
+            );
+        }
+    }
+
+    private void validateMultipartRequest(HttpServletRequest request) {
+        // 이 API에는 Query 입력이 없으므로 Query 문자열이 있으면 거절합니다.
+        if (request.getQueryString() != null
+                && !request.getQueryString().isBlank()) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_REQUEST,
+                    "Query Parameter는 사용할 수 없습니다."
+            );
+        }
+
+        Set<String> allowedParts = Set.of("assignmentId", "file");
+        Map<String, Integer> partCounts = new HashMap<>();
+
+        try {
+            for (Part part : request.getParts()) {
+                String name = part.getName();
+                int count = partCounts.merge(name, 1, Integer::sum);
+
+                if (!allowedParts.contains(name) || count > 1) {
+                    throw new BusinessException(
+                            ErrorCode.INVALID_REQUEST,
+                            "Multipart 입력을 확인해 주세요."
+                    );
+                }
+            }
+        } catch (IOException | ServletException exception) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_REQUEST,
+                    "Multipart 요청을 읽을 수 없습니다."
             );
         }
     }

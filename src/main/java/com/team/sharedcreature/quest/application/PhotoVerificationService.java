@@ -221,6 +221,21 @@ public class PhotoVerificationService {
                             longitude
                     );
                 }
+
+                // 확정된 업무 오류(4xx)는 실패 이력만 남기고,
+                // 클라이언트에는 원래 BusinessException을 그대로 반환합니다.
+                if (exception.status().is4xxClientError()) {
+                    markInvalidAndRespond(
+                            pending,
+                            assignmentId,
+                            "QUEST_COMPLETION_FAILED",
+                            capturedAt,
+                            latitude,
+                            longitude
+                    );
+                }
+
+                // 5xx BusinessException은 결과를 확정하지 않고 PENDING 상태로 둡니다.
                 throw exception;
             }
 
