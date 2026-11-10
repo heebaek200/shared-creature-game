@@ -75,4 +75,50 @@ public class Group {
         return new Group(name, normalizedName, description, creator, now);
     }
 
+    /**
+     * 그룹에 연결된 주 관리자 사용자 참조를 변경합니다.
+     *  - 멤버십의 PRIMARY 역할 변경과 동일한 트랜잭션에서 호출해야 함
+     *  - 그룹의 최신 수정 시간도 함께 갱신함
+     */
+    public void changePrimaryAdmin(User nextPrimary, Instant now) {
+        if (nextPrimary == null) {
+            throw new IllegalArgumentException("주 관리자가 필요합니다.");
+        }
+
+        this.primaryAdminUser = nextPrimary;
+        this.updatedAt = now;
+    }
+
+    /**
+     * 활성 그룹에서 일반 회원 한 명의 탈퇴를 반영합니다.
+     *  - 주 관리자(PRIMARY)가 남아 있는 그룹에서만 진행
+     *  - 마지막 구성원 탈퇴는 다른 기능 deactivateAfterLastMemberLeaves 에서 수행
+     */
+    public void decrementMemberCount(Instant now) {
+        if (!"ACTIVE".equals(this.status) || this.currentMemberCount <= 1) {
+            throw new IllegalStateException("그룹 인원을 감소시킬 수 없습니다.");
+        }
+
+        // 관리 중인 그룹의 인원만 감소합니다.
+        this.currentMemberCount --;
+        this.updatedAt = now;
+    }
+
+    /**
+     * 유일한 주 관리자(PRIMARY) 탈퇴로 그룹을 비활성화합니다.
+     *  - 구성원이 정확히 한 명 남은 활성 그룹에서만 사용할 수 있음
+     *  - 그룹 데이터는 유지하고 관리자 참조만 해제함
+     */
+    public void deactivateAfterLastMemberLeaves(Instant now) {
+        if (!"ACTIVE".equals(this.status) || this.currentMemberCount != 1) {
+            throw new IllegalStateException("1인 활성 그룹만 종료할 수 있습니다.");
+        }
+
+        // 그룹 종료와 함께 인원 및 주 관리자 참조를 정리
+        this.status = "INACTIVE";
+        this.currentMemberCount = 0;
+        this.primaryAdminUser = null;
+        this.updatedAt = now;
+    }
+
 }

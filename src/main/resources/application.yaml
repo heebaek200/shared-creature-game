@@ -8,6 +8,9 @@ spring:
     import: optional:file:.env[.properties]
   application:
     name: sharedcreature
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
   servlet:
@@ -35,3 +38,10 @@ auth:
   initial-super-admin:
     provider: ${INITIAL_SUPER_ADMIN_PROVIDER:}
     provider-user-id: ${INITIAL_SUPER_ADMIN_PROVIDER_USER_ID:}
+
+portone:
+  store-id: ${PORTONE_STORE_ID:}
+  channel-key: ${PORTONE_CHANNEL_KEY:}
+  api-secret: ${PORTONE_API_SECRET:}
+  webhook-secret: ${PORTONE_WEBHOOK_SECRET:}
+  api-base-url: ${PORTONE_API_BASE_URL:https://api.portone.io}

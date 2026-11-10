@@ -158,4 +158,18 @@ public class GroupCreature {
             default -> throw new IllegalStateException("Unknown growth stage: " + stage);
         };
     }
+
+    /**
+     * 그룹 종료에 따라 공동 크리처를 보관 상태로 변경함
+     *  - 경험치와 성장 단계, 종 선택 및 부화 시각은 유지
+     *  - 상태만 변경(비활성)
+     */
+    public void archiveForGroupClosure(Instant now) {
+        if ("ARCHIVED".equals(this.status)) {
+            return;
+        }
+
+        this.status = "ARCHIVED";
+        this.updatedAt = now;
+    }
 }

@@ -1,13 +1,15 @@
 package com.team.sharedcreature._core.security;
 
+import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.web.RequestIdFilter;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
+import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.web.cors.CorsConfiguration;
@@ -46,7 +48,10 @@ public class SecurityConfiguration {
                 .cors(cors -> { })
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfRepository)
-                        .ignoringRequestMatchers("/oauth2/callback/**"))
+                        .ignoringRequestMatchers(
+                                "/oauth2/callback/**",
+                                "/api/v1/payments/webhooks/portone"
+                        ))
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
                         .sessionFixation(fixation -> fixation.changeSessionId()))
@@ -54,6 +59,7 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/csrf", "/api/v1/me").permitAll()
                         .requestMatchers("/api/v1/auth/oauth-attempts", "/api/v1/auth/signup-context", "/api/v1/auth/signup").permitAll()
                         .requestMatchers("/oauth2/callback/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/webhooks/portone").permitAll()
                         .requestMatchers("/api/v1/invitations/**").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("SUPER_ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/v1/creature-species")
@@ -63,6 +69,7 @@ public class SecurityConfiguration {
                         .requestMatchers(
                                 "/api/v1/groups/me/members/*/role",
                                 "/api/v1/groups/me/primary-transfer",
+                                "/api/v1/groups/me/invitation", // GET 패스 추가
                                 "/api/v1/groups/me/invitation/**"
                         ).hasRole("PRIMARY")
                         .requestMatchers("/api/v1/groups/me/members/*/removals").hasAnyRole("PRIMARY", "DEPUTY")
@@ -78,17 +85,47 @@ public class SecurityConfiguration {
                         .anyRequest().permitAll())
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint((request, response, exception) ->
-                                errorWriter.write(request, response, 401, "AUTH_REQUIRED", "로그인이 필요합니다."))
+                                errorWriter.write(
+                                        request,
+                                        response,
+                                        Boolean.TRUE.equals(request.getAttribute(SessionAuthenticationFilter.SESSION_EXPIRED))
+                                                ? ErrorCode.SESSION_EXPIRED
+                                                : ErrorCode.AUTH_REQUIRED
+                                ))
                         .accessDeniedHandler((request, response, exception) -> {
                             if (exception instanceof CsrfException) {
-                                errorWriter.write(request, response, 403, "CSRF_INVALID", "보안 토큰이 만료됐습니다.");
+                                errorWriter.write(
+                                        request,
+                                        response,
+                                        Boolean.TRUE.equals(request.getAttribute(SessionAuthenticationFilter.SESSION_EXPIRED))
+                                                ? ErrorCode.SESSION_EXPIRED
+                                                : ErrorCode.CSRF_INVALID
+                                );
                                 return;
                             }
-                            errorWriter.write(request, response, 403, "ROLE_FORBIDDEN", "요청 권한이 없습니다.");
+                            errorWriter.write(request, response, ErrorCode.ROLE_FORBIDDEN);
                         }))
-                .addFilterBefore(requestIdFilter, AnonymousAuthenticationFilter.class)
-                .addFilterBefore(sessionAuthenticationFilter, AnonymousAuthenticationFilter.class);
+                .addFilterBefore(requestIdFilter, CsrfFilter.class)
+                .addFilterAfter(sessionAuthenticationFilter, RequestIdFilter.class);
         return http.build();
+    }
+
+    /** Request ID Filter를 Security Filter Chain에서만 실행하도록 Servlet 자동 등록을 끕니다. */
+    @Bean
+    FilterRegistrationBean<RequestIdFilter> requestIdFilterRegistration(RequestIdFilter filter) {
+        FilterRegistrationBean<RequestIdFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    /** 세션 인증 Filter를 Security Filter Chain에서만 실행하도록 Servlet 자동 등록을 끕니다. */
+    @Bean
+    FilterRegistrationBean<SessionAuthenticationFilter> sessionAuthenticationFilterRegistration(
+            SessionAuthenticationFilter filter
+    ) {
+        FilterRegistrationBean<SessionAuthenticationFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     /**

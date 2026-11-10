@@ -125,4 +125,19 @@ public class GroupSeason {
     public boolean isSelectionOpenAt(Instant now) {
         return "PREPARING".equals(status) && now.isBefore(selectionDeadlineAt);
     }
+
+    /**
+     * 그룹 비활성화에 따라 현재 시즌 참여를 종료합니다.
+     *  - 준비 중인 알과 활성 시즌 참여 모두 종료
+     *  - 이미 확정된 종 선택과 시즌 이력은 보존
+     */
+    public void endForGroupClosure(Instant now) {
+        if ("ENDED".equals(this.status)) {
+            return;
+        }
+
+        // 시즌 참가 상태만 종료
+        this.status = "ENDED";
+        this.updatedAt = now;
+    }
 }

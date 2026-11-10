@@ -208,6 +208,19 @@ classDiagram
         +assignDailyQuests()
         +assignWeeklyQuests()
     }
+    class SchedulerReconciliationTrigger {
+        <<Trigger>>
+        +onCron()
+        +onApplicationReady()
+        +recheckEveryFiveMinutes()
+    }
+    class SchedulerReconciliationService {
+        <<Service>>
+        +reconcile(now)
+        +reconcileSeason()
+        +initializeActiveGroups()
+        +reconcileCurrentQuestPeriods()
+    }
     class CreatureSelectionService {
         <<Service>>
         +listActiveSpecies()
@@ -324,6 +337,9 @@ classDiagram
         +findBySeasonAndGroupForUpdate()
     }
 
+    SchedulerReconciliationTrigger --> SchedulerReconciliationService
+    SchedulerReconciliationService --> SeasonScheduler
+    SchedulerReconciliationService --> QuestAssignmentScheduler
     SeasonScheduler --> CreatureSelectionService
     QuestAssignmentScheduler --> QuestTemplateVersion
     CreatureSelectionService --> GroupCreatureRepository
@@ -360,6 +376,13 @@ classDiagram
 - 사진 완료는 촬영·업로드 접수 시각이 모두 배정 기간 안이고 판정·보상 Commit이 마감과 시즌 `CLOSING` 전에 끝난 경우만 허용합니다.
 - 시즌 종료 Snapshot은 이후 닉네임·그룹명·멤버십 변경과 무관하게 당시 결과를 보존합니다.
 - `SeasonScheduler.closeSeason()`은 시즌 배타 잠금으로 진행 중 완료의 공유 잠금 해제를 기다린 뒤 `CLOSING`으로 선점하고, Snapshot UNIQUE를 이용해 중단 후 누락 결과만 보완한 뒤 `ENDED`로 확정합니다. 같은 시각의 `startSeason()`은 이전 시즌 종료 뒤 실행합니다.
+- `SchedulerReconciliationTrigger`는 정시 Cron, 초기화 완료 뒤 기동 이벤트와 5분 점검을 전달만 하고, `SchedulerReconciliationService`가 DB 상태와 `BusinessClock`으로 누락 업무를 판정합니다.
+- 정상화는 잔여 `CLOSING` 시즌의 저장 상태 Snapshot과 종료, 현재 `SCHEDULED` 시즌 생성, 기존 활성 그룹의 알·점수 전량 초기화, `ACTIVE` 전환, 현재 일일·주간 배정 순으로 실행합니다. 중단 중 만료된 퀘스트와 중간 시즌은 생성하지 않고 종료 시즌의 알도 소급 부화하지 않습니다.
+- 기존 활성 그룹과 시즌 도중 새 그룹의 `selectionDeadlineAt`은 모두 실제 최초 참여 생성 시각+72시간입니다. 기존 그룹의 `GroupSeason`, `GroupCreature`, `SeasonGroupScore` 초기화가 끝나면 시즌을 `ACTIVE`로 바꾸고, 이후 일반 부화 경로가 저장된 기한에 도달한 알만 처리합니다.
+- `SCHEDULED`와 `CLOSING`에서는 부화하지 않습니다. 복구 시즌에서도 사용자가 알 상태와 종 선택 기간을 거치며, 시즌 종료가 72시간보다 먼저면 알 상태로 종료합니다.
+- `SchedulerReconciliationService`는 만료 전 `SCHEDULED`의 초기화를 재개하고, 만료 후에는 기존 기록만 보존해 랭킹 Snapshot 없이 시즌과 참여를 종료합니다.
+- 시즌 의존 Service는 `ACTIVE` 상태와 함께 `startAt <= now < endAt`을 검사하고 정상화 전에는 기존 `CONCURRENT_MODIFICATION`을 반환합니다.
+- 현재 `QuestPeriod`가 없거나 `PENDING/FAILED`이면 현재 퀘스트 관련 Service도 `CONCURRENT_MODIFICATION`을 반환하고, 완성된 `ACTIVE` 배정만 조회합니다.
 
 ## 4. 아바타·상품·결제·환불
 
@@ -585,6 +608,7 @@ classDiagram
     class SchedulerExecutionService {
         <<Service>>
         +claimExecution()
+        +reclaimExpiredLease()
         +markSucceeded()
         +markFailed()
     }
@@ -672,6 +696,8 @@ classDiagram
 
 - `BusinessClock`을 주입하여 시즌, KST 자정, 24시간 제한과 72시간 미접속 규칙을 고정 시각으로 테스트합니다.
 - 같은 Scheduler 작업은 `(jobType, scheduledFor)` 논리 키로 한 실행만 처리권을 얻습니다.
+- `scheduledFor`는 업무 논리 경계이며 실제 실행 시각이 아닙니다. 실행 이력이 없어도 업무 테이블의 상태·기한으로 누락을 찾고 `FAILED`와 Lease 만료 `RUNNING`만 재선점합니다.
+- 시즌 그룹 초기화·일반 `ACTIVE` 부화·사진·결제처럼 대상이 많은 상태 기반 작업은 100건씩 처리하며, 다음 5분 점검이 남은 대상을 이어서 처리합니다. 초기화 대상이 남은 시즌 활성화 실행은 성공 처리하지 않고, 지나간 5분 틱 자체는 재생하지 않습니다.
 - WebSocket 이벤트는 DB Commit 이후에만 발행하고 명령 처리는 REST API가 담당합니다.
 - `StompInboundAuthorization`은 세션·Origin·CSRF와 활성 그룹 구독만 허용하고 클라이언트 애플리케이션 메시지는 기본 거부합니다.
 - Presence는 MVP에서 단일 애플리케이션 인스턴스 메모리만 사용하며 영속 Entity로 만들지 않습니다.

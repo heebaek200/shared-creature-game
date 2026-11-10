@@ -44,4 +44,22 @@ public class ServiceCheckIn {
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
+    /** 체크인 기록을 생성합니다. */
+    public static ServiceCheckIn create(
+            User user,
+            UserActivityEvent activityEvent,
+            LocalDate checkInDate,
+            Instant checkedInAt,
+            boolean isMorning
+    ) {
+        ServiceCheckIn checkIn = new ServiceCheckIn();
+        checkIn.user = user;
+        checkIn.activityEvent = activityEvent;
+        checkIn.checkInDate = checkInDate;
+        checkIn.checkedInAt = checkedInAt;
+        checkIn.isMorning = isMorning;
+        checkIn.createdAt = checkedInAt;
+        return checkIn;
+    }
 }

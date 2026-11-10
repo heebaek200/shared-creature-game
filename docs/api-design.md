@@ -105,8 +105,8 @@
 
 | HTTP | code | 상태·원인 |
 |---|---|---|
-| 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
-| 400 | `INVALID_FIELD_VALUE` | 필드 타입·길이·값·형식 검증 실패 |
+| 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체 누락 또는 미등록 JSON 필드 |
+| 400 | `INVALID_FIELD_VALUE` | 필드 타입·길이·값·형식 검증 실패 또는 중복·미등록 Query |
 | 400 | `SLOT_MISMATCH` | 보유 아이템과 장착 슬롯 불일치 |
 | 401 | `AUTH_REQUIRED` | 세션 인증 없음 |
 | 401 | `SESSION_EXPIRED` | 인증 세션 만료 |
@@ -138,6 +138,7 @@
 | 409 | `IDEMPOTENCY_REQUEST_IN_PROGRESS` | 같은 멱등 키 처리 중 |
 | 413 | `FILE_TOO_LARGE` | 사진 10 MiB 초과 |
 | 429 | `RATE_LIMIT_EXCEEDED` | 호출량/동시 처리 제한 초과 |
+| 500 | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버 내부 오류 |
 
 **오류 조건 우선순위:** 인증/서명 → CSRF → 권한·리소스 범위 → 형식 및 필드 검증 → 업무 상태·동시성. 필드 오류와 공통 상태 오류가 함께 발생하면 선행 단계 오류로 응답합니다. 동일 주문·환불의 멱등 재요청은 최초 HTTP 상태와 Body를 그대로 반환합니다.
 
@@ -576,6 +577,7 @@
 | 409 | `GROUP_NAME_ALREADY_USED` | 정규화된 그룹명 중복 |
 | 409 | `ALREADY_IN_GROUP` | 이미 활성 그룹 소속 |
 | 409 | `JOIN_COOLDOWN_ACTIVE` | 탈퇴/강퇴 후 24시간 가입 제한 |
+| 409 | `CONCURRENT_MODIFICATION` | 현재 시즌 초기화 중 또는 시간 경계와 상태 불일치 |
 
 ### proofreadGroupDescription — `POST /api/v1/ai/proofreads`
 
@@ -915,7 +917,6 @@
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
 | data.groupId | integer(int64) | Y | N | 1 이상 | 그룹 ID |
-| data.invitationUrl | string(uri) | Y | N | 동일 Origin /invite/{token} | 초대 URL |
 | data.issuedAt | string(date-time) | Y | N | UTC ISO 8601 | 발급 시각 |
 | data.issuedByUserId | integer(int64) | Y | N | 1 이상 | 링크 발급 사용자 ID |
 | data.unlimitedUses | boolean | Y | N | 고정 true | 사용 횟수 무제한 여부 |
@@ -929,6 +930,7 @@
 | 401 | `SESSION_EXPIRED` | 인증 세션 만료 |
 | 403 | `ROLE_FORBIDDEN` | 요청자 권한 부족 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
+| 409 | `CONCURRENT_MODIFICATION` | 활성 그룹에 유효한 초대 링크가 존재하지 않는 비정상 상태 |
 
 ### rotateInvitation — `POST /api/v1/groups/me/invitation/rotate`
 
@@ -962,9 +964,13 @@
 | 403 | `ROLE_FORBIDDEN` | 요청자 권한 부족 |
 | 403 | `CSRF_INVALID` | CSRF 토큰 없음 또는 불일치 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
-| 409 | `CONCURRENT_MODIFICATION` | 동시 처리 또는 이미 변경된 리소스 |
+| 409 | `CONCURRENT_MODIFICATION` | 활성 초대 링크 누락 또는 동시 처리로 인한 상태 불일치 |
 
 ## 4. 시즌·크리처 API
+
+현재 시즌에 의존하는 API는 `status=ACTIVE`와 `startAt <= now < endAt`을 모두 만족한 시즌만 사용합니다. 서버 기동 정상화 전처럼 상태와 시간이 불일치하면 신규 오류 코드를 추가하지 않고 기존 `409 CONCURRENT_MODIFICATION`과 공통 오류 Envelope을 반환합니다. 이 규칙은 현재 시즌 참여를 함께 생성하는 `createGroup`, 현재 시즌을 기본값으로 사용하는 퀘스트·체크인·사진·랭킹 API에도 적용하며, 과거 시즌 ID를 명시한 조회와 순수 인증·상점 API에는 적용하지 않습니다.
+
+현재 퀘스트 API는 필요한 현재 일일·주간 `QuestPeriod`와 배정이 모두 `ACTIVE`일 때만 성공합니다. 기간이 없거나 `PENDING/FAILED`이면 빈 배열 대신 `409 CONCURRENT_MODIFICATION`을 반환하며 `FAILED`는 운영 경고에도 노출합니다.
 
 ### getCurrentSeason — `GET /api/v1/seasons/current`
 
@@ -994,6 +1000,7 @@
 | 401 | `AUTH_REQUIRED` | 세션 인증 없음 |
 | 401 | `SESSION_EXPIRED` | 인증 세션 만료 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
+| 409 | `CONCURRENT_MODIFICATION` | 현재 시즌 정상화 중 또는 시간 경계와 상태 불일치 |
 
 ### getCreatureHome — `GET /api/v1/groups/me/creature-home`
 
@@ -1069,6 +1076,7 @@
 | 401 | `SESSION_EXPIRED` | 인증 세션 만료 |
 | 403 | `ROLE_FORBIDDEN` | 요청자 권한 부족 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
+| 409 | `CONCURRENT_MODIFICATION` | 현재 시즌 정상화 중 또는 시간 경계와 상태 불일치 |
 
 ### listActiveCreatureSpecies — `GET /api/v1/creature-species`
 
@@ -1136,7 +1144,7 @@
 | 400 | `INVALID_FIELD_VALUE` | 필드 타입·길이·값·형식 검증 실패 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
 | 409 | `CREATURE_SELECTION_CLOSED` | 종 선택 72시간 종료 |
-| 409 | `CONCURRENT_MODIFICATION` | 동시 처리 또는 이미 변경된 리소스 |
+| 409 | `CONCURRENT_MODIFICATION` | 현재 시즌 정상화 중, 동시 처리 또는 이미 변경된 리소스 |
 
 ## 5. 퀘스트·체크인 API
 
@@ -1187,6 +1195,7 @@
 | 403 | `ROLE_FORBIDDEN` | 요청자 권한 부족 |
 | 400 | `INVALID_FIELD_VALUE` | 필드 타입·길이·값·형식 검증 실패 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
+| 409 | `CONCURRENT_MODIFICATION` | 현재 시즌 정상화 중, 현재 기간 미생성 또는 배정 `PENDING/FAILED` |
 
 ### completeQuestAssignment — `POST /api/v1/quest-assignments/{assignmentId}/completions`
 
@@ -1229,7 +1238,7 @@
 | 404 | `RESOURCE_NOT_FOUND` | 없거나 요청자에게 노출하지 않는 리소스 |
 | 409 | `QUEST_PERIOD_ENDED` | 퀘스트 유효 기간 밖 |
 | 409 | `QUEST_COMPLETION_NOT_ALLOWED` | 해당 판정 유형 직접 완료 불가 |
-| 409 | `CONCURRENT_MODIFICATION` | 동시 처리 또는 이미 변경된 리소스 |
+| 409 | `CONCURRENT_MODIFICATION` | 현재 시즌·기간 정상화 중, 동시 처리 또는 이미 변경된 리소스 |
 
 ### createCheckIn — `POST /api/v1/check-ins`
 
@@ -1264,7 +1273,7 @@
 | 403 | `CSRF_INVALID` | CSRF 토큰 없음 또는 불일치 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
 | 409 | `QUEST_PERIOD_ENDED` | 퀘스트 유효 기간 밖 |
-| 409 | `CONCURRENT_MODIFICATION` | 동시 처리 또는 이미 변경된 리소스 |
+| 409 | `CONCURRENT_MODIFICATION` | 현재 시즌·기간 정상화 중, 동시 처리 또는 이미 변경된 리소스 |
 
 ### submitQuestPhoto — `POST /api/v1/photo-submissions`
 
@@ -1308,6 +1317,7 @@
 | 413 | `FILE_TOO_LARGE` | 사진 10 MiB 초과 |
 | 409 | `PHOTO_ATTEMPT_LIMIT_EXCEEDED` | 사진 제출 횟수 5회 초과 |
 | 409 | `QUEST_PERIOD_ENDED` | 퀘스트 유효 기간 밖 |
+| 409 | `CONCURRENT_MODIFICATION` | 현재 시즌·기간 정상화 중 또는 이미 변경된 리소스 |
 | 429 | `RATE_LIMIT_EXCEEDED` | 호출량/동시 처리 제한 초과 |
 
 ## 6. 랭킹 API
@@ -1356,6 +1366,7 @@
 | 403 | `ROLE_FORBIDDEN` | 요청자 권한 부족 |
 | 400 | `INVALID_FIELD_VALUE` | 필드 타입·길이·값·형식 검증 실패 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
+| 409 | `CONCURRENT_MODIFICATION` | `seasonId` 미지정 시 현재 시즌 정상화 중 또는 상태 불일치 |
 
 ### getGroupRanking — `GET /api/v1/rankings/groups`
 
@@ -1399,6 +1410,7 @@
 | 401 | `SESSION_EXPIRED` | 인증 세션 만료 |
 | 400 | `INVALID_FIELD_VALUE` | 필드 타입·길이·값·형식 검증 실패 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
+| 409 | `CONCURRENT_MODIFICATION` | `seasonId` 미지정 시 현재 시즌 정상화 중 또는 상태 불일치 |
 
 ## 7. 상점·아바타 API
 
@@ -1919,7 +1931,7 @@
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
 
-서명 실패 및 변조된 전송은 `400` **빈 응답 본문**. 검증 후 알 수 없는 `type`, 재수신, 미등록 주문은 `202` + `{"data":{}}`; 검증된 이벤트의 결제 상태는 포트원 최신 조회 후 반영합니다. 공급자 서버 오류 시 `5xx` 가능.
+서명 실패 및 변조된 전송은 `400` **빈 응답 본문**. 검증 후 알 수 없는 `type`과 재수신은 업무를 반복하지 않고 `202` + `{"data":{}}`를 반환합니다. 미등록 주문도 같은 응답을 반환하되 공급자 이벤트·결제 식별자를 보존하고 복구 대상으로 유지합니다. 검증된 이벤트의 결제 상태는 포트원 최신 조회 후 반영합니다. 공급자 서버 오류 시 `5xx` 가능.
 
 ### createRefundRequest — `POST /api/v1/purchases/{purchaseId}/refund-requests`
 

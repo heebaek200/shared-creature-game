@@ -56,4 +56,18 @@ public class OwnedItem {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    private OwnedItem(Purchase purchase, User user, ShopItem shopItem, Instant now) {
+        this.purchase = purchase;
+        this.user = user;
+        this.shopItem = shopItem;
+        this.status = "OWNED_UNUSED";
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    /** 결제 완료 주문으로 지급되는 미사용 보유 아이템을 생성합니다. */
+    public static OwnedItem grant(Purchase purchase, Instant now) {
+        return new OwnedItem(purchase, purchase.getUser(), purchase.getShopItem(), now);
+    }
 }

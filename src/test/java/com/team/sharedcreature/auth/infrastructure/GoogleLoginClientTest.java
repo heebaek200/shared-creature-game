@@ -77,7 +77,8 @@ class GoogleLoginClientTest {
                         org.hamcrest.Matchers.containsString("grant_type=authorization_code")
                 )))
                 .andRespond(withSuccess(
-                        "{\"access_token\":\"access-token\",\"id_token\":\"signed-id-token\"}",
+                        "{\"access_token\":\"access-token\",\"id_token\":\"signed-id-token\","
+                                + "\"token_type\":\"Bearer\",\"expires_in\":3600}",
                         MediaType.APPLICATION_JSON
                 ));
         server.expect(once(), requestTo("https://openidconnect.googleapis.com/v1/userinfo"))
@@ -85,7 +86,8 @@ class GoogleLoginClientTest {
                 .andExpect(header("Authorization", "Bearer access-token"))
                 .andRespond(withSuccess(
                         "{\"sub\":\"google-user-1\",\"email\":\"user@example.com\","
-                                + "\"email_verified\":true,\"name\":\"공유 생명체\"}",
+                                + "\"email_verified\":true,\"name\":\"공유 생명체\","
+                                + "\"picture\":\"https://example.com/avatar.png\"}",
                         MediaType.APPLICATION_JSON
                 ));
 
