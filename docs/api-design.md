@@ -1301,10 +1301,15 @@
 | data.assignmentId | integer(int64) | Y | N | 1 이상 | 퀘스트 배정 ID |
 | data.attemptNumber | integer | Y | N | 1~5 | 제출 시도 번호 |
 | data.verificationStatus | string(enum) | Y | N | PENDING \| VALID \| INVALID | 사진 검증 상태 |
-| data.failureReason | string | Y | Y | EXIF_GPS_MISSING \| EXIF_GPS_OUT_OF_RANGE \| EXIF_CAPTURED_AT_MISSING \| PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD \| PHOTO_PROCESSING_TIMEOUT \| QUEST_PERIOD_ENDED; 실패 외 null | 검증 실패 사유 |
+| data.failureReason | string | Y | Y | EXIF_GPS_MISSING \| EXIF_GPS_OUT_OF_RANGE \| EXIF_CAPTURED_AT_MISSING \| PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD \| PHOTO_PROCESSING_TIMEOUT \| QUEST_PERIOD_ENDED \| QUEST_COMPLETION_FAILED \| PHOTO_PROCESSING_FAILED; 실패 외 null | 사진 제출·퀘스트 인증 실패 사유 |
 | data.uploadedAt | string(date-time) | Y | N | UTC ISO 8601 | 업로드 접수 시각 |
 | data.capturedAt | string(date-time) | Y | Y | EXIF 누락 시 null | 사진 촬영 시각 |
 | data.completionId | integer(int64) | Y | Y | 확정된 보상 없으면 null | 완료 기록 ID |
+
+- `QUEST_COMPLETION_FAILED`: EXIF는 정상이지만 기간 종료 외의 확정된 업무 조건 위반으로 완료·보상이 거절된 경우입니다.
+- `PHOTO_PROCESSING_FAILED`: 결과가 확정되지 않은 `PENDING` 제출을 1시간 뒤 Scheduler가 내부 정리한 경우입니다.
+- `PHOTO_PROCESSING_TIMEOUT`: EXIF 파싱의 5초 제한을 초과한 경우입니다.
+- `failureReason`은 사진 제출 이력 값입니다. 확정된 업무 오류를 이력에 기록해도 HTTP 응답은 원래 상태와 오류 코드를 유지하며, 이 값을 공통 HTTP 오류 코드로 사용하지 않습니다.
 
 **오류 응답**
 

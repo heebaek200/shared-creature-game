@@ -216,6 +216,10 @@ OAuth 인증·신규 가입·현재 사용자 상태를 하나의 일관된 흐�
 - EXIF APP1은 **최대 1 MiB**, 병렬 파싱 **4건**, 제한 **5초**입니다. 픽셀 전체를 디코딩하지 않습니다.
 - GPS 범위: 위도 `-90~90`, 경도 `-180~180`; Offset 없는 촬영 시각은 KST로 해석합니다.
 - 사진 제출: 사용자·배정당 **5회**, 사용자당 **1분 5회**. 촬영·업로드·보상 Commit은 기간 내에 끝나야 합니다.
+- EXIF 검증 후 기간 종료 등 확정된 업무 조건으로 완료·보상이 거절되면 제출을 `INVALID`로 확정합니다. 기간 종료는 `QUEST_PERIOD_ENDED`, 그 밖의 확정된 업무 거절은 `QUEST_COMPLETION_FAILED`를 `failure_reason`에 기록합니다.
+- 예상하지 못한 서버·DB 장애로 보상 결과를 확정할 수 없으면 `PENDING`이 남을 수 있으며 HTTP 5xx를 반환합니다. 별도 복구·재지급 처리는 추가하지 않습니다.
+- 1시간을 넘긴 `PENDING`은 기존 Scheduler가 `INVALID`와 `PHOTO_PROCESSING_FAILED`로 종료합니다. EXIF 파싱의 5초 제한 초과는 기존 `PHOTO_PROCESSING_TIMEOUT`을 사용합니다.
+- `verification_status`와 `failure_reason`은 내부 이력입니다. 확정된 업무 오류의 HTTP 응답은 원래 상태와 오류 코드를 유지합니다.
 - 실외 여부·기기 현재 위치·위조·사진 재사용은 판정하지 않으며, 대체 인증·관리자 예외 승인도 없습니다.
 - `PHOTO_EXIF`는 MVP 필수입니다. Android Chrome 실기기 검증을 통과해야 하며, iOS Safari는 검증 대상에서 제외합니다.
 
