@@ -104,9 +104,6 @@ public class AdminDashboardService {
         long[] capacity = analyticsRepository.capacityUsage(groupId);
         BigDecimal capacityRate = percentage(capacity[0], Math.addExact(capacity[0], capacity[1]));
         List<OperationalWarningResponse> warnings = warningService.currentWarnings().stream()
-                .filter(warning -> groupId == null
-                        || !"GROUP".equals(warning.resourceType())
-                        || groupId.equals(warning.resourceId()))
                 .sorted(java.util.Comparator.comparing(OperationalWarningResponse::detectedAt).reversed())
                 .toList();
         List<OperationalWarningResponse> recentWarnings = warnings.stream().limit(10).toList();

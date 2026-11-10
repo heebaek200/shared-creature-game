@@ -2581,7 +2581,7 @@
 ### getAdminDashboard — `GET /api/v1/admin/dashboard`
 
 - **Operation ID:** `getAdminDashboard` · **요구사항:** `REQ-ADM-001` · **인증·권한:** `SUPER_ADMIN` · **성공 HTTP:** `200`
-- **엔드포인트 조건:** 기간은 KST `[시작, aggregatedAt)`. 활동은 일별 원본의 사용자 중복 제거, 그룹은 활동 당시 Snapshot으로 집계. 퀘스트 완료율은 선택 기간·`ACTIVE/CLOSED` 기간·멤버십 기간이 겹치고 선택 기간 시작 전에 미완료인 `(membershipId,assignmentId)` 기회 대비 기간 내 완료이며 분모 0은 0. 성장 단계·상위 그룹·정원은 현재 Snapshot. 결제·환불은 `SUCCESS` 승인·취소 거래의 `processed_at`과 구매 당시 그룹 Snapshot을 공통으로 사용.
+- **엔드포인트 조건:** 기간은 KST `[시작, aggregatedAt)`. 활동은 일별 원본의 사용자 중복 제거, 그룹은 활동 당시 Snapshot으로 집계. 퀘스트 완료율은 선택 기간·`ACTIVE/CLOSED` 기간·멤버십 기간이 겹치고 선택 기간 시작 전에 미완료인 `(membershipId,assignmentId)` 기회 대비 기간 내 완료이며 분모 0은 0. 성장 단계·상위 그룹·정원은 현재 Snapshot. 결제·환불은 `SUCCESS` 승인·취소 거래의 `processed_at`과 구매 당시 그룹 Snapshot을 공통으로 사용. 운영 경고는 `groupId`와 무관한 전역 현황이다.
 
 **요청 필드**
 
@@ -2646,6 +2646,7 @@
 | 403 | `ROLE_FORBIDDEN` | 요청자 권한 부족 |
 | 400 | `INVALID_FIELD_VALUE` | 필드 타입·길이·값·형식 검증 실패 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
+| 409 | `CONCURRENT_MODIFICATION` | `CURRENT_SEASON` 조회 시 현재 정상 시즌 없음 |
 
 ### listOperationalWarnings — `GET /api/v1/admin/operations/warnings`
 

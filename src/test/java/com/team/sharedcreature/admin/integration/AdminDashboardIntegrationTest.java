@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 관리자 집계와 운영 경고 Native SQL을 실제 MySQL 스키마에서 검증합니다. */
+/** 관리자 JPQL 집계와 제한된 KST 일별 SQL을 실제 MySQL 스키마에서 검증합니다. */
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional

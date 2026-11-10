@@ -1,6 +1,13 @@
 package com.team.sharedcreature.admin.application;
 
 import com.team.sharedcreature.admin.api.OperationalWarningResponse;
+import com.team.sharedcreature.admin.domain.SchedulerExecution;
+import com.team.sharedcreature.group.domain.Group;
+import com.team.sharedcreature.payment.domain.PaymentTransaction;
+import com.team.sharedcreature.payment.domain.RefundRequest;
+import com.team.sharedcreature.quest.domain.PhotoSubmission;
+import com.team.sharedcreature.quest.domain.QuestPeriod;
+import com.team.sharedcreature.season.domain.Season;
 import jakarta.persistence.EntityManager;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -8,7 +15,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -63,24 +69,20 @@ public class OperationalWarningService {
     }
 
     private void addSchedulerWarnings(List<OperationalWarningResponse> warnings, Instant now) {
-        List<?> rows = entityManager.createNativeQuery("""
-                SELECT execution.id
-                     , execution.status
-                     , execution.completed_at
-                     , execution.lease_expires_at
-                     , execution.updated_at
-                  FROM scheduler_executions execution
+        List<SchedulerExecution> executions = entityManager.createQuery("""
+                SELECT execution
+                  FROM SchedulerExecution execution
                  WHERE execution.status = 'FAILED'
-                    OR (execution.status = 'RUNNING' AND execution.lease_expires_at < :now)
-                """).setParameter("now", now).getResultList();
-        for (Object rowValue : rows) {
-            Object[] row = (Object[]) rowValue;
-            Long id = number(row[0]);
-            boolean leaseExpired = "RUNNING".equals(String.valueOf(row[1]));
-            Instant detectedAt = leaseExpired ? instant(row[3]) : firstInstant(row[2], row[4], now);
+                    OR (execution.status = 'RUNNING' AND execution.leaseExpiresAt < :now)
+                """, SchedulerExecution.class).setParameter("now", now).getResultList();
+        for (SchedulerExecution execution : executions) {
+            boolean leaseExpired = "RUNNING".equals(execution.getStatus());
+            Instant detectedAt = leaseExpired
+                    ? execution.getLeaseExpiresAt()
+                    : firstInstant(execution.getCompletedAt(), execution.getUpdatedAt(), now);
             warnings.add(warning(
                     "SCHEDULER_FAILED", leaseExpired ? "CRITICAL" : "WARNING",
-                    "SCHEDULER_EXECUTION", id,
+                    "SCHEDULER_EXECUTION", execution.getId(),
                     leaseExpired ? "Scheduler Lease가 만료됐습니다." : "Scheduler 실행이 실패했습니다.",
                     detectedAt
             ));
@@ -88,29 +90,26 @@ public class OperationalWarningService {
     }
 
     private void addSeasonWarnings(List<OperationalWarningResponse> warnings, Instant now) {
-        List<?> rows = entityManager.createNativeQuery("""
-                SELECT season.id
-                     , season.status
-                     , season.end_at
-                  FROM seasons season
-                 WHERE (season.status = 'ACTIVE' AND season.end_at <= :now)
+        List<Season> seasons = entityManager.createQuery("""
+                SELECT season
+                  FROM Season season
+                 WHERE (season.status = 'ACTIVE' AND season.endAt <= :now)
                     OR season.status = 'CLOSING'
-                """).setParameter("now", now).getResultList();
-        for (Object rowValue : rows) {
-            Object[] row = (Object[]) rowValue;
+                """, Season.class).setParameter("now", now).getResultList();
+        for (Season season : seasons) {
             warnings.add(warning(
-                    "SEASON_STATE_INVALID", "CRITICAL", "SEASON", number(row[0]),
-                    "현재 시각과 시즌 상태가 일치하지 않습니다.", instant(row[2])
+                    "SEASON_STATE_INVALID", "CRITICAL", "SEASON", season.getId(),
+                    "현재 시각과 시즌 상태가 일치하지 않습니다.", season.getEndAt()
             ));
         }
 
-        Number covering = (Number) entityManager.createNativeQuery("""
+        Long covering = entityManager.createQuery("""
                 SELECT COUNT(season.id)
-                  FROM seasons season
-                 WHERE season.start_at <= :now
-                   AND season.end_at > :now
-                """).setParameter("now", now).getSingleResult();
-        if (covering.longValue() == 0L) {
+                  FROM Season season
+                 WHERE season.startAt <= :now
+                   AND season.endAt > :now
+                """, Long.class).setParameter("now", now).getSingleResult();
+        if (covering == 0L) {
             Instant expectedStart = expectedSeasonStart(now);
             String key = "SEASON_STATE_INVALID:SEASON:CURRENT_PERIOD:"
                     + expectedStart.atZone(KST).toLocalDate();
@@ -122,116 +121,125 @@ public class OperationalWarningService {
     }
 
     private void addQuestPeriodWarnings(List<OperationalWarningResponse> warnings) {
-        List<?> rows = entityManager.createNativeQuery("""
-                SELECT period.id
-                     , period.failure_code
-                     , period.updated_at
-                  FROM quest_periods period
+        List<QuestPeriod> periods = entityManager.createQuery("""
+                SELECT period
+                  FROM QuestPeriod period
                  WHERE period.status = 'FAILED'
-                """).getResultList();
-        for (Object rowValue : rows) {
-            Object[] row = (Object[]) rowValue;
-            String type = "TEMPLATE_SHORTAGE".equals(String.valueOf(row[1]))
+                """, QuestPeriod.class).getResultList();
+        for (QuestPeriod period : periods) {
+            String type = "TEMPLATE_SHORTAGE".equals(period.getFailureCode())
                     ? "TEMPLATE_SHORTAGE" : "QUEST_PERIOD_FAILED";
             warnings.add(warning(
-                    type, "WARNING", "QUEST_PERIOD", number(row[0]),
-                    "퀘스트 기간 배정이 실패했습니다.", instant(row[2])
+                    type, "WARNING", "QUEST_PERIOD", period.getId(),
+                    "퀘스트 기간 배정이 실패했습니다.", period.getUpdatedAt()
             ));
         }
     }
 
     private void addPaymentWarnings(List<OperationalWarningResponse> warnings) {
-        List<?> rows = entityManager.createNativeQuery("""
-                SELECT transaction.purchase_id
-                     , MAX(transaction.updated_at)
-                  FROM payment_transactions transaction
-                 WHERE transaction.status = 'UNKNOWN'
-                 GROUP BY transaction.purchase_id
-                """).getResultList();
-        for (Object rowValue : rows) {
-            Object[] row = (Object[]) rowValue;
+        List<PaymentTransaction> transactions = entityManager.createQuery("""
+                SELECT paymentTransaction
+                  FROM PaymentTransaction paymentTransaction
+                 WHERE paymentTransaction.transactionType = 'APPROVAL'
+                   AND paymentTransaction.status = 'UNKNOWN'
+                   AND NOT EXISTS (
+                       SELECT later.id
+                         FROM PaymentTransaction later
+                        WHERE later.purchase = paymentTransaction.purchase
+                          AND later.transactionType = 'APPROVAL'
+                          AND (
+                              later.createdAt > paymentTransaction.createdAt
+                           OR (later.createdAt = paymentTransaction.createdAt AND later.id > paymentTransaction.id)
+                          )
+                   )
+                """, PaymentTransaction.class).getResultList();
+        for (PaymentTransaction transaction : transactions) {
             warnings.add(warning(
-                    "PAYMENT_UNCERTAIN", "CRITICAL", "PURCHASE", number(row[0]),
-                    "결제 결과가 확정되지 않았습니다.", instant(row[1])
+                    "PAYMENT_UNCERTAIN", "CRITICAL", "PURCHASE", transaction.getPurchase().getId(),
+                    "결제 결과가 확정되지 않았습니다.", transaction.getUpdatedAt()
             ));
         }
     }
 
     private void addRefundWarnings(List<OperationalWarningResponse> warnings) {
-        List<?> rows = entityManager.createNativeQuery("""
-                SELECT refund.id
-                     , refund.updated_at
-                  FROM refund_requests refund
+        List<RefundRequest> refunds = entityManager.createQuery("""
+                SELECT refund
+                  FROM RefundRequest refund
                  WHERE refund.status = 'CANCEL_UNKNOWN'
-                """).getResultList();
-        for (Object rowValue : rows) {
-            Object[] row = (Object[]) rowValue;
+                """, RefundRequest.class).getResultList();
+        for (RefundRequest refund : refunds) {
             warnings.add(warning(
-                    "REFUND_UNCERTAIN", "CRITICAL", "REFUND_REQUEST", number(row[0]),
-                    "환불 취소 결과가 확정되지 않았습니다.", instant(row[1])
+                    "REFUND_UNCERTAIN", "CRITICAL", "REFUND_REQUEST", refund.getId(),
+                    "환불 취소 결과가 확정되지 않았습니다.", refund.getUpdatedAt()
             ));
         }
     }
 
     private void addMemberCountWarnings(List<OperationalWarningResponse> warnings) {
-        List<?> rows = entityManager.createNativeQuery("""
-                SELECT game_group.id
-                     , game_group.updated_at
-                     , COUNT(membership.id)
-                  FROM game_groups game_group
-                  LEFT JOIN group_memberships membership
-                    ON membership.group_id = game_group.id
-                   AND membership.status = 'ACTIVE'
-                 WHERE game_group.status = 'ACTIVE'
-                 GROUP BY game_group.id, game_group.current_member_count, game_group.updated_at
-                HAVING game_group.current_member_count <> COUNT(membership.id)
-                """).getResultList();
-        for (Object rowValue : rows) {
-            Object[] row = (Object[]) rowValue;
+        List<Group> groups = entityManager.createQuery("""
+                SELECT gameGroup
+                  FROM Group gameGroup
+                 WHERE gameGroup.status = 'ACTIVE'
+                   AND gameGroup.currentMemberCount <> (
+                       SELECT COUNT(membership.id)
+                         FROM GroupMembership membership
+                        WHERE membership.group = gameGroup
+                          AND membership.status = 'ACTIVE'
+                   )
+                """, Group.class).getResultList();
+        for (Group group : groups) {
+            Instant membershipUpdatedAt = entityManager.createQuery("""
+                    SELECT MAX(membership.updatedAt)
+                      FROM GroupMembership membership
+                     WHERE membership.group = :group
+                    """, Instant.class).setParameter("group", group).getSingleResult();
+            Instant detectedAt = membershipUpdatedAt == null || group.getUpdatedAt().isAfter(membershipUpdatedAt)
+                    ? group.getUpdatedAt() : membershipUpdatedAt;
             warnings.add(warning(
-                    "MEMBER_COUNT_MISMATCH", "WARNING", "GROUP", number(row[0]),
-                    "그룹 인원 카운터와 활성 멤버십 수가 일치하지 않습니다.", instant(row[1])
+                    "MEMBER_COUNT_MISMATCH", "WARNING", "GROUP", group.getId(),
+                    "그룹 인원 카운터와 활성 멤버십 수가 일치하지 않습니다.", detectedAt
             ));
         }
     }
 
     private void addPhotoWarnings(List<OperationalWarningResponse> warnings, Instant now) {
-        List<?> rows = entityManager.createNativeQuery("""
-                SELECT submission.id
-                     , CASE
-                           WHEN submission.verification_status = 'VALID'
-                           THEN DATE_ADD(season.end_at, INTERVAL 30 DAY)
-                           ELSE DATE_ADD(submission.updated_at, INTERVAL 24 HOUR)
-                       END AS deletion_due_at
-                  FROM photo_submissions submission
-                  JOIN quest_assignments assignment ON assignment.id = submission.quest_assignment_id
-                  JOIN quest_periods period ON period.id = assignment.quest_period_id
-                  JOIN seasons season ON season.id = period.season_id
-                 WHERE submission.storage_key IS NOT NULL
+        Instant validCutoff = now.minus(Duration.ofDays(30));
+        Instant invalidCutoff = now.minus(Duration.ofHours(24));
+        List<PhotoSubmission> submissions = entityManager.createQuery("""
+                SELECT submission
+                  FROM PhotoSubmission submission
+                  JOIN FETCH submission.questAssignment assignment
+                  JOIN FETCH assignment.questPeriod period
+                  JOIN FETCH period.season season
+                 WHERE submission.storageKey IS NOT NULL
                    AND (
-                       (submission.verification_status = 'VALID' AND DATE_ADD(season.end_at, INTERVAL 30 DAY) <= :now)
-                    OR (submission.verification_status = 'INVALID' AND DATE_ADD(submission.updated_at, INTERVAL 24 HOUR) <= :now)
+                       (submission.verificationStatus = 'VALID' AND season.endAt <= :validCutoff)
+                    OR (submission.verificationStatus = 'INVALID' AND submission.updatedAt <= :invalidCutoff)
                    )
-                """).setParameter("now", now).getResultList();
-        for (Object rowValue : rows) {
-            Object[] row = (Object[]) rowValue;
+                """, PhotoSubmission.class)
+                .setParameter("validCutoff", validCutoff)
+                .setParameter("invalidCutoff", invalidCutoff)
+                .getResultList();
+        for (PhotoSubmission submission : submissions) {
+            Instant deletionDueAt = "VALID".equals(submission.getVerificationStatus())
+                    ? submission.getQuestAssignment().getQuestPeriod().getSeason().getEndAt().plus(Duration.ofDays(30))
+                    : submission.getUpdatedAt().plus(Duration.ofHours(24));
             warnings.add(warning(
-                    "PHOTO_DELETION_FAILED", "WARNING", "PHOTO_SUBMISSION", number(row[0]),
-                    "보존 기한이 지난 사진 파일이 삭제되지 않았습니다.", instant(row[1])
+                    "PHOTO_DELETION_FAILED", "WARNING", "PHOTO_SUBMISSION", submission.getId(),
+                    "보존 기한이 지난 사진 파일이 삭제되지 않았습니다.", deletionDueAt
             ));
         }
     }
 
     private Instant expectedSeasonStart(Instant now) {
-        Object first = entityManager.createNativeQuery("SELECT MIN(season.start_at) FROM seasons season")
+        Instant first = entityManager.createQuery("SELECT MIN(season.startAt) FROM Season season", Instant.class)
                 .getSingleResult();
         if (first != null) {
-            Instant baseline = instant(first);
-            if (!now.isBefore(baseline)) {
-                long cycles = Duration.between(baseline, now).dividedBy(SEASON_LENGTH);
-                return baseline.plus(SEASON_LENGTH.multipliedBy(cycles));
+            if (!now.isBefore(first)) {
+                long cycles = Duration.between(first, now).dividedBy(SEASON_LENGTH);
+                return first.plus(SEASON_LENGTH.multipliedBy(cycles));
             }
-            return baseline;
+            return first;
         }
         LocalDate monday = now.atZone(KST).toLocalDate()
                 .with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
@@ -257,26 +265,12 @@ public class OperationalWarningService {
         );
     }
 
-    private Long number(Object value) {
-        return ((Number) value).longValue();
-    }
-
-    private Instant instant(Object value) {
-        if (value instanceof Instant instant) {
-            return instant;
-        }
-        if (value instanceof Timestamp timestamp) {
-            return timestamp.toInstant();
-        }
-        return Instant.parse(String.valueOf(value));
-    }
-
-    private Instant firstInstant(Object first, Object second, Instant fallback) {
+    private Instant firstInstant(Instant first, Instant second, Instant fallback) {
         if (first != null) {
-            return instant(first);
+            return first;
         }
         if (second != null) {
-            return instant(second);
+            return second;
         }
         return fallback;
     }

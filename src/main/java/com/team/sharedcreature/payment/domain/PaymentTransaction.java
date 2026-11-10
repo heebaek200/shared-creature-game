@@ -103,4 +103,16 @@ public class PaymentTransaction {
                 now
         );
     }
+
+    /** 공급자 조회 결과를 확정할 수 없는 승인 시도를 현재 미확정 이력으로 생성합니다. */
+    public static PaymentTransaction unknown(Purchase purchase, Long amountKrw, Instant now) {
+        return new PaymentTransaction(
+                purchase,
+                null,
+                amountKrw,
+                PaymentTransactionStatus.UNKNOWN.name(),
+                null,
+                now
+        );
+    }
 }
