@@ -85,6 +85,53 @@ class CreatureHomeQueryServiceTest {
     }
 
     @Test
+    void 알_상태에서_종을_선택했다면_선택한_종_ID를_반환한다() {
+        GroupMembershipRepository membershipRepository = mock(GroupMembershipRepository.class);
+        SeasonQueryService seasonQueryService = mock(SeasonQueryService.class);
+        GroupSeasonRepository groupSeasonRepository = mock(GroupSeasonRepository.class);
+        GroupCreatureRepository groupCreatureRepository = mock(GroupCreatureRepository.class);
+        CreatureHomeSupplementProvider supplementProvider = mock(CreatureHomeSupplementProvider.class);
+        Instant now = Instant.parse("2026-11-10T00:00:00Z");
+        CreatureHomeQueryService service = new CreatureHomeQueryService(
+                membershipRepository,
+                seasonQueryService,
+                groupSeasonRepository,
+                groupCreatureRepository,
+                supplementProvider,
+                Clock.fixed(now, ZoneOffset.UTC)
+        );
+        Group group = mock(Group.class);
+        when(group.getId()).thenReturn(10L);
+        GroupMembership membership = mock(GroupMembership.class);
+        when(membership.getGroup()).thenReturn(group);
+        Season season = mock(Season.class);
+        when(season.getId()).thenReturn(20L);
+        GroupSeason groupSeason = mock(GroupSeason.class);
+        when(groupSeason.getId()).thenReturn(30L);
+        CreatureSpecies selectedSpecies = mock(CreatureSpecies.class);
+        when(selectedSpecies.getId()).thenReturn(50L);
+        when(groupSeason.getSelectedSpecies()).thenReturn(selectedSpecies);
+        GroupCreature creature = mock(GroupCreature.class);
+        when(creature.getId()).thenReturn(40L);
+        when(creature.getGrowthStage()).thenReturn("EGG");
+        when(creature.getTotalExperience()).thenReturn(100L);
+        when(creature.nextStageThreshold()).thenReturn(45_000L);
+        UUID streamId = UUID.randomUUID();
+        when(membershipRepository.findActiveWithGroupByUserId(1L)).thenReturn(Optional.of(membership));
+        when(seasonQueryService.findCurrentSeason()).thenReturn(season);
+        when(groupSeasonRepository.findSnapshotByGroupIdAndSeasonId(10L, 20L))
+                .thenReturn(Optional.of(groupSeason));
+        when(groupCreatureRepository.findSnapshotByGroupSeasonId(30L)).thenReturn(Optional.of(creature));
+        when(supplementProvider.getSupplement(creature, 1L, now)).thenReturn(
+                new CreatureHomeSupplementProvider.Supplement(100L, List.of(), List.of(), streamId, 1L));
+
+        var response = service.getCreatureHome(1L);
+
+        assertThat(response.creature().growthStage()).isEqualTo("EGG");
+        assertThat(response.creature().creatureSpeciesId()).isEqualTo(50L);
+    }
+
+    @Test
     void 부화_후에도_저장된_그룹별_종_선택_마감_시각을_반환한다() {
         GroupMembershipRepository membershipRepository = mock(GroupMembershipRepository.class);
         SeasonQueryService seasonQueryService = mock(SeasonQueryService.class);

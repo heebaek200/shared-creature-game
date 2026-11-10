@@ -1028,7 +1028,7 @@
 | data.season.endAt | string(date-time) | Y | N | UTC ISO 8601 | 종료 시각 |
 | data.creature | object | Y | N | 필수 | 크리처 |
 | data.creature.groupCreatureId | integer(int64) | Y | N | 1 이상 | 그룹 크리처 ID |
-| data.creature.creatureSpeciesId | integer(int64) | Y | Y | 알 기간 null | 크리처 종 ID |
+| data.creature.creatureSpeciesId | integer(int64) | Y | Y | 알 상태에서 미선택이면 null, 선택 후에는 선택 종 ID; 부화 후에는 확정 종 ID | 크리처 종 ID |
 | data.creature.growthStage | string(enum) | Y | N | EGG \| HATCHLING \| GROWING \| MATURE \| COMPLETE | 성장 단계 |
 | data.creature.totalExperience | integer(int64) | Y | N | 0 이상 | 누적 경험치 |
 | data.creature.nextStageAtExperience | integer(int64) | Y | Y | 다음 성장 임계값; 최종 단계 null | 다음 성장 단계 달성 경험치 |

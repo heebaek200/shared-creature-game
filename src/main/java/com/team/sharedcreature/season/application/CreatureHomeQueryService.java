@@ -61,7 +61,9 @@ public class CreatureHomeQueryService {
         CreatureHomeSupplementProvider.Supplement supplement = supplementProvider
                 .getSupplement(creature, userId, now);
 
-        CreatureSpecies visibleSpecies = creature.getSpecies();
+        CreatureSpecies visibleSpecies = creature.getSpecies() != null
+                ? creature.getSpecies()
+                : groupSeason.getSelectedSpecies();
         var creatureResponse = new CreatureHomeResponse.CreatureResponse(
                 creature.getId(),
                 visibleSpecies == null ? null : visibleSpecies.getId(),

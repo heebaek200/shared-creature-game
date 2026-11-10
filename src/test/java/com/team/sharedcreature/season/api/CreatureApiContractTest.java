@@ -96,6 +96,28 @@ class CreatureApiContractTest {
     }
 
     @Test
+    void 알_상태의_종_ID는_선택_여부에_따라_null_또는_ID로_직렬화한다() throws Exception {
+        Instant now = Instant.parse("2026-11-10T00:00:00Z");
+        SeasonResponse season = new SeasonResponse(1L, 3, "ACTIVE", now.minusSeconds(60), now.plusSeconds(60));
+        CreatureHomeResponse unselectedEgg = creatureHomeWith(
+                season,
+                new CreatureHomeResponse.CreatureResponse(20L, null, "EGG", 0L, 45_000L, now),
+                now
+        );
+        CreatureHomeResponse selectedEgg = creatureHomeWith(
+                season,
+                new CreatureHomeResponse.CreatureResponse(20L, 30L, "EGG", 0L, 45_000L, now),
+                now
+        );
+
+        String unselectedJson = objectMapper.writeValueAsString(ApiResponse.success(unselectedEgg));
+        String selectedJson = objectMapper.writeValueAsString(ApiResponse.success(selectedEgg));
+
+        assertThat(unselectedJson).contains("\"growthStage\":\"EGG\"", "\"creatureSpeciesId\":null");
+        assertThat(selectedJson).contains("\"growthStage\":\"EGG\"", "\"creatureSpeciesId\":30");
+    }
+
+    @Test
     void 활성_종과_관리자_선택_응답은_현행_ID_필드를_사용한다() throws Exception {
         var species = new CreatureSpeciesResponse(5L, "MOSS_GOLEM", "이끼 골렘", "moss-golem", 1);
         var selection = new CreatureSelectionResponse(
@@ -119,5 +141,24 @@ class CreatureApiContractTest {
                 "\"selectionDeadlineAt\":\"2026-11-13T00:00:00Z\""
         );
         assertThat(selectionJson).doesNotContain("speciesName", "selectionSource", "changeableUntil");
+    }
+
+    private CreatureHomeResponse creatureHomeWith(
+            SeasonResponse season,
+            CreatureHomeResponse.CreatureResponse creature,
+            Instant snapshotAt
+    ) {
+        return new CreatureHomeResponse(
+                10L,
+                "테스트 그룹",
+                season,
+                creature,
+                0L,
+                List.of(),
+                List.of(),
+                snapshotAt,
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                0L
+        );
     }
 }
