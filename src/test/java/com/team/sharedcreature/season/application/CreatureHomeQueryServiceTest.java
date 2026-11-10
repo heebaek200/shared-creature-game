@@ -85,7 +85,7 @@ class CreatureHomeQueryServiceTest {
     }
 
     @Test
-    void 알_상태에서_종을_선택했다면_선택한_종_ID를_반환한다() {
+    void 알_상태에서_선택한_최신_종_ID와_저장된_마감_시각을_반환한다() {
         GroupMembershipRepository membershipRepository = mock(GroupMembershipRepository.class);
         SeasonQueryService seasonQueryService = mock(SeasonQueryService.class);
         GroupSeasonRepository groupSeasonRepository = mock(GroupSeasonRepository.class);
@@ -100,6 +100,7 @@ class CreatureHomeQueryServiceTest {
                 supplementProvider,
                 Clock.fixed(now, ZoneOffset.UTC)
         );
+        Instant selectionDeadlineAt = Instant.parse("2026-11-13T00:00:00Z");
         Group group = mock(Group.class);
         when(group.getId()).thenReturn(10L);
         GroupMembership membership = mock(GroupMembership.class);
@@ -110,7 +111,10 @@ class CreatureHomeQueryServiceTest {
         when(groupSeason.getId()).thenReturn(30L);
         CreatureSpecies selectedSpecies = mock(CreatureSpecies.class);
         when(selectedSpecies.getId()).thenReturn(50L);
-        when(groupSeason.getSelectedSpecies()).thenReturn(selectedSpecies);
+        CreatureSpecies changedSpecies = mock(CreatureSpecies.class);
+        when(changedSpecies.getId()).thenReturn(60L);
+        when(groupSeason.getSelectedSpecies()).thenReturn(selectedSpecies, changedSpecies);
+        when(groupSeason.getSelectionDeadlineAt()).thenReturn(selectionDeadlineAt);
         GroupCreature creature = mock(GroupCreature.class);
         when(creature.getId()).thenReturn(40L);
         when(creature.getGrowthStage()).thenReturn("EGG");
@@ -125,10 +129,15 @@ class CreatureHomeQueryServiceTest {
         when(supplementProvider.getSupplement(creature, 1L, now)).thenReturn(
                 new CreatureHomeSupplementProvider.Supplement(100L, List.of(), List.of(), streamId, 1L));
 
-        var response = service.getCreatureHome(1L);
+        var firstResponse = service.getCreatureHome(1L);
+        var changedResponse = service.getCreatureHome(1L);
 
-        assertThat(response.creature().growthStage()).isEqualTo("EGG");
-        assertThat(response.creature().creatureSpeciesId()).isEqualTo(50L);
+        assertThat(firstResponse.creature().growthStage()).isEqualTo("EGG");
+        assertThat(firstResponse.creature().creatureSpeciesId()).isEqualTo(50L);
+        assertThat(firstResponse.creature().selectionDeadlineAt()).isEqualTo(selectionDeadlineAt);
+        assertThat(changedResponse.creature().growthStage()).isEqualTo("EGG");
+        assertThat(changedResponse.creature().creatureSpeciesId()).isEqualTo(60L);
+        assertThat(changedResponse.creature().selectionDeadlineAt()).isEqualTo(selectionDeadlineAt);
     }
 
     @Test

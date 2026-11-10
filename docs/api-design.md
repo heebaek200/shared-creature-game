@@ -2734,7 +2734,7 @@
 | payload.groupCreatureId | integer(int64) | Y | 1 이상 |
 | payload.totalExperience | integer(int64) | Y | 0 이상 |
 | payload.growthStage | string(enum) | Y | EGG \| HATCHLING \| GROWING \| MATURE \| COMPLETE |
-| payload.creatureSpeciesId | integer(int64) | Y | 알 상태에서는 null |
+| payload.creatureSpeciesId | integer(int64) | Y | 알 상태에서 미선택이면 null, 선택 후에는 선택 종 ID; 부화 후에는 확정 종 ID |
 | payload.lastUpdatedAt | string(date-time) | Y | UTC ISO 8601 |
 
 **WebSocket 필드명/이벤트 종류는 기존 문서에 상세 정의가 없어 이번 재작성에서 확정 형식으로 제안한 부분입니다.** 전체 Snapshot을 실시간으로 중복 송신하지 않으며, 소켓 이벤트는 상태 갱신 힌트로 취급하고 복구는 REST Snapshot으로 수행합니다.
