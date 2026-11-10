@@ -225,16 +225,16 @@
 | Header | Location | string(uri) | Y | N | 검증된 동일 Origin CSR Route |
 | Body | — | — | — | — | JSON Envelope 없음 |
 
-인가 오류·`state`/세션 검증 실패 시 **토큰과 코드가 URL에 노출되지 않는 내부 오류 경로로 302 Redirect**. 아래 오류 코드는 내부 사유 분류이며, 일반 JSON 응답으로 리다이렉트하지 않습니다.
+OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Location: /login?oauthError={errorCode}`로 이동합니다. 프론트엔드는 `oauthError`를 해석해 안내하며 정의되지 않은 값은 기본 인증 실패 메시지로 처리합니다.
 
-**오류 응답**
+**실패 리다이렉트 코드**
 
-| HTTP | code | 조건 |
-|---|---|---|
-| 400 | `INVALID_FIELD_VALUE` | 필드 타입·길이·값·형식 검증 실패 |
-| 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
-| 404 | `RESOURCE_NOT_FOUND` | 없거나 요청자에게 노출하지 않는 리소스 |
-| 401 | `SESSION_EXPIRED` | 인증 세션 만료 |
+| oauthError | 조건 |
+|---|---|
+| `OAUTH_ACCESS_DENIED` | 사용자가 공급자 인증을 거부하거나 취소 |
+| `OAUTH_INVALID_STATE` | 미등록·재사용 State 또는 잘못된 Callback 입력 |
+| `OAUTH_SESSION_EXPIRED` | OAuth 시도 만료 또는 시작 세션 불일치·소실 |
+| `OAUTH_AUTHENTICATION_FAILED` | Token·Nonce·계정 검증 실패 또는 공급자 장애 |
 
 ### getSignupContext — `GET /api/v1/auth/signup-context`
 
