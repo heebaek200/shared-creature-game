@@ -63,7 +63,7 @@ public class SecurityConfiguration {
                         .requestMatchers("/api/v1/invitations/**").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("SUPER_ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/v1/creature-species")
-                        .hasAnyRole("PRIMARY", "DEPUTY")
+                        .hasAnyRole("PRIMARY", "DEPUTY", "MEMBER")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/groups/me/seasons/current/creature-selection")
                         .hasAnyRole("PRIMARY", "DEPUTY")
                         .requestMatchers(
