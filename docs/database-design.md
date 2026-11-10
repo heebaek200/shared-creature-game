@@ -163,6 +163,7 @@ erDiagram
 erDiagram
     shop_items ||--o{ purchases : sold_as
     users ||--o{ purchases : buys
+    game_groups o|--o{ purchases : captured_at_purchase
     purchases ||--o{ payment_transactions : transactions
     purchases ||--o| owned_items : grants
     shop_items ||--o{ owned_items : owned
@@ -1042,13 +1043,14 @@ UPDATE game_groups
 
 **주요 규칙**
 
-`order_number` UUID UNIQUE=PortOne `paymentId`; `status=READY/PAID/FAILED/CANCELLED`, 통화 `KRW`.
+`order_number` UUID UNIQUE=PortOne `paymentId`; `status=READY/PAID/FAILED/CANCELLED`, 통화 `KRW`. `group_id_snapshot`은 구매 당시 활성 그룹이며 미소속이면 `NULL`입니다.
 
 | 컬럼 | 자료형 | 역할·제약 |
 |---|---|---|
 | `id` | `BIGINT` | PK, AUTO_INCREMENT |
 | `order_number` | `CHAR(36)` | UNIQUE |
 | `user_id` | `BIGINT` | — |
+| `group_id_snapshot` | `BIGINT` | 구매 당시 활성 그룹, nullable |
 | `shop_item_id` | `BIGINT` | — |
 | `item_code_snapshot` | `VARCHAR(50)` | 확정 시점 값 고정 |
 | `item_name_snapshot` | `VARCHAR(100)` | 확정 시점 값 고정 |
@@ -1243,7 +1245,7 @@ UPDATE game_groups
 
 **주요 규칙**
 
-실행 당시 Role Snapshot; 업무 변경과 함께 Commit, 실패도 별도 이력으로 기록.
+실행 당시 Role Snapshot; 성공은 업무 변경과 함께 Commit합니다. 권한 확인 후의 업무 실패는 별도 트랜잭션으로 기록하고 인증·CSRF 실패는 제외합니다.
 
 | 컬럼 | 자료형 | 역할·제약 |
 |---|---|---|
@@ -1293,8 +1295,10 @@ UPDATE game_groups
 | 현재 시즌 정상화 실패·기준 시즌 누락 | 시간상 만료된 `ACTIVE`·잔여 `CLOSING`·현재 4주 구간 시즌 없음 |
 | 기간 배정 실패 | `quest_periods.status=FAILED` |
 | 결제·취소 결과 불명 | `refund_requests.CANCEL_UNKNOWN`, PG 거래 결과 |
-| 그룹 정원 불일치 | 카운터 점검으로 기록된 감사 로그 |
+| 그룹 정원 불일치 | `game_groups.current_member_count`와 활성 멤버십 수의 불일치 |
 | 사진 삭제 실패 | 삭제 기한을 초과했는데 `storage_key`가 남은 제출 |
+
+`warningKey=유형:원본종류:원본ID`; 결제·환불 결과 불명과 만료 Scheduler·시즌 불일치는 `CRITICAL`, 나머지는 `WARNING`입니다. `detectedAt`은 원본 상태 발생 시각입니다.
 
 **완료 확인** — 경고는 원본 정합성이 회복되면 조회에서 제외하며, 경고 읽음·해결 상태와 과거 조회용 테이블은 만들지 않습니다.
 

@@ -1695,7 +1695,7 @@
 ### createPurchase — `POST /api/v1/purchases`
 
 - **Operation ID:** `createPurchase` · **요구사항:** `REQ-PAY-001` · **인증·권한:** `AUTHENTICATED` · **성공 HTTP:** `201`
-- **엔드포인트 조건:** 장바구니 없이 주문당 상품 1개. 서버 가격을 기준으로 PortOne V2 결제 설정 반환.
+- **엔드포인트 조건:** 장바구니 없이 주문당 상품 1개. 서버 가격과 구매 당시 활성 그룹 Snapshot을 저장하고 PortOne V2 결제 설정 반환.
 
 **요청 필드**
 
@@ -2291,6 +2291,7 @@
 ### createUserReport — `POST /api/v1/reports`
 
 - **Operation ID:** `createUserReport` · **요구사항:** `REQ-GRP-006` · **인증·권한:** `GROUP_MEMBER` · **성공 HTTP:** `201`
+- **엔드포인트 조건:** 신고자와 대상은 같은 그룹의 활성 회원. 반복 신고 허용.
 
 **요청 필드**
 
@@ -2463,6 +2464,7 @@
 ### removeReportedMember — `POST /api/v1/admin/reports/{reportId}/removals`
 
 - **Operation ID:** `removeReportedMember` · **요구사항:** `REQ-GRP-006, REQ-ADM-002` · **인증·권한:** `SUPER_ADMIN` · **성공 HTTP:** `200`
+- **엔드포인트 조건:** 처리 시점의 같은 그룹 활성 멤버십을 재검사하며 `PRIMARY` 대상은 거부.
 
 **요청 필드**
 
@@ -2562,7 +2564,7 @@
 ### getAdminDashboard — `GET /api/v1/admin/dashboard`
 
 - **Operation ID:** `getAdminDashboard` · **요구사항:** `REQ-ADM-001` · **인증·권한:** `SUPER_ADMIN` · **성공 HTTP:** `200`
-- **엔드포인트 조건:** Google Charts 입력이 가능한 서버 집계. 그룹 필터는 이번 명세 보완안.
+- **엔드포인트 조건:** 기간은 KST `[시작, aggregatedAt)`. 활동 사용자는 기간 내 활동한 활성 사용자, 활동 그룹은 해당 사용자가 속한 활성 그룹, 퀘스트 완료율은 완료 건수/활성 회원별 완료 기회. 성장 단계·상위 그룹·정원은 현재 Snapshot. 결제·환불의 그룹 필터는 구매 당시 그룹 Snapshot을 사용.
 
 **요청 필드**
 
@@ -2628,7 +2630,7 @@
 ### listOperationalWarnings — `GET /api/v1/admin/operations/warnings`
 
 - **Operation ID:** `listOperationalWarnings` · **요구사항:** `REQ-ADM-004` · **인증·권한:** `SUPER_ADMIN` · **성공 HTTP:** `200`
-- **엔드포인트 조건:** 현재 원본에서 집계한 미해결 경고만 반환. 별도 읽음/해결 상태 없음.
+- **엔드포인트 조건:** 현재 원본에서 집계한 미해결 경고만 반환. `warningKey=유형:원본종류:원본ID`; 결제·환불 결과 불명과 만료 Scheduler·시즌 불일치는 `CRITICAL`, 나머지는 `WARNING`. 별도 읽음/해결 상태 없음.
 
 **요청 필드**
 
