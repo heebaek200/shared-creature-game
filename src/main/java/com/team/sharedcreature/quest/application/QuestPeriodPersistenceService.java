@@ -81,7 +81,8 @@ public class QuestPeriodPersistenceService {
 
         // 시즌 공유 잠금을 확보한 뒤 기존 기간을 잠가 동시 재실행을 직렬화합니다.
         QuestPeriod period = findExistingPeriodForUpdate(window);
-        // 기존 기간 행의 잠금을 기다리다 자정이 지났을 수도 있으므로 다시 판정합니다.
+        // 기존 기간 행의 잠금 대기 중 날짜가 바뀌었을 수 있으므로 NOW를 반드시 다시 읽습니다.
+        now = Instant.now(clock);
         if (!isWithinWindow(window, currentSeason.orElseThrow(), now)) {
             return new QuestPeriodAssignmentService.Result(
                     QuestPeriodAssignmentService.Outcome.NOT_READY, null, 0);
@@ -156,7 +157,8 @@ public class QuestPeriodPersistenceService {
 
         // 실패 행도 동일 UNIQUE 기간을 사용해 재실행으로 중복 생성되지 않게 합니다.
         QuestPeriod period = findExistingPeriodForUpdate(window);
-        // 기존 기간 행의 잠금을 기다리다 자정이 지났을 수도 있으므로 다시 판정합니다.
+        // 실패 기록에서도 기존 행의 배타 잠금 대기 직후 NOW 값을 다시 읽습니다.
+        now = Instant.now(clock);
         if (!isWithinWindow(window, currentSeason.orElseThrow(), now)) {
             return new QuestPeriodAssignmentService.Result(
                     QuestPeriodAssignmentService.Outcome.NOT_READY, null, 0);
