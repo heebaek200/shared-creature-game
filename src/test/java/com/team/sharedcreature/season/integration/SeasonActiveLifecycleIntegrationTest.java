@@ -300,23 +300,6 @@ class SeasonActiveLifecycleIntegrationTest {
         assertEquals(3L, count("SELECT COUNT(*) FROM season_group_rank_snapshots WHERE season_id = ?", firstSeasonId));
         assertEquals(3L, count("SELECT COUNT(*) FROM season_member_rank_snapshots WHERE season_id = ?", firstSeasonId));
 
-        System.out.println("EXPECTED FIRST_END = " + FIRST_END);
-
-        System.out.println("SCHEDULER EXECUTIONS = " +
-                jdbc.queryForList("""
-                SELECT id
-                     , job_type
-                     , status
-                     , scheduled_for
-                     , attempt_count
-                     , error_code
-                     , error_detail
-                  FROM scheduler_executions
-                 ORDER BY id
-                """)
-        );
-
-
         assertEquals(1L, count("""
         SELECT COUNT(*)
           FROM scheduler_executions e
@@ -578,15 +561,6 @@ class SeasonActiveLifecycleIntegrationTest {
      */
     private int intValue(String sql, Object... parameters) {
         return Objects.requireNonNull(jdbc.queryForObject(sql, Integer.class, parameters));
-    }
-
-    /**
-     * MySQL DATETIME 시각을 UTC Instant로 변환해 반환합니다.
-     * 0점 그룹의 Snapshot 시각이 점수 행 생성 시각과 같은지 검사합니다.
-     * 이전 타임존 검증 단계에서 통과한 test 연결을 사용합니다.
-     */
-    private Instant timestampValue(String sql, Object... parameters) {
-        return Objects.requireNonNull(jdbc.queryForObject(sql, Timestamp.class, parameters)).toInstant();
     }
 
     /**

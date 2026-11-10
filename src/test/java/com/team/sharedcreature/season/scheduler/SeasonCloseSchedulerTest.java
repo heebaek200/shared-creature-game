@@ -1,6 +1,9 @@
 package com.team.sharedcreature.season.scheduler;
 
+import com.team.sharedcreature.quest.application.QuestAssignmentNormalizationService;
+import com.team.sharedcreature.season.application.CreatureHatchingNormalizationService;
 import com.team.sharedcreature.season.application.SeasonLifecycleNormalizationService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.scheduling.annotation.Scheduled;
 
@@ -18,7 +21,23 @@ class SeasonCloseSchedulerTest {
 
     private final SeasonLifecycleNormalizationService normalizer =
             mock(SeasonLifecycleNormalizationService.class);
-    private final SeasonCloseScheduler scheduler = new SeasonCloseScheduler(normalizer);
+    private final QuestAssignmentNormalizationService questNormalizer =
+            mock(QuestAssignmentNormalizationService.class);
+    private final CreatureHatchingNormalizationService hatchingNormalizer =
+            mock(CreatureHatchingNormalizationService.class);
+    private final SeasonCloseScheduler scheduler =
+            new SeasonCloseScheduler(normalizer, questNormalizer, hatchingNormalizer);
+
+    /**
+     * 실제 시즌 정상화 결과처럼 ACTIVE 시즌 ID를 반환하도록 설정합니다.
+     * 시즌 준비가 완료된 경우에만 퀘스트 정상화가 수행되는지 검증합니다.
+     * 테스트마다 Mock 호출 이력은 JUnit 인스턴스 생명주기에 따라 분리됩니다.
+     */
+    @BeforeEach
+    void setUp() {
+        when(normalizer.normalize()).thenReturn(new SeasonLifecycleNormalizationService.Result(
+                SeasonLifecycleNormalizationService.Outcome.ACTIVE, 42L, 0, 0, null));
+    }
 
     /**
      * ApplicationReadyEvent가 시즌 전체 정상화를 호출하는지 확인합니다.
@@ -29,7 +48,9 @@ class SeasonCloseSchedulerTest {
     void startupDelegatesToLifecycle() {
         scheduler.onApplicationReady();
         verify(normalizer).normalize();
-        verifyNoMoreInteractions(normalizer);
+        verify(questNormalizer).normalizeForActiveSeason(42L);
+        verify(hatchingNormalizer).normalizeForActiveSeason(42L);
+        verifyNoMoreInteractions(normalizer, questNormalizer, hatchingNormalizer);
     }
 
     /**
@@ -41,6 +62,8 @@ class SeasonCloseSchedulerTest {
     void midnightDelegatesToLifecycle() {
         scheduler.onKstMidnight();
         verify(normalizer).normalize();
+        verify(questNormalizer).normalizeForActiveSeason(42L);
+        verify(hatchingNormalizer).normalizeForActiveSeason(42L);
     }
 
     /**
@@ -52,6 +75,8 @@ class SeasonCloseSchedulerTest {
     void fiveMinuteCheckDelegatesToLifecycle() {
         scheduler.onEveryFiveMinutes();
         verify(normalizer).normalize();
+        verify(questNormalizer).normalizeForActiveSeason(42L);
+        verify(hatchingNormalizer).normalizeForActiveSeason(42L);
     }
 
     /**
@@ -65,6 +90,66 @@ class SeasonCloseSchedulerTest {
 
         assertDoesNotThrow(scheduler::onEveryFiveMinutes);
         verify(normalizer).normalize();
+        verifyNoInteractions(questNormalizer, hatchingNormalizer);
+    }
+
+    /**
+     * 시즌의 모든 초기화가 끝나지 않았다면 퀘스트 배정을 건너뜁니다.
+     * 다음 5분 점검에서 시즌이 ACTIVE가 된 이후에만 퀘스트 정상화를 시작합니다.
+     * 부분적으로 생성된 그룹 시즌에서 배정이 노출되지 않아야 합니다.
+     */
+    @Test
+    void waitsForSeasonActivationBeforeAssigningQuests() {
+        when(normalizer.normalize()).thenReturn(new SeasonLifecycleNormalizationService.Result(
+                SeasonLifecycleNormalizationService.Outcome.MORE_GROUPS, 42L, 1, 100, null));
+        scheduler.onEveryFiveMinutes();
+        verifyNoInteractions(questNormalizer, hatchingNormalizer);
+    }
+
+    /**
+     * 퀘스트 정합화 중 예외가 발생해도 다음 Cron이 중단되지 않아야 합니다.
+     * 이미 시즌 정상화가 성공한 결과는 유지합니다.
+     * 실패한 배정은 다음 5분 실행에서 별도로 복구합니다.
+     */
+    @Test
+    void questFailureDoesNotStopSchedulerThread() {
+        when(questNormalizer.normalizeForActiveSeason(42L))
+                .thenThrow(new IllegalStateException("Quest DB down"));
+        assertDoesNotThrow(scheduler::onEveryFiveMinutes);
+        verify(normalizer).normalize();
+        verify(questNormalizer).normalizeForActiveSeason(42L);
+        verify(hatchingNormalizer).normalizeForActiveSeason(42L);
+    }
+
+    /**
+     * 퀘스트 배정이 실패해도 현재 시즌의 부화 대상은 계속 처리합니다.
+     * 두 업무의 실패·재시도 단위를 서로 독립적으로 유지합니다.
+     * 실패한 퀘스트는 다음 점검에서 별도로 재시도됩니다.
+     */
+    @Test
+    void questFailureStillRunsHatching() {
+        when(questNormalizer.normalizeForActiveSeason(42L))
+                .thenThrow(new IllegalStateException("Quest DB unavailable"));
+
+        // 전체 스케줄러 호출이 예외를 밖으로 전파하지 않습니다.
+        assertDoesNotThrow(scheduler::onEveryFiveMinutes);
+        verify(hatchingNormalizer).normalizeForActiveSeason(42L);
+    }
+
+    /**
+     * 부화 작업 자체가 실패하더라도 이미 수행된 퀘스트 정상화는 되돌리지 않습니다.
+     * 다음 5분 점검에서 미부화 그룹을 다시 검색하도록 예외를 로그로 남깁니다.
+     * 새 작업이 기존 Scheduler 트리거의 생존성을 깨지 않는지 확인합니다.
+     */
+    @Test
+    void hatchingFailureDoesNotStopSchedulerThread() {
+        when(hatchingNormalizer.normalizeForActiveSeason(42L))
+                .thenThrow(new IllegalStateException("Creature DB unavailable"));
+
+        // 크리처 복구 장애는 동일 Cron 메서드를 종료시키지 않습니다.
+        assertDoesNotThrow(scheduler::onEveryFiveMinutes);
+        verify(questNormalizer).normalizeForActiveSeason(42L);
+        verify(hatchingNormalizer).normalizeForActiveSeason(42L);
     }
 
     /**

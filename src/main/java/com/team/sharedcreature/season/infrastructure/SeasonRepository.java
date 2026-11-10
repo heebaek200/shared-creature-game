@@ -18,6 +18,13 @@ import java.util.Optional;
 public interface SeasonRepository extends JpaRepository<Season, Long> {
     Optional<Season> findFirstByStatusOrderByStartAtDesc(String status);
 
+    /**
+     * 최초 시즌 달력의 기준 시각을 읽습니다.
+     * 퀘스트 누적 회전 인덱스 검증에 사용하며 시즌 생성용 배타 잠금은 잡지 않습니다.
+     * 정시 실행·기동 정상화 모두 첫 시즌의 영구 기준을 공유합니다.
+     */
+    Optional<Season> findFirstByOrderByStartAtAsc();
+
     @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("""
             SELECT season
