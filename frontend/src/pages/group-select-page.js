@@ -74,6 +74,7 @@ export function groupSelectPage({navigate}) {
                     <div class="mb-3">
                         <label class="form-label" for="group-description">그룹 소개</label>
                         <textarea class="form-control" id="group-description" name="description" maxlength="500" rows="4" placeholder="그룹 소개 (선택 · 최대 500자)"></textarea>
+                        <div class="invalid-feedback" id="group-description-error"></div>
                     </div>
                                                    
                     <button class="btn btn-success create-submit" type="submit">그룹 생성</button>
@@ -122,6 +123,8 @@ export function groupSelectPage({navigate}) {
     const createAlert = element.querySelector('.create-alert')
     const groupNameInput = element.querySelector('#group-name');
     const groupNameError = element.querySelector('#group-name-error');
+    const groupDescriptionInput = element.querySelector('#group-description');
+    const groupDescriptionError = element.querySelector('#group-description-error');
 
     const showGroupNameError = (message) => {
         groupNameInput.classList.add('is-invalid');
@@ -130,6 +133,22 @@ export function groupSelectPage({navigate}) {
     const clearGroupNameError = () => {
         groupNameInput.classList.remove('is-invalid');
         groupNameError.textContent = '';
+    };
+
+    /**
+     * 그룹 소개 입력 필드의 오류를 표시합니다.
+     */
+    const showGroupDescriptionError = (message) => {
+        groupDescriptionInput.classList.add('is-invalid');
+        groupDescriptionError.textContent = message;
+    };
+
+    /**
+     * 그룹 소개 입력 필드의 오류를 초기화합니다.
+     */
+    const clearGroupDescriptionError = () => {
+        groupDescriptionInput.classList.remove('is-invalid');
+        groupDescriptionError.textContent = '';
     };
 
     const listAlert = element.querySelector('.list-alert')
@@ -250,14 +269,19 @@ export function groupSelectPage({navigate}) {
                 <td>
                     ${canJoin
                 ? ` <button type="button" class="btn btn-success btn-sm join-button" data-group-id="${groupId}">가입</button>`
-
-                : ` <button type="button" class="btn btn-outline-secondary btn-sm" disabled title="${escapeHtml(getBlockedMessage(group.joinBlockedReason))}"
-                            >
-                                ${remaining <= 0
-                    ? '정원 마감'
-                    : '가입 불가'
-                }
-                            </button>`
+                : `
+                    <button
+                        type="button"
+                        class="btn btn-outline-secondary btn-sm"
+                        disabled
+                    >
+                        ${remaining <= 0 ? '정원 마감' : '가입 불가'}
+                    </button>
+                
+                    <div class="small text-danger mt-1">
+                        ${escapeHtml(getBlockedMessage(group.joinBlockedReason))}
+                    </div>
+                `
             }
                 </td>
               `;
@@ -512,19 +536,35 @@ export function groupSelectPage({navigate}) {
                 (fieldError) => fieldError.field === 'name'
             );
 
+            const descriptionFieldError = error?.fieldErrors?.find(
+                (fieldError) => fieldError.field === 'description'
+            );
+
+            let hasFieldError = false;
+
             if (error?.code === 'GROUP_NAME_ALREADY_USED') {
                 showGroupNameError(
                     '이미 사용 중인 그룹명입니다. 다른 이름을 입력해 주세요.'
                 );
+                hasFieldError = true;
             } else if (error?.code === 'INVALID_FIELD_VALUE' && nameFieldError) {
                 showGroupNameError(nameFieldError.message);
-            } else {
+                hasFieldError = true;
+            }
+
+            if (error?.code === 'INVALID_FIELD_VALUE' && descriptionFieldError) {
+                showGroupDescriptionError(descriptionFieldError.message);
+                hasFieldError = true;
+            }
+
+            if (!hasFieldError) {
                 showAlert(
                     createAlert,
                     error.message || '그룹 생성에 실패했습니다.'
                 );
             }
-        } finally {
+        }
+        finally {
             createSubmit.disabled = creationSucceeded;
         }
     };
@@ -561,8 +601,7 @@ export function groupSelectPage({navigate}) {
                 error?.message ||
                 '그룹 가입에 실패했습니다.'
             );
-        }
-        finally {
+        } finally {
             joining = false;
             button.disabled = false;
             button.textContent = '가입';
@@ -614,6 +653,7 @@ export function groupSelectPage({navigate}) {
     createToggle.addEventListener('click', onCreateToggle);
     createForm.addEventListener('submit', onCreate);
     groupNameInput.addEventListener('input', clearGroupNameError);
+    groupDescriptionInput.addEventListener('input', clearGroupDescriptionError);
     groupList.addEventListener('click', onGroupListClick);
     pagination.addEventListener('click', onPagination);
     themeButton.addEventListener('click', onTheme);
@@ -627,6 +667,7 @@ export function groupSelectPage({navigate}) {
             createToggle.removeEventListener('click', onCreateToggle);
             createForm.removeEventListener('submit', onCreate);
             groupNameInput.removeEventListener('input', clearGroupNameError);
+            groupDescriptionInput.removeEventListener('input', clearGroupDescriptionError);
             groupList.removeEventListener('click', onGroupListClick);
             pagination.removeEventListener('click', onPagination);
             themeButton.removeEventListener('click', onTheme);

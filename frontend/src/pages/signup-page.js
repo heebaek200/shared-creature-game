@@ -97,7 +97,7 @@ export function signupPage({navigate}) {
                                     </div>
 
                                 <div class="form-text">
-                                    2~20자 · 중복 확인 후 가입
+                                    2~20자 · 중복 여부는 가입 시 확인합니다.
                                 </div>
                             </div>
 
