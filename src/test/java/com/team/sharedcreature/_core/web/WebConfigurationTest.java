@@ -74,6 +74,15 @@ class WebConfigurationTest {
     }
 
     @Test
+    void OAuth_error와_code를_동시에_보내면_INVALID_STATE로_이동한다() throws Exception {
+        mockMvc.perform(get("/oauth2/callback/google")
+                        .queryParam("error", "access_denied")
+                        .queryParam("code", "authorization-code"))
+                .andExpect(status().isFound())
+                .andExpect(header().string("Location", "/login?oauthError=OAUTH_INVALID_STATE"));
+    }
+
+    @Test
     void OAuth의_알_수_없는_공급자_오류는_AUTHENTICATION_FAILED로_이동한다() throws Exception {
         mockMvc.perform(get("/oauth2/callback/google")
                         .queryParam("error", "server_error"))

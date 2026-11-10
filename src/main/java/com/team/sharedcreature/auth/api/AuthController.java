@@ -67,6 +67,10 @@ public class AuthController {
         if (!"google".equalsIgnoreCase(provider)) {
             return redirect("/login", OAuthCallbackError.OAUTH_INVALID_STATE.name());
         }
+        // 공급자 오류와 인가 코드는 상호 배타적이므로 함께 전달되면 계약 위반입니다.
+        if (error != null && code != null) {
+            return redirect("/login", OAuthCallbackError.OAUTH_INVALID_STATE.name());
+        }
         if (error != null) {
             OAuthCallbackError callbackError = "access_denied".equalsIgnoreCase(error)
                     ? OAuthCallbackError.OAUTH_ACCESS_DENIED
