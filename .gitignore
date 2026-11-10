@@ -295,6 +295,8 @@ $RECYCLE.BIN/
 # 실제 환경변수 파일은 제외하고 공유용 예제 파일만 포함합니다.
 .env
 *.env
+.env.local
+frontend/.env.local
 !.env.example
 
 # Frontend build output

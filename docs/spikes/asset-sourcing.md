@@ -81,49 +81,49 @@
 
 | 성장 단계 | 해상도 | 샘플 이미지 |
 | :---: | :---: | :---: | 
-| **1단계 (알)** | $64 \times 64\text{ px}$ | ![1단계 크리처](../images/sample/creature/sample_creature_lv1.png) | 
-| **2단계 (유아기)** | $64 \times 64\text{ px}$ | ![2단계 크리처](../images/sample/creature/sample_creature_lv2.png) | 
-| **3단계 (기준 샘플)** | $64 \times 64\text{ px}$ | ![3단계 크리처](../images/sample/creature/sample_creature_lv3.png) | 
-| **4단계 (성장기)** | $128 \times 128\text{ px}$ | ![4단계 크리처](../images/sample/creature/sample_creature_lv4.png) | 
-| **5단계 (완성체)** | $256 \times 256\text{ px}$ | ![5단계 크리처](../images/sample/creature/sample_creature_lv5.png) | 
+| **1단계 (알)** | $64 \times 64\text{ px}$ | ![1단계 크리처](../../frontend/assets/creature/moss-golem/lv1.png) | 
+| **2단계 (유아기)** | $64 \times 64\text{ px}$ | ![2단계 크리처](../../frontend/assets/creature/moss-golem/lv2.png) | 
+| **3단계 (기준 샘플)** | $64 \times 64\text{ px}$ | ![3단계 크리처](../../frontend/assets/creature/moss-golem/lv3.png) | 
+| **4단계 (성장기)** | $128 \times 128\text{ px}$ | ![4단계 크리처](../../frontend/assets/creature/moss-golem/lv4.png) | 
+| **5단계 (완성체)** | $256 \times 256\text{ px}$ | ![5단계 크리처](../../frontend/assets/creature/moss-golem/lv5.png) | 
 
 ### 3.4 아바타 규격 및 레이어 구조 ($60 \times 60\text{ px}$)
 - **크기 및 피벗:** 통일 $60 \times 60\text{ px}$ (하단 $10\text{ px}$ 바닥 피벗 기준).
 - **합성 방식:** 기본 바디 위에 독립된 아이템 파츠(의상, 머리장식 등)를 캔버스 렌더링 시 실시간 오버레이 레이어 스태킹(Layer Stacking) 방식으로 결합.
 
 #### ① 아바타 레이어 구조 (총 5개 레이어 분리):
-1. **Layer 0 (Base):** 기본 캐릭터 바디 (`docs/images/sample/avatar/`)
-2. **Layer 1 (Face Parts):** 얼굴 파츠 (`docs/images/sample/item/`)
-3. **Layer 2 (Clothes):** 의상 파츠 (`docs/images/sample/item/`)
-4. **Layer 3 (Hair):** 헤어 파츠 (`docs/images/sample/item/`)
-5. **Layer 4 (Accessory):** 손/외곽 아이템 파츠 (`docs/images/sample/item/`)
+1. **Layer 0 (Base):** 기본 캐릭터 바디 (`../../frontend/assets/avatar/`)
+2. **Layer 1 (Face Parts):** 얼굴 파츠 (`../../frontend/assets/item/`)
+3. **Layer 2 (Clothes):** 의상 파츠 (`../../frontend/assets/item/`)
+4. **Layer 3 (Hair):** 헤어 파츠 (`../../frontend/assets/item/`)
+5. **Layer 4 (Accessory):** 손/외곽 아이템 파츠 (`../../frontend/assets/item/`)
 
-#### ② 아바타 베이스 리소스 예시 (`docs/images/sample/avatar/`)
+#### ② 아바타 베이스 리소스 예시 (`../../frontend/assets/avatar/`)
 
 | 구분 | 파일명 | 해상도 | 샘플 이미지 | 설명 |
 | :--- | :--- | :---: | :---: | :--- |
-| **대기 (좌)** | `stop-left-avatar.png` | $60 \times 60\text{ px}$ | ![대기 좌](../images/sample/avatar/stop-left-avatar.png) | 기본 바디 상태의 좌측 대기(Idle) 프레임 |
-| **대기 (우)** | `stop-right-avatar.png` | $60 \times 60\text{ px}$ | ![대기 우](../images/sample/avatar/stop-right-avatar.png) | 기본 바디 상태의 우측 대기(Idle) 프레임 |
-| **보행 (좌) #1** | `walk-left-avatar-1.png` | $60 \times 60\text{ px}$ | ![보행 좌 1](../images/sample/avatar/walk-left-avatar-1.png) | 기본 바디 상태의 좌측 보행(Walk) 첫 번째 프레임 |
-| **보행 (좌) #2** | `walk-left-avatar-2.png` | $60 \times 60\text{ px}$ | ![보행 좌 2](../images/sample/avatar/walk-left-avatar-2.png) | 기본 바디 상태의 좌측 보행(Walk) 두 번째 프레임 |
-| **보행 (우) #1** | `walk-right-avatar-1.png` | $60 \times 60\text{ px}$ | ![보행 우 1](../images/sample/avatar/walk-right-avatar-1.png) | 기본 바디 상태의 우측 보행(Walk) 첫 번째 프레임 |
-| **보행 (우) #2** | `walk-right-avatar-2.png` | $60 \times 60\text{ px}$ | ![보행 우 2](../images/sample/avatar/walk-right-avatar-2.png) | 기본 바디 상태의 우측 보행(Walk) 두 번째 프레임 |
+| **대기 (좌)** | `stop-left-avatar.png` | $60 \times 60\text{ px}$ | ![대기 좌](../../frontend/assets/avatar/stop-left-avatar.png) | 기본 바디 상태의 좌측 대기(Idle) 프레임 |
+| **대기 (우)** | `stop-right-avatar.png` | $60 \times 60\text{ px}$ | ![대기 우](../../frontend/assets/avatar/stop-right-avatar.png) | 기본 바디 상태의 우측 대기(Idle) 프레임 |
+| **보행 (좌) #1** | `walk-left-avatar-1.png` | $60 \times 60\text{ px}$ | ![보행 좌 1](../../frontend/assets/avatar/walk-left-avatar-1.png) | 기본 바디 상태의 좌측 보행(Walk) 첫 번째 프레임 |
+| **보행 (좌) #2** | `walk-left-avatar-2.png` | $60 \times 60\text{ px}$ | ![보행 좌 2](../../frontend/assets/avatar/walk-left-avatar-2.png) | 기본 바디 상태의 좌측 보행(Walk) 두 번째 프레임 |
+| **보행 (우) #1** | `walk-right-avatar-1.png` | $60 \times 60\text{ px}$ | ![보행 우 1](../../frontend/assets/avatar/walk-right-avatar-1.png) | 기본 바디 상태의 우측 보행(Walk) 첫 번째 프레임 |
+| **보행 (우) #2** | `walk-right-avatar-2.png` | $60 \times 60\text{ px}$ | ![보행 우 2](../../frontend/assets/avatar/walk-right-avatar-2.png) | 기본 바디 상태의 우측 보행(Walk) 두 번째 프레임 |
 
 
-#### ③ 아이템 파츠 리소스 예시 (`docs/images/sample/item/`)
+#### ③ 아이템 파츠 리소스 예시 (`../../frontend/assets/item/`)
 
 | 레이어 | 구분 | 파일명 | 해상도 | 샘플 이미지 | 설명 |
 | :---: | :--- | :--- | :---: | :---: | :--- |
-| **Layer 1** | 얼굴 (정지 좌) | `stop-left-face.png` | $60 \times 60\text{ px}$ | ![얼굴 좌](../images/sample/item/stop-left-face.png) | 좌측 대기 시 눈/입 표정 파츠 |
-| **Layer 1** | 얼굴 (정지 우) | `stop-right-face.png` | $60 \times 60\text{ px}$ | ![얼굴 우](../images/sample/item/stop-right-face.png) | 우측 대기 시 눈/입 표정 파츠 |
-| **Layer 2** | 의상 (정지 좌) | `stop-left-cloth.png` | $60 \times 60\text{ px}$ | ![의상 좌](../images/sample/item/stop-left-cloth.png) | 좌측 대기 시 상하의 및 신발 세트 파츠 |
-| **Layer 2** | 의상 (정지 우) | `stop-right-cloth.png` | $60 \times 60\text{ px}$ | ![의상 우](../images/sample/item/stop-right-cloth.png) | 우측 대기 시 상하의 및 신발 세트 파츠 |
-| **Layer 3** | 헤어 (정지 좌) | `stop-left-hair.png` | $60 \times 60\text{ px}$ | ![헤어 좌](../images/sample/item/stop-left-hair.png) | 좌측 대기 시 헤어스타일 파츠 |
-| **Layer 3** | 헤어 (정지 우) | `stop-right-hair-1.png` | $60 \times 60\text{ px}$ | ![헤어 우](../images/sample/item/stop-right-hair-1.png) | 우측 대기 시 헤어스타일 파츠 |
-| **Layer 3** | 헤어 (이동 우 #1) | `walk-right-hair-1.png` | $60 \times 60\text{ px}$ | ![헤어 이동1](../images/sample/item/walk-right-hair-1.png) | 우측 보행 프레임 #1에 대응하는 헤어 파츠 |
-| **Layer 3** | 헤어 (이동 우 #2) | `walk-right-hair-2.png` | $60 \times 60\text{ px}$ | ![헤어 이동2](../images/sample/item/walk-right-hair-2.png) | 우측 보행 프레임 #2에 대응하는 헤어 파츠 |
-| **Layer 4** | 액세서리 (정지 좌) | `stop-left-ac.png` | $60 \times 60\text{ px}$ | ![액세서리 좌](../images/sample/item/stop-left-ac.png) | 좌측 대기 시 머리핀/모자 장식 액세서리 |
-| **Layer 4** | 액세서리 (정지 우) | `stop-right-ac.png` | $60 \times 60\text{ px}$ | ![액세서리 우](../images/sample/item/stop-right-ac.png) | 우측 대기 시 머리핀/모자 장식 액세서리 |
+| **Layer 1** | 얼굴 (정지 좌) | `stop-left-face.png` | $60 \times 60\text{ px}$ | ![얼굴 좌](../../frontend/assets/item/stop-left-face.png) | 좌측 대기 시 눈/입 표정 파츠 |
+| **Layer 1** | 얼굴 (정지 우) | `stop-right-face.png` | $60 \times 60\text{ px}$ | ![얼굴 우](../../frontend/assets/item/stop-right-face.png) | 우측 대기 시 눈/입 표정 파츠 |
+| **Layer 2** | 의상 (정지 좌) | `stop-left-cloth.png` | $60 \times 60\text{ px}$ | ![의상 좌](../../frontend/assets/item/stop-left-cloth.png) | 좌측 대기 시 상하의 및 신발 세트 파츠 |
+| **Layer 2** | 의상 (정지 우) | `stop-right-cloth.png` | $60 \times 60\text{ px}$ | ![의상 우](../../frontend/assets/item/stop-right-cloth.png) | 우측 대기 시 상하의 및 신발 세트 파츠 |
+| **Layer 3** | 헤어 (정지 좌) | `stop-left-hair.png` | $60 \times 60\text{ px}$ | ![헤어 좌](../../frontend/assets/item/stop-left-hair.png) | 좌측 대기 시 헤어스타일 파츠 |
+| **Layer 3** | 헤어 (정지 우) | `stop-right-hair-1.png` | $60 \times 60\text{ px}$ | ![헤어 우](../../frontend/assets/item/stop-right-hair-1.png) | 우측 대기 시 헤어스타일 파츠 |
+| **Layer 3** | 헤어 (이동 우 #1) | `walk-right-hair-1.png` | $60 \times 60\text{ px}$ | ![헤어 이동1](../../frontend/assets/item/walk-right-hair-1.png) | 우측 보행 프레임 #1에 대응하는 헤어 파츠 |
+| **Layer 3** | 헤어 (이동 우 #2) | `walk-right-hair-2.png` | $60 \times 60\text{ px}$ | ![헤어 이동2](../../frontend/assets/item/walk-right-hair-2.png) | 우측 보행 프레임 #2에 대응하는 헤어 파츠 |
+| **Layer 4** | 액세서리 (정지 좌) | `stop-left-ac.png` | $60 \times 60\text{ px}$ | ![액세서리 좌](../../frontend/assets/item/stop-left-ac.png) | 좌측 대기 시 머리핀/모자 장식 액세서리 |
+| **Layer 4** | 액세서리 (정지 우) | `stop-right-ac.png` | $60 \times 60\text{ px}$ | ![액세서리 우](../../frontend/assets/item/stop-right-ac.png) | 우측 대기 시 머리핀/모자 장식 액세서리 |
 
 ## 4. 필드 배치 및 겹침 처리 규칙 (Z-Index Hierarchy)
 

@@ -1,5 +1,6 @@
 // @ts-check
 import { ApiError } from '../api/client.js';
+import { mockCreatureHomeData } from './mock-creature-page.js';
 
 /** 실제 API 계약과 같은 정상·오류 시나리오를 제공합니다. */
 export const mockApi = {
@@ -8,7 +9,7 @@ export const mockApi = {
       authenticationState: 'AUTHENTICATED',
       onboardingState: 'GROUP_REQUIRED',
       user: { userId: 101, nickname: '새싹지기' },
-      membership: null,
+      membership: 501,
       roles: [],
       restrictionUntil: null,
     };
@@ -40,6 +41,30 @@ export const mockApi = {
       },
       initialInvitationUrl: `${location.origin}/invite/mock-invitation-token`,
     };
+  },
+
+  // mock-creature-page 연결
+  async getCreatureHome() {
+    await delay(200);
+    return mockCreatureHomeData;
+  },
+
+  async getActiveCreatureSpecies() {
+    await delay(150);
+    const creature = mockCreatureHomeData.creature;
+    if (creature.creatureSpeciesId == null) return [];
+    return [{
+      creatureSpeciesId: creature.creatureSpeciesId,
+      code: creature.assetKey,
+      name: creature.speciesName,
+      assetKey: creature.assetKey,
+      displayOrder: 1,
+    }];
+  },
+
+  async getCurrentSeason() {
+    await delay(150);
+    return mockCreatureHomeData.season;
   },
 };
 
