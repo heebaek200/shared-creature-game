@@ -87,7 +87,7 @@ export function groupSelectPage({navigate}) {
         <div class="table-responsive">
             <table class="table align-middle mb-3">
             <thead class="table-light">
-            <tr> 
+            <tr>  
                 <th scope="col">그룹</th>
                 <th scope="col">현재 인원</th>
                 <th scope="col">남은 자리</th>
