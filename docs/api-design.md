@@ -98,7 +98,7 @@
 | 결제 거래 | `REQUESTED`, `SUCCESS`, `DEFINITIVE_FAILURE`, `UNKNOWN` |
 | 환불 | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED |
 | 신고 | `RECEIVED`, `RESOLVED`, `REJECTED` |
-| 신고 분류 [보완안] | `HARASSMENT`, `SPAM`, `INAPPROPRIATE_CONTENT`, `OTHER` |
+| 신고 분류 | `HARASSMENT`, `SPAM`, `INAPPROPRIATE_CONTENT`, `OTHER` |
 | 사진 판정 | `PENDING`, `VALID`, `INVALID` |
 
 ### 1.5. 오류 코드 사전
@@ -2561,10 +2561,27 @@
 | 404 | `RESOURCE_NOT_FOUND` | 없거나 요청자에게 노출하지 않는 리소스 |
 | 409 | `CONCURRENT_MODIFICATION` | 동시 처리 또는 이미 변경된 리소스 |
 
+### 관리자 운영 경고 공통 매핑
+
+| 원본 상태 | type | severity | resourceType | resourceId | detectedAt |
+|---|---|---|---|---|---|
+| Scheduler `FAILED` | `SCHEDULER_FAILED` | `WARNING` | `SCHEDULER_EXECUTION` | 실행 ID | 완료/수정 시각 |
+| Scheduler Lease 만료 | `SCHEDULER_FAILED` | `CRITICAL` | `SCHEDULER_EXECUTION` | 실행 ID | Lease 만료 시각 |
+| 만료 `ACTIVE`·잔여 `CLOSING` 시즌 | `SEASON_STATE_INVALID` | `CRITICAL` | `SEASON` | 시즌 ID | 시즌 종료 시각 |
+| 현재 기간 시즌 누락 | `SEASON_STATE_INVALID` | `CRITICAL` | `SEASON` | null | 예정 시작 시각 |
+| 템플릿 부족 기간 실패 | `TEMPLATE_SHORTAGE` | `WARNING` | `QUEST_PERIOD` | 기간 ID | 수정 시각 |
+| 그 외 기간 실패 | `QUEST_PERIOD_FAILED` | `WARNING` | `QUEST_PERIOD` | 기간 ID | 수정 시각 |
+| 결제 결과 불명 | `PAYMENT_UNCERTAIN` | `CRITICAL` | `PURCHASE` | 구매 ID | 원본 수정 시각 |
+| 환불 결과 불명 | `REFUND_UNCERTAIN` | `CRITICAL` | `REFUND_REQUEST` | 환불 요청 ID | 원본 수정 시각 |
+| 그룹 인원 불일치 | `MEMBER_COUNT_MISMATCH` | `WARNING` | `GROUP` | 그룹 ID | 관련 원본 최종 수정 시각 |
+| 사진 삭제 실패 | `PHOTO_DELETION_FAILED` | `WARNING` | `PHOTO_SUBMISSION` | 제출 ID | 삭제 기한 |
+
+`warningKey=type:resourceType:resourceId`이며 시즌 누락은 `SEASON_STATE_INVALID:SEASON:CURRENT_PERIOD:{KST 시작일}`입니다. 원본이 정상화되면 경고에서 제외합니다.
+
 ### getAdminDashboard — `GET /api/v1/admin/dashboard`
 
 - **Operation ID:** `getAdminDashboard` · **요구사항:** `REQ-ADM-001` · **인증·권한:** `SUPER_ADMIN` · **성공 HTTP:** `200`
-- **엔드포인트 조건:** 기간은 KST `[시작, aggregatedAt)`. 활동 사용자는 기간 내 활동한 활성 사용자, 활동 그룹은 해당 사용자가 속한 활성 그룹, 퀘스트 완료율은 완료 건수/활성 회원별 완료 기회. 성장 단계·상위 그룹·정원은 현재 Snapshot. 결제·환불의 그룹 필터는 구매 당시 그룹 Snapshot을 사용.
+- **엔드포인트 조건:** 기간은 KST `[시작, aggregatedAt)`. 활동은 일별 원본의 사용자 중복 제거, 그룹은 활동 당시 Snapshot으로 집계. 퀘스트 완료율은 선택 기간·`ACTIVE/CLOSED` 기간·멤버십 기간이 겹치고 선택 기간 시작 전에 미완료인 `(membershipId,assignmentId)` 기회 대비 기간 내 완료이며 분모 0은 0. 성장 단계·상위 그룹·정원은 현재 Snapshot. 결제·환불은 `SUCCESS` 승인·취소 거래의 `processed_at`과 구매 당시 그룹 Snapshot을 공통으로 사용.
 
 **요청 필드**
 
@@ -2583,13 +2600,16 @@
 | data.groupId | integer(int64) | Y | Y | 전체 집계 null | 그룹 ID |
 | data.aggregatedAt | string(date-time) | Y | N | UTC ISO 8601 | 통계 집계 시각 |
 | data.summary | object | Y | N | 필수 | 요약 통계 객체 |
-| data.summary.activeUsers | integer(int64) | Y | N | 0 이상 | 활동 사용자 수 |
-| data.summary.activeGroups | integer(int64) | Y | N | 0 이상 | 활성 그룹 수 |
+| data.summary.activeUsers | integer(int64) | Y | N | 0 이상 | 기간 전체 고유 활동 사용자 수 |
+| data.summary.activeGroups | integer(int64) | Y | N | 0 이상 | 기간 내 활동이 있는 고유 그룹 수 |
 | data.summary.questCompletionRate | number | Y | N | 0~100, % | 퀘스트 완료 비율 |
+| data.summary.paidAmountKrw | integer(int64) | Y | N | 0 이상 | 기간 내 성공 결제 금액 합계 |
+| data.summary.refundedAmountKrw | integer(int64) | Y | N | 0 이상 | 기간 내 성공 환불 금액 합계 |
+| data.summary.capacityUsageRate | number | Y | N | 0~100, 소수 둘째 자리 반올림; 분모 0은 0 | 현재 정원 사용률(%) |
 | data.summary.operationalWarningCount | integer(int64) | Y | N | 0 이상 | 운영 경고 수 |
 | data.activitySeries | array<object> | Y | N | 날짜 오름차순, 없으면 [] | 기간별 활동 통계 |
 | data.activitySeries[].date | string(date) | Y | N | YYYY-MM-DD, KST | 날짜 |
-| data.activitySeries[].activeUsers | integer | Y | N | 0 이상 | 활동 사용자 수 |
+| data.activitySeries[].activeUsers | integer | Y | N | 0 이상 | 해당 KST 날짜의 고유 활동 사용자 수 |
 | data.activitySeries[].questCompletions | integer | Y | N | 0 이상 | 퀘스트 완료 건수 |
 | data.growthStages | array<object> | Y | N | 없으면 [] | 성장 단계별 분포 |
 | data.growthStages[].stage | string(enum) | Y | N | EGG \| HATCHLING \| GROWING \| MATURE \| COMPLETE | 성장 단계 |
@@ -2610,10 +2630,10 @@
 | data.queues.pendingRefunds | integer | Y | N | 0 이상 | 대기 중인 환불 요청 목록 |
 | data.queues.operationalWarnings | array<object> | Y | N | 최근 10건 이하 | 운영 경고 목록 |
 | data.queues.operationalWarnings[].warningKey | string | Y | N | 1~255자; 유형+원본 식별자 결합, 동일 상태에서 안정적 | 경고 키 |
-| data.queues.operationalWarnings[].type | string(enum) | Y | N | SCHEDULER_FAILED \| TEMPLATE_SHORTAGE \| MEMBER_COUNT_MISMATCH \| PAYMENT_UNCERTAIN \| REFUND_UNCERTAIN \| PHOTO_DELETION_FAILED | 운영 경고 목록 유형 |
+| data.queues.operationalWarnings[].type | string(enum) | Y | N | SCHEDULER_FAILED \| SEASON_STATE_INVALID \| TEMPLATE_SHORTAGE \| QUEST_PERIOD_FAILED \| MEMBER_COUNT_MISMATCH \| PAYMENT_UNCERTAIN \| REFUND_UNCERTAIN \| PHOTO_DELETION_FAILED | 운영 경고 목록 유형 |
 | data.queues.operationalWarnings[].severity | string(enum) | Y | N | WARNING \| CRITICAL | 심각도 |
-| data.queues.operationalWarnings[].resourceType | string | Y | N | SEASON \| QUEST_PERIOD \| GROUP \| PURCHASE \| REFUND_REQUEST \| PHOTO_SUBMISSION | 경고 관련 자원 유형 |
-| data.queues.operationalWarnings[].resourceId | integer(int64) | Y | N | 1 이상 | 경고 관련 자원 ID |
+| data.queues.operationalWarnings[].resourceType | string | Y | N | SCHEDULER_EXECUTION \| SEASON \| QUEST_PERIOD \| GROUP \| PURCHASE \| REFUND_REQUEST \| PHOTO_SUBMISSION | 경고 관련 자원 유형 |
+| data.queues.operationalWarnings[].resourceId | integer(int64) | Y | Y | 1 이상; 현재 기간 시즌 누락은 null | 경고 관련 자원 ID |
 | data.queues.operationalWarnings[].message | string | Y | N | 1~1000자 | 메시지 |
 | data.queues.operationalWarnings[].detectedAt | string(date-time) | Y | N | UTC ISO 8601 | 운영 경고 감지 시각 |
 
@@ -2630,7 +2650,7 @@
 ### listOperationalWarnings — `GET /api/v1/admin/operations/warnings`
 
 - **Operation ID:** `listOperationalWarnings` · **요구사항:** `REQ-ADM-004` · **인증·권한:** `SUPER_ADMIN` · **성공 HTTP:** `200`
-- **엔드포인트 조건:** 현재 원본에서 집계한 미해결 경고만 반환. `warningKey=유형:원본종류:원본ID`; 결제·환불 결과 불명과 만료 Scheduler·시즌 불일치는 `CRITICAL`, 나머지는 `WARNING`. 별도 읽음/해결 상태 없음.
+- **엔드포인트 조건:** 위 공통 매핑에 따라 현재 미해결 원본만 반환. 별도 읽음/해결 상태 없음.
 
 **요청 필드**
 
@@ -2639,7 +2659,7 @@
 | Header | Cookie | string | Y | N | Spring Session 세션 쿠키; HttpOnly / SameSite=Lax |
 | Query | page | integer | N | N | 0 이상, 미지정 0; 0-based page |
 | Query | size | integer | N | N | 1~50, 미지정 20; 페이지 크기 |
-| Query | type | string(enum) | N | N | SCHEDULER_FAILED \| TEMPLATE_SHORTAGE \| MEMBER_COUNT_MISMATCH \| PAYMENT_UNCERTAIN \| REFUND_UNCERTAIN \| PHOTO_DELETION_FAILED; 미지정 전체 |
+| Query | type | string(enum) | N | N | SCHEDULER_FAILED \| SEASON_STATE_INVALID \| TEMPLATE_SHORTAGE \| QUEST_PERIOD_FAILED \| MEMBER_COUNT_MISMATCH \| PAYMENT_UNCERTAIN \| REFUND_UNCERTAIN \| PHOTO_DELETION_FAILED; 미지정 전체 |
 
 **성공 응답 필드**
 
@@ -2647,10 +2667,10 @@
 |---|---|---|---|---|---|
 | data | array<object> | Y | N | 0건이면 [] | 목록 |
 | data[].warningKey | string | Y | N | 1~255자; 유형+원본 식별자 결합, 동일 상태에서 안정적 | 경고 키 |
-| data[].type | string(enum) | Y | N | SCHEDULER_FAILED \| TEMPLATE_SHORTAGE \| MEMBER_COUNT_MISMATCH \| PAYMENT_UNCERTAIN \| REFUND_UNCERTAIN \| PHOTO_DELETION_FAILED | 성공 데이터 유형 |
+| data[].type | string(enum) | Y | N | SCHEDULER_FAILED \| SEASON_STATE_INVALID \| TEMPLATE_SHORTAGE \| QUEST_PERIOD_FAILED \| MEMBER_COUNT_MISMATCH \| PAYMENT_UNCERTAIN \| REFUND_UNCERTAIN \| PHOTO_DELETION_FAILED | 성공 데이터 유형 |
 | data[].severity | string(enum) | Y | N | WARNING \| CRITICAL | 심각도 |
-| data[].resourceType | string | Y | N | SEASON \| QUEST_PERIOD \| GROUP \| PURCHASE \| REFUND_REQUEST \| PHOTO_SUBMISSION | 경고 관련 자원 유형 |
-| data[].resourceId | integer(int64) | Y | N | 1 이상 | 경고 관련 자원 ID |
+| data[].resourceType | string | Y | N | SCHEDULER_EXECUTION \| SEASON \| QUEST_PERIOD \| GROUP \| PURCHASE \| REFUND_REQUEST \| PHOTO_SUBMISSION | 경고 관련 자원 유형 |
+| data[].resourceId | integer(int64) | Y | Y | 1 이상; 현재 기간 시즌 누락은 null | 경고 관련 자원 ID |
 | data[].message | string | Y | N | 1~1000자 | 메시지 |
 | data[].detectedAt | string(date-time) | Y | N | UTC ISO 8601 | 운영 경고 감지 시각 |
 | meta | object | Y | N | — | 목록 부가 정보 |

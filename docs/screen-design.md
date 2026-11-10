@@ -103,9 +103,9 @@ Vanilla JavaScript ES Module·Vite·Bootstrap v5 기반 Full CSR 화면과 Histo
 
 ### 주요 규칙
 
-| 구성 | 표시 기준 |
+| 구성 | 표시 기준·API 출처 |
 |---|---|
-| 요약 카드 | 활동 사용자, 활성 그룹·정원율, 퀘스트 완료율, 테스트 결제 금액, 환불·신고·경고 |
+| 요약 카드 | 활동 사용자·활성 그룹·완료율·결제/환불 금액·정원율은 `summary`; 대기 신고·환불은 `queues`; 경고는 `summary.operationalWarningCount` |
 | Line | 선택 기간의 활동 사용자·퀘스트 완료 |
 | Column | 현재 시즌 크리처 성장 단계 분포 |
 | Bar | 그룹 점수 상위 10개 |
