@@ -120,6 +120,68 @@ class QuestCompletionConcurrencyIntegrationTest {
         assertThat(memberContribution(userIds.get(1))).isEqualTo(30L);
     }
 
+    @Test
+    void 같은_사용자가_같은_사진배정을_동시에_완료해도_보상은_한번만_지급된다()
+            throws Exception {
+        // 기존 fixture의 배정을 PHOTO_EXIF 유형으로 바꿉니다.
+        jdbcTemplate.update(
+                "UPDATE quest_assignments "
+                        + "SET verification_type_snapshot = 'PHOTO_EXIF' "
+                        + "WHERE id = ?",
+                assignmentId
+        );
+
+        CountDownLatch start = new CountDownLatch(1);
+        Future<QuestCompletionResponse> first =
+                submitPhotoCompletion(userIds.get(0), start);
+        Future<QuestCompletionResponse> second =
+                submitPhotoCompletion(userIds.get(0), start);
+
+        start.countDown();
+
+        QuestCompletionResponse firstResult =
+                first.get(10, TimeUnit.SECONDS);
+        QuestCompletionResponse secondResult =
+                second.get(10, TimeUnit.SECONDS);
+
+        // 두 요청은 동일한 완료 이력을 반환해야 합니다.
+        assertThat(firstResult.getCompletionId())
+                .isEqualTo(secondResult.getCompletionId());
+
+        // 완료 1건과 보상 원장 2건만 생성되어야 합니다.
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM quest_completions "
+                        + "WHERE quest_assignment_id = ?",
+                Integer.class,
+                assignmentId
+        )).isEqualTo(1);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM quest_reward_ledgers ledger "
+                        + "JOIN quest_completions completion "
+                        + "ON completion.id = ledger.quest_completion_id "
+                        + "WHERE completion.quest_assignment_id = ?",
+                Integer.class,
+                assignmentId
+        )).isEqualTo(2);
+
+        assertThat(creatureExperience()).isEqualTo(300L);
+        assertThat(groupScore()).isEqualTo(30L);
+    }
+
+    private Future<QuestCompletionResponse> submitPhotoCompletion(
+            Long userId,
+            CountDownLatch start
+    ) {
+        return executor.submit(() -> {
+            await(start);
+            return questCompletionService.completePhotoExifAssignment(
+                    userId,
+                    assignmentId
+            );
+        });
+    }
+
     private Future<QuestCompletionResponse> submitCompletion(Long userId, CountDownLatch start) {
         return executor.submit(() -> {
             await(start);

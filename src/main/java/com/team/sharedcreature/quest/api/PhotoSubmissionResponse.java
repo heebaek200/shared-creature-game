@@ -6,7 +6,7 @@ import java.time.Instant;
 
 /**
  * 사진 EXIF 제출 및 판정 결과 응답입니다.
- *
+ * 객체를 JSON으로 변환할 때 설정이나 전역 정책에 따라 null인 필드를 생략하거나 특정 조건에 맞는 필드만 포함
  * nullable 필드도 API 계약에 따라 JSON에 null로 포함합니다.
  */
 @JsonInclude(JsonInclude.Include.ALWAYS)

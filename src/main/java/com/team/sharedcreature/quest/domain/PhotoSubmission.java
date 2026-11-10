@@ -167,6 +167,51 @@ public class PhotoSubmission {
         this.updatedAt = verifiedAt;
     }
 
+    /**
+     * 1시간 넘게 처리되지 않은 제출을 Timeout 실패로 전환합니다.
+     */
+    public void markPendingTimedOut(Instant failedAt) {
+        requirePending();
+
+        // 응답 계약에 정의된 Timeout 사유를 사용해 실패 이력을 남깁니다.
+        markInvalid(
+                "PHOTO_PROCESSING_TIMEOUT",
+                null,
+                null,
+                null,
+                failedAt
+        );
+    }
+
+    /**
+     * 보존 기한이 지난 사진 파일과 GPS 좌표를 정리 완료 상태로 기록합니다.
+     *
+     * 촬영 시각과 판정 결과는 감사 이력으로 보존하고,
+     * 파일 저장 키와 GPS 좌표만 비웁니다.
+     */
+    public void markPhotoAndLocationDataDeleted(Instant deletedAt) {
+        Objects.requireNonNull(deletedAt, "deletedAt은 필수입니다.");
+
+        if (!STATUS_VALID.equals(this.verificationStatus)
+                && !STATUS_INVALID.equals(this.verificationStatus)) {
+            throw new IllegalStateException(
+                    "VALID 또는 INVALID 제출만 정리할 수 있습니다. status="
+                            + this.verificationStatus
+            );
+        }
+
+        // 이미 정리한 이력은 재호출해도 상태를 바꾸지 않습니다.
+        if (this.fileDeletedAt != null) {
+            return;
+        }
+
+        this.storageKey = null;
+        this.latitude = null;
+        this.longitude = null;
+        this.fileDeletedAt = deletedAt;
+        this.updatedAt = deletedAt;
+    }
+
     /** 문지기(Guard) 메서드 */
     private void requirePending() {
         if (!STATUS_PENDING.equals(this.verificationStatus)) {

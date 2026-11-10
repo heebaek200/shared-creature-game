@@ -2,6 +2,7 @@ package com.team.sharedcreature._core.security;
 
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.web.RequestIdFilter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,7 +24,6 @@ import java.util.List;
  */
 @Configuration
 public class SecurityConfiguration {
-
     /**
      * REST 경로 등급과 인증·인가 실패 응답을 구성합니다.
      *
@@ -130,9 +130,14 @@ public class SecurityConfiguration {
      * @return CORS 설정 원본
      */
     @Bean
-    CorsConfigurationSource corsConfigurationSource() {
+    CorsConfigurationSource corsConfigurationSource(
+            @Value("${ngrok.domain-uri}") String ngrokDomainUri
+    ) {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:5173"));
+        configuration.setAllowedOrigins(List.of(
+                "http://localhost:5173",
+                ngrokDomainUri
+        ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Accept", "Content-Type", "X-CSRF-TOKEN", "X-Request-Id", "Idempotency-Key"));
         configuration.setExposedHeaders(List.of("X-Request-Id"));
