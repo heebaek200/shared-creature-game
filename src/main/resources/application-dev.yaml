@@ -24,13 +24,14 @@ spring:
     properties:
       hibernate:
         format_sql: true    # 출력되는 SQL을 콘솔창에 줄바꿈해 보기 좋게 표시
-    # data.sql을 테이블 생성 후에 실행한다.
+    # JPA 테이블 준비 후 퀘스트 카탈로그만 초기화한다.
     defer-datasource-initialization: true
 
   sql:
     init:
+      mode: always
       data-locations:
-        - classpath:db/data.sql
+        - classpath:db/quest-catalog.sql
 
 app:
   scheduler:

@@ -64,6 +64,9 @@ public class QuestPeriodAssignmentService {
             return persistence.assign(window);
         } catch (QuestTemplateSelectionService.SelectionException failure) {
             return recordAfterRollback(window, failure);
+        } catch (QuestPeriodPersistenceService.WindowExpiredDuringPersistenceException expired) {
+            // REQUIRES_NEW가 롤백된 다음 만료 기간을 정상적인 미처리 상태로 변환합니다.
+            return new Result(Outcome.NOT_READY, null, 0);
         } catch (DataIntegrityViolationException conflict) {
             // 기간 UNIQUE 경합에서 승자가 Commit한 경우만 정상적인 중복 실행으로 처리합니다.
             return persistence.readCommittedOutcome(window).orElseThrow(() -> conflict);
@@ -82,6 +85,9 @@ public class QuestPeriodAssignmentService {
         try {
             return persistence.recordSelectionFailure(window,
                     failure.failureCode().name(), failure.getMessage());
+        } catch (QuestPeriodPersistenceService.WindowExpiredDuringPersistenceException expired) {
+            // 실패 이력을 쓰는 중 만료되더라도 해당 기간에 FAILED 행을 남기지 않습니다.
+            return new Result(Outcome.NOT_READY, null, 0);
         } catch (DataIntegrityViolationException conflict) {
             return persistence.readCommittedOutcome(window).orElseThrow(() -> conflict);
         }

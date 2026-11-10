@@ -18,15 +18,23 @@ import java.util.Optional;
 public interface SchedulerExecutionRepository extends JpaRepository<SchedulerExecution, Long> {
 
     /**
-     * 동일한 논리 작업의 실행 이력이 존재하는지 확인함.
-     * 성능 최적화 목적이며, 동시성 보장 수단은 아님. 실제 동시성은 DB UNIQUE 제약으로 최종 방어.
+     * 동일한 논리 작업의 실행 이력이 존재하는지 확인합니다.
+     * 조회는 최적화 목적이며 동시성의 최종 방어는 DB UNIQUE 제약입니다.
+     * 이 메서드는 실행권을 선점하거나 잠그지 않습니다.
      */
     boolean existsByJobTypeAndScheduledFor(String jobType, Instant scheduledFor);
 
     /**
-     * 기존 실행 이력을 배타 잠금으로 조회함.
-     * 같은 논리 작업에 대한 재선점 요청을 직렬화.
-     * 트랜잭션이 종료될 때 DB 잠금이 해제됨.
+     * R-3 정합성 감사에서 실행 이력의 최종 상태를 잠금 없이 조회합니다.
+     * SUCCEEDED인 경우에만 실제 퀘스트 데이터의 완전성을 검사합니다.
+     * RUNNING·FAILED는 공통 Runner의 재시도 정책에 맡깁니다.
+     */
+    Optional<SchedulerExecution> findByJobTypeAndScheduledFor(String jobType, Instant scheduledFor);
+
+    /**
+     * 기존 실행 이력을 배타 잠금으로 조회합니다.
+     * 같은 논리 작업에 대한 재선점 요청을 직렬화합니다.
+     * 트랜잭션이 종료될 때 DB 잠금이 해제됩니다.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
@@ -44,9 +52,9 @@ public interface SchedulerExecutionRepository extends JpaRepository<SchedulerExe
     );
 
     /**
-     * 실행 이력ID로 행을 배타 잠금하여 조회한다.
-     * Heartbeat, 성공, 실패 기록의 동시 변경을 직렬화.
-     * 잠금은 해당 트랜잭션의 Commit 또는 Rollback까지 유지됨.
+     * 실행 이력 ID로 행을 배타 잠금하여 조회합니다.
+     * Heartbeat, 성공, 실패 기록의 동시 변경을 직렬화합니다.
+     * 잠금은 해당 트랜잭션의 Commit 또는 Rollback까지 유지됩니다.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""

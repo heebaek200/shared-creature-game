@@ -71,15 +71,21 @@ public class QuestPeriodPersistenceService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public QuestPeriodAssignmentService.Result assign(QuestPeriodCalendar.PeriodWindow window) {
         Objects.requireNonNull(window, "window");
-        Instant now = Instant.now(clock);
-        Optional<Season> currentSeason = eligibleSeason(window, now);
+        // 시즌 공유 잠금을 얻은 뒤 기간 시각을 판단해야 잠금 대기 중의 날짜 변경을 감지합니다.
+        Optional<Season> currentSeason = eligibleSeason(window);
         if (currentSeason.isEmpty()) {
             return new QuestPeriodAssignmentService.Result(
                     QuestPeriodAssignmentService.Outcome.NOT_READY, null, 0);
         }
+        Instant now = Instant.now(clock);
 
         // 시즌 공유 잠금을 확보한 뒤 기존 기간을 잠가 동시 재실행을 직렬화합니다.
         QuestPeriod period = findExistingPeriodForUpdate(window);
+        // 기존 기간 행의 잠금을 기다리다 자정이 지났을 수도 있으므로 다시 판정합니다.
+        if (!isWithinWindow(window, currentSeason.orElseThrow(), now)) {
+            return new QuestPeriodAssignmentService.Result(
+                    QuestPeriodAssignmentService.Outcome.NOT_READY, null, 0);
+        }
         if (period != null && "ACTIVE".equals(period.getStatus())) {
             return new QuestPeriodAssignmentService.Result(
                     QuestPeriodAssignmentService.Outcome.ALREADY_ACTIVE, period.getId(),
@@ -94,6 +100,12 @@ public class QuestPeriodPersistenceService {
         int expectedSlots = "DAILY".equals(window.periodType()) ? 3 : 7;
         if (!window.periodType().equals(batch.periodType()) || batch.slots().size() != expectedSlots) {
             throw new IllegalStateException("퀘스트 슬롯 전체가 준비되지 않았습니다: " + window.periodType());
+        }
+        // 템플릿 조회 도중 날짜가 바뀌었다면 아직 DB를 변경하지 않았으므로 즉시 중단합니다.
+        now = Instant.now(clock);
+        if (!isWithinWindow(window, currentSeason.orElseThrow(), now)) {
+            return new QuestPeriodAssignmentService.Result(
+                    QuestPeriodAssignmentService.Outcome.NOT_READY, null, 0);
         }
         if (period == null) {
             period = periodRepository.saveAndFlush(QuestPeriod.pending(
@@ -118,6 +130,8 @@ public class QuestPeriodPersistenceService {
         period.activate(now);
         assignmentRepository.flush();
         periodRepository.flush();
+        // 마지막 Flush 직후 경계가 지났다면 예외로 REQUIRES_NEW 트랜잭션 전체를 롤백합니다.
+        ensureWindowOpenOrRollback(window, currentSeason.orElseThrow());
         return new QuestPeriodAssignmentService.Result(
                 QuestPeriodAssignmentService.Outcome.CREATED, period.getId(), batch.slots().size());
     }
@@ -132,19 +146,31 @@ public class QuestPeriodPersistenceService {
             QuestPeriodCalendar.PeriodWindow window, String code, String detail
     ) {
         Objects.requireNonNull(window, "window");
-        Instant now = Instant.now(clock);
-        Optional<Season> currentSeason = eligibleSeason(window, now);
+        // 시즌 공유 잠금을 얻은 뒤 기간 시각을 판단해야 잠금 대기 중의 날짜 변경을 감지합니다.
+        Optional<Season> currentSeason = eligibleSeason(window);
         if (currentSeason.isEmpty()) {
             return new QuestPeriodAssignmentService.Result(
                     QuestPeriodAssignmentService.Outcome.NOT_READY, null, 0);
         }
+        Instant now = Instant.now(clock);
 
         // 실패 행도 동일 UNIQUE 기간을 사용해 재실행으로 중복 생성되지 않게 합니다.
         QuestPeriod period = findExistingPeriodForUpdate(window);
+        // 기존 기간 행의 잠금을 기다리다 자정이 지났을 수도 있으므로 다시 판정합니다.
+        if (!isWithinWindow(window, currentSeason.orElseThrow(), now)) {
+            return new QuestPeriodAssignmentService.Result(
+                    QuestPeriodAssignmentService.Outcome.NOT_READY, null, 0);
+        }
         if (period != null && "ACTIVE".equals(period.getStatus())) {
             return new QuestPeriodAssignmentService.Result(
                     QuestPeriodAssignmentService.Outcome.ALREADY_ACTIVE, period.getId(),
                     assignmentRepository.countByQuestPeriodId(period.getId()));
+        }
+        // 실패 이력 INSERT/UPDATE도 마찬가지로 만료된 날짜에 소급 기록하지 않습니다.
+        now = Instant.now(clock);
+        if (!isWithinWindow(window, currentSeason.orElseThrow(), now)) {
+            return new QuestPeriodAssignmentService.Result(
+                    QuestPeriodAssignmentService.Outcome.NOT_READY, null, 0);
         }
         if (period == null) {
             period = periodRepository.save(QuestPeriod.pending(
@@ -155,6 +181,8 @@ public class QuestPeriodPersistenceService {
         }
         period.fail(code, detail, now);
         periodRepository.flush();
+        // 실패 행도 트랜잭션 종료 전 최종 검사해 만료 경계에서는 Rollback합니다.
+        ensureWindowOpenOrRollback(window, currentSeason.orElseThrow());
         return new QuestPeriodAssignmentService.Result(
                 QuestPeriodAssignmentService.Outcome.FAILED, period.getId(), 0);
     }
@@ -204,9 +232,10 @@ public class QuestPeriodPersistenceService {
      * 시즌 밖 기간이나 이미 만료된 기간은 배정하지 않습니다.
      * 주입받은 Clock과 DB의 최초 시즌 시작 경계만 업무 시각 판단에 사용합니다.
      */
-    private Optional<Season> eligibleSeason(QuestPeriodCalendar.PeriodWindow window, Instant now) {
-        // 공유 잠금을 다른 시즌 관련 잠금보다 먼저 획득합니다.
+    private Optional<Season> eligibleSeason(QuestPeriodCalendar.PeriodWindow window) {
+        // 먼저 공유 잠금을 확보하고, 이후의 시계 값으로 일일·주간 기간을 판정합니다.
         Optional<Season> season = seasonQueryService.findCurrentSeasonForShareIfPresent();
+        Instant now = Instant.now(clock);
         if (season.isEmpty() || now.isBefore(window.startAt()) || !now.isBefore(window.endAt())) {
             return Optional.empty();
         }
@@ -222,5 +251,41 @@ public class QuestPeriodPersistenceService {
             return Optional.empty();
         }
         return season;
+    }
+
+    /**
+     * 이미 잠근 시즌과 요청 기간이 주어진 시각에도 유효한지 검사합니다.
+     * 시즌 상태는 공유 잠금을 확보한 SeasonQueryService가 검증했습니다.
+     * 기간의 시작과 종료는 모두 [startAt, endAt) 반열린 구간으로 판정합니다.
+     */
+    private boolean isWithinWindow(
+            QuestPeriodCalendar.PeriodWindow window, Season season, Instant now
+    ) {
+        return !now.isBefore(window.startAt()) && now.isBefore(window.endAt())
+                && !now.isBefore(season.getStartAt()) && now.isBefore(season.getEndAt());
+    }
+
+    /**
+     * Flush 이후에도 날짜가 바뀌지 않았는지 확인해 모든 쓰기를 원자적으로 되돌립니다.
+     * NOT_READY를 정상 반환하면 트랜잭션이 Commit되므로 반드시 예외를 발생시킵니다.
+     * 바깥 조정 서비스는 실제 트랜잭션이 Rollback된 다음 이 예외를 NOT_READY로 바꿉니다.
+     */
+    private void ensureWindowOpenOrRollback(
+            QuestPeriodCalendar.PeriodWindow window, Season season
+    ) {
+        if (!isWithinWindow(window, season, Instant.now(clock))) {
+            throw new WindowExpiredDuringPersistenceException(window.periodType(), window.startAt());
+        }
+    }
+
+    /**
+     * 기간 만료가 DB 쓰기 도중 발생해 전체 Rollback이 필요한 상태입니다.
+     * 성공/실패 행 중 어느 쪽도 부분 Commit하지 않도록 런타임 예외로 표현합니다.
+     * 상위 조정 서비스에서 NOT_READY로 변환하되 원본 트랜잭션 안에서는 잡지 않습니다.
+     */
+    static final class WindowExpiredDuringPersistenceException extends RuntimeException {
+        WindowExpiredDuringPersistenceException(String type, Instant startAt) {
+            super("퀘스트 저장 중 기간이 종료되었습니다. type=" + type + ", startAt=" + startAt);
+        }
     }
 }

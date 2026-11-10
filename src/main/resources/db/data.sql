@@ -34,23 +34,7 @@ ON DUPLICATE KEY UPDATE
   , status = VALUES(status)
   , display_order = VALUES(display_order);
 
-INSERT INTO quest_templates (
-    code
-  , period_type
-  , difficulty
-  , status
-  , rotation_order
-  , created_at
-  , updated_at
-) VALUES
-    ('DAILY_WATER', 'DAILY', 'LOW', 'ACTIVE', 1, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
-  , ('DAILY_STRETCH', 'DAILY', 'LOW', 'ACTIVE', 2, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
-  , ('WEEKLY_WALK', 'WEEKLY', 'MEDIUM', 'ACTIVE', 1, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
-ON DUPLICATE KEY UPDATE
-    period_type = VALUES(period_type)
-  , difficulty = VALUES(difficulty)
-  , status = VALUES(status)
-  , rotation_order = VALUES(rotation_order);
+-- 퀘스트 카탈로그는 db/quest-catalog.sql에서 별도로 초기화합니다.
 
 INSERT INTO shop_items (
     code
