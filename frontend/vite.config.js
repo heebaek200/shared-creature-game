@@ -11,7 +11,6 @@ export default defineConfig(({ mode }) => {
       : null;
 
   return {
-    envDir: rootEnvDir,
     server: {
       port: 5173,
       ...(ngrokHost ? { allowedHosts: [ngrokHost] } : {}),
