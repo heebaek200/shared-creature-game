@@ -4,7 +4,9 @@ import com.team.sharedcreature._core.api.ErrorResponseFactory;
 import com.team.sharedcreature._core.exception.RestApiExceptionHandler;
 import com.team.sharedcreature._core.web.RequestIdFilter;
 import com.team.sharedcreature.auth.application.UserActivityService;
+import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
+import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,6 +19,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.test.context.web.WebAppConfiguration;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,13 +30,17 @@ import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
+import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -52,6 +59,12 @@ class SecurityFilterChainTest {
     @Autowired
     @Qualifier("sessionAuthenticationFilterRegistration")
     private FilterRegistrationBean<SessionAuthenticationFilter> sessionAuthenticationFilterRegistration;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private GroupMembershipRepository membershipRepository;
 
     private MockMvc mockMvc;
 
@@ -95,7 +108,7 @@ class SecurityFilterChainTest {
     @Test
     void CSRF_오류도_Request_ID와_공통_Envelope를_반환한다() throws Exception {
         mockMvc.perform(post("/api/v1/protected")
-                        .with(user("member").roles("MEMBER"))
+                        .session(authenticatedSession(1L, "MEMBER"))
                         .header("X-Request-Id", "csrf-invalid"))
                 .andExpect(status().isForbidden())
                 .andExpect(header().string("X-Request-Id", "csrf-invalid"))
@@ -120,7 +133,7 @@ class SecurityFilterChainTest {
     @Test
     void 역할이_부족하면_403_ROLE_FORBIDDEN으로_응답한다() throws Exception {
         mockMvc.perform(get("/api/v1/admin/test")
-                        .with(user("member").roles("MEMBER"))
+                        .session(authenticatedSession(2L, "MEMBER"))
                         .header("X-Request-Id", "role-forbidden"))
                 .andExpect(status().isForbidden())
                 .andExpect(header().string("X-Request-Id", "role-forbidden"))
@@ -129,14 +142,56 @@ class SecurityFilterChainTest {
     }
 
     @Test
+    void 일반_그룹원은_활성_크리처_종을_조회할_수_있다() throws Exception {
+        mockMvc.perform(get("/api/v1/creature-species")
+                        .session(authenticatedSession(3L, "MEMBER")))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void 일반_그룹원은_크리처_종을_선택할_수_없다() throws Exception {
+        mockMvc.perform(put("/api/v1/groups/me/seasons/current/creature-selection")
+                        .session(authenticatedSession(4L, "MEMBER"))
+                        .with(csrf()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ROLE_FORBIDDEN"));
+    }
+
+    @Test
+    void 부_관리자는_크리처_종을_선택할_수_있다() throws Exception {
+        mockMvc.perform(put("/api/v1/groups/me/seasons/current/creature-selection")
+                        .session(authenticatedSession(5L, "DEPUTY"))
+                        .with(csrf()))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void 인증된_사용자의_미등록_API는_404_RESOURCE_NOT_FOUND로_응답한다() throws Exception {
         mockMvc.perform(get("/api/v1/not-found")
-                        .with(user("member").roles("MEMBER"))
+                        .session(authenticatedSession(6L, "MEMBER"))
                         .header("X-Request-Id", "not-found"))
                 .andExpect(status().isNotFound())
                 .andExpect(header().string("X-Request-Id", "not-found"))
                 .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
                 .andExpect(jsonPath("$.traceId").value("not-found"));
+    }
+
+    private MockHttpSession authenticatedSession(Long userId, String role) {
+        User user = mock(User.class);
+        when(user.getId()).thenReturn(userId);
+        when(user.getStatus()).thenReturn("ACTIVE");
+        when(user.getGlobalRole()).thenReturn("USER");
+        GroupMembership membership = mock(GroupMembership.class);
+        when(membership.getRole()).thenReturn(role);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(membershipRepository.findByUserIdAndStatus(userId, "ACTIVE"))
+                .thenReturn(Optional.of(membership));
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute(
+                SessionAuthenticationFilter.LOGIN_USER,
+                new LoginUser(userId, "테스트 사용자", Set.of(role))
+        );
+        return session;
     }
 
     @Configuration
@@ -208,6 +263,16 @@ class SecurityFilterChainTest {
 
         @PostMapping("/api/v1/protected")
         void protectedPost() {
+        }
+
+        @GetMapping("/api/v1/creature-species")
+        void creatureSpecies() {
+        }
+
+        @org.springframework.web.bind.annotation.PutMapping(
+                "/api/v1/groups/me/seasons/current/creature-selection"
+        )
+        void selectCreatureSpecies() {
         }
 
         @GetMapping("/api/v1/admin/test")

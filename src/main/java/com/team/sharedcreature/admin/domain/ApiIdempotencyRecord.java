@@ -58,4 +58,15 @@ public class ApiIdempotencyRecord {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    /** 최초 성공 응답을 이후 같은 요청에 재사용하도록 저장합니다. */
+    public void complete(int httpStatus, String resourceType, Long resourceId, String responseSnapshot, Instant now) {
+        this.status = "COMPLETED";
+        this.httpStatus = httpStatus;
+        this.resourceType = resourceType;
+        this.resourceId = resourceId;
+        this.responseSnapshot = responseSnapshot;
+        this.completedAt = now;
+        this.updatedAt = now;
+    }
 }
