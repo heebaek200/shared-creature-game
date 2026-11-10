@@ -100,6 +100,26 @@ export function loginPage() {
   if (!button || !feedback || !loginError || !themeButton || !themeIcon || !themeLabel) {
     throw new Error('로그인 화면 요소를 찾을 수 없습니다.');
   }
+  // Google OAuth 콜백 실패 사유 안내
+  const params = new URLSearchParams(location.search);
+  const oauthError = params.get('oauthError');
+
+  const oauthErrorMessages = {
+    OAUTH_ACCESS_DENIED:
+        'Google 로그인이 취소되었습니다. 다시 로그인해 주세요.',
+    OAUTH_INVALID_STATE:
+        '로그인 요청을 확인할 수 없습니다. 다시 로그인해 주세요.',
+    OAUTH_SESSION_EXPIRED:
+        '로그인 세션이 만료되었습니다. 다시 로그인해 주세요.',
+  };
+
+  if (oauthError) {
+    feedback.textContent =
+        oauthErrorMessages[oauthError] ||
+        'Google 인증에 실패했습니다. 다시 로그인해 주세요.';
+
+    loginError.classList.remove('d-none');
+  }
 
   // 현재 테마에 맞춰 버튼 표시
   const updateThemeButton = () => {
@@ -130,7 +150,15 @@ export function loginPage() {
 
 
     try {
-      const result = await createOAuthAttempt();
+      // 초대 로그인 여부를 확인합니다.
+      const params = new URLSearchParams(location.search);
+
+      const returnRoute =
+          params.get('returnRoute') === 'INVITE'
+              ? 'INVITE'
+              : 'DEFAULT';
+
+      const result = await createOAuthAttempt(returnRoute);
       location.assign(result.authorizationUrl);
     } catch (error) {
       feedback.textContent =

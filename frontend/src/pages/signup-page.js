@@ -1,4 +1,3 @@
-
 // @ts-check
 import {
     getSignupContext,
@@ -6,7 +5,7 @@ import {
 } from '../features/auth/api.js';
 
 /** 가입 대기 사용자의 닉네임 확정 Page를 생성합니다. */
-export function signupPage({ navigate }) {
+export function signupPage({navigate}) {
     const element = document.createElement('main');
     element.className = 'min-vh-100 bg-body-tertiary';
 
@@ -73,26 +72,29 @@ export function signupPage({ navigate }) {
                                     닉네임
                                 </label>
 
-                                <div class="d-flex gap-2 align-items-start">
-                                    <input
-                                        class="form-control"
-                                        id="nickname"
-                                        type="text"
-                                        minlength="2"
-                                        maxlength="20"
-                                        placeholder="닉네임을 입력하세요"
-                                        autocomplete="nickname"
-                                        required
-                                    >
-
-                                    <button
-                                        class="btn btn-outline-secondary text-nowrap"
-                                        id="check-nickname"
-                                        type="button"
-                                    >
-                                        중복 확인
-                                    </button>
-                                </div>
+                                    <div class="d-flex gap-2 align-items-start">
+                                        <div class="flex-grow-1">
+                                            <input
+                                                class="form-control"
+                                                id="nickname"
+                                                type="text"
+                                                minlength="2"
+                                                maxlength="20"
+                                                placeholder="닉네임을 입력하세요"
+                                                autocomplete="nickname"
+                                                required
+                                            >
+                                            <div class="invalid-feedback" id="nickname-error"></div>
+                                        </div>
+                                    
+                                        <button
+                                            class="btn btn-outline-secondary text-nowrap"
+                                            id="check-nickname"
+                                            type="button"
+                                        >
+                                            입력 형식 확인
+                                        </button>
+                                    </div>
 
                                 <div class="form-text">
                                     2~20자 · 중복 확인 후 가입
@@ -135,6 +137,7 @@ export function signupPage({ navigate }) {
     const provider = element.querySelector('#provider');
     const email = element.querySelector('#email');
     const nickname = element.querySelector('#nickname');
+    const nicknameError = element.querySelector('#nickname-error');
     const submit = element.querySelector('button[type="submit"]');
     const checkButton = element.querySelector('#check-nickname');
     const feedback = element.querySelector('#feedback');
@@ -149,6 +152,18 @@ export function signupPage({ navigate }) {
         return value.normalize('NFKC').trim();
     }
 
+    /** 닉네임 필드에 서버 검증 오류를 표시합니다. */
+    function showNicknameError(message) {
+        nickname.classList.add('is-invalid');
+        nicknameError.textContent = message;
+    }
+
+    /** 닉네임 필드의 이전 오류 표시를 초기화합니다. */
+    function clearNicknameError() {
+        nickname.classList.remove('is-invalid');
+        nicknameError.textContent = '';
+    }
+
     function validateNickname() {
         const normalized = normalizeNickname(nickname.value);
         nickname.value = normalized;
@@ -156,11 +171,11 @@ export function signupPage({ navigate }) {
         const length = Array.from(normalized).length;
 
         if (length < 2 || length > 20) {
-            feedback.textContent = '닉네임은 2~20자로 입력해 주세요.';
-            feedback.className = 'alert alert-warning border-0 mb-3';
+            showNicknameError('닉네임은 2~20자로 입력해 주세요.');
             return false;
         }
 
+        clearNicknameError();
         return true;
     }
 
@@ -197,7 +212,7 @@ export function signupPage({ navigate }) {
         if (!validateNickname()) return;
 
         feedback.textContent =
-            '사용 가능한 닉네임입니다';
+            '닉네임 입력 형식이 올바릅니다. 실제 중복 여부는 가입 시 확인합니다.';
         feedback.className = 'alert alert-info mb-3';
     }
 
@@ -214,18 +229,44 @@ export function signupPage({ navigate }) {
         feedback.className = 'alert alert-info mb-3';
 
         try {
-            await completeSignup(nickname.value);
+            const result = await completeSignup(nickname.value);
 
             if (!disposed) {
-                navigate('/');
+                const allowedReasons = [
+                    'INVITE_INVALID',
+                    'GROUP_FULL',
+                    'JOIN_COOLDOWN_ACTIVE',
+                    'ALREADY_IN_GROUP',
+                ];
+
+                const reason = allowedReasons.includes(result?.onboardingReason)
+                    ? result.onboardingReason
+                    : null;
+
+                navigate(
+                    reason
+                        ? `/groups/select?reason=${encodeURIComponent(reason)}`
+                        : '/'
+                );
             }
         } catch (error) {
             if (disposed) return;
 
-            feedback.textContent =
-                error?.message || '회원가입에 실패했습니다. 다시 시도해 주세요.';
+            const nicknameFieldError = error?.fieldErrors?.find(
+                (fieldError) => fieldError.field === 'nickname'
+            );
 
-            feedback.className = 'alert alert-danger mb-3';
+            if (error?.code === 'NICKNAME_ALREADY_USED') {
+                showNicknameError(
+                    '이미 사용 중인 닉네임입니다. 다른 닉네임을 입력해 주세요.'
+                );
+            } else if (error?.code === 'INVALID_FIELD_VALUE' && nicknameFieldError) {
+                showNicknameError(nicknameFieldError.message);
+            } else {
+                feedback.textContent =
+                    error?.message || '회원가입에 실패했습니다. 다시 시도해 주세요.';
+                feedback.className = 'alert alert-danger mb-3';
+            }
 
             submit.disabled = false;
             checkButton.disabled = false;
@@ -253,6 +294,7 @@ export function signupPage({ navigate }) {
     backLogin.addEventListener('click', onBackLogin);
 
     nickname.addEventListener('input', () => {
+        clearNicknameError();
         checkButton.disabled = false;
     });
 

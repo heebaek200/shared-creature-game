@@ -51,9 +51,10 @@ export function getPublicInvitation(token) {
 export function acceptInvitation(token) {
     return useMock
         ? mockApi.acceptInvitation(token)
-        : apiRequest((`/api/v1/invitations/${encodeURIComponent(token)}/accept`,
-            {method: 'POST'}));
+        : apiRequest(`/api/v1/invitations/${encodeURIComponent(token)}/accept`,
+            { method: 'POST' });
 }
+
 
 /**
  * 초대를 거절합니다.
@@ -61,8 +62,9 @@ export function acceptInvitation(token) {
 export function rejectInvitation(token) {
     return useMock
         ? mockApi.rejectInvitation(token)
-        : apiRequest((`/api/v1/invitations/${encodeURIComponent(token)}/reject`,
-            {method: 'POST'}));
+        : apiRequest(
+            `/api/v1/invitations/${encodeURIComponent(token)}/reject`,
+            { method: 'POST' });
 }
 
 

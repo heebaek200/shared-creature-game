@@ -1,8 +1,29 @@
 // @ts-check
 import { ApiError } from '../api/client.js';
 
-let mockMembership = null;
+const MOCK_STATE_KEY = 'shared-creature-mock-state';
+
+function loadMockState() {
+  try {
+    const savedState = sessionStorage.getItem(MOCK_STATE_KEY);
+    return savedState ? JSON.parse(savedState) : null;
+  } catch {
+    return null;
+  }
+}
+
+const savedMockState = loadMockState();
+
+let mockMembership = savedMockState?.mockMembership ?? null;
 let nextMockGroupId = 501;
+let mockAuthenticationState =
+    savedMockState?.mockAuthenticationState ?? 'SIGNUP_PENDING';
+let mockSignupNickname =
+    savedMockState?.mockSignupNickname ?? '새싹지기';
+
+
+const MOCK_INVITATION_TOKEN =
+    'mockInvitationToken1234567890abcdef';
 
 const mockGroups = [
   {
@@ -78,21 +99,86 @@ const mockGroups = [
   }
 ];
 
-
-
-
 /** 실제 API 계약과 같은 정상·오류 시나리오를 제공합니다. */
 export const mockApi = {
   async getCurrentUser() {
+    const isAuthenticated =
+        mockAuthenticationState !== 'ANONYMOUS';
+
+    const isSignupPending =
+        mockAuthenticationState === 'SIGNUP_PENDING';
+
     return {
-      authenticationState: 'AUTHENTICATED',
-      onboardingState: mockMembership ? 'COMPLETE' : 'GROUP_REQUIRED',
-      user: { userId: 101, nickname: '새싹지기' },
+      authenticationState: mockAuthenticationState,
+
+      onboardingState: !isAuthenticated
+          ? 'NOT_STARTED'
+          : isSignupPending
+              ? 'SIGNUP_REQUIRED'
+              : mockMembership
+                  ? 'COMPLETED'
+                  : 'GROUP_REQUIRED',
+
+      user: isAuthenticated && !isSignupPending
+          ? {
+            userId: 101,
+            nickname: mockSignupNickname,
+          }
+          : null,
+
       membership: mockMembership,
-      roles: mockMembership ? [mockMembership.role] : [],
+
+      roles: mockMembership
+          ? [mockMembership.role]
+          : [],
+
       restrictionUntil: null,
+      onboardingReason: null
     };
   },
+
+  async createOAuthAttempt(returnRoute = 'DEFAULT') {
+    await delay(200);
+
+    mockAuthenticationState = 'SIGNUP_PENDING';
+    saveMockState();
+
+    return {
+      authorizationUrl: '/signup',
+      returnRoute,
+    };
+  },
+
+  async completeSignup(nickname) {
+    await delay(200);
+
+    if (mockAuthenticationState !== 'SIGNUP_PENDING') {
+      throw new ApiError(409, {
+        code: 'SIGNUP_NOT_PENDING',
+        message: '가입 대기 상태가 아닙니다.',
+        fieldErrors: [],
+        traceId: 'mock-signup-not-pending',
+      });
+    }
+
+    mockSignupNickname = nickname.normalize('NFKC').trim();
+    mockAuthenticationState = 'AUTHENTICATED';
+    saveMockState();
+
+    return {
+      authenticationState: 'AUTHENTICATED',
+      onboardingState: 'GROUP_REQUIRED',
+      user: {
+        userId: 101,
+        nickname: mockSignupNickname,
+      },
+      membership: null,
+      roles: [],
+      restrictionUntil: null,
+      onboardingReason: null,
+    };
+  },
+
   async createGroup(input) {
     await delay(250);
 
@@ -141,19 +227,21 @@ export const mockApi = {
       status: 'ACTIVE',
     };
 
+    saveMockState();
+
     return {
       group: {
         group: newGroup,
         primaryAdmin: {
           userId: 101,
-          nickname: '새싹지기',
+          nickname: mockSignupNickname,
           role: 'PRIMARY',
           joinedAt: now,
         },
         myMembership: mockMembership,
       },
       initialInvitationUrl:
-          `${location.origin}/invite/mock-invitation-token`,
+          `${location.origin}/invite/${MOCK_INVITATION_TOKEN}`,
       nextRoute: '/creature',
     };
   },
@@ -233,6 +321,8 @@ export const mockApi = {
       status: 'ACTIVE',
     };
 
+    saveMockState();
+
     // 그룹 인원 갱신
     group.currentMemberCount += 1;
     group.remainingCapacity =
@@ -254,12 +344,21 @@ export const mockApi = {
   async getSignupContext() {
     await delay(200);
 
+    if (mockAuthenticationState !== 'SIGNUP_PENDING') {
+      throw new ApiError(401, {
+        code: 'SIGNUP_NOT_PENDING',
+        message: '가입 대기 상태가 아닙니다.',
+        fieldErrors: [],
+        traceId: 'mock-signup-not-pending',
+      });
+    }
+
     return {
-      provider: "GOOGLE",
+      provider: 'GOOGLE',
       email: 'example@gmail.com',
-      suggestedNickname: '새싹지기',
+      suggestedNickname: mockSignupNickname,
       invitation: null,
-      expiresAt: new Date(Date.now() + 30 * 60 * 100).toISOString(),
+      expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
     };
   },
 
@@ -269,7 +368,7 @@ export const mockApi = {
   async getPublicInvitation(token) {
     await delay(250);
 
-    if (!['test-token', 'mock-invitation-token'].includes(token)) {
+    if (token !== MOCK_INVITATION_TOKEN) {
       throw new ApiError(404, {
         code: 'INVITE_INVALID',
         message: '유효하지 않거나 만료된 초대 링크입니다.',
@@ -307,7 +406,7 @@ export const mockApi = {
     }
 
     // 초대 링크 유효성 확인
-    if (!['test-token', 'mock-invitation-token'].includes(token)) {
+    if (token !== MOCK_INVITATION_TOKEN) {
       throw new ApiError(404, {
         code: 'INVITE_INVALID',
         message: '유효하지 않거나 만료된 초대 링크입니다.',
@@ -324,6 +423,8 @@ export const mockApi = {
       status: 'ACTIVE',
     };
 
+    saveMockState();
+
     return {
       groupId: 501,
       nextRoute: '/creature',
@@ -337,7 +438,7 @@ export const mockApi = {
     await delay(250);
 
 
-    if (!['test-token', 'mock-invitation-token'].includes(token)) {
+    if (token !== MOCK_INVITATION_TOKEN) {
       throw new ApiError(404, {
         code: 'INVITE_INVALID',
         message: '유효하지 않거나 만료된 초대 링크입니다.',
@@ -350,6 +451,17 @@ export const mockApi = {
     };
   },
 };
+
+function saveMockState() {
+  sessionStorage.setItem(
+      MOCK_STATE_KEY,
+      JSON.stringify({
+        mockMembership,
+        mockAuthenticationState,
+        mockSignupNickname,
+      })
+  );
+}
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));

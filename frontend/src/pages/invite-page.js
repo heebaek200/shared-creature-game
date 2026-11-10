@@ -139,11 +139,10 @@ export function invitePage({ navigate }) {
                         </li>
                     </ul>
 
-                    <div
-                        class="alert d-none"
-                        role="status"
-                        aria-live="polite"
-                    ></div>
+                        <div class="alert d-none invite-feedback"
+                             role="status"
+                             aria-live="polite">
+                        </div>
 
                     <div class="d-grid gap-2 d-sm-flex">
 
@@ -176,7 +175,7 @@ export function invitePage({ navigate }) {
     const memberCount = element.querySelector('.member-count');
     const capacity = element.querySelector('.capacity');
     const remainingCapacity = element.querySelector('.remaining-capacity');
-    const alert = element.querySelector('.alert');
+    const alert = element.querySelector('.invite-feedback');
     const acceptButton = element.querySelector('.accept-button');
     const rejectButton = element.querySelector('.reject-button');
     const themeButton = element.querySelector('.theme-toggle');
@@ -276,7 +275,13 @@ export function invitePage({ navigate }) {
 
         try {
             const result = await acceptInvitation(token);
-            navigate(result.nextRoute);
+
+            // 초대 수락 후 로그인이 필요한 경우 초대 흐름을 유지합니다.
+            const nextRoute = result.nextRoute === '/login'
+                ? '/login?returnRoute=INVITE'
+                : result.nextRoute;
+
+            navigate(nextRoute);
 
         } catch (error) {
             showMessage(

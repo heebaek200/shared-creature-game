@@ -68,7 +68,7 @@ export function groupSelectPage({navigate}) {
                         <label class="form-label" for="group-name">그룹명</label>
                         <input class="form-control" id="group-name" name="name" minlength="2" maxlength="30" required placeholder="그룹명을 입력하세요">
                         <div class="form-text">2~30자 · 전역 중복 불가</div>
-                        <div class="invalid-feedback">그룹명을 2~30자 안으로 입력해주세요</div>
+                        <div class="invalid-feedback" id="group-name-error"></div>
                     </div>
                     
                     <div class="mb-3">
@@ -120,8 +120,39 @@ export function groupSelectPage({navigate}) {
     const createForm = element.querySelector('.group-form')
     const createSubmit = element.querySelector('.create-submit')
     const createAlert = element.querySelector('.create-alert')
+    const groupNameInput = element.querySelector('#group-name');
+    const groupNameError = element.querySelector('#group-name-error');
+
+    const showGroupNameError = (message) => {
+        groupNameInput.classList.add('is-invalid');
+        groupNameError.textContent = message;
+    };
+    const clearGroupNameError = () => {
+        groupNameInput.classList.remove('is-invalid');
+        groupNameError.textContent = '';
+    };
 
     const listAlert = element.querySelector('.list-alert')
+    // 회원가입 후 초대 그룹 가입 실패 사유 안내
+    const params = new URLSearchParams(window.location.search);
+    const allowedReasons = [
+        'INVITE_INVALID',
+        'GROUP_FULL',
+        'JOIN_COOLDOWN_ACTIVE',
+        'ALREADY_IN_GROUP',
+    ];
+
+    const reason = allowedReasons.includes(params.get('reason'))
+        ? params.get('reason')
+        : null;
+
+    const reasonMessages = {
+        INVITE_INVALID: '초대 링크가 유효하지 않습니다. 다른 그룹을 선택해 주세요.',
+        GROUP_FULL: '초대받은 그룹의 정원이 마감되었습니다. 다른 그룹에 가입하거나 새 그룹을 만들어 주세요.',
+        JOIN_COOLDOWN_ACTIVE: '그룹 탈퇴 또는 강퇴 후 24시간 가입 제한이 적용 중입니다.',
+        ALREADY_IN_GROUP: '이미 다른 그룹에 가입되어 있습니다.',
+    };
+
     const groupList = element.querySelector('.group-list')
     const pagination = element.querySelector('.pagination-area .pagination')
     const themeButton = element.querySelector('.theme-toggle')
@@ -138,6 +169,9 @@ export function groupSelectPage({navigate}) {
         target.classList.add('alert', `alert-${type}`);
         target.textContent = message;
     };
+    if (reason) {
+        showAlert(listAlert, reasonMessages[reason], 'warning');
+    }
 
     const hideAlert = (target) => {
         target.classList.add('d-none');
@@ -215,16 +249,16 @@ export function groupSelectPage({navigate}) {
                 
                 <td>
                     ${canJoin
-                        ? ` <button type="button" class="btn btn-success btn-sm join-button" data-group-id="${groupId}">가입</button>`
+                ? ` <button type="button" class="btn btn-success btn-sm join-button" data-group-id="${groupId}">가입</button>`
 
-                        : ` <button type="button" class="btn btn-outline-secondary btn-sm" disabled title="${escapeHtml(getBlockedMessage(group.joinBlockedReason))}"
+                : ` <button type="button" class="btn btn-outline-secondary btn-sm" disabled title="${escapeHtml(getBlockedMessage(group.joinBlockedReason))}"
                             >
-                                ${remaining <= 0    
-                                    ? '정원 마감'
-                                    : '가입 불가'
-                                }
+                                ${remaining <= 0
+                    ? '정원 마감'
+                    : '가입 불가'
+                }
                             </button>`
-                     }
+            }
                 </td>
               `;
 
@@ -281,7 +315,9 @@ export function groupSelectPage({navigate}) {
         loading = true;
         searchButton.disabled = true;
 
-        hideAlert(listAlert);
+        if (!reason) {
+            hideAlert(listAlert);
+        }
 
         groupList.innerHTML = `<tr>
         <td colspan="4" class="text-center py-4">
@@ -472,15 +508,26 @@ export function groupSelectPage({navigate}) {
             createForm.reset();
 
         } catch (error) {
-            showAlert(
-                createAlert,
-                error.message || '그룹 생성에 실패했습니다.'
+            const nameFieldError = error?.fieldErrors?.find(
+                (fieldError) => fieldError.field === 'name'
             );
+
+            if (error?.code === 'GROUP_NAME_ALREADY_USED') {
+                showGroupNameError(
+                    '이미 사용 중인 그룹명입니다. 다른 이름을 입력해 주세요.'
+                );
+            } else if (error?.code === 'INVALID_FIELD_VALUE' && nameFieldError) {
+                showGroupNameError(nameFieldError.message);
+            } else {
+                showAlert(
+                    createAlert,
+                    error.message || '그룹 생성에 실패했습니다.'
+                );
+            }
         } finally {
             createSubmit.disabled = creationSucceeded;
         }
     };
-
 
 
     const onJoin = async (event) => {
@@ -495,28 +542,51 @@ export function groupSelectPage({navigate}) {
         joining = true;
         button.disabled = true;
         button.textContent = '가입 중...'
-        
+
         try {
             const result = await joinGroup(groupId);
             navigate(result?.nextRoute || '/creature');
 
         } catch (error) {
+            const joinErrorMessages = {
+                JOIN_COOLDOWN_ACTIVE:
+                    '그룹 탈퇴 또는 강퇴 후 24시간 가입 제한이 적용 중입니다.',
+                ALREADY_IN_GROUP:
+                    '이미 다른 그룹에 가입되어 있습니다.',
+            };
+
             showAlert(
                 listAlert,
-                error.message || '그룹 가입에 실패했습니다.'
+                joinErrorMessages[error?.code] ||
+                error?.message ||
+                '그룹 가입에 실패했습니다.'
             );
-        } finally {
+        }
+        finally {
             joining = false;
             button.disabled = false;
             button.textContent = '가입';
         }
     };
 
-    const onRetry = () => {
-        loadGroup();
+    /**
+     * 그룹 목록의 클릭 이벤트를 한 곳에서 처리합니다.
+     * 가입 버튼과 재시도 버튼을 구분합니다.
+     */
+    const onGroupListClick = (event) => {
+        if (!(event.target instanceof Element)) return;
+
+        // 목록 조회 재시도 버튼을 클릭한 경우
+        if (event.target.closest('.retry-button')) {
+            void loadGroup();
+            return;
+        }
+
+        // 그룹 가입 버튼을 클릭한 경우
+        if (event.target.closest('.join-button')) {
+            void onJoin(event);
+        }
     };
-    groupList.addEventListener('click', onJoin);
-    groupList.addEventListener('click', onRetry);
 
     const onPagination = (event) => {
         const button = event.target.closest('[data-page]');
@@ -540,10 +610,11 @@ export function groupSelectPage({navigate}) {
         localStorage.setItem('theme', next);
     };
 
-    searchForm.addEventListener('input', onSearch);
+    searchForm.addEventListener('submit', onSearch);
     createToggle.addEventListener('click', onCreateToggle);
     createForm.addEventListener('submit', onCreate);
-    groupList.addEventListener('click', onJoin);
+    groupNameInput.addEventListener('input', clearGroupNameError);
+    groupList.addEventListener('click', onGroupListClick);
     pagination.addEventListener('click', onPagination);
     themeButton.addEventListener('click', onTheme);
 
@@ -555,7 +626,8 @@ export function groupSelectPage({navigate}) {
             searchForm.removeEventListener('submit', onSearch);
             createToggle.removeEventListener('click', onCreateToggle);
             createForm.removeEventListener('submit', onCreate);
-            groupList.removeEventListener('click', onJoin);
+            groupNameInput.removeEventListener('input', clearGroupNameError);
+            groupList.removeEventListener('click', onGroupListClick);
             pagination.removeEventListener('click', onPagination);
             themeButton.removeEventListener('click', onTheme);
         },
