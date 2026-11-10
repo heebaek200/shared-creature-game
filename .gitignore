@@ -319,3 +319,6 @@ build/
 /logs/*
 !/logs/.gitkeep
 /.vscode/settings.json
+
+# 실행 중 생성된 사진 제출 원본은 Git에 올리지 않습니다.
+/data/photo-submissions/

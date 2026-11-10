@@ -37,7 +37,7 @@ public class StrictQueryParameterInterceptor implements HandlerInterceptor {
                 .anyMatch(entry -> !allowed.contains(entry.getKey()) || entry.getValue() > 1);
         if (invalid) {
             throw new BusinessException(
-                    ErrorCode.INVALID_FIELD_VALUE,
+                    ErrorCode.INVALID_REQUEST,
                     "Query Parameter를 확인해 주세요."
             );
         }

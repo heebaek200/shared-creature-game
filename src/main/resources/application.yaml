@@ -45,3 +45,6 @@ portone:
   api-secret: ${PORTONE_API_SECRET:}
   webhook-secret: ${PORTONE_WEBHOOK_SECRET:}
   api-base-url: ${PORTONE_API_BASE_URL:https://api.portone.io}
+
+ngrok:
+  domain-uri: ${NGROK_DOMAIN_URI:}
