@@ -1,5 +1,6 @@
 // @ts-check
 import { ApiError } from '../api/client.js';
+import { mockCreatureHomeData } from './mock-creature-page.js';
 
 const MOCK_STATE_KEY = 'shared-creature-mock-state';
 
@@ -449,6 +450,30 @@ export const mockApi = {
     return {
       nextRoute: '/groups/select',
     };
+  },
+
+  // mock-creature-page 연결
+  async getCreatureHome() {
+    await delay(200);
+    return mockCreatureHomeData;
+  },
+
+  async getActiveCreatureSpecies() {
+    await delay(150);
+    const creature = mockCreatureHomeData.creature;
+    if (creature.creatureSpeciesId == null) return [];
+    return [{
+      creatureSpeciesId: creature.creatureSpeciesId,
+      code: creature.assetKey,
+      name: creature.speciesName,
+      assetKey: creature.assetKey,
+      displayOrder: 1,
+    }];
+  },
+
+  async getCurrentSeason() {
+    await delay(150);
+    return mockCreatureHomeData.season;
   },
 };
 

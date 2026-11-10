@@ -2,9 +2,9 @@ package com.team.sharedcreature.season.api;
 
 import com.team.sharedcreature.season.domain.CreatureSpecies;
 
-/** 관리자가 선택할 수 있는 활성 크리처 종을 표현합니다. */
+/** 그룹 구성원이 조회할 수 있는 활성 크리처 종을 표현합니다. */
 public record CreatureSpeciesResponse(
-        Long speciesId,
+        Long creatureSpeciesId,
         String code,
         String name,
         String assetKey,

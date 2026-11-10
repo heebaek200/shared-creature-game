@@ -1,7 +1,7 @@
 package com.team.sharedcreature.season.application;
 
 import com.team.sharedcreature.season.api.CreatureHomeResponse.ContributionActivityResponse;
-import com.team.sharedcreature.season.api.CreatureHomeResponse.PresentAvatarResponse;
+import com.team.sharedcreature.season.api.CreatureHomeResponse.OnlineMemberResponse;
 import com.team.sharedcreature.season.domain.GroupCreature;
 
 import java.time.Instant;
@@ -20,7 +20,7 @@ public interface CreatureHomeSupplementProvider {
     record Supplement(
             long todayExperience,
             List<ContributionActivityResponse> recentContributions,
-            List<PresentAvatarResponse> presentAvatars,
+            List<OnlineMemberResponse> onlineMembers,
             UUID streamInstanceId,
             long sequence
     ) {
