@@ -139,8 +139,11 @@ public class AuthService {
     }
 
     private void validateAttempt(OauthLoginAttempt attempt, String sessionHash, Instant now) {
-        if (!"PENDING".equals(attempt.getStatus()) || attempt.getExpiresAt().isBefore(now)) {
-            throw conflict(ErrorCode.OAUTH_STATE_INVALID, "만료되거나 이미 사용한 로그인 요청입니다.");
+        if (!"PENDING".equals(attempt.getStatus())) {
+            throw conflict(ErrorCode.OAUTH_STATE_INVALID, "이미 사용한 로그인 요청입니다.");
+        }
+        if (attempt.getExpiresAt().isBefore(now)) {
+            throw conflict(ErrorCode.OAUTH_SESSION_EXPIRED, "OAuth 인증 세션이 만료됐습니다.");
         }
         if (!attempt.getInitiatingSessionHash().equals(sessionHash)) {
             throw conflict(ErrorCode.OAUTH_SESSION_MISMATCH, "로그인을 시작한 브라우저 세션과 다릅니다.");

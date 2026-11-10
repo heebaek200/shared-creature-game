@@ -31,6 +31,13 @@ public class AuthController {
 
     private final AuthService authService;
 
+    private enum OAuthCallbackError {
+        OAUTH_ACCESS_DENIED,
+        OAUTH_INVALID_STATE,
+        OAUTH_SESSION_EXPIRED,
+        OAUTH_AUTHENTICATION_FAILED
+    }
+
     /** 인증 업무 Service를 주입받습니다. */
     public AuthController(AuthService authService) {
         this.authService = authService;
@@ -57,15 +64,28 @@ public class AuthController {
             @RequestParam(required = false) String error,
             HttpServletRequest request
     ) {
-        if (!"google".equalsIgnoreCase(provider) || error != null || code == null || state == null) {
-            return redirect("/login", "OAUTH_PROVIDER_REJECTED");
+        if (!"google".equalsIgnoreCase(provider)) {
+            return redirect("/login", OAuthCallbackError.OAUTH_INVALID_STATE.name());
+        }
+        // 공급자 오류와 인가 코드는 상호 배타적이므로 함께 전달되면 계약 위반입니다.
+        if (error != null && code != null) {
+            return redirect("/login", OAuthCallbackError.OAUTH_INVALID_STATE.name());
+        }
+        if (error != null) {
+            OAuthCallbackError callbackError = "access_denied".equalsIgnoreCase(error)
+                    ? OAuthCallbackError.OAUTH_ACCESS_DENIED
+                    : OAuthCallbackError.OAUTH_AUTHENTICATION_FAILED;
+            return redirect("/login", callbackError.name());
+        }
+        if (code == null || state == null) {
+            return redirect("/login", OAuthCallbackError.OAUTH_INVALID_STATE.name());
         }
         try {
             String route = authService.handleCallback(state, code, request.getSession());
             request.changeSessionId();
             return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(route)).build();
         } catch (BusinessException exception) {
-            return redirect("/login", exception.code());
+            return redirect("/login", callbackError(exception.errorCode()).name());
         }
     }
 
@@ -154,6 +174,16 @@ public class AuthController {
     private ResponseEntity<Void> redirect(String route, String code) {
         URI location = UriComponentsBuilder.fromPath(route).queryParam("oauthError", code).build().toUri();
         return ResponseEntity.status(HttpStatus.FOUND).location(location).build();
+    }
+
+    /** 내부 업무 오류를 프론트엔드와 합의한 OAuth Callback 오류로 제한합니다. */
+    private OAuthCallbackError callbackError(ErrorCode errorCode) {
+        return switch (errorCode) {
+            case OAUTH_STATE_INVALID -> OAuthCallbackError.OAUTH_INVALID_STATE;
+            case SESSION_EXPIRED, OAUTH_SESSION_EXPIRED, OAUTH_SESSION_MISMATCH ->
+                    OAuthCallbackError.OAUTH_SESSION_EXPIRED;
+            default -> OAuthCallbackError.OAUTH_AUTHENTICATION_FAILED;
+        };
     }
 
     private void requireValidSession(HttpServletRequest request) {
