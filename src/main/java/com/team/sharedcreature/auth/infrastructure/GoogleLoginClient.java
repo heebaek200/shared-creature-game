@@ -55,6 +55,11 @@ public class GoogleLoginClient implements SocialLoginClient {
         this.jwtDecoder = jwtDecoder;
     }
 
+    @Override
+    public String provider() {
+        return "GOOGLE";
+    }
+
     /** Google 공식 Authorization Endpoint URL을 생성합니다. */
     @Override
     public String authorizationUrl(String state, String nonce) {
@@ -77,7 +82,7 @@ public class GoogleLoginClient implements SocialLoginClient {
      * 인가 코드를 Token으로 교환하고 검증된 Google 사용자 프로필을 반환합니다.
      */
     @Override
-    public SocialProfile exchange(String code, String expectedNonce) {
+    public SocialProfile exchange(String code, String expectedNonce, String state) {
         requireConfigured();
         if (!StringUtils.hasText(code) || !StringUtils.hasText(expectedNonce)) {
             throw invalidToken("Google 인증 요청 정보가 올바르지 않습니다.");
