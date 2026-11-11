@@ -7,6 +7,13 @@ logging:
     com.team.sharedcreature: DEBUG    # 내가 작성한 코드는 DEBUG 이상까지 출력
 
 spring:
+  # 여러 개의 5분 Cron이 동시에 도착해도 하나의 긴 작업이 나머지를 막지 않도록 설정한다.
+  task:
+    scheduling:
+      pool:
+        size: 6
+      thread-name-prefix: sharedcreature-scheduler-
+
   # 팀원 PC의 로컬 MySQL을 사용한다.
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -38,4 +45,9 @@ spring:
 
 app:
   scheduler:
-    enabled: true  # 스케쥴러(이 프로젝트에서는 시즌 및 퀘스트 갱신 역할) 기능 활성화 여부
+    # local에서는 서버 기동 시 누락 작업을 복구하고 가동 중에는 자동 점검한다.
+    enabled: true
+    photo-retention-enabled: true
+    payment-webhook-enabled: true
+    # #22 환불 업무 Bean이 병합된 뒤 실DB 검증까지 마치기 전에는 활성화하지 않는다.
+    refund-reconciliation-enabled: false

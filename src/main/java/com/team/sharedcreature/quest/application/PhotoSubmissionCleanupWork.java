@@ -54,7 +54,18 @@ public class PhotoSubmissionCleanupWork implements PhotoRetentionWork {
      */
     @Override
     public Summary cleanup(Instant now) {
+        return cleanup(now, () -> { });
+    }
+
+    /**
+     * 정리 대상을 순회하는 동안 20건마다 실행권을 갱신합니다.
+     * Heartbeat 실패는 일반 사진 정리 실패처럼 삼키지 않고 즉시 전파합니다.
+     * 단건 파일 I/O가 Lease보다 길어지면 갱신하지 못할 수 있으므로 상한 감시가 별도로 필요합니다.
+     */
+    @Override
+    public Summary cleanup(Instant now, Runnable heartbeat) {
         Objects.requireNonNull(now, "now");
+        Objects.requireNonNull(heartbeat, "heartbeat");
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("사진 파일 정리는 DB 트랜잭션 밖에서만 실행해야 합니다.");
         }
@@ -73,7 +84,9 @@ public class PhotoSubmissionCleanupWork implements PhotoRetentionWork {
         boolean more = pending.size() > BATCH_SIZE || invalid.size() > BATCH_SIZE || valid.size() > BATCH_SIZE;
 
         // PENDING 실패 확정은 행 잠금과 별도 Commit으로 처리합니다.
+        int attempted = 0;
         for (Long id : pending.subList(0, Math.min(pending.size(), BATCH_SIZE))) {
+            if (attempted++ % 20 == 0) heartbeat.run();
             try {
                 if (transactions.expirePending(id, now)) pendingCount++;
             } catch (RuntimeException exception) {
@@ -82,10 +95,12 @@ public class PhotoSubmissionCleanupWork implements PhotoRetentionWork {
             }
         }
         for (Long id : invalid.subList(0, Math.min(invalid.size(), BATCH_SIZE))) {
+            if (attempted++ % 20 == 0) heartbeat.run();
             if (cleanupOneFile(id, RetentionKind.INVALID, now)) invalidCount++;
             else failures += isStillEligible(id, RetentionKind.INVALID, now) ? 1 : 0;
         }
         for (Long id : valid.subList(0, Math.min(valid.size(), BATCH_SIZE))) {
+            if (attempted++ % 20 == 0) heartbeat.run();
             if (cleanupOneFile(id, RetentionKind.VALID, now)) validCount++;
             else failures += isStillEligible(id, RetentionKind.VALID, now) ? 1 : 0;
         }

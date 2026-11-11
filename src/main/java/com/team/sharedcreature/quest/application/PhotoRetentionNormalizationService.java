@@ -1,6 +1,8 @@
 package com.team.sharedcreature.quest.application;
 
 import com.team.sharedcreature.admin.application.SchedulerJobRunner;
+import com.team.sharedcreature.admin.application.SchedulerClaimTicket;
+import com.team.sharedcreature.admin.application.SchedulerExecutionLifecycleService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -26,6 +28,7 @@ public class PhotoRetentionNormalizationService {
     private static final Duration LEASE = Duration.ofMinutes(3);
 
     private final SchedulerJobRunner jobRunner;
+    private final SchedulerExecutionLifecycleService lifecycle;
     private final PhotoRetentionWork work;
     private final Clock clock;
     private final String ownerId = "photo-retention-" + UUID.randomUUID();
@@ -35,8 +38,14 @@ public class PhotoRetentionNormalizationService {
      * 구현체가 누락된 상태에서 조용히 성공하는 일이 없도록 필수 의존성으로 받습니다.
      * 생성자에서 파일 정리나 실행권 선점은 수행하지 않습니다.
      */
-    public PhotoRetentionNormalizationService(SchedulerJobRunner jobRunner, PhotoRetentionWork work, Clock clock) {
+    public PhotoRetentionNormalizationService(
+            SchedulerJobRunner jobRunner,
+            SchedulerExecutionLifecycleService lifecycle,
+            PhotoRetentionWork work,
+            Clock clock
+    ) {
         this.jobRunner = jobRunner;
+        this.lifecycle = lifecycle;
         this.work = work;
         this.clock = clock;
     }
@@ -66,9 +75,12 @@ public class PhotoRetentionNormalizationService {
         try {
             // 실행권을 선점한 호출만 사진 업무를 수행합니다.
             SchedulerJobRunner.ExecutionResult execution = jobRunner.run(
-                    JOB_TYPE, scheduledFor, ownerId, LEASE, () -> {
+                    JOB_TYPE, scheduledFor, ownerId, LEASE, (SchedulerClaimTicket ticket) -> {
+                        // 실제 사진 정리 항목의 진행 중에만 Lease를 연장합니다.
+                        // 다른 인스턴스가 재선점했다면 갱신 실패 예외로 즉시 업무를 중단합니다.
                         PhotoRetentionWork.Summary outcome = Objects.requireNonNull(
-                                work.cleanup(now), "사진 정리 결과는 null일 수 없습니다.");
+                                work.cleanup(now, () -> lifecycle.renewLease(ticket, LEASE)),
+                                "사진 정리 결과는 null일 수 없습니다.");
                         summary.set(outcome);
                         if (outcome.failedCount() > 0) {
                             throw new IllegalStateException("사진 정리 항목 실패: " + outcome.failedCount());

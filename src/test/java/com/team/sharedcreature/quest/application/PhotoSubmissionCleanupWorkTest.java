@@ -177,4 +177,37 @@ class PhotoSubmissionCleanupWorkTest {
             TransactionSynchronizationManager.setActualTransactionActive(original);
         }
     }
+    /**
+     * 총 21개를 처리할 때 첫 건과 21번째 처리 직전에 Heartbeat 합니다.
+     * 작업이 오래 걸려도 각 항목 사이에서 Lease 갱신 기회가 생깁니다.
+     * 나머지 업로드/DB 로직은 Mockito로 대체합니다.
+     */
+    @Test
+    void heartbeatEveryTwentyAttempts() {
+        List<Long> ids = LongStream.rangeClosed(1, 21).boxed().toList();
+        when(repository.findStalePendingIds(NOW.minus(Duration.ofHours(1)), PageRequest.of(0, 101)))
+                .thenReturn(ids);
+        java.util.concurrent.atomic.AtomicInteger heartbeats = new java.util.concurrent.atomic.AtomicInteger();
+
+        var result = work.cleanup(NOW, heartbeats::incrementAndGet);
+        assertEquals(2, heartbeats.get());
+        assertEquals(0, result.failedCount());
+        verify(transactions, times(21)).expirePending(anyLong(), eq(NOW));
+    }
+
+    /**
+     * 실행권을 상실했다면 처리 중 오류를 단건 실패처럼 삼키면 안 됩니다.
+     * Heartbeat 예외는 SchedulerJobRunner까지 전달해야 합니다.
+     * 작업 중단 시 DB/파일을 더 이상 수정하지 않아야 합니다.
+     */
+    @Test
+    void heartbeatFailureAbortsWork() {
+        when(repository.findStalePendingIds(NOW.minus(Duration.ofHours(1)), PageRequest.of(0, 101)))
+                .thenReturn(List.of(4L));
+        assertThrows(IllegalStateException.class, () -> work.cleanup(NOW, () -> {
+            throw new IllegalStateException("lease lost");
+        }));
+        verifyNoInteractions(transactions, storage);
+    }
+
 }

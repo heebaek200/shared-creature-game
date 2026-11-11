@@ -1,6 +1,7 @@
 package com.team.sharedcreature.quest.application;
 
 import java.time.Instant;
+import java.util.Objects;
 
 /**
  * 사진 정리 업무와 #24 Scheduler 실행권 사이의 계약입니다.
@@ -15,6 +16,16 @@ public interface PhotoRetentionWork {
      * 완료된 항목은 재호출 시 중복 변경하지 않도록 구현해야 합니다.
      */
     Summary cleanup(Instant now);
+
+    /**
+     * 실행권 Heartbeat를 지원하는 정리 계약.
+     * 기존 구현과 테스트는 cleanup(now)를 곗고 사용할 수 있다.
+     * 실제 사진 정리 구현은 여러 항목 사이에서 콜백을 호출한다.
+     */
+    default Summary cleanup(Instant now, Runnable heartbeat) {
+        Objects.requireNonNull(heartbeat, "heartbeat");
+        return cleanup(now);
+    }
 
     /**
      * 한 실행에서 실제로 처리된 항목과 실패·잔여 가능성을 기록합니다.
