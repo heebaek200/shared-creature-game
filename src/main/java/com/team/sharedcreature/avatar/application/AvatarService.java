@@ -6,17 +6,28 @@ import com.team.sharedcreature.avatar.domain.AvatarEquipment;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
 import com.team.sharedcreature.avatar.infrastructure.AvatarEquipmentRepository;
 import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
+import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature._core.exception.ErrorCode;
+import com.team.sharedcreature.auth.domain.User;
+import com.team.sharedcreature.auth.infrastructure.UserRepository;
+import com.team.sharedcreature.payment.domain.Purchase;
+import com.team.sharedcreature.payment.domain.RefundRequest;
+import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
+import com.team.sharedcreature.payment.infrastructure.RefundRequestRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.time.Clock;
+import java.time.Instant;
 
 /**
  * 사용자의 보유 아이템과 아바타 장착 정보를 조회합니다.
@@ -27,19 +38,35 @@ public class AvatarService {
 
     private final OwnedItemRepository ownedItemRepository;
     private final AvatarEquipmentRepository avatarEquipmentRepository;
+    private final UserRepository userRepository;
+    private final PurchaseRepository purchaseRepository;
+    private final RefundRequestRepository refundRequestRepository;
+    private final Clock clock;
 
     /**
-     * 보유 아이템과 아바타 장착 정보 Repository를 주입받습니다.
+     * 아바타 조회·장착에 필요한 Repository와 서버 시계를 주입받습니다.
      *
      * @param ownedItemRepository 보유 아이템 Repository
      * @param avatarEquipmentRepository 아바타 장착 정보 Repository
+     * @param userRepository 사용자 Repository
+     * @param purchaseRepository 구매 Repository
+     * @param refundRequestRepository 환불 요청 Repository
+     * @param clock 서버 현재 시각의 기준
      */
     public AvatarService(
             OwnedItemRepository ownedItemRepository,
-            AvatarEquipmentRepository avatarEquipmentRepository
+            AvatarEquipmentRepository avatarEquipmentRepository,
+            UserRepository userRepository,
+            PurchaseRepository purchaseRepository,
+            RefundRequestRepository refundRequestRepository,
+            Clock clock
     ) {
         this.ownedItemRepository = ownedItemRepository;
         this.avatarEquipmentRepository = avatarEquipmentRepository;
+        this.userRepository = userRepository;
+        this.purchaseRepository = purchaseRepository;
+        this.refundRequestRepository = refundRequestRepository;
+        this.clock = clock;
     }
 
     /**
@@ -128,5 +155,170 @@ public class AvatarService {
                         slots.get("ACCESSORY")
                 )
         );
+    }
+
+    /**
+     * 본인의 보유 아이템을 지정한 아바타 슬롯에 장착합니다.
+     *
+     * 사용 확정과 슬롯 변경은 하나의 트랜잭션으로 처리합니다.
+     *
+     * @param userId 로그인한 사용자 ID
+     * @param slot 장착할 슬롯
+     * @param ownedItemId 장착할 보유 아이템 ID
+     * @param confirmFirstUse 최초 사용 동의 여부
+     * @return 변경된 아바타의 전체 슬롯 정보
+     * @throws BusinessException 잘못된 슬롯, 소유권·상태 위반,
+     *                          환불 진행 또는 최초 사용 동의 누락인 경우
+     */
+    @Transactional
+    public AvatarResponse equipAvatarItem(
+            Long userId,
+            String slot,
+            Long ownedItemId,
+            boolean confirmFirstUse
+    ) {
+        validateSlot(slot);
+
+        // 같은 사용자의 장착·해제를 직렬화하고 최초 슬롯 생성 경합을 막습니다.
+        User user = userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)
+                );
+
+        Long purchaseId = ownedItemRepository
+                .findPurchaseIdByIdAndUserId(ownedItemId, userId)
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)
+                );
+
+        // 구매 > 보유 아이템 > 환불 요청 순서로 잠금을 획득합니다.
+        Purchase purchase = purchaseRepository.findByIdForUpdate(purchaseId)
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)
+                );
+
+        if (!userId.equals(purchase.getUser().getId())) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+
+        OwnedItem item = ownedItemRepository
+                .findByIdAndUserIdForUpdate(ownedItemId, userId)
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)
+                );
+
+        // 최초 구매 ID 조회 이후에도 연결 관계가 같은지 재검사합니다.
+        if (!purchaseId.equals(item.getPurchase().getId())) {
+            throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
+        }
+
+        List<RefundRequest> refunds =
+                refundRequestRepository.findAllByPurchaseIdForUpdate(purchaseId);
+
+        if (item.getRevokedAt() != null || "REVOKED".equals(item.getStatus())) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+
+        if (!"PAID".equals(purchase.getStatus())) {
+            throw new BusinessException(
+                    ErrorCode.CONCURRENT_MODIFICATION,
+                    "결제 완료 상태의 아이템만 장착할 수 있습니다."
+            );
+        }
+
+        if (!slot.equals(item.getShopItem().getSlotCode())) {
+            throw new BusinessException(ErrorCode.SLOT_MISMATCH); // 아이템 슬롯과 장착 대상 슬롯이 다름
+        }
+
+        boolean refundInProgress = refunds.stream()
+                .anyMatch(refund ->
+                        Set.of("REQUESTED", "CANCEL_PENDING", "CANCEL_UNKNOWN")
+                                .contains(refund.getStatus())
+                );
+
+        if (refundInProgress) {
+            throw new BusinessException(
+                    ErrorCode.CONCURRENT_MODIFICATION,
+                    "환불 진행 중인 아이템은 장착할 수 없습니다."
+            );
+        }
+
+        AvatarEquipment equipment = avatarEquipmentRepository
+                .findByUserIdAndSlotCodeForUpdate(userId, slot)
+                .orElse(null);
+
+        // 잠금 대기가 끝난 뒤의 서버 시각으로 사용·변경 시각을 기록합니다.
+        Instant now = clock.instant();
+
+        if (equipment == null) {
+            equipment = AvatarEquipment.createEmpty(user, slot, now);
+        }
+
+        item.confirmUse(confirmFirstUse, now);
+        equipment.equip(item, now);
+
+        avatarEquipmentRepository.save(equipment);
+
+        // 응답 재조회 전에 사용 이력과 장착 변경을 DB에 반영합니다.
+        // flush는 Commit이 아니므로 이후 실패하면 함께 롤백됩니다.
+        avatarEquipmentRepository.flush();
+
+        return getAvatar(userId);
+    }
+
+    /**
+     * 아바타 슬롯이 허용된 값인지 검증합니다.
+     *
+     * @param slot 검사할 슬롯 코드
+     * @throws BusinessException 허용되지 않은 슬롯인 경우
+     */
+    private void validateSlot(String slot) {
+        if (slot == null
+                || !Set.of("HEAD", "FACE", "BODY", "ACCESSORY").contains(slot)) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_FIELD_VALUE, // 허용하지 않는 슬롯
+                    "슬롯은 HEAD, FACE, BODY, ACCESSORY 중 하나여야 합니다."
+            );
+        }
+    }
+
+    /**
+     * 지정한 아바타 슬롯의 아이템을 해제합니다.
+     *
+     * 보유 아이템의 사용 상태와 최초 사용 시각은 변경하지 않습니다.
+     *
+     * @param userId 로그인한 사용자 ID
+     * @param slot 해제할 슬롯
+     * @return 변경된 아바타의 전체 슬롯 정보
+     * @throws BusinessException 허용되지 않은 슬롯이거나 사용자가 없는 경우
+     */
+    @Transactional
+    public AvatarResponse unequipAvatarItem(Long userId, String slot) {
+        validateSlot(slot);
+
+        // 장착과 같은 사용자 잠금을 먼저 획득해 동시 변경을 순서대로 처리합니다.
+        userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)
+                );
+
+        AvatarEquipment equipment = avatarEquipmentRepository
+                .findByUserIdAndSlotCodeForUpdate(userId, slot)
+                .orElse(null);
+
+        // 슬롯 행이 없거나 이미 비어 있다면 현재 아바타를 그대로 반환합니다.
+        if (equipment == null || equipment.getOwnedItem() == null) {
+            return getAvatar(userId);
+        }
+
+        Instant now = clock.instant();
+
+        // 슬롯 연결만 제거하며 아이템의 OWNED_USED와 usedAt은 유지합니다.
+        equipment.unequip(now);
+
+        // 응답을 조회하기 전에 장착 해제 변경을 DB에 반영합니다.
+        avatarEquipmentRepository.flush();
+
+        return getAvatar(userId);
     }
 }

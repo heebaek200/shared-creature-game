@@ -6,6 +6,7 @@ import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.avatar.application.AvatarService;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
@@ -13,6 +14,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.List;
 
@@ -25,6 +30,62 @@ import java.util.List;
 public class AvatarController {
 
     private final AvatarService avatarService;
+
+    /**
+     * 본인의 보유 아이템을 지정한 아바타 슬롯에 장착합니다.
+     *
+     * @param loginUser 세션에서 확인한 로그인 사용자
+     * @param slot 장착할 슬롯
+     * @param request 보유 아이템 ID와 최초 사용 동의 여부
+     * @return 변경된 아바타의 전체 슬롯 정보
+     */
+    @PutMapping("/avatar/equipments/{slot}")
+    public ApiResponse<AvatarResponse> equipAvatarItem(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @PathVariable(name = "slot")
+            @Pattern(
+                    regexp = "HEAD|FACE|BODY|ACCESSORY",
+                    message = "슬롯은 HEAD, FACE, BODY, ACCESSORY 중 하나여야 합니다."
+            )
+            String slot,
+            @Valid @RequestBody EquipAvatarItemRequest request
+    ) {
+        // 사용자 ID는 요청 본문이 아닌 인증된 세션 정보에서 가져옵니다.
+        AvatarResponse response = avatarService.equipAvatarItem(
+                loginUser.id(),
+                slot,
+                request.ownedItemId(),
+                request.confirmFirstUse()
+        );
+
+        return ApiResponse.success(response);
+    }
+
+    /**
+     * 본인 아바타의 지정한 슬롯에서 아이템을 해제합니다.
+     *
+     * @param loginUser 세션에서 확인한 로그인 사용자
+     * @param slot 해제할 슬롯
+     * @return 변경된 아바타의 전체 슬롯 정보
+     */
+    @DeleteMapping("/avatar/equipments/{slot}")
+    public ApiResponse<AvatarResponse> unequipAvatarItem(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @PathVariable(name = "slot")
+            @Pattern(
+                    regexp = "HEAD|FACE|BODY|ACCESSORY",
+                    message = "슬롯은 HEAD, FACE, BODY, ACCESSORY 중 하나여야 합니다."
+            )
+            String slot
+    ) {
+        // 해제 대상은 슬롯으로 지정하므로 요청 본문은 받지 않습니다.
+        AvatarResponse response = avatarService.unequipAvatarItem(
+                loginUser.id(),
+                slot
+        );
+
+        return ApiResponse.success(response);
+    }
 
     /**
      * 아바타 Service를 주입받습니다.

@@ -6,7 +6,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.repository.query.Param;
+import jakarta.persistence.LockModeType;
 
 import java.util.Optional;
 
@@ -59,5 +61,45 @@ public interface OwnedItemRepository extends JpaRepository<OwnedItem, Long> {
             @Param("slot") String slot,
             @Param("status") String status,
             Pageable pageable
+    );
+
+    /**
+     * 본인 보유 아이템에 연결된 구매 ID를 조회합니다.
+     *
+     * @param ownedItemId 보유 아이템 ID
+     * @param userId 로그인한 사용자 ID
+     * @return 연결된 구매 ID, 본인 아이템이 아니거나 없으면 빈 Optional
+     */
+    // 구매를 먼저 잠그기 위한 식별 정보만 조회하며 아직 아이템을 잠그지 않습니다.
+    @Query("""
+        select item.purchase.id
+        from OwnedItem item
+        where item.id = :ownedItemId
+        and item.user.id = :userId
+        """)
+    Optional<Long> findPurchaseIdByIdAndUserId(
+            @Param("ownedItemId") Long ownedItemId,
+            @Param("userId") Long userId
+    );
+
+    /**
+     * 본인의 보유 아이템을 비관적 쓰기 잠금으로 조회합니다.
+     *
+     * 호출자는 연결된 구매를 먼저 잠근 상태여야 합니다.
+     *
+     * @param ownedItemId 보유 아이템 ID
+     * @param userId 로그인한 사용자 ID
+     * @return 잠근 보유 아이템, 본인 아이템이 아니거나 없으면 빈 Optional
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        select item
+        from OwnedItem item
+        where item.id = :ownedItemId
+        and item.user.id = :userId
+        """)
+    Optional<OwnedItem> findByIdAndUserIdForUpdate(
+            @Param("ownedItemId") Long ownedItemId,
+            @Param("userId") Long userId
     );
 }

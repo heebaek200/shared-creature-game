@@ -3,8 +3,14 @@ package com.team.sharedcreature.avatar.infrastructure;
 import com.team.sharedcreature.avatar.domain.AvatarEquipment;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import jakarta.persistence.LockModeType;
+
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 아바타 슬롯별 장착 정보의 저장과 조회를 담당합니다.
@@ -25,4 +31,24 @@ public interface AvatarEquipmentRepository
             "ownedItem.shopItem"
     })
     List<AvatarEquipment> findAllByUserId(Long userId); // 장착하지 않은 슬롯도 응답에는 null로 포함
+
+    /**
+     * 사용자의 특정 아바타 슬롯을 비관적 쓰기 잠금으로 조회합니다.
+     *
+     * @param userId 로그인한 사용자 ID
+     * @param slotCode 조회할 장착 슬롯 코드
+     * @return 잠근 슬롯 정보, 슬롯 행이 없으면 빈 Optional
+     */
+    // 슬롯 행 자체를 잠그며 연결된 아이템의 잠금은 별도로 처리합니다.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        select equipment
+        from AvatarEquipment equipment
+        where equipment.user.id = :userId
+        and equipment.slotCode = :slotCode
+        """)
+    Optional<AvatarEquipment> findByUserIdAndSlotCodeForUpdate(
+            @Param("userId") Long userId,
+            @Param("slotCode") String slotCode
+    );
 }
