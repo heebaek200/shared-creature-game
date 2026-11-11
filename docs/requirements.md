@@ -227,7 +227,7 @@ EXIF는 실제 Android Chrome에서 촬영·업로드 및 실패 처리를 검�
 | 백엔드 | Java 21, Spring Boot, MySQL |
 | 프론트엔드 | Vanilla JavaScript ES Module, Vite, Bootstrap v5, Full CSR |
 | Java 좌표 | Group `com.team`, Artifact `shared-creature-game`, Package `com.team.sharedcreature` |
-| 데이터베이스 | 업무 테이블 40개 (`photo_submissions` 포함), 인프라 테이블 별도 |
+| 데이터베이스 | 업무 테이블 41개 (`user_daily_activities`, `photo_submissions` 포함), 인프라 테이블 별도 |
 | 시각 | DB UTC `DATETIME(6)`, 업무 경계 `Asia/Seoul` |
 | 개발·통합 환경 | localhost HTTP / 모바일·OAuth·PG 검증에는 임시 HTTPS 터널 |
 | 로그인 시도 | 10분 유효, 종료 후 24시간에 시도 이력 삭제 |
@@ -248,7 +248,7 @@ EXIF는 실제 Android Chrome에서 촬영·업로드 및 실패 처리를 검�
 | 실시간 | Commit 이후 그룹원 크리처·기여도·아바타 갱신 |
 | 결제·환불 | 테스트 결제·Webhook/Redirect, 미사용 승인·사용 후 거절, 중복 처리 방지 |
 | 관리자·UI | 대시보드, 신고·환불·경고, 반응형·라이트/다크 모드 |
-| AI·데이터 | Gemini 교정 실패 시 원문 유지, 40개 업무 테이블과 설계 정합성 |
+| AI·데이터 | Gemini 교정 실패 시 원문 유지, 41개 업무 테이블과 설계 정합성 |
 | 통합 검증 | 임시 HTTPS 공개 주소에서 모바일 OAuth·결제 Redirect·Webhook 검증 |
 
 EXIF 제출은 미처리 1시간 초과 시 실패로 전환합니다. 실패 파일·좌표는 판정 후 24시간 이내, 성공 파일·좌표는 시즌 종료 후 30일에 삭제하고 최소 판정 이력은 유지합니다.

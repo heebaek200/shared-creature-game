@@ -60,4 +60,51 @@ public class UserReport {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    /** 같은 그룹의 활성 회원 사이에서 접수된 신고를 생성합니다. */
+    public static UserReport receive(
+            User reporter,
+            User reported,
+            Group group,
+            String category,
+            String content,
+            Instant now
+    ) {
+        UserReport report = new UserReport();
+        report.reporterUser = reporter;
+        report.reportedUser = reported;
+        report.group = group;
+        report.category = category;
+        report.content = content;
+        report.status = "RECEIVED";
+        report.createdAt = now;
+        report.updatedAt = now;
+        return report;
+    }
+
+    /** 접수 중인 신고를 기각하고 처리 사유를 보존합니다. */
+    public void reject(User handler, String reason, Instant now) {
+        requireReceived();
+        status = "REJECTED";
+        handledByUser = handler;
+        handledAt = now;
+        resolution = reason;
+        updatedAt = now;
+    }
+
+    /** 접수 중인 신고를 강퇴 조치 완료로 확정합니다. */
+    public void resolve(User handler, String reason, Instant now) {
+        requireReceived();
+        status = "RESOLVED";
+        handledByUser = handler;
+        handledAt = now;
+        resolution = reason;
+        updatedAt = now;
+    }
+
+    private void requireReceived() {
+        if (!"RECEIVED".equals(status)) {
+            throw new IllegalStateException("이미 처리된 신고입니다.");
+        }
+    }
 }

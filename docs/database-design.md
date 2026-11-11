@@ -4,7 +4,7 @@
 
 ### 구현할 기능
 
-공동 육성 게임의 **업무 테이블 40개**를 Spring Boot/JPA와 MySQL 8로 관리합니다. 사용자·그룹·시즌·퀘스트·결제 기록은 업무 상태와 이력을 분리하여 보존합니다.
+공동 육성 게임의 **업무 테이블 41개**를 Spring Boot/JPA와 MySQL 8로 관리합니다. 사용자·그룹·시즌·퀘스트·결제 기록은 업무 상태와 이력을 분리하여 보존합니다.
 
 ### 완료 확인
 
@@ -17,10 +17,10 @@
 | 계정·인증 | 4 | 회원·소셜 계정·프로필·OAuth 시도 |
 | 그룹·운영 | 7 | 그룹·멤버십·초대·제재·관리 이력 |
 | 시즌·크리처·랭킹 | 9 | 시즌·종·크리처·기여·종료 Snapshot |
-| 퀘스트·활동 | 9 | 템플릿·배정·완료·보상·사진 |
+| 퀘스트·활동 | 10 | 템플릿·배정·완료·일별 활동·보상·사진 |
 | 결제·아바타 | 8 | 상품·주문·거래·보유·장착·환불·Webhook |
 | 운영 공통 | 3 | Scheduler·감사·멱등 요청 |
-| **합계** | **40** | Spring Session 등 인프라 테이블은 제외 |
+| **합계** | **41** | Spring Session 등 인프라 테이블은 제외 |
 
 `notifications`는 추후 구현이며 운영 경고는 원본 상태에서 조회합니다.
 
@@ -61,7 +61,7 @@
 | `season_member_rank_snapshots` | 개인 종료 랭킹 Snapshot |
 | `season_group_rank_snapshots` | 그룹 종료 랭킹 Snapshot |
 
-### 3.4. 퀘스트·활동 — 9개
+### 3.4. 퀘스트·활동 — 10개
 
 | 테이블 | 구현할 기능 |
 |---|---|
@@ -72,6 +72,7 @@
 | `quest_completions` | 회원별 한 번의 완료 |
 | `quest_reward_ledgers` | 경험치·기여 지급 원장 |
 | `user_activity_events` | 서버 행동 집계 원본 |
+| `user_daily_activities` | 인증 API 일별 활동·당시 소속 Snapshot |
 | `service_check_ins` | 일일 체크인 |
 | `photo_submissions` | EXIF 검증·파일 정리 기록 |
 
@@ -152,6 +153,9 @@ erDiagram
     users ||--o{ user_activity_events : performs
     group_memberships ||--o{ user_activity_events : membership
     group_seasons ||--o{ user_activity_events : season
+    users ||--o{ user_daily_activities : active_on
+    group_memberships o|--o{ user_daily_activities : membership_snapshot
+    game_groups o|--o{ user_daily_activities : group_snapshot
     user_activity_events ||--o| service_check_ins : checkin
     users ||--o{ photo_submissions : submits
     quest_assignments ||--o{ photo_submissions : verifies
@@ -163,6 +167,7 @@ erDiagram
 erDiagram
     shop_items ||--o{ purchases : sold_as
     users ||--o{ purchases : buys
+    game_groups o|--o{ purchases : captured_at_purchase
     purchases ||--o{ payment_transactions : transactions
     purchases ||--o| owned_items : grants
     shop_items ||--o{ owned_items : owned
@@ -230,6 +235,7 @@ erDiagram
 | `quest_periods`, `quest_template_versions` | `quest_assignments` | 각각 1:N |
 | `users` + `quest_assignments` | `quest_completions` | 조합당 0..1 |
 | `group_memberships`, `group_seasons` | `user_activity_events` | 각각 1:N, 발생 당시 귀속 유지 |
+| `users`, `group_memberships`, `game_groups` | `user_daily_activities` | 사용자·KST 날짜·멤버십 범위당 1건, 발생 당시 귀속 유지 |
 | `purchases` | `payment_transactions`, `refund_requests` | 1:N, 진행 중 환불 1건 이하 |
 | `purchases` | `owned_items` | 1:0..1 |
 | `users` + 슬롯 | `avatar_equipments` | 조합당 0..1 |
@@ -966,7 +972,28 @@ UPDATE game_groups
 | `metadata` | `JSON` | — |
 | `created_at` | `DATETIME(6)` | — |
 
-### 12.8. `service_check_ins`
+### 12.8. `user_daily_activities`
+
+**구현할 기능** — 성공한 인증 API 활동을 KST 날짜와 당시 소속별로 보존합니다.
+
+**주요 규칙**
+
+`activity_membership_key=COALESCE(membership_id,0)` STORED; `(user_id,business_date,activity_membership_key)` UNIQUE. 같은 날 그룹 이동 시 소속별 행을 유지하고 전체 집계는 사용자를 중복 제거합니다. `users.last_active_at`의 강퇴 판단과 10분 갱신 정책은 유지합니다.
+
+| 컬럼 | 자료형 | 역할·제약 |
+|---|---|---|
+| `id` | `BIGINT` | PK, AUTO_INCREMENT |
+| `user_id` | `BIGINT` | 활동 당시 활성 계정 |
+| `membership_id` | `BIGINT` | 활동 당시 멤버십, nullable |
+| `group_id_snapshot` | `BIGINT` | 활동 당시 그룹, nullable |
+| `business_date` | `DATE` | KST 날짜 |
+| `first_active_at` | `DATETIME(6)` | 해당 범위 최초 활동 |
+| `last_active_at` | `DATETIME(6)` | 해당 범위 최종 활동 |
+| `activity_membership_key` | `BIGINT` | STORED, 멤버십 없음은 0 |
+| `created_at` | `DATETIME(6)` | — |
+| `updated_at` | `DATETIME(6)` | — |
+
+### 12.9. `service_check_ins`
 
 **구현할 기능** — 사용자별 KST 하루 한 번 체크인 기록입니다.
 
@@ -984,7 +1011,7 @@ UPDATE game_groups
 | `is_morning` | `BOOLEAN` | — |
 | `created_at` | `DATETIME(6)` | — |
 
-### 12.9. `photo_submissions`
+### 12.10. `photo_submissions`
 
 **구현할 기능** — JPEG 사진 EXIF 검증과 파일 정리 결과를 저장합니다.
 
@@ -1042,13 +1069,14 @@ UPDATE game_groups
 
 **주요 규칙**
 
-`order_number` UUID UNIQUE=PortOne `paymentId`; `status=READY/PAID/FAILED/CANCELLED`, 통화 `KRW`.
+`order_number` UUID UNIQUE=PortOne `paymentId`; `status=READY/PAID/FAILED/CANCELLED`, 통화 `KRW`. `group_id_snapshot`은 구매 당시 활성 그룹이며 미소속이면 `NULL`입니다.
 
 | 컬럼 | 자료형 | 역할·제약 |
 |---|---|---|
 | `id` | `BIGINT` | PK, AUTO_INCREMENT |
 | `order_number` | `CHAR(36)` | UNIQUE |
 | `user_id` | `BIGINT` | — |
+| `group_id_snapshot` | `BIGINT` | 구매 당시 활성 그룹, nullable |
 | `shop_item_id` | `BIGINT` | — |
 | `item_code_snapshot` | `VARCHAR(50)` | 확정 시점 값 고정 |
 | `item_name_snapshot` | `VARCHAR(100)` | 확정 시점 값 고정 |
@@ -1243,7 +1271,7 @@ UPDATE game_groups
 
 **주요 규칙**
 
-실행 당시 Role Snapshot; 업무 변경과 함께 Commit, 실패도 별도 이력으로 기록.
+실행 당시 Role Snapshot; 성공은 업무 변경과 함께 Commit합니다. 권한 확인 후의 업무 실패는 별도 트랜잭션으로 기록하고 인증·CSRF 실패는 제외합니다.
 
 | 컬럼 | 자료형 | 역할·제약 |
 |---|---|---|
@@ -1255,7 +1283,7 @@ UPDATE game_groups
 | `target_id` | `BIGINT` | — |
 | `group_id` | `BIGINT` | — |
 | `result` | `VARCHAR(30)` | — |
-| `reason` | `VARCHAR(500)` | — |
+| `reason` | `VARCHAR(1000)` | 관리자 입력 원문 보존 |
 | `detail` | `JSON` | — |
 | `created_at` | `DATETIME(6)` | — |
 
@@ -1287,14 +1315,20 @@ UPDATE game_groups
 
 **구현할 기능** — 별도 `notifications` 테이블 없이 원본 업무 상태를 조회하여 현재 미해결 경고만 구성합니다.
 
-| 경고 | 원본 확인 |
-|---|---|
-| 실행 실패·Lease 만료 | `scheduler_executions`의 `FAILED`·만료 `RUNNING` |
-| 현재 시즌 정상화 실패·기준 시즌 누락 | 시간상 만료된 `ACTIVE`·잔여 `CLOSING`·현재 4주 구간 시즌 없음 |
-| 기간 배정 실패 | `quest_periods.status=FAILED` |
-| 결제·취소 결과 불명 | `refund_requests.CANCEL_UNKNOWN`, PG 거래 결과 |
-| 그룹 정원 불일치 | 카운터 점검으로 기록된 감사 로그 |
-| 사진 삭제 실패 | 삭제 기한을 초과했는데 `storage_key`가 남은 제출 |
+| 원본 상태 | 경고 유형 | 심각도 | 자원·감지 시각 |
+|---|---|---|---|
+| `scheduler_executions.status=FAILED` | `SCHEDULER_FAILED` | `WARNING` | 실행 ID·완료/수정 시각 |
+| Lease가 만료된 `RUNNING` | `SCHEDULER_FAILED` | `CRITICAL` | 실행 ID·`lease_expires_at` |
+| 만료 `ACTIVE`·잔여 `CLOSING` 시즌 | `SEASON_STATE_INVALID` | `CRITICAL` | 시즌 ID·`end_at` |
+| 현재 4주 구간 시즌 없음 | `SEASON_STATE_INVALID` | `CRITICAL` | 자원 ID `NULL`·예정 시작 시각 |
+| `quest_periods.status=FAILED`·템플릿 부족 | `TEMPLATE_SHORTAGE` | `WARNING` | 기간 ID·`updated_at` |
+| 그 외 `quest_periods.status=FAILED` | `QUEST_PERIOD_FAILED` | `WARNING` | 기간 ID·`updated_at` |
+| 결제 거래·PG 결과 `UNKNOWN` | `PAYMENT_UNCERTAIN` | `CRITICAL` | 구매 ID·원본 `updated_at` |
+| `refund_requests.status=CANCEL_UNKNOWN` | `REFUND_UNCERTAIN` | `CRITICAL` | 환불 요청 ID·`updated_at` |
+| 그룹 카운터와 활성 멤버십 수 불일치 | `MEMBER_COUNT_MISMATCH` | `WARNING` | 그룹 ID·관련 원본의 최종 수정 시각 |
+| 삭제 기한 초과·`storage_key` 잔존 | `PHOTO_DELETION_FAILED` | `WARNING` | 제출 ID·삭제 기한 |
+
+`warningKey=유형:자원유형:자원ID`입니다. 시즌 누락은 `SEASON_STATE_INVALID:SEASON:CURRENT_PERIOD:{KST 시작일}`을 사용합니다.
 
 **완료 확인** — 경고는 원본 정합성이 회복되면 조회에서 제외하며, 경고 읽음·해결 상태와 과거 조회용 테이블은 만들지 않습니다.
 

@@ -80,6 +80,7 @@ public class SecurityConfiguration {
                                 "/api/v1/quest-assignments/**",
                                 "/api/v1/check-ins/**",
                                 "/api/v1/photo-submissions/**",
+                                "/api/v1/reports/**",
                                 "/api/v1/rankings/members/**"
                         ).hasAnyRole("PRIMARY", "DEPUTY", "MEMBER")
                         .requestMatchers("/api/v1/**").authenticated()

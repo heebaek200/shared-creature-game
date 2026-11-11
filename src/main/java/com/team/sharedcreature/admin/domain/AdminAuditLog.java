@@ -50,7 +50,7 @@ public class AdminAuditLog {
     @Column(name = "result", length = 30, nullable = false)
     private String result;
 
-    @Column(name = "reason", length = 500, nullable = false)
+    @Column(name = "reason", length = 1000, nullable = false)
     private String reason;
 
     @Column(name = "detail", columnDefinition = "JSON", nullable = false)
@@ -58,4 +58,30 @@ public class AdminAuditLog {
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
+    /** 전체 관리자 명령의 성공 또는 업무 실패 감사 레코드를 생성합니다. */
+    public static AdminAuditLog create(
+            User actor,
+            String actionType,
+            String targetType,
+            Long targetId,
+            Group group,
+            String result,
+            String reason,
+            String detail,
+            Instant now
+    ) {
+        AdminAuditLog log = new AdminAuditLog();
+        log.actorUser = actor;
+        log.actorRoleSnapshot = actor.getGlobalRole();
+        log.actionType = actionType;
+        log.targetType = targetType;
+        log.targetId = targetId;
+        log.group = group;
+        log.result = result;
+        log.reason = reason;
+        log.detail = detail;
+        log.createdAt = now;
+        return log;
+    }
 }

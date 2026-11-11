@@ -2,6 +2,7 @@ package com.team.sharedcreature.payment.domain;
 
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.avatar.domain.ShopItem;
+import com.team.sharedcreature.group.domain.Group;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -31,6 +32,10 @@ public class Purchase {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "group_id_snapshot")
+    private Group groupSnapshot;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "shop_item_id", nullable = false)
@@ -67,6 +72,7 @@ public class Purchase {
     private Purchase(
             String orderNumber,
             User user,
+            Group groupSnapshot,
             ShopItem shopItem,
             String itemCodeSnapshot,
             String itemNameSnapshot,
@@ -76,6 +82,7 @@ public class Purchase {
     ) {
         this.orderNumber = orderNumber;
         this.user = user;
+        this.groupSnapshot = groupSnapshot;
         this.shopItem = shopItem;
         this.itemCodeSnapshot = itemCodeSnapshot;
         this.itemNameSnapshot = itemNameSnapshot;
@@ -89,9 +96,21 @@ public class Purchase {
 
     /** 서버에서 확정한 상품 Snapshot으로 결제 대기 주문을 생성합니다. */
     public static Purchase ready(String orderNumber, User user, ShopItem shopItem, Instant now) {
+        return ready(orderNumber, user, null, shopItem, now);
+    }
+
+    /** 구매 당시 활성 그룹을 Snapshot으로 보존한 결제 대기 주문을 생성합니다. */
+    public static Purchase ready(
+            String orderNumber,
+            User user,
+            Group groupSnapshot,
+            ShopItem shopItem,
+            Instant now
+    ) {
         return new Purchase(
                 orderNumber,
                 user,
+                groupSnapshot,
                 shopItem,
                 shopItem.getCode(),
                 shopItem.getName(),

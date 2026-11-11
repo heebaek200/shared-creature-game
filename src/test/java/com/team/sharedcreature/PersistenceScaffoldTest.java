@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 class PersistenceScaffoldTest {
 
     @Test
-    void 설계한_40개_업무테이블에_Entity와_Repository가_각각_존재한다() throws IOException {
+    void 설계한_41개_업무테이블에_Entity와_Repository가_각각_존재한다() throws IOException {
         Path source = Path.of("src/main/java");
         long entities;
         long repositories;
@@ -28,8 +28,8 @@ class PersistenceScaffoldTest {
                     .count();
         }
 
-        assertThat(entities).isEqualTo(40);
-        assertThat(repositories).isEqualTo(40);
+        assertThat(entities).isEqualTo(41);
+        assertThat(repositories).isEqualTo(41);
     }
 
     @Test

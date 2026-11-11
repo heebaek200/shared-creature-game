@@ -6,6 +6,7 @@ import com.team.sharedcreature.admin.application.ApiIdempotencyService;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.avatar.domain.ShopItem;
 import com.team.sharedcreature.avatar.infrastructure.ShopItemRepository;
+import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.payment.api.CreatePurchaseResponse;
 import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.infrastructure.PortOneProperties;
@@ -25,6 +26,7 @@ public class PurchaseService {
     private final PurchaseRepository purchaseRepository;
     private final ShopItemRepository shopItemRepository;
     private final UserRepository userRepository;
+    private final GroupMembershipRepository membershipRepository;
     private final ApiIdempotencyService idempotencyService;
     private final PortOneProperties portOneProperties;
     private final Clock clock;
@@ -34,6 +36,7 @@ public class PurchaseService {
             PurchaseRepository purchaseRepository,
             ShopItemRepository shopItemRepository,
             UserRepository userRepository,
+            GroupMembershipRepository membershipRepository,
             ApiIdempotencyService idempotencyService,
             PortOneProperties portOneProperties,
             Clock clock
@@ -41,6 +44,7 @@ public class PurchaseService {
         this.purchaseRepository = purchaseRepository;
         this.shopItemRepository = shopItemRepository;
         this.userRepository = userRepository;
+        this.membershipRepository = membershipRepository;
         this.idempotencyService = idempotencyService;
         this.portOneProperties = portOneProperties;
         this.clock = clock;
@@ -62,9 +66,13 @@ public class PurchaseService {
 
         ShopItem shopItem = shopItemRepository.findByIdAndStatus(shopItemId, "ACTIVE")
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        var membership = membershipRepository.findActiveWithGroupByUserId(userId)
+                .filter(activeMembership -> "ACTIVE".equals(activeMembership.getGroup().getStatus()))
+                .orElse(null);
         Purchase purchase = purchaseRepository.save(Purchase.ready(
                 UUID.randomUUID().toString(),
                 userRepository.getReferenceById(userId),
+                membership == null ? null : membership.getGroup(),
                 shopItem,
                 clock.instant()
         ));
