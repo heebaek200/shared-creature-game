@@ -1,5 +1,7 @@
 package com.team.sharedcreature.avatar.application;
 
+import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.avatar.api.AvatarResponse;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
@@ -40,8 +42,7 @@ public class AvatarCommandRetryService {
      * @param ownedItemId 장착할 보유 아이템 ID
      * @param confirmFirstUse 최초 사용 동의 여부
      * @return 변경된 아바타 정보
-     * @throws PessimisticLockingFailureException 모든 시도에서 잠금 처리가 실패한 경우
-     * @throws OptimisticLockingFailureException 모든 시도에서 버전 충돌이 발생한 경우
+     * @throws BusinessException 재시도 한도까지 DB 동시성 오류가 발생하거나 장착 업무 조건을 위반한 경우
      */
     public AvatarResponse equipAvatarItem(
             Long userId,
@@ -65,8 +66,7 @@ public class AvatarCommandRetryService {
      * @param userId 로그인한 사용자 ID
      * @param slot 해제할 슬롯
      * @return 변경된 아바타 정보
-     * @throws PessimisticLockingFailureException 모든 시도에서 잠금 처리가 실패한 경우
-     * @throws OptimisticLockingFailureException 모든 시도에서 버전 충돌이 발생한 경우
+     * @throws BusinessException 재시도 한도까지 DB 동시성 오류가 발생하거나 해제 업무 조건을 위반한 경우
      */
     public AvatarResponse unequipAvatarItem(Long userId, String slot) {
         return executeWithRetry(() ->
@@ -79,6 +79,7 @@ public class AvatarCommandRetryService {
      *
      * @param action 실행할 아바타 변경 작업
      * @return 성공한 작업의 결과
+     * @throws BusinessException 재시도 한도까지 DB 동시성 오류가 발생한 경우
      */
     private AvatarResponse executeWithRetry(
             Supplier<AvatarResponse> action
@@ -88,9 +89,9 @@ public class AvatarCommandRetryService {
                 return action.get();
             } catch (PessimisticLockingFailureException
                      | OptimisticLockingFailureException exception) {
-                // 마지막 시도도 실패하면 공통 예외 처리기가 409로 변환합니다.
+                // 아바타 명령의 재시도 실패만 업무 오류로 변환해 다른 API의 예외 처리는 유지합니다.
                 if (attempt >= MAX_ATTEMPTS) {
-                    throw exception;
+                    throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
                 }
 
                 // 이전 트랜잭션의 롤백이 끝난 뒤 새 트랜잭션으로 다시 호출합니다.

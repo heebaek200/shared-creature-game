@@ -14,6 +14,7 @@ import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.domain.RefundRequest;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
 import com.team.sharedcreature.payment.infrastructure.RefundRequestRepository;
+import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -42,9 +43,11 @@ public class AvatarService {
     private final PurchaseRepository purchaseRepository;
     private final RefundRequestRepository refundRequestRepository;
     private final Clock clock;
+    private final GroupMembershipRepository groupMembershipRepository;
+    private final AvatarEquipmentEventPublisher avatarEquipmentEventPublisher;
 
     /**
-     * 아바타 조회·장착에 필요한 Repository와 서버 시계를 주입받습니다.
+     * 아바타 조회·변경과 변경 이벤트 예약에 필요한 의존성을 주입받습니다.
      *
      * @param ownedItemRepository 보유 아이템 Repository
      * @param avatarEquipmentRepository 아바타 장착 정보 Repository
@@ -52,6 +55,8 @@ public class AvatarService {
      * @param purchaseRepository 구매 Repository
      * @param refundRequestRepository 환불 요청 Repository
      * @param clock 서버 현재 시각의 기준
+     * @param groupMembershipRepository 현재 소속 그룹 조회 Repository
+     * @param avatarEquipmentEventPublisher Commit 이후 이벤트 발행기
      */
     public AvatarService(
             OwnedItemRepository ownedItemRepository,
@@ -59,7 +64,9 @@ public class AvatarService {
             UserRepository userRepository,
             PurchaseRepository purchaseRepository,
             RefundRequestRepository refundRequestRepository,
-            Clock clock
+            Clock clock,
+            GroupMembershipRepository groupMembershipRepository,
+            AvatarEquipmentEventPublisher avatarEquipmentEventPublisher
     ) {
         this.ownedItemRepository = ownedItemRepository;
         this.avatarEquipmentRepository = avatarEquipmentRepository;
@@ -67,6 +74,8 @@ public class AvatarService {
         this.purchaseRepository = purchaseRepository;
         this.refundRequestRepository = refundRequestRepository;
         this.clock = clock;
+        this.groupMembershipRepository = groupMembershipRepository;
+        this.avatarEquipmentEventPublisher = avatarEquipmentEventPublisher;
     }
 
     /**
@@ -247,6 +256,11 @@ public class AvatarService {
                 .findByUserIdAndSlotCodeForUpdate(userId, slot)
                 .orElse(null);
 
+        // 같은 아이템을 다시 지정한 요청은 장착 변경 이벤트를 만들지 않습니다.
+        boolean equipmentChanged = equipment == null
+                || equipment.getOwnedItem() == null
+                || !ownedItemId.equals(equipment.getOwnedItem().getId());
+
         // 잠금 대기가 끝난 뒤의 서버 시각으로 사용·변경 시각을 기록합니다.
         Instant now = clock.instant();
 
@@ -262,6 +276,15 @@ public class AvatarService {
         // 응답 재조회 전에 사용 이력과 장착 변경을 DB에 반영합니다.
         // flush는 Commit이 아니므로 이후 실패하면 함께 롤백됩니다.
         avatarEquipmentRepository.flush();
+
+        if (equipmentChanged) {
+            scheduleEquipmentChangedEvent(
+                    userId,
+                    slot,
+                    AvatarResponse.Equipment.from(item),
+                    now
+            );
+        }
 
         return getAvatar(userId);
     }
@@ -319,6 +342,40 @@ public class AvatarService {
         // 응답을 조회하기 전에 장착 해제 변경을 DB에 반영합니다.
         avatarEquipmentRepository.flush();
 
+        // 해제 이벤트에는 변경 후 장착 아이템을 null로 전달합니다.
+        scheduleEquipmentChangedEvent(userId, slot, null, now);
+
         return getAvatar(userId);
+    }
+
+    /**
+     * 현재 소속 그룹에 전달할 아바타 변경 이벤트를 예약합니다.
+     *
+     * 호출자는 사용자 잠금을 확보한 쓰기 트랜잭션 안에서 호출해야 합니다.
+     *
+     * @param userId 아바타를 변경한 사용자 ID
+     * @param slot 변경한 슬롯
+     * @param equippedItem 변경 후 장착 아이템, 해제하면 null
+     * @param occurredAt 변경 시각
+     */
+    private void scheduleEquipmentChangedEvent(
+            Long userId,
+            String slot,
+            AvatarResponse.Equipment equippedItem,
+            Instant occurredAt
+    ) {
+        // 그룹이 없어도 개인 아바타 변경은 허용하며 그룹 전파만 생략합니다.
+        groupMembershipRepository.findActiveGroupIdByUserId(userId)
+                .ifPresent(groupId ->
+                        avatarEquipmentEventPublisher.publishAfterCommit(
+                                new AvatarEquipmentChangedEvent(
+                                        groupId,
+                                        userId,
+                                        slot,
+                                        equippedItem,
+                                        occurredAt
+                                )
+                        )
+                );
     }
 }
