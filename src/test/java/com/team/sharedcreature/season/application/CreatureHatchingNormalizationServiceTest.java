@@ -1,6 +1,5 @@
 package com.team.sharedcreature.season.application;
 
-import com.team.sharedcreature.season.api.CreatureSelectionResponse;
 import com.team.sharedcreature.season.infrastructure.GroupSeasonRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageRequest;
@@ -175,11 +174,16 @@ class CreatureHatchingNormalizationServiceTest {
     }
 
     /**
-     * 부화 성공 응답은 호출 성공 여부의 식별자로만 사용합니다.
-     * 실제 종 정보는 부화 서비스의 엔티티와 JPA 연동 검증에서 확인합니다.
-     * 이 테스트에서는 DB와 무관한 고정값을 사용합니다.
+     * 부화 성공 결과를 테스트용으로 생성합니다.
+     * 실제 서비스의 HatchResult 반환 계약을 따릅니다.
+     * 그룹 시즌, 크리처, 종 ID는 테스트용 고정값입니다.
      */
-    private CreatureSelectionResponse hatchedResponse() {
-        return new CreatureSelectionResponse(1L, "샘플종", "RANDOM", NOW, NOW);
+    private CreatureSelectionService.HatchResult hatchedResponse() {
+        return new CreatureSelectionService.HatchResult(
+                1L,  // groupSeasonId
+                2L,  // groupCreatureId
+                3L,  // creatureSpeciesId
+                NOW  // hatchedAt
+        );
     }
 }

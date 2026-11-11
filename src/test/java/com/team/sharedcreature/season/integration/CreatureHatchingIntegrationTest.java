@@ -9,7 +9,6 @@ import com.team.sharedcreature.group.infrastructure.GroupRepository;
 import com.team.sharedcreature.season.application.CreatureHatchingNormalizationService;
 import com.team.sharedcreature.season.application.CreatureSelectionService;
 import com.team.sharedcreature.season.application.SeasonTransitionService;
-import com.team.sharedcreature.season.api.CreatureSelectionResponse;
 import com.team.sharedcreature.season.domain.GroupCreature;
 import com.team.sharedcreature.season.domain.GroupSeason;
 import com.team.sharedcreature.season.domain.Season;
@@ -241,8 +240,8 @@ class CreatureHatchingIntegrationTest {
 
         // 실제 관리자 권한과 그룹 가입 기록을 이용해 종을 선택합니다.
         var chosen = selection.selectSpecies(f.ownerId(), speciesB);
-        assertEquals(speciesB, chosen.speciesId());
-        assertEquals("ADMIN", chosen.selectionSource());
+        assertEquals(speciesB, chosen.creatureSpeciesId());
+        assertEquals(f.ownerId(), chosen.selectedByUserId());
         assertEquals(chosenAt, chosen.selectedAt());
         clock.set(DEADLINE.plusSeconds(1));
         assertEquals(1, hatching.normalizeForActiveSeason(seasonId).hatched());
@@ -298,8 +297,8 @@ class CreatureHatchingIntegrationTest {
         CountDownLatch go = new CountDownLatch(1);
 
         try {
-            Future<Optional<CreatureSelectionResponse>> first = workers.submit(() -> hatchWhenReleased(f, ready, go));
-            Future<Optional<CreatureSelectionResponse>> second = workers.submit(() -> hatchWhenReleased(f, ready, go));
+            Future<Optional<CreatureSelectionService.HatchResult>> first = workers.submit(() -> hatchWhenReleased(f, ready, go));
+            Future<Optional<CreatureSelectionService.HatchResult>> second = workers.submit(() -> hatchWhenReleased(f, ready, go));
             assertTrue(ready.await(10, TimeUnit.SECONDS), "두 스레드가 준비되지 않았습니다.");
             go.countDown();
 
@@ -477,7 +476,7 @@ class CreatureHatchingIntegrationTest {
      * 동시성 제어는 CountDownLatch가 아닌 시즌·그룹 시즌의 DB 잠금이 책임집니다.
      * 테스트의 두 Future는 서로 다른 MySQL 커넥션에서 수행됩니다.
      */
-    private Optional<CreatureSelectionResponse> hatchWhenReleased(
+    private Optional<CreatureSelectionService.HatchResult> hatchWhenReleased(
             Fixture f, CountDownLatch ready, CountDownLatch go
     ) throws InterruptedException {
         ready.countDown();
