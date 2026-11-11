@@ -4,90 +4,31 @@ import { renderCreatureGrowth } from '../features/creature/render.js';
 import { getCurrentSeason } from '../features/season/api.js';
 import { getCurrentUser } from '../features/auth/api.js';
 import { ApiError } from '../api/client.js';
-import creatureLv0 from '../../assets/creature/lv0.png';
 
+import creatureLv0 from '../../assets/creature/lv0.png';
+import { createAppShell } from '../components/app-shell.js';
+import { formatSeasonRemainingTime, startSeasonCountdown } from '../features/season/season-countdown.js';
 /**
  * 크리처 홈 페이지 마운트 및 렌더링합니다.
  * @param {{ navigate: (path: string) => void }} context
  */
 export function creaturePage(context) {
-    const element = document.createElement('main');
-    element.className = 'd-flex flex-column min-vh-100 app-shell w-100 m-0 p-0 overflow-x-hidden';
-    element.style.backgroundColor = 'var(--app-background)';
-    element.style.color = 'var(--app-text)';
-    element.style.padding = '0';
-    element.style.margin = '0';
-    element.style.maxWidth = 'none';
+    const content = document.createElement('div');
+    content.className = 'd-flex flex-column flex-grow-1';
 
-    element.innerHTML = `
-    <!-- 상단 전체 헤더 (높이 고정 60px) -->
-    <header class="position-fixed top-0 start-0 w-100 border-bottom px-4 py-3 d-flex justify-content-between align-items-center z-3" style="background-color: var(--app-surface); border-color: var(--app-border) !important; height: 60px;">
-      <div class="d-flex align-items-center gap-2">
-        <span class="fs-5 fw-bold d-flex align-items-center gap-2" style="color: var(--app-primary);">
-          <span class="rounded-circle d-inline-block" style="width: 10px; height: 10px; background-color: var(--app-primary);"></span>
-          다 같이 키우는 생명체
-        </span>
-      </div>
-      <div class="d-flex align-items-center gap-2">
-        <button type="button" class="btn btn-sm btn-outline-secondary theme-toggle px-3">테마 전환 ◐</button>
-        <button type="button" class="btn btn-sm btn-outline-secondary px-3">로그아웃</button>
-      </div>
-    </header>
-
-    <!-- 헤더 아래 영역부터 화면 끝까지 꽉 채우는 래퍼 -->
-    <div class="d-flex flex-grow-1 w-100" style="padding-top: 60px;">
-      
-      <!-- 좌측 서비스 메뉴바 -->
-      <nav class="d-none d-lg-flex flex-column flex-shrink-0 p-4 border-end" style="width: 230px; background-color: var(--app-surface); border-color: var(--app-border) !important;">
-        <div class="small px-2 mb-3 mt-2 fw-bold" style="color: var(--app-muted);">서비스 메뉴</div>
-        <ul class="nav nav-pills flex-column mb-auto gap-1">
-          <li class="nav-item">
-            <a href="/creature" class="nav-link active text-white py-2 px-3" style="background-color: var(--app-primary);" data-link>크리처</a>
-          </li>
-          <li class="nav-item">
-            <a href="/quests" class="nav-link py-2 px-3" style="color: var(--app-text);" data-link>퀘스트</a>
-          </li>
-          <li class="nav-item">
-            <a href="/rankings" class="nav-link py-2 px-3" style="color: var(--app-text);" data-link>랭킹</a>
-          </li>
-          <li class="nav-item">
-            <a href="/group" class="nav-link py-2 px-3" style="color: var(--app-text);" data-link>그룹</a>
-          </li>
-          <li class="nav-item">
-            <a href="/shop" class="nav-link py-2 px-3" style="color: var(--app-text);" data-link>상점</a>
-          </li>
-          <li class="nav-item">
-            <a href="/avatar" class="nav-link py-2 px-3" style="color: var(--app-text);" data-link>아바타</a>
-          </li>
-          <li class="nav-item">
-            <a href="/payments" class="nav-link py-2 px-3" style="color: var(--app-text);" data-link>결제 내역</a>
-          </li>
-          <li class="nav-item">
-            <a href="/group-admin" class="nav-link py-2 px-3" style="color: var(--app-text);" data-link>그룹 관리</a>
-          </li>
-        </ul>
-      </nav>
-
-      <!-- 우측 메인 콘텐츠 영역 -->
-      <div class="flex-grow-1 d-flex flex-column min-w-0">
-        <div class="container-fluid px-5 pt-4 pb-4 d-flex flex-column flex-grow-1">
+    content.innerHTML = `
           
-          <!-- 메인 콘텐츠 타이틀 및 상태 영역 -->
-          <div class="d-flex justify-content-between align-items-center mb-4 px-1">
+          <!-- 크리처홈 메인 영역 타이틀 및 상태 영역 -->
+          <div class="d-flex justify-content-between align-items-center mb-3 px-1">
             <div>
               <div class="d-flex align-items-center gap-2">
                 <h1 class="h3 mb-0 fw-bold" style="color: var(--app-text);">크리처 홈</h1>
-                <span class="badge border font-monospace px-2 py-1" style="background-color: var(--app-background); color: var(--app-text); border-color: var(--app-border) !important;" id="group-name-badge">소속 그룹 없음</span>
               </div>
-              <p class="mb-0 mt-1" style="color: var(--app-muted);" id="group-season-info">로딩 중...</p>
             </div>
             <div class="d-flex align-items-center gap-3">
               <button type="button" class="btn border px-3 py-1.5 fw-bold" style="background-color: var(--app-surface); color: var(--app-primary); border-color: var(--app-border) !important;" id="btn-toggle-movement">
                 아바타 이동 : ON
               </button>
-              <span class="badge rounded-pill px-3 py-2" style="background-color: var(--app-text); color: var(--app-surface);" id="connection-status">
-                <span style="color: var(--app-primary);" class="me-1">●</span> 실시간
-              </span>
             </div>
           </div>
 
@@ -126,7 +67,6 @@ export function creaturePage(context) {
                         <span class="small" style="color: var(--app-muted);" id="species-subtitle">???</span>
                         <span class="small" style="color: var(--app-muted);" id="hatch-countdown" aria-live="polite"></span>
                       </div>
-
                     </div>
                   </div>
 
@@ -205,11 +145,12 @@ export function creaturePage(context) {
             </div>
 
           </div>
-
-        </div>
-      </div>
-    </div>
   `;
+
+    const element = createAppShell({
+        content,
+        currentPath: location.pathname,
+    });
 
     // 2. DOM 요소 참조 및 이벤트 바인딩
     // 화면 요소를 조회하고 버튼 및 바깥 영역 이벤트 연결
@@ -217,7 +158,7 @@ export function creaturePage(context) {
     const avatarInfoCard = element.querySelector('#avatar-info-card');
     const avatarToggleTitle = element.querySelector('#avatar-toggle-title');
     const btnGotoShop = element.querySelector('#btn-goto-shop');
-    const themeToggle = element.querySelector('.theme-toggle');
+    // const themeToggle = element.querySelector('.theme-toggle');
     const btnToggleMovement = element.querySelector('#btn-toggle-movement');
     const avatarContainer = element.querySelector('#avatar-container');
     const loadError = element.querySelector('#creature-load-error');
@@ -274,13 +215,6 @@ export function creaturePage(context) {
 
     let isAvatarMoving = true;
 
-    const onThemeToggle = () => {
-        const next = document.documentElement.dataset.bsTheme === 'dark' ? 'light' : 'dark';
-        document.documentElement.dataset.bsTheme = next;
-        localStorage.setItem('theme', next);
-    };
-    themeToggle?.addEventListener('click', onThemeToggle);
-
     const onQuestClick = () => {
         context.navigate('/quests');
     };
@@ -330,6 +264,8 @@ export function creaturePage(context) {
     let currentUserId = null;
     let countdownIntervalId = null;
     let deadlineTimeoutId = null;
+    let stopSeasonCountdown = () => {};
+
     /** @type {Set<number>} */
     const growthAnimationTimeoutIds = new Set();
 
@@ -343,52 +279,35 @@ export function creaturePage(context) {
     }
 
     // 72시간까지 남은 시각(크리처 선택 마감 기간)
-    function updateRemainingTimeLabels(seasonData, hatchDeadlineAt, growthStage, hatchStatusMessage = null) {
+    function updateHatchCountdown(hatchDeadlineAt, growthStage, hatchStatusMessage = null) {
         const now = Date.now();
-        const groupSeasonInfo = element.querySelector('#group-season-info');
         const hatchCountdown = element.querySelector('#hatch-countdown');
 
-        if (groupSeasonInfo && seasonData) {
-            const endAtTime = seasonData.endAt ? new Date(seasonData.endAt).getTime() : NaN;
-            const diffMs = endAtTime - now;
-            let remainingText = '종료됨';
+        if (!hatchCountdown) return;
 
-            if (Number.isFinite(endAtTime) && diffMs > 0) {
-                const diffHours = diffMs / (1000 * 60 * 60);
-                if (diffHours >= 24) {
-                    remainingText = `${Math.ceil(diffHours / 24)}일 남음`;
-                } else if (diffHours >= 1) {
-                    remainingText = `${Math.ceil(diffHours)}시간 남음`;
-                } else {
-                    remainingText = `시즌 종료까지 ${Math.ceil(diffMs / (1000 * 60))}분`;
-                }
-            }
+        if (growthStage !== 'EGG') {
+            hatchCountdown.textContent = '';
+        } else if (hatchStatusMessage !== null) {
+            hatchCountdown.textContent = hatchStatusMessage;
+        } else if (!Number.isFinite(hatchDeadlineAt)) {
+            hatchCountdown.textContent = '남은 시간 확인 불가';
+        } else {
+            const diffMs = hatchDeadlineAt - now;
 
-            groupSeasonInfo.textContent = `시즌 ${seasonData.seasonNumber || 1} · ${remainingText}`;
-        }
-
-        if (hatchCountdown) {
-            if (growthStage !== 'EGG') {
+            if (diffMs <= 0) {
                 hatchCountdown.textContent = '';
-            }else if (hatchStatusMessage !== null) {
-                hatchCountdown.textContent = hatchStatusMessage;
-            } else if (!Number.isFinite(hatchDeadlineAt)) {
-                hatchCountdown.textContent = '남은 시간 확인 불가';
             } else {
-                const diffMs = hatchDeadlineAt - now;
-                if (diffMs <= 0) {
-                    hatchCountdown.textContent = '';
-                } else {
-                    const totalMinutes = Math.ceil(diffMs / (1000 * 60));
-                    const days = Math.floor(totalMinutes / (60 * 24));
-                    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
-                    const minutes = totalMinutes % 60;
-                    const parts = [];
-                    if (days > 0) parts.push(`${days}일`);
-                    if (hours > 0) parts.push(`${hours}시간`);
-                    if (minutes > 0 || parts.length === 0) parts.push(`${minutes}분`);
-                    hatchCountdown.textContent = `부화까지 ${parts.join(' ')}`;
-                }
+                const totalMinutes = Math.ceil(diffMs / (1000 * 60));
+                const days = Math.floor(totalMinutes / (60 * 24));
+                const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+                const minutes = totalMinutes % 60;
+                const parts = [];
+
+                if (days > 0) parts.push(`${days}일`);
+                if (hours > 0) parts.push(`${hours}시간`);
+                if (minutes > 0 || parts.length === 0) parts.push(`${minutes}분`);
+
+                hatchCountdown.textContent = `부화까지 ${parts.join(' ')}`;
             }
         }
     }
@@ -398,7 +317,25 @@ export function creaturePage(context) {
         if (countdownIntervalId !== null) clearInterval(countdownIntervalId);
         if (deadlineTimeoutId !== null) clearTimeout(deadlineTimeoutId);
 
-        updateRemainingTimeLabels(seasonData, hatchDeadlineAt, growthStage);
+        stopSeasonCountdown();
+
+        const updateHeaderSeasonInfo = (seasonText) => {
+            if (!isMounted) return;
+
+            const seasonInfo = element.querySelector('[data-header-season-info]');
+            if (seasonInfo) seasonInfo.textContent = seasonText;
+        };
+
+        if (groupSeasonStatus === 'ENDED') {
+            updateHeaderSeasonInfo(formatSeasonRemainingTime(seasonData));
+        } else {
+            stopSeasonCountdown = startSeasonCountdown(
+                seasonData,
+                updateHeaderSeasonInfo,
+            );
+        }
+
+        updateHatchCountdown(hatchDeadlineAt, growthStage);
 
         // 그룹 시즌이 종료됐으면 부화 타이머나 재조회를 설정하지 않습니다.
         if (groupSeasonStatus === 'ENDED') {
@@ -414,8 +351,7 @@ export function creaturePage(context) {
 
         let hatchStatusMessage = null;
 
-        updateRemainingTimeLabels(
-            seasonData,
+        updateHatchCountdown(
             hatchDeadlineAt,
             growthStage,
             hatchStatusMessage
@@ -423,8 +359,7 @@ export function creaturePage(context) {
 
         countdownIntervalId = window.setInterval(() => {
             if (isMounted) {
-                updateRemainingTimeLabels(
-                    seasonData,
+                updateHatchCountdown(
                     hatchDeadlineAt,
                     growthStage,
                     hatchStatusMessage
@@ -532,8 +467,11 @@ export function creaturePage(context) {
             && userId !== undefined
             && String(userId) === String(currentUserId);
 
-        const groupNameBadge = element.querySelector('#group-name-badge');
-        if (groupNameBadge) groupNameBadge.textContent = creatureData.groupName || '소속 그룹 없음';
+        element
+            .querySelectorAll('#group-name-badge, [data-header-group-name]')
+            .forEach((badge) => {
+                badge.textContent = creatureData.groupName || '소속 그룹 없음';
+            });
 
         const growthUnlockAt = renderCreatureGrowth({
             element,
@@ -765,11 +703,11 @@ export function creaturePage(context) {
             isMounted = false;
             if (countdownIntervalId !== null) clearInterval(countdownIntervalId);
             if (deadlineTimeoutId !== null) clearTimeout(deadlineTimeoutId);
+            stopSeasonCountdown();
             growthAnimationTimeoutIds.forEach(timeoutId => clearTimeout(timeoutId));
             growthAnimationTimeoutIds.clear();
             retryButton?.removeEventListener('click', onRetryLoad);
             loginButton?.removeEventListener('click', onLoginFromError);
-            themeToggle?.removeEventListener('click', onThemeToggle);
             btnQuest?.removeEventListener('click', onQuestClick);
             btnGotoShop?.removeEventListener('click', onShopClick);
             btnToggleMovement?.removeEventListener('click', onToggleMovement);

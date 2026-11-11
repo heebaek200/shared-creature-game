@@ -93,6 +93,55 @@ body {
   outline: 3px solid var(--app-accent);
   outline-offset: 3px;
 }
+.theme-dropdown {
+  position: relative;
+}
+
+.theme-dropdown > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.theme-dropdown > summary::-webkit-details-marker {
+  display: none;
+}
+
+.theme-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 10;
+  display: none;
+  min-width: 9rem;
+  padding: 0.35rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.5rem;
+  background: var(--app-surface);
+  box-shadow: 0 0.5rem 1rem rgb(0 0 0 / 12%);
+}
+
+.theme-dropdown[open] .theme-menu {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.theme-option {
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  border-radius: 0.35rem;
+  color: var(--app-text);
+  background: transparent;
+  text-align: left;
+}
+
+.theme-option:hover,
+.theme-option.is-selected {
+  background: var(--app-background);
+}
+
+.theme-option.is-selected {
+  font-weight: 700
+}
 
 @media (max-width: 576px) {
   .app-shell {
