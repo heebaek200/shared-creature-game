@@ -5,6 +5,7 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.avatar.application.AvatarService;
+import com.team.sharedcreature.avatar.application.AvatarCommandRetryService;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
@@ -30,13 +31,28 @@ import java.util.List;
 public class AvatarController {
 
     private final AvatarService avatarService;
+    private final AvatarCommandRetryService avatarCommandRetryService;
+
+    /**
+     * 아바타 조회 Service와 변경 재시도 Service를 주입받습니다.
+     *
+     * @param avatarService             보유 아이템·아바타 조회 Service
+     * @param avatarCommandRetryService 장착·해제 재시도 Service
+     */
+    public AvatarController(
+            AvatarService avatarService,
+            AvatarCommandRetryService avatarCommandRetryService
+    ) {
+        this.avatarService = avatarService;
+        this.avatarCommandRetryService = avatarCommandRetryService;
+    }
 
     /**
      * 본인의 보유 아이템을 지정한 아바타 슬롯에 장착합니다.
      *
      * @param loginUser 세션에서 확인한 로그인 사용자
-     * @param slot 장착할 슬롯
-     * @param request 보유 아이템 ID와 최초 사용 동의 여부
+     * @param slot      장착할 슬롯
+     * @param request   보유 아이템 ID와 최초 사용 동의 여부
      * @return 변경된 아바타의 전체 슬롯 정보
      */
     @PutMapping("/avatar/equipments/{slot}")
@@ -50,8 +66,8 @@ public class AvatarController {
             String slot,
             @Valid @RequestBody EquipAvatarItemRequest request
     ) {
-        // 사용자 ID는 요청 본문이 아닌 인증된 세션 정보에서 가져옵니다.
-        AvatarResponse response = avatarService.equipAvatarItem(
+        // DB 동시성 오류가 발생하면 별도 트랜잭션으로 제한적으로 재시도합니다.
+        AvatarResponse response = avatarCommandRetryService.equipAvatarItem(
                 loginUser.id(),
                 slot,
                 request.ownedItemId(),
@@ -65,7 +81,7 @@ public class AvatarController {
      * 본인 아바타의 지정한 슬롯에서 아이템을 해제합니다.
      *
      * @param loginUser 세션에서 확인한 로그인 사용자
-     * @param slot 해제할 슬롯
+     * @param slot      해제할 슬롯
      * @return 변경된 아바타의 전체 슬롯 정보
      */
     @DeleteMapping("/avatar/equipments/{slot}")
@@ -78,8 +94,8 @@ public class AvatarController {
             )
             String slot
     ) {
-        // 해제 대상은 슬롯으로 지정하므로 요청 본문은 받지 않습니다.
-        AvatarResponse response = avatarService.unequipAvatarItem(
+        // 장착과 동일한 재시도 정책으로 해제 요청을 처리합니다.
+        AvatarResponse response = avatarCommandRetryService.unequipAvatarItem(
                 loginUser.id(),
                 slot
         );
@@ -88,22 +104,13 @@ public class AvatarController {
     }
 
     /**
-     * 아바타 Service를 주입받습니다.
-     *
-     * @param avatarService 보유 아이템과 아바타 처리 Service
-     */
-    public AvatarController(AvatarService avatarService) {
-        this.avatarService = avatarService;
-    }
-
-    /**
      * 로그인한 사용자의 보유 아이템 목록을 조회합니다.
      *
      * @param loginUser 세션에서 확인한 로그인 사용자
-     * @param page 페이지 번호, 생략하면 0
-     * @param size 페이지 크기, 생략하면 20
-     * @param slot 슬롯 필터, 생략하면 전체
-     * @param status 보유 상태 필터, 생략하면 전체
+     * @param page      페이지 번호, 생략하면 0
+     * @param size      페이지 크기, 생략하면 20
+     * @param slot      슬롯 필터, 생략하면 전체
+     * @param status    보유 상태 필터, 생략하면 전체
      * @return 보유 아이템 목록과 페이지 정보
      * @throws BusinessException 페이지 번호·크기가 올바르지 않은 경우
      */
@@ -159,11 +166,11 @@ public class AvatarController {
     /**
      * 선택적인 정수 Query Parameter의 형식과 범위를 검증합니다.
      *
-     * @param value 전달받은 문자열
+     * @param value        전달받은 문자열
      * @param defaultValue 파라미터 생략 시 기본값
-     * @param min 최솟값
-     * @param max 최댓값
-     * @param fieldName 오류 안내에 사용할 필드명
+     * @param min          최솟값
+     * @param max          최댓값
+     * @param fieldName    오류 안내에 사용할 필드명
      * @return 검증된 정수
      * @throws BusinessException 정수 형식이 아니거나 허용 범위를 벗어난 경우
      */

@@ -22,6 +22,8 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
 
 import java.util.List;
 
@@ -33,6 +35,30 @@ public class RestApiExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(RestApiExceptionHandler.class);
     private final ErrorResponseFactory responseFactory;
+
+    /**
+     * DB 잠금 실패와 낙관적 버전 충돌을 업무 충돌 응답으로 변환합니다.
+     *
+     * @param exception Spring이 변환한 동시성 관련 DB 예외
+     * @param request 오류가 발생한 HTTP 요청
+     * @return CONCURRENT_MODIFICATION 코드의 HTTP 409 응답
+     */
+    @ExceptionHandler({
+            PessimisticLockingFailureException.class, // 잠금을 획득하지 못하거나 교착 상태 등으로 잠금 처리가 실패
+            OptimisticLockingFailureException.class // @Version 값이 달라져 다른 요청의 변경을 덮어쓸 위험이 있음
+    })
+    public ResponseEntity<ErrorResponse> handleConcurrency(
+            Exception exception,
+            HttpServletRequest request
+    ) {
+        // DB 오류 메시지는 노출하지 않고 기존 공통 충돌 응답을 사용합니다.
+        return response(
+                ErrorCode.CONCURRENT_MODIFICATION, // 동시 처리로 인해 이번 변경을 완료하지 못함
+                null, // ErrorCode의 기본 메시지 사용
+                List.of(), // 필드 입력 오류가 아니므로 빈 배열
+                request // 요청의 traceId 확인
+        );
+    }
 
     /**
      * 공통 오류 응답 생성기를 주입받습니다.
