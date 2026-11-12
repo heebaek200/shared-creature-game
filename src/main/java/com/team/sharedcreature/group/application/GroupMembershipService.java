@@ -4,6 +4,7 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.Hashing;
 import com.team.sharedcreature._core.security.LoginUser;
+import com.team.sharedcreature._core.realtime.GroupPresenceRevocationService;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.api.*;
@@ -50,6 +51,7 @@ public class GroupMembershipService {
     private final SeasonGroupScoreRepository groupScoreRepository;
     private final SeasonQueryService seasonQueryService;
     private final SeasonContributionMembershipService contributionMembershipService;
+    private final GroupPresenceRevocationService presenceRevocationService;
 
     private final Clock clock;
     private final String appBaseUrl;
@@ -68,6 +70,7 @@ public class GroupMembershipService {
             SeasonGroupScoreRepository groupScoreRepository,
             SeasonQueryService seasonQueryService,
             SeasonContributionMembershipService contributionMembershipService,
+            GroupPresenceRevocationService presenceRevocationService,
             Clock clock,
             @Value("${APP_BASE_URL:http://localhost:5173}") String appBaseUrl
     ) {
@@ -82,6 +85,7 @@ public class GroupMembershipService {
         this.groupScoreRepository = groupScoreRepository;
         this.seasonQueryService = seasonQueryService;
         this.contributionMembershipService = contributionMembershipService;
+        this.presenceRevocationService = presenceRevocationService;
         this.clock = clock;
         this.appBaseUrl = appBaseUrl;
     }
@@ -394,6 +398,9 @@ public class GroupMembershipService {
 
         // 8. 멤버십을 LEFT로 종료. 기존 이력은 삭제하지 않음
         membership.leaveBySelf(user, now);
+
+        // Rollback된 탈퇴가 Presence를 제거하지 않도록 Commit 이후 권한 회수를 예약합니다.
+        presenceRevocationService.revokeAfterCommit(userId, now);
 
         // 멤버십·기여도 상태가 같은 트랜잭션에서 Commit되게 합니다.
         contributionMembershipService.synchronizeIfPresent(currentSeason, membership, now);

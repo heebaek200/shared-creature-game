@@ -57,13 +57,7 @@ public class CreatureGrowthService {
                 creature.getTotalExperience(),
                 occurredAt
         ));
-        eventPublisher.publishAfterCommit(new CreatureUpdatedEvent(
-                creature.getGroupSeason().getGroup().getId(),
-                creature.getId(),
-                creature.getGrowthStage(),
-                creature.getTotalExperience(),
-                occurredAt
-        ));
+        eventPublisher.publishAfterCommit(CreatureUpdatedEvent.from(creature, occurredAt));
         return GrowthResult.applied(creature);
     }
 

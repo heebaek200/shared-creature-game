@@ -2,6 +2,7 @@ package com.team.sharedcreature.group.application;
 
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
+import com.team.sharedcreature._core.realtime.GroupPresenceRevocationService;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.api.LeaveMyGroupResponse;
@@ -47,6 +48,7 @@ public class GroupRemovalService {
     private final ModerationActionRepository moderationActionRepository;
     private final SeasonQueryService seasonQueryService;
     private final SeasonContributionMembershipService contributionMembershipService;
+    private final GroupPresenceRevocationService presenceRevocationService;
     private final Clock clock;
 
     public GroupRemovalService(
@@ -57,6 +59,7 @@ public class GroupRemovalService {
             ModerationActionRepository moderationActionRepository,
             SeasonQueryService seasonQueryService,
             SeasonContributionMembershipService contributionMembershipService,
+            GroupPresenceRevocationService presenceRevocationService,
             Clock clock
     ) {
         this.userRepository = userRepository;
@@ -66,6 +69,7 @@ public class GroupRemovalService {
         this.moderationActionRepository = moderationActionRepository;
         this.seasonQueryService = seasonQueryService;
         this.contributionMembershipService = contributionMembershipService;
+        this.presenceRevocationService = presenceRevocationService;
         this.clock = clock;
     }
 
@@ -181,6 +185,9 @@ public class GroupRemovalService {
 
         // 11. 대상 멤버를 REMOVED 상태로 종료
         targetMembership.removeForInactivity(actor, now);
+
+        // Rollback된 강퇴가 Presence를 제거하지 않도록 Commit 이후 권한 회수를 예약합니다.
+        presenceRevocationService.revokeAfterCommit(targetId, now);
 
         // 종료된 참가 상태를 같은 트랜잭션 안에서 기여도에 반영합니다.
         contributionMembershipService.synchronizeIfPresent(currentSeason, targetMembership, now);

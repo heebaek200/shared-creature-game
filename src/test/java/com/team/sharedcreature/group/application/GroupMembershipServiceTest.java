@@ -62,6 +62,7 @@ class GroupMembershipServiceTest {
     @Mock SeasonGroupScoreRepository groupScoreRepository;
     @Mock SeasonQueryService seasonQueryService;
     @Mock SeasonContributionMembershipService contributionMembershipService;
+    @Mock com.team.sharedcreature._core.realtime.GroupPresenceRevocationService presenceRevocationService;
 
     private GroupMembershipService service;
     private User user;
@@ -87,6 +88,7 @@ class GroupMembershipServiceTest {
                 groupScoreRepository,
                 seasonQueryService,
                 contributionMembershipService,
+                presenceRevocationService,
                 clock,
                 "http://localhost:5173"
         );

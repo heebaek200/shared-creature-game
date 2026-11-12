@@ -62,6 +62,7 @@ class QuestCompletionServiceTest {
     @Mock private ServiceCheckInRepository serviceCheckInRepository;
     @Mock private SeasonQueryService seasonQueryService;
     @Mock private CreatureUpdateEventPublisher creatureUpdateEventPublisher;
+    @Mock private com.team.sharedcreature.quest.application.ContributionUpdateEventPublisher contributionUpdateEventPublisher;
     @Mock private QuestPeriodRepository periodRepository;
     @Mock private QuestAssignmentRepository assignmentRepository;
     @Mock private QuestCompletionRepository completionRepository;
@@ -93,6 +94,7 @@ class QuestCompletionServiceTest {
                 serviceCheckInRepository,
                 seasonQueryService,
                 creatureUpdateEventPublisher,
+                contributionUpdateEventPublisher,
                 periodRepository,
                 assignmentRepository,
                 completionRepository,
