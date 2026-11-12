@@ -21,6 +21,8 @@ import jakarta.servlet.http.HttpSession;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.session.FindByIndexNameSessionRepository;
+import org.springframework.session.Session;
 
 import java.security.SecureRandom;
 import java.text.Normalizer;
@@ -50,6 +52,13 @@ public class AuthService {
     private final InitialSuperAdminProperties initialSuperAdmin;
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
+
+    private final FindByIndexNameSessionRepository<? extends Session> sessionRepository;
+    private static final Object[] SESSION_LIMIT_LOCKS = new Object[64];
+    static {
+        Arrays.setAll(SESSION_LIMIT_LOCKS, index -> new Object());
+    }
+
     private final SecureRandom secureRandom = new SecureRandom();
 
     /** 인증 흐름에 필요한 저장소와 공급자 Port를 주입받습니다. */
@@ -65,7 +74,7 @@ public class AuthService {
             List<SocialLoginClient> socialLoginClients,
             InitialSuperAdminProperties initialSuperAdmin,
             TransactionTemplate transactionTemplate,
-            Clock clock
+            Clock clock, FindByIndexNameSessionRepository<? extends Session> sessionRepository
     ) {
         this.attemptRepository = attemptRepository;
         this.socialAccountRepository = socialAccountRepository;
@@ -79,6 +88,7 @@ public class AuthService {
         this.initialSuperAdmin = initialSuperAdmin;
         this.transactionTemplate = transactionTemplate;
         this.clock = clock;
+        this.sessionRepository = sessionRepository;
     }
 
     /** 소셜 OAuth 시도를 저장하고 공급자 Authorization URL을 반환합니다. */
@@ -205,6 +215,7 @@ public class AuthService {
             joinExistingInvitation(invitationId, user, nickname, session);
             Set<String> roles = currentRoles(user);
             session.setAttribute(SessionAuthenticationFilter.LOGIN_USER, new LoginUser(user.getId(), nickname, roles));
+            enforceSessionLimit(user.getId(), session);
             session.removeAttribute(OAUTH_NONCE);
             return "/";
         }
@@ -257,6 +268,7 @@ public class AuthService {
         }
         LoginUser loginUser = new LoginUser(user.getId(), nickname.strip(), currentRoles(user));
         session.setAttribute(SessionAuthenticationFilter.LOGIN_USER, loginUser);
+        enforceSessionLimit(user.getId(), session);
         session.removeAttribute(PENDING_SIGNUP);
         session.removeAttribute(InvitationSessionContext.SESSION_KEY);
         return loginUser;
@@ -369,4 +381,25 @@ public class AuthService {
             Instant joinedAt
     ) {
     }
+
+    private void enforceSessionLimit(Long userId, HttpSession currentSession) {
+        String principalName = userId.toString();
+        currentSession.setAttribute(FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME, principalName);
+        Object lock = SESSION_LIMIT_LOCKS[Math.floorMod(userId.hashCode(), SESSION_LIMIT_LOCKS.length)];
+
+        synchronized (lock) {
+            Map<String, ? extends Session> sessions = sessionRepository.findByPrincipalName(principalName);
+
+            List<Map.Entry<String, ? extends Session>> previousSessions = new ArrayList<>(sessions.entrySet());
+            previousSessions.removeIf(entry -> entry.getKey().equals(currentSession.getId()));
+            previousSessions.sort(Comparator.comparing(entry -> entry.getValue().getLastAccessedTime()));
+
+            while (previousSessions.size() > 2) {
+                Map.Entry<String, ? extends Session> oldest = previousSessions.remove(0);
+                sessionRepository.deleteById(oldest.getKey());
+            }
+        }
+    }
+
+
 }

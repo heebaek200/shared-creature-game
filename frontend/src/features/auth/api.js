@@ -10,13 +10,13 @@ export function getCurrentUser() {
   return useMock ? mockApi.getCurrentUser() : apiRequest('/api/v1/me');
 }
 
-/** Google 소셜 로그인 시작 URL을 생성합니다. */
-export function createOAuthAttempt(returnRoute = 'DEFAULT') {
+/** 소셜 로그인 시작 URL을 생성합니다. */
+export function createOAuthAttempt(returnRoute = 'DEFAULT', provider = 'GOOGLE') {
   return useMock
-      ? mockApi.createOAuthAttempt(returnRoute)
+      ? mockApi.createOAuthAttempt(returnRoute, provider)
       : apiRequest('/api/v1/auth/oauth-attempts', {
         method: 'POST',
-        body: { provider: 'GOOGLE', returnRoute },
+        body: { provider, returnRoute },
       });
 }
 

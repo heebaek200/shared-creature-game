@@ -70,6 +70,14 @@ export function loginPage() {
                         type="button">
                         Google로 계속하기
                     </button>
+                    
+                    <button
+                        id="naver-login-button"
+                        class="btn w-100 py-2 mb-3 text-white"
+                        style="background-color: #03C75A;"
+                        type="button">
+                        Naver로 계속하기
+                    </button>
 
                     <!-- 로그인 오류 안내 -->
 <!-- 로그인 오류 안내 -->
@@ -90,23 +98,24 @@ export function loginPage() {
         </div>
     `;
 
-  const button = element.querySelector('#google-login-button');
+  const googleButton = element.querySelector('#google-login-button');
+  const naverButton = element.querySelector('#naver-login-button');
   const feedback = element.querySelector('.feedback');
   const loginError = element.querySelector('.login-error');
   const themeButton = element.querySelector('.theme-toggle');
   const themeIcon = element.querySelector('.theme-icon');
   const themeLabel = element.querySelector('.theme-label');
 
-  if (!button || !feedback || !loginError || !themeButton || !themeIcon || !themeLabel) {
+  if (!googleButton || !naverButton || !feedback || !loginError || !themeButton || !themeIcon || !themeLabel) {
     throw new Error('로그인 화면 요소를 찾을 수 없습니다.');
   }
-  // Google OAuth 콜백 실패 사유 안내
+  // 소셜 OAuth 콜백 실패 사유 안내
   const params = new URLSearchParams(location.search);
   const oauthError = params.get('oauthError');
 
   const oauthErrorMessages = {
     OAUTH_ACCESS_DENIED:
-        'Google 로그인이 취소되었습니다. 다시 로그인해 주세요.',
+        '소셜 로그인이 취소되었습니다. 다시 로그인해 주세요.',
     OAUTH_INVALID_STATE:
         '로그인 요청을 확인할 수 없습니다. 다시 로그인해 주세요.',
     OAUTH_SESSION_EXPIRED:
@@ -116,7 +125,7 @@ export function loginPage() {
   if (oauthError) {
     feedback.textContent =
         oauthErrorMessages[oauthError] ||
-        'Google 인증에 실패했습니다. 다시 로그인해 주세요.';
+        '소셜 인증에 실패했습니다. 다시 로그인해 주세요.';
 
     loginError.classList.remove('d-none');
   }
@@ -141,10 +150,16 @@ export function loginPage() {
     updateThemeButton();
   };
 
-  // Google 로그인
-  const onClick = async () => {
-    button.disabled = true;
-    button.textContent = '로그인 연결 중...';
+  // 소셜 로그인
+  const onClick = async (provider, targetButton) => {
+    const originalText = provider === 'NAVER' ? 'Naver로 계속하기' : 'Google로 계속하기';
+
+    targetButton.disabled = true;
+    targetButton.textContent = '로그인 연결 중...';
+
+    googleButton.disabled = true;
+    naverButton.disabled = true;
+
     feedback.textContent = '';
     loginError.classList.add('d-none');
 
@@ -158,7 +173,7 @@ export function loginPage() {
               ? 'INVITE'
               : 'DEFAULT';
 
-      const result = await createOAuthAttempt(returnRoute);
+      const result = await createOAuthAttempt(returnRoute, provider);
       location.assign(result.authorizationUrl);
     } catch (error) {
       feedback.textContent =
@@ -168,19 +183,27 @@ export function loginPage() {
 
       loginError.classList.remove('d-none');
 
-      button.disabled = false;
-      button.textContent = 'Google로 계속하기';
+      googleButton.disabled = false;
+      naverButton.disabled = false;
+
+      googleButton.textContent = 'Google로 계속하기';
+      naverButton.textContent = 'Naver로 계속하기';
     }
   };
 
+  const onGoogleClick = () => onClick("GOOGLE", googleButton);
+  const onNaverClick = () => onClick("NAVER", naverButton);
+
   themeButton.addEventListener('click', onTheme);
-  button.addEventListener('click', onClick);
+  googleButton.addEventListener('click', onGoogleClick);
+  naverButton.addEventListener('click', onNaverClick);
 
   return {
     element,
     cleanup: () => {
       themeButton.removeEventListener('click', onTheme);
-      button.removeEventListener('click', onClick);
+      googleButton.removeEventListener('click', onGoogleClick);
+      naverButton.removeEventListener('click', onNaverClick);
     },
   };
 }
