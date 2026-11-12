@@ -7,6 +7,13 @@ logging:
     com.team.sharedcreature: DEBUG
 
 spring:
+  # 복수 Scheduler의 5분 Cron을 실행할 별도 스레드 풀을 설정한다.
+  task:
+    scheduling:
+      pool:
+        size: 6
+      thread-name-prefix: sharedcreature-scheduler-
+
   # 데이터베이스 연결 (MySQL)
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -24,10 +31,20 @@ spring:
     properties:
       hibernate:
         format_sql: true    # 출력되는 SQL을 콘솔창에 줄바꿈해 보기 좋게 표시
-    # data.sql을 테이블 생성 후에 실행한다.
+    # JPA 테이블 준비 후 퀘스트 카탈로그만 초기화한다.
     defer-datasource-initialization: true
 
   sql:
     init:
+      mode: always
       data-locations:
-        - classpath:db/data.sql
+        - classpath:db/quest-catalog.sql
+
+app:
+  scheduler:
+    # dev에서도 별도 환경변수 없이 기동 복구·주기 실행을 활성화한다.
+    enabled: true
+    photo-retention-enabled: true
+    payment-webhook-enabled: true
+    # #22 실제 환불 상태 복구 연동이 완료되면 별도 검증 후 true로 전환한다.
+    refund-reconciliation-enabled: false

@@ -14,6 +14,13 @@ import java.util.Optional;
 public interface QuestAssignmentRepository extends JpaRepository<QuestAssignment, Long> {
 
     /**
+     * 이미 확정된 기간의 슬롯 수와 이전 미완료 기간의 부분 저장 여부를 조사합니다.
+     * 기간 ID로만 조회하므로 다른 시즌 데이터와 혼동하지 않습니다.
+     * 기간 상태 전이 전에 원자적 배정 여부를 검증합니다.
+     */
+    long countByQuestPeriodId(Long questPeriodId);
+
+    /**
      * 퀘스트 배정 정보를 조회하고 저장합니다.
      * 한 기간에 배정된 퀘스트를 슬롯 순서대로 조회합니다.
      * 응답에 필요한 기간, 템플릿, 배정 시점의 Snapshot을 함께 가져옵니다.

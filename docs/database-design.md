@@ -649,6 +649,7 @@ UPDATE game_groups
 | `start_at` | `DATETIME(6)` | — |
 | `end_at` | `DATETIME(6)` | — |
 | `status` | `VARCHAR(30)` | — |
+| `closing_from_status` | `VARCHAR(30) NULL` | CLOSING 진입 직전 상태. ACTIVE 또는 SCHEDULED |
 | `version` | `BIGINT` | 동시 변경 감지 |
 | `created_at` | `DATETIME(6)` | — |
 | `updated_at` | `DATETIME(6)` | — |
@@ -1017,7 +1018,7 @@ UPDATE game_groups
 
 **주요 규칙**
 
-`(user_id,quest_assignment_id,attempt_number)` UNIQUE·1~5 CHECK; JPEG ≤10 MiB, EXIF APP1 ≤1 MiB; 판정 결과·삭제 이력 보존.
+`(user_id,quest_assignment_id,attempt_number)` UNIQUE·1~5 CHECK; JPEG ≤10 MiB, EXIF APP1 ≤1 MiB; 판정 결과·삭제 이력 보존. 실패한 정리는 실제 실패 시각부터 5분 뒤 재시도하고 신규·재시도 대상을 함께 처리합니다. 파일 삭제 전 10분 만료 단건 claim을 저장하고 파일 I/O 중 30초마다 Scheduler Lease와 함께 갱신하며 판정 시각은 변경하지 않습니다.
 
 | 컬럼 | 자료형 | 역할·제약 |
 |---|---|---|
@@ -1033,6 +1034,9 @@ UPDATE game_groups
 | `verification_status` | `VARCHAR(30)` | — |
 | `failure_reason` | `VARCHAR(50)` | — |
 | `file_deleted_at` | `DATETIME(6)` | — |
+| `cleanup_next_attempt_at` | `DATETIME(6)` | 실패한 정리의 다음 시도 시각 |
+| `cleanup_claim_token` | `VARCHAR(36)` | 파일 정리 단건 실행권 |
+| `cleanup_claim_expires_at` | `DATETIME(6)` | 단건 실행권 만료 시각 |
 | `created_at` | `DATETIME(6)` | — |
 | `updated_at` | `DATETIME(6)` | — |
 
