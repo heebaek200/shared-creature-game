@@ -40,8 +40,9 @@ export function createThemeToggle() {
     dropdown.className = 'theme-dropdown';
 
     dropdown.innerHTML = `
-    <summary class="btn btn-sm btn-outline-secondary text-nowrap">
-      테마 설정
+    <summary class="btn btn-sm btn-outline-secondary text-nowrap" aria-label="테마 설정">
+      <span class="theme-toggle-label">테마 설정</span>
+      <span class="theme-toggle-icon" aria-hidden="true">◐</span>
     </summary>
 
     <div class="theme-menu" role="group" aria-label="테마 선택">

@@ -3,135 +3,125 @@ import {
     getSignupContext,
     completeSignup
 } from '../features/auth/api.js';
+import { createHeaderLayout } from '../components/app-shell.js';
 
 /** 가입 대기 사용자의 닉네임 확정 Page를 생성합니다. */
-export function signupPage({navigate}) {
-    const element = document.createElement('main');
-    element.className = 'min-vh-100 bg-body-tertiary';
+export function signupPage({navigate, currentUser }) {
+    const content = document.createElement('main');
+    content.className = 'min-vh-100 bg-body-tertiary w-100 flex-grow-1';
 
-    element.innerHTML = `
-        <header class="border-bottom bg-body">
-            <div class="container-fluid px-4 py-3 d-flex justify-content-between align-items-center">
-                <a href="/" class="text-decoration-none fw-semibold text-success">
-                    다 같이 키우는 생명체
-                </a>
-
-                <button class="btn btn-sm btn-outline-secondary" id="theme-toggle" type="button">
-                    테마 전환 ◐
-                </button>
-            </div>
-        </header>
-
-        <div class="container-fluid px-3 px-md-4 py-4">
+    content.innerHTML = `
+    <div class="container-fluid px-3 px-md-4 py-4">
+        <div class="mx-auto" style="max-width: 620px;">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                 <div>
                     <h2 class="fw-bold mb-2">회원가입</h2>
                    
                 </div>
             </div>
+            <section class="card shadow-none border rounded-4 mb-4">
+                <div class="card-body p-4">
+                    <h5 class="fw-semibold mb-4">회원가입</h5>
 
-            <div class="mx-auto" style="max-width: 620px;">
-                <section class="card shadow-none border rounded-4 mb-4">
-                    <div class="card-body p-4">
-                        <h5 class="fw-semibold mb-4">회원가입</h5>
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                        <p class="mb-0">
+                            소셜 인증이 완료되었습니다. 서비스 닉네임을 확정해 주세요.
+                        </p>
+                        <span class="badge rounded-pill text-bg-success bg-opacity-10 text-success border px-3 py-2">
+                            가입 대기 30분
+                        </span>
+                    </div>
 
-                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-                            <p class="mb-0">
-                                소셜 인증이 완료되었습니다. 서비스 닉네임을 확정해 주세요.
-                            </p>
-                            <span class="badge rounded-pill text-bg-success bg-opacity-10 text-success border px-3 py-2">
-                                가입 대기 30분
-                            </span>
+                    <form id="signup-form" novalidate>
+                        <div class="mb-3">
+                            <label for="provider" class="form-label fw-semibold">
+                                가입 방식
+                            </label>
+                            <input
+                                class="form-control bg-body-secondary"
+                                id="provider"
+                                readonly
+                            >
                         </div>
 
-                        <form id="signup-form" novalidate>
-                            <div class="mb-3">
-                                <label for="provider" class="form-label fw-semibold">
-                                    가입 방식
-                                </label>
-                                <input
-                                    class="form-control bg-body-secondary"
-                                    id="provider"
-                                    readonly
-                                >
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="email" class="form-label fw-semibold">
-                                    이메일
-                                </label>
-                                <input
-                                    class="form-control bg-body-secondary"
-                                    id="email"
-                                    readonly
-                                >
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="nickname" class="form-label fw-semibold">
-                                    닉네임
-                                </label>
-
-                                    <div class="d-flex gap-2 align-items-start">
-                                        <div class="flex-grow-1">
-                                            <input
-                                                class="form-control"
-                                                id="nickname"
-                                                type="text"
-                                                minlength="2"
-                                                maxlength="20"
-                                                placeholder="닉네임을 입력하세요"
-                                                autocomplete="nickname"
-                                                required
-                                            >
-                                            <div class="invalid-feedback" id="nickname-error"></div>
-                                        </div>
-                                    
-                                        <button
-                                            class="btn btn-outline-secondary text-nowrap"
-                                            id="check-nickname"
-                                            type="button"
-                                        >
-                                            입력 형식 확인
-                                        </button>
-                                    </div>
-
-                                <div class="form-text">
-                                    2~20자 · 중복 여부는 가입 시 확인합니다.
-                                </div>
-                            </div>
-
-                            <div
-                                class="alert alert-secondary border-0 border-start border-4 mb-3"
-                                role="status"
-                                id="feedback"
+                        <div class="mb-3">
+                            <label for="email" class="form-label fw-semibold">
+                                이메일
+                            </label>
+                            <input
+                                class="form-control bg-body-secondary"
+                                id="email"
+                                readonly
                             >
-                                가입 정보를 조회하고 있습니다.
-                            </div>
+                        </div>
 
-                            <div class="d-flex gap-2 flex-wrap">
-                                <button
-                                    class="btn btn-success"
-                                    type="submit"
-                                    disabled
-                                >
-                                    가입 완료
-                                </button>
+                        <div class="mb-3">
+                            <label for="nickname" class="form-label fw-semibold">
+                                닉네임
+                            </label>
 
-                                <button
-                                    class="btn btn-outline-secondary"
-                                    id="back-login"
-                                    type="button"
-                                >
-                                    로그인으로 돌아가기
-                                </button>
+                                <div class="d-flex gap-2 align-items-start">
+                                    <div class="flex-grow-1">
+                                        <input
+                                            class="form-control"
+                                            id="nickname"
+                                            type="text"
+                                            minlength="2"
+                                            maxlength="20"
+                                            placeholder="닉네임을 입력하세요"
+                                            autocomplete="nickname"
+                                            required
+                                        >
+                                        <div class="invalid-feedback" id="nickname-error"></div>
+                                    </div>
+                                
+                                    <button
+                                        class="btn btn-outline-secondary text-nowrap"
+                                        id="check-nickname"
+                                        type="button"
+                                    >
+                                        입력 형식 확인
+                                    </button>
+                                </div>
+
+                            <div class="form-text">
+                                2~20자 · 중복 여부는 가입 시 확인합니다.
                             </div>
-                        </form>
-                    </div>
-                </section>
-            </div>
+                        </div>
+
+                        <div
+                            class="alert alert-secondary border-0 border-start border-4 mb-3"
+                            role="status"
+                            id="feedback"
+                        >
+                            가입 정보를 조회하고 있습니다.
+                        </div>
+
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button
+                                class="btn btn-success"
+                                type="submit"
+                                disabled
+                            >
+                                가입 완료
+                            </button>
+
+                            <button
+                                class="btn btn-outline-secondary"
+                                id="back-login"
+                                type="button"
+                            >
+                                로그인으로 돌아가기
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
         </div>
+    </div>
     `;
+
+    const element = createHeaderLayout({ content, currentUser, navigate, showGroupBadge: false });
 
     const form = element.querySelector('#signup-form');
     const provider = element.querySelector('#provider');
@@ -141,7 +131,6 @@ export function signupPage({navigate}) {
     const submit = element.querySelector('button[type="submit"]');
     const checkButton = element.querySelector('#check-nickname');
     const feedback = element.querySelector('#feedback');
-    const themeToggle = element.querySelector('#theme-toggle');
     const backLogin = element.querySelector('#back-login');
 
     let disposed = false;
@@ -273,16 +262,6 @@ export function signupPage({navigate}) {
         }
     }
 
-    /** 테마 전환 */
-    function onThemeToggle() {
-        const currentTheme =
-            document.documentElement.dataset.bsTheme || 'light';
-
-        const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
-
-        document.documentElement.dataset.bsTheme = nextTheme;
-        localStorage.setItem('theme', nextTheme);
-    }
 
     function onBackLogin() {
         navigate('/login');
@@ -290,13 +269,15 @@ export function signupPage({navigate}) {
 
     form.addEventListener('submit', onSubmit);
     checkButton.addEventListener('click', onCheckNickname);
-    themeToggle.addEventListener('click', onThemeToggle);
     backLogin.addEventListener('click', onBackLogin);
 
-    nickname.addEventListener('input', () => {
+    // 수정) 기존 익명 함수는 cleanup() 에서 이벤트 리스너를 제거할 수 없어서 이름을 지정했습니다.
+    function onNicknameInput() {
         clearNicknameError();
         checkButton.disabled = false;
-    });
+    }
+
+    nickname.addEventListener('input', onNicknameInput);
 
     void loadSignupContext();
 
@@ -308,8 +289,8 @@ export function signupPage({navigate}) {
 
             form.removeEventListener('submit', onSubmit);
             checkButton.removeEventListener('click', onCheckNickname);
-            themeToggle.removeEventListener('click', onThemeToggle);
             backLogin.removeEventListener('click', onBackLogin);
+            nickname.removeEventListener('input', onNicknameInput);
         }
     };
 }

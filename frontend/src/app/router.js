@@ -2,7 +2,7 @@
 import { getCurrentUser } from '../features/auth/api.js';
 import { statusPage } from '../pages/status-page.js';
 
-/** @typedef {{ path: string, access: string, page: (context: {navigate: (path: string) => void}) => {element: HTMLElement, cleanup?: () => void} }} Route */
+/** @typedef {{ path: string, access: string, page: (context: {navigate: (path: string) => void, currentUser: object | null}) => {element: HTMLElement, cleanup?: () => void} }} Route */
 
 /**
  * History API 이동과 Page mount·cleanup을 관리합니다.
@@ -23,31 +23,25 @@ export function createRouter(root, routes) {
       return candidate.path === location.pathname;
     }) ?? routes.find((candidate) => candidate.path === '*');
 
-    // 사용자 정보는 필요한 경우 한 번만 조회합니다.
-
+    // Route 진입 시 현재 로그인·그룹 상태를 조회합니다.
     let me = null;
 
-    if (
-        route.access === 'HOME' ||
-        route.path === '/signup' ||
-        route.access !== 'PUBLIC'
-    ) {
-      try {
-        me = await getCurrentUser();
-      } catch (error) {
-        console.error('사용자 정보 조회 실패:', error);
+    try {
+      me = await getCurrentUser();
+    } catch (error) {
+      console.error('사용자 정보 조회 실패:', error);
 
-        const errorPage = statusPage(
-            '일시적인 오류가 발생했습니다',
-            '사용자 정보를 확인하지 못했습니다. 잠시 후 페이지를 새로고침해 주세요.'
-        );
+      const errorPage = statusPage(
+          '일시적인 오류가 발생했습니다',
+          '사용자 정보를 확인하지 못했습니다. 잠시 후 페이지를 새로고침해 주세요.'
+      );
 
-        const mounted = errorPage({ navigate });
-        root.replaceChildren(mounted.element);
-        cleanup = mounted.cleanup ?? (() => {});
-        return;
-      }
+      const mounted = errorPage({ navigate });
+      root.replaceChildren(mounted.element);
+      cleanup = mounted.cleanup ?? (() => {});
+      return;
     }
+
 
 
     if (route.access === 'HOME') {
@@ -83,6 +77,17 @@ export function createRouter(root, routes) {
         return;
       }
 
+      if (route.access === 'GROUP_ADMIN') {
+        const roles = Array.isArray(me.roles) ? me.roles : [];
+        const canManageGroup =
+            roles.includes('PRIMARY') || roles.includes('DEPUTY');
+
+        if (!canManageGroup) {
+          replace('/403');
+          return;
+        }
+      }
+
       if (
           route.access === 'SUPER_ADMIN' &&
           !me.roles.includes('SUPER_ADMIN')
@@ -97,7 +102,10 @@ export function createRouter(root, routes) {
       }
     }
 
-    const mounted = route.page({ navigate });
+    const mounted = route.page({
+      navigate,
+      currentUser: me,
+    });
     root.replaceChildren(mounted.element);
     cleanup = mounted.cleanup ?? (() => {});
   }

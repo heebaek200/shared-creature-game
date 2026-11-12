@@ -1,0 +1,186 @@
+.mobile-navigation {
+    display: none;
+}
+
+.theme-toggle-icon {
+    display: none;
+}
+
+/* 데스크톱에서는 제목의 줄바꿈 문자를 공백처럼 표시 */
+#creature-title-name {
+    white-space: normal;
+}
+
+@media (max-width: 991.98px) {
+    .app-shell > .d-flex.flex-grow-1 > nav.d-lg-flex {
+        display: none !important;
+    }
+
+    .mobile-navigation {
+        position: fixed;
+        z-index: 1030;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        display: flex;
+        padding: 0 0 env(safe-area-inset-bottom);
+        border-top: 1px solid var(--app-border);
+        background-color: var(--app-surface);
+    }
+
+    .mobile-navigation__link {
+        display: flex;
+        min-width: 0;
+        min-height: 3.5rem;
+        flex: 1 1 0;
+        align-items: center;
+        justify-content: center;
+        padding: 0.35rem 0.15rem;
+        color: var(--app-text);
+        font-size: 0.95rem;
+        line-height: 1.2;
+        text-align: center;
+        text-decoration: none;
+        overflow-wrap: anywhere;
+    }
+
+    .mobile-navigation__more {
+        position: relative;
+        display: flex;
+        min-width: 0;
+        flex: 1 1 0;
+    }
+
+    .mobile-navigation__more > summary {
+        width: 100%;
+        cursor: pointer;
+        list-style: none;
+    }
+
+    .mobile-navigation__more > summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .mobile-navigation__link.active {
+        color: var(--bs-white);
+        background-color: var(--app-primary);
+        border-radius: 0;
+        font-weight: 700;
+    }
+
+    .app-shell .container-fluid {
+        padding-bottom: 5.5rem !important;
+    }
+
+    .connection-status-label,
+    .theme-toggle-label {
+        display: none;
+    }
+
+    .theme-toggle-icon {
+        display: inline;
+    }
+
+    .mobile-navigation__more[open] .mobile-navigation__menu {
+        position: absolute;
+        right: 0;
+        bottom: 100%;
+        z-index: 1040;
+        display: grid;
+        width: max-content;
+        min-width: 9rem;
+        max-width: calc(100vw - 1rem);
+        padding: 0.4rem;
+        border: 1px solid var(--app-border);
+        border-radius: 0.5rem 0.5rem 0 0;
+        background-color: var(--app-surface);
+        box-shadow: 0 -0.4rem 1rem rgb(0 0 0 / 12%);
+    }
+
+    .mobile-navigation__menu a {
+        display: block;
+        padding: 0.65rem 0.8rem;
+        color: var(--app-text);
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .mobile-navigation__menu a:hover,
+    .mobile-navigation__menu a:focus-visible {
+        background-color: var(--app-background);
+    }
+}
+
+@media (max-width: 768px) {
+    .app-header {
+        flex-wrap: nowrap;
+    }
+
+    .app-header__title-text {
+        display: none;
+    }
+
+    .app-header__status {
+        flex: 1 1 0;
+        min-width: 0;
+        gap: 0.5rem !important;
+        margin-left: 0.75rem !important;
+        white-space: nowrap;
+    }
+
+    [data-header-season-info] {
+        flex: 0 1 auto;
+        min-width: 0;
+        max-width: 12rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    [data-header-group-name] {
+        flex: 0 1 auto;
+        min-width: 0;
+        max-width: 7rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    [data-header-connection-status] {
+        flex: 0 0 auto;
+        margin-left: auto !important;
+        margin-right: 0.25rem !important;
+        padding-right: 0.5rem !important;
+    }
+
+    [data-header-actions] {
+        flex: 0 0 auto;
+        gap: 0.25rem !important;
+    }
+
+    #growth-stage {
+        font-size: 1.1rem !important;
+        line-height: 1.2;
+    }
+
+    /* 모바일에서는 제목을 '시즌 크리처' 뒤에서 줄바꿈 */
+    #creature-title-name {
+        white-space: pre-line;
+    }
+
+    #creature-img-wrapper {
+        zoom: 0.85;
+    }
+}
+
+@media (max-width: 576px) {
+    #creature-img-wrapper {
+        zoom: 0.75;
+    }
+}
+
+@media (max-width: 390px) {
+    #creature-img-wrapper {
+        zoom: 0.65;
+    }
+}

@@ -16,140 +16,141 @@ export function creaturePage(context) {
     const content = document.createElement('div');
     content.className = 'd-flex flex-column flex-grow-1';
 
-    content.innerHTML = `
-          
-          <!-- 크리처홈 메인 영역 타이틀 및 상태 영역 -->
-          <div class="d-flex justify-content-between align-items-center mb-3 px-1">
-            <div>
-              <div class="d-flex align-items-center gap-2">
-                <h1 class="h3 mb-0 fw-bold" style="color: var(--app-text);">크리처 홈</h1>
-              </div>
-            </div>
-            <div class="d-flex align-items-center gap-3">
-              <button type="button" class="btn border px-3 py-1.5 fw-bold" style="background-color: var(--app-surface); color: var(--app-primary); border-color: var(--app-border) !important;" id="btn-toggle-movement">
-                아바타 이동 : ON
-              </button>
-            </div>
+    content.innerHTML = `  
+    <!-- 크리처홈 메인 영역 타이틀 및 상태 영역 -->
+    <div class="d-flex justify-content-between align-items-center mb-3 px-1">
+        <div>
+          <div class="d-flex align-items-center gap-2">
+            <h1 class="h3 mb-0 fw-bold" style="color: var(--app-text);">크리처 홈</h1>
           </div>
-
-          <div id="creature-load-error" class="alert alert-danger d-none d-flex justify-content-between align-items-start gap-3" role="alert">
-            <div>
-              <div id="creature-load-error-message"></div>
-              <small id="creature-load-error-details" class="d-block mt-1"></small>
-            </div>
-            <div class="d-flex flex-shrink-0 gap-2">
-              <button type="button" class="btn btn-sm btn-outline-danger d-none" id="creature-error-login">로그인</button>
-              <button type="button" class="btn btn-sm btn-danger" id="creature-error-retry">다시 시도</button>
-            </div>
-          </div>
-
-          <!-- 메인 콘텐츠 대시보드 -->
-          <div class="row g-4 flex-grow-1 align-items-stretch">
-            
-            <!-- 좌측: 공동 크리처 영역 -->
-            <div class="col-xl-9 col-lg-8 d-flex flex-column">
-              <div class="card shadow-sm flex-grow-1 border" style="background-color: var(--app-surface); border-color: var(--app-border) !important; border-radius: 1.25rem;">
-                <div class="card-body d-flex flex-column justify-content-between p-3 p-xxl-4 h-100">
-                  <div class="d-flex flex-column flex-grow-1">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                      <h2 class="h5 card-title mb-0 fw-bold" style="color: var(--app-text);" id="creature-title-name">시즌 크리처 - ???</h2>
-                      <span class="badge rounded-pill py-2 px-3" style="background-color: var(--app-muted); color: var(--app-surface);" id="online-count">접속 0명</span>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+          <button type="button" class="btn border px-3 py-1.5 fw-bold" style="background-color: var(--app-surface); color: var(--app-primary); border-color: var(--app-border) !important;" id="btn-toggle-movement">
+            모션 감소 : OFF
+          </button>
+        </div>
+        </div>
+        
+        <div id="creature-load-error" class="alert alert-danger d-none d-flex justify-content-between align-items-start gap-3" role="alert">
+        <div>
+          <div id="creature-load-error-message"></div>
+          <small id="creature-load-error-details" class="d-block mt-1"></small>
+        </div>
+        <div class="d-flex flex-shrink-0 gap-2">
+          <button type="button" class="btn btn-sm btn-outline-danger d-none" id="creature-error-login">로그인</button>
+          <button type="button" class="btn btn-sm btn-danger" id="creature-error-retry">다시 시도</button>
+        </div>
+        </div>
+        
+        <!-- 메인 콘텐츠 대시보드 -->
+        <div class="row g-4 flex-grow-1 align-items-stretch">
+        
+        <!-- 좌측: 공동 크리처 영역 -->
+        <div class="col-xl-9 col-lg-8 d-flex flex-column">
+          <div class="card shadow-sm flex-grow-1 border" style="background-color: var(--app-surface); border-color: var(--app-border) !important; border-radius: 1.25rem;">
+            <div class="card-body d-flex flex-column justify-content-between p-3 p-xxl-4 h-100">
+              <div class="d-flex flex-column flex-grow-1">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <h2 class="h5 card-title mb-0 fw-bold" style="color: var(--app-text);" id="creature-title-name">시즌 크리처 - ???</h2>
+                  <span class="badge rounded-pill py-2 px-3" style="background-color: var(--app-muted); color: var(--app-surface);" id="online-count">접속 0명</span>
+                </div>
+        
+                <!-- 크리처 및 아바타 이동 구역 -->
+                <div class="border rounded-3 p-4 text-center position-relative my-2 flex-grow-1 d-flex flex-column justify-content-center align-items-center" style="min-height: 480px; background-color: var(--app-background); border-color: var(--app-border) !important;" id="avatar-container">
+                  
+                  <div id="creature-display" class="d-flex flex-column align-items-center justify-content-center" style="visibility: hidden;">
+                    <div id="creature-img-wrapper" class="mb-1 d-flex align-items-center justify-content-center">
+                      <img src="${creatureLv0}" alt="크리처 이미지" id="creature-image" style="image-rendering: pixelated; image-rendering: crisp-edges;" />
                     </div>
-
-                    <!-- 크리처 및 아바타 이동 구역 -->
-                    <div class="border rounded-3 p-4 text-center position-relative my-2 flex-grow-1 d-flex flex-column justify-content-center align-items-center" style="min-height: 480px; background-color: var(--app-background); border-color: var(--app-border) !important;" id="avatar-container">
-                      
-                      <div id="creature-display" class="d-flex flex-column align-items-center justify-content-center" style="visibility: hidden;">
-                        <div id="creature-img-wrapper" class="mb-1 d-flex align-items-center justify-content-center">
-                          <img src="${creatureLv0}" alt="크리처 이미지" id="creature-image" style="image-rendering: pixelated; image-rendering: crisp-edges;" />
-                        </div>
-                        <h3 class="h4 mb-0 fw-bold" style="color: var(--app-text);" id="growth-stage">미선택 알</h3>
-                        <span class="small" style="color: var(--app-muted);" id="species-subtitle">???</span>
-                        <span class="small" style="color: var(--app-muted);" id="hatch-countdown" aria-live="polite"></span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- 경험치 및 퀘스트 하단 구역 -->
-                  <div class="mt-2">
-                    <div class="d-flex justify-content-end fw-bold mb-2" style="color: var(--app-text);" id="exp-text">
-                      <span>0 / - XP</span>
-                    </div>
-                    <div class="progress mb-3" style="height: 12px; background-color: var(--app-border);">
-                      <!-- 부드러운 바 차오름을 위한 CSS 트랜지션 추가 -->
-                      <div class="progress-bar" role="progressbar" id="exp-bar" aria-label="크리처 성장 경험치 진행률" aria-valuetext="경험치 정보 불러오는 중" style="width: 0%; background-color: var(--app-primary); transition: width 2.8s ease-in-out;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
-                    </div>
-                    <div class="text-center">
-                      <button type="button" class="btn btn-primary fw-bold px-4 py-2" id="btn-quest">오늘 퀘스트 확인</button>
-                    </div>
+                    <h3 class="h4 mb-0 fw-bold" style="color: var(--app-text);" id="growth-stage">미선택 알</h3>
+                    <span class="small" style="color: var(--app-muted);" id="species-subtitle">???</span>
+                    <span class="small" style="color: var(--app-muted);" id="hatch-countdown" aria-live="polite"></span>
                   </div>
                 </div>
               </div>
-            </div>
-
-            <!-- 우측: 아바타 상세 정보 카드 영역 -->
-            <div class="col-xl-3 col-lg-4 d-flex flex-column">
-              <div class="card shadow-sm flex-grow-1 border" style="background-color: var(--app-surface); border-color: var(--app-border) !important; border-radius: 1.25rem;">
-                <div class="card-body p-4 d-flex flex-column justify-content-between h-100">
-                  <div>
-                    <h2 class="h6 mb-2" style="color: var(--app-muted);">오늘 그룹 경험치</h2>
-                    <div class="h3 fw-bold mb-4" style="color: var(--app-text);" id="today-exp">+0 XP</div>
-
-                    <h3 class="h6 fw-bold mb-3" style="color: var(--app-text);">최근 기여</h3>
-                    <ul class="list-group list-group-flush mb-4" id="recent-contributions-list"></ul>
-                  </div>
-
-                  <!-- 아바타 선택 시에만 나타나는 유저 정보창 -->
-                  <div class="card border mt-3 d-none shadow-sm" style="background-color: var(--app-surface); border-color: var(--app-border) !important;" id="avatar-info-card">
-                    <div class="card-header py-2.5" style="background-color: var(--app-surface); border-color: var(--app-border) !important;">
-                      <div class="d-flex justify-content-between align-items-center">
-                        <span class="fw-bold text-nowrap" id="avatar-toggle-title">USER INFO [ON]</span>
-                      </div>
-                    </div>
-                    <div class="card-body collapse show pt-2" id="avatar-detail-collapse" style="overflow-x: auto; overflow-y: hidden;">
-                      <p class="mb-2 fw-bold text-nowrap" style="color: var(--app-primary);" id="avatar-info-header">-</p>
-                      <table class="table table-sm align-middle mb-2" style="color: var(--app-text); border-color: var(--app-border); white-space: nowrap;">
-                        <thead>
-                          <tr style="background-color: var(--app-background); color: var(--app-text);">
-                            <th style="font-style: italic" class="py-1.5">slot</th>
-                            <th style="font-style: italic" class="py-1.5">item</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr>
-                            <td style="color: var(--app-muted);" class="py-1.5">HEAD</td>
-                            <td id="slot-head" class="py-1.5">-</td>
-                          </tr>
-                          <tr>
-                            <td style="color: var(--app-muted);" class="py-1.5">FACE</td>
-                            <td id="slot-face" class="py-1.5">-</td>
-                          </tr>
-                          <tr>
-                            <td style="color: var(--app-muted);" class="py-1.5">BODY</td>
-                            <td id="slot-body" class="py-1.5">-</td>
-                          </tr>
-                          <tr>
-                            <td style="color: var(--app-muted);" class="py-1.5">ACCESSORY</td>
-                            <td id="slot-accessory" class="py-1.5">-</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                    <div class="card-footer bg-transparent border-0 pt-0 pb-3 text-center">
-                      <button type="button" class="btn btn-sm px-3 fw-bold w-100 py-1.5" style="background-color: var(--app-background); color: var(--app-primary); border: 1px solid var(--app-border);" id="btn-goto-shop">상점에서 보기</button>
-                    </div>
-                  </div>
-
+        
+              <!-- 경험치 및 퀘스트 하단 구역 -->
+              <div class="mt-2">
+                <div class="d-flex justify-content-end fw-bold mb-2" style="color: var(--app-text);" id="exp-text">
+                  <span>0 / - XP</span>
+                </div>
+                <div class="progress mb-3" style="height: 12px; background-color: var(--app-border);">
+                  <!-- 부드러운 바 차오름을 위한 CSS 트랜지션 추가 -->
+                  <div class="progress-bar" role="progressbar" id="exp-bar" aria-label="크리처 성장 경험치 진행률" aria-valuetext="경험치 정보 불러오는 중" style="width: 0%; background-color: var(--app-primary); transition: width 2.8s ease-in-out;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
+                <div class="text-center">
+                  <button type="button" class="btn btn-primary fw-bold px-4 py-2" id="btn-quest">오늘 퀘스트 확인</button>
                 </div>
               </div>
             </div>
-
           </div>
-  `;
+        </div>
+        
+        <!-- 우측: 아바타 상세 정보 카드 영역 -->
+        <div class="col-xl-3 col-lg-4 d-flex flex-column">
+          <div class="card shadow-sm flex-grow-1 border" style="background-color: var(--app-surface); border-color: var(--app-border) !important; border-radius: 1.25rem;">
+            <div class="card-body p-4 d-flex flex-column justify-content-between h-100">
+              <div>
+                <h2 class="h6 mb-2" style="color: var(--app-muted);">오늘 그룹 경험치</h2>
+                <div class="h3 fw-bold mb-4" style="color: var(--app-text);" id="today-exp">+0 XP</div>
+        
+                <h3 class="h6 fw-bold mb-3" style="color: var(--app-text);">최근 기여</h3>
+                <ul class="list-group list-group-flush mb-4" id="recent-contributions-list"></ul>
+              </div>
+        
+              <!-- 아바타 선택 시에만 나타나는 유저 정보창 -->
+              <div class="card border mt-3 d-none shadow-sm" style="background-color: var(--app-surface); border-color: var(--app-border) !important;" id="avatar-info-card">
+                <div class="card-header py-2.5" style="background-color: var(--app-surface); border-color: var(--app-border) !important;">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <span class="fw-bold text-nowrap" id="avatar-toggle-title">USER INFO [ON]</span>
+                  </div>
+                </div>
+                <div class="card-body collapse show pt-2" id="avatar-detail-collapse" style="overflow-x: auto; overflow-y: hidden;">
+                  <p class="mb-2 fw-bold text-nowrap" style="color: var(--app-primary);" id="avatar-info-header">-</p>
+                  <table class="table table-sm align-middle mb-2" style="color: var(--app-text); border-color: var(--app-border); white-space: nowrap;">
+                    <thead>
+                      <tr style="background-color: var(--app-background); color: var(--app-text);">
+                        <th style="font-style: italic" class="py-1.5">slot</th>
+                        <th style="font-style: italic" class="py-1.5">item</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td style="color: var(--app-muted);" class="py-1.5">HEAD</td>
+                        <td id="slot-head" class="py-1.5">-</td>
+                      </tr>
+                      <tr>
+                        <td style="color: var(--app-muted);" class="py-1.5">FACE</td>
+                        <td id="slot-face" class="py-1.5">-</td>
+                      </tr>
+                      <tr>
+                        <td style="color: var(--app-muted);" class="py-1.5">BODY</td>
+                        <td id="slot-body" class="py-1.5">-</td>
+                      </tr>
+                      <tr>
+                        <td style="color: var(--app-muted);" class="py-1.5">ACCESSORY</td>
+                        <td id="slot-accessory" class="py-1.5">-</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="card-footer bg-transparent border-0 pt-0 pb-3 text-center">
+                  <button type="button" class="btn btn-sm px-3 fw-bold w-100 py-1.5" style="background-color: var(--app-background); color: var(--app-primary); border: 1px solid var(--app-border);" id="btn-goto-shop">상점에서 보기</button>
+                </div>
+              </div>
+        
+            </div>
+          </div>
+        </div>
+
+    </div>
+    `;
 
     const element = createAppShell({
         content,
+        navigate: context.navigate,
         currentPath: location.pathname,
+        currentUser: context.currentUser,
     });
 
     // 2. DOM 요소 참조 및 이벤트 바인딩
@@ -158,7 +159,6 @@ export function creaturePage(context) {
     const avatarInfoCard = element.querySelector('#avatar-info-card');
     const avatarToggleTitle = element.querySelector('#avatar-toggle-title');
     const btnGotoShop = element.querySelector('#btn-goto-shop');
-    // const themeToggle = element.querySelector('.theme-toggle');
     const btnToggleMovement = element.querySelector('#btn-toggle-movement');
     const avatarContainer = element.querySelector('#avatar-container');
     const loadError = element.querySelector('#creature-load-error');
@@ -228,7 +228,7 @@ export function creaturePage(context) {
     const onToggleMovement = () => {
         isAvatarMoving = !isAvatarMoving;
         if (btnToggleMovement) {
-            btnToggleMovement.textContent = isAvatarMoving ? '아바타 이동 : ON' : '아바타 이동 : OFF';
+            btnToggleMovement.textContent = isAvatarMoving ? '모션 감소 : OFF' : '모션 감소 : ON';
             if (isAvatarMoving) {
                 btnToggleMovement.style.color = 'var(--app-primary)';
                 btnToggleMovement.style.backgroundColor = 'var(--app-surface)';
@@ -253,11 +253,16 @@ export function creaturePage(context) {
     btnToggleMovement?.addEventListener('focus', onMovementFocus);
     btnToggleMovement?.addEventListener('blur', onMovementBlur);
 
-    avatarContainer?.addEventListener('click', (e) => {
-        if (e.target === avatarContainer || e.target.closest('.d-flex.flex-column.align-items-center.justify-content-center')) {
+    const onAvatarContainerClick = (event) => {
+        if (
+            event.target === avatarContainer ||
+            event.target.closest('.d-flex.flex-column.align-items-center.justify-content-center')
+        ) {
             avatarInfoCard?.classList.add('d-none');
         }
-    });
+    };
+
+    avatarContainer?.addEventListener('click', onAvatarContainerClick);
 
     // 3. API 조회, 크리처 성장 렌더링 및 마감 감시 로직
     let isMounted = true;
@@ -713,6 +718,7 @@ export function creaturePage(context) {
             btnToggleMovement?.removeEventListener('click', onToggleMovement);
             btnToggleMovement?.removeEventListener('focus', onMovementFocus);
             btnToggleMovement?.removeEventListener('blur', onMovementBlur);
+            avatarContainer?.removeEventListener('click', onAvatarContainerClick);
         },
     };
 }

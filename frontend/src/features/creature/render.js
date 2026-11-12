@@ -96,8 +96,8 @@ export function renderCreatureGrowth({
         : '???';
     if (creatureTitleName) {
         creatureTitleName.textContent = shouldRevealSpeciesName
-            ? `시즌 크리처 - ${speciesName}`
-            : '시즌 크리처 - ???';
+            ? `시즌 크리처 -\n ${speciesName}`
+            : '시즌 크리처 -\n ???';
     }
     if (speciesSubtitle) {
         speciesSubtitle.textContent = shouldRevealSpeciesName ? speciesName : '???';
