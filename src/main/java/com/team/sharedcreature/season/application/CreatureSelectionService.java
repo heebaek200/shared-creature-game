@@ -167,13 +167,7 @@ public class CreatureSelectionService {
     }
 
     private void publish(GroupSeason groupSeason, GroupCreature creature, Instant now) {
-        eventPublisher.publishAfterCommit(new CreatureUpdatedEvent(
-                groupSeason.getGroup().getId(),
-                creature.getId(),
-                creature.getGrowthStage(),
-                creature.getTotalExperience(),
-                now
-        ));
+        eventPublisher.publishAfterCommit(CreatureUpdatedEvent.from(creature, now));
     }
 
     private BusinessException conflict(ErrorCode errorCode, String message) {

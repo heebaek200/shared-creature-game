@@ -62,6 +62,7 @@ class GroupDepartureServiceTest {
     @Mock private SeasonGroupScoreRepository groupScoreRepository;
     @Mock private SeasonQueryService seasonQueryService;
     @Mock private SeasonContributionMembershipService contributionMembershipService;
+    @Mock private com.team.sharedcreature._core.realtime.GroupPresenceRevocationService presenceRevocationService;
 
     private GroupMembershipService service;
 
@@ -77,7 +78,7 @@ class GroupDepartureServiceTest {
                 userRepository, groupRepository, membershipRepository,
                 restrictionRepository, inviteLinkRepository, adminChangeRepository,
                 groupSeasonRepository, groupCreatureRepository, groupScoreRepository,
-                seasonQueryService, contributionMembershipService,
+                seasonQueryService, contributionMembershipService, presenceRevocationService,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 "http://localhost:5173"
         );

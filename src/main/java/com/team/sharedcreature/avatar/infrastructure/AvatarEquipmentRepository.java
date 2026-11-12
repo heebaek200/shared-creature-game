@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -31,6 +32,14 @@ public interface AvatarEquipmentRepository
             "ownedItem.shopItem"
     })
     List<AvatarEquipment> findAllByUserId(Long userId); // 장착하지 않은 슬롯도 응답에는 null로 포함
+
+    /** 접속 구성원들의 장착 슬롯과 상품 외형을 한 번에 조회합니다. */
+    @EntityGraph(attributePaths = {
+            "user",
+            "ownedItem",
+            "ownedItem.shopItem"
+    })
+    List<AvatarEquipment> findAllByUserIdIn(Collection<Long> userIds);
 
     /**
      * 사용자의 특정 아바타 슬롯을 비관적 쓰기 잠금으로 조회합니다.
