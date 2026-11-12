@@ -16,4 +16,14 @@ public interface SeasonMemberRankSnapshotRepository extends JpaRepository<Season
      * 이전 배치에서 확정한 값을 재실행해도 갱신하지 않습니다.
      */
     List<SeasonMemberRankSnapshot> findAllBySeasonId(Long seasonId);
+
+    /**
+     * 한 그룹 시즌의 확정된 개인 랭킹을 순위순으로 조회합니다.
+     * 종료 시점에 저장한 닉네임·점수·참여 상태를 그대로 사용합니다.
+     *
+     * @param groupSeasonId 조회할 그룹 시즌 ID
+     * @return 확정 순위 오름차순의 개인 랭킹 Snapshot
+     */
+    List<SeasonMemberRankSnapshot>
+    findAllByGroupSeasonIdOrderByRankNumberAsc(Long groupSeasonId);
 }

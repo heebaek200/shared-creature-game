@@ -40,4 +40,21 @@ public interface SeasonMemberContributionRepository extends JpaRepository<Season
              ORDER BY gs.id ASC, contribution.user.id ASC
             """)
     List<SeasonMemberContribution> findAllForSeasonSnapshot(@Param("seasonId") Long seasonId);
+
+    /**
+     * 하나의 그룹 시즌에 속한 개인 랭킹 계산 대상을 조회합니다.
+     * 탈퇴·강퇴자의 기록도 포함하고 사용자 정보를 함께 로딩합니다.
+     *
+     * @param groupSeasonId 조회할 그룹 시즌 ID
+     * @return 해당 그룹 시즌의 전체 개인 기여도
+     */
+    @Query("""
+            SELECT contribution
+            FROM SeasonMemberContribution contribution
+            JOIN FETCH contribution.user
+            WHERE contribution.groupSeason.id = :groupSeasonId
+            """)
+    List<SeasonMemberContribution> findAllForMemberRanking(
+            @Param("groupSeasonId") Long groupSeasonId
+    );
 }
