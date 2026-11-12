@@ -35,6 +35,11 @@ public class PhotoSubmissionCleanupWork implements PhotoRetentionWork {
 
     private enum CleanupOutcome { SUCCEEDED, SKIPPED, FAILED }
     private record CandidateBatch(List<Long> ids, boolean moreMayRemain) { }
+    private static final class FileConfirmationException extends RuntimeException {
+        private FileConfirmationException(RuntimeException cause) {
+            super(cause);
+        }
+    }
 
     private final PhotoSubmissionRepository repository;
     private final PhotoSubmissionCleanupTransactionService transactions;
@@ -183,15 +188,24 @@ public class PhotoSubmissionCleanupWork implements PhotoRetentionWork {
                 return CleanupOutcome.FAILED;
             }
 
-            // 파일 I/O 직후 두 Lease와 토큰을 동기 검증한 실행만 DB를 확정합니다.
-            leaseScope.renewNow();
             try {
-                return transactions.confirmFileDeletion(
-                        id, kind, key, activeClaimToken, policyNow, clock.instant())
+                // 비동기 갱신과 직렬화된 구간에서 소유권 재검증과 DB 확정을 연속 수행합니다.
+                return leaseScope.completeClaim(
+                        id,
+                        activeClaimToken,
+                        () -> {
+                            try {
+                                return transactions.confirmFileDeletion(
+                                        id, kind, key, activeClaimToken, policyNow, clock.instant());
+                            } catch (RuntimeException exception) {
+                                throw new FileConfirmationException(exception);
+                            }
+                        })
                         ? CleanupOutcome.SUCCEEDED
                         : CleanupOutcome.SKIPPED;
-            } catch (RuntimeException exception) {
-                log.warn("사진 삭제 DB 확정 실패. submissionId={}, kind={}", id, kind, exception);
+            } catch (FileConfirmationException exception) {
+                log.warn("사진 삭제 DB 확정 실패. submissionId={}, kind={}",
+                        id, kind, exception.getCause());
                 deferFileAfterFailure(id, activeClaimToken);
                 return CleanupOutcome.FAILED;
             }

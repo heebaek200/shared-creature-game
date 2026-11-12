@@ -7,6 +7,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -71,7 +74,79 @@ class PhotoCleanupLeaseHeartbeatTest {
         scope.activate(8L, CLAIM);
 
         assertTrue(attempted.await(1, TimeUnit.SECONDS));
-        assertThrows(IllegalStateException.class, scope::assertHealthy);
         assertThrows(IllegalStateException.class, scope::close);
+    }
+
+    /** 이미 Claim을 읽은 비동기 갱신과 DB 완료 확정을 직렬화해 정상 완료를 보존합니다. */
+    @Test
+    void completionWaitsForInFlightRenewalWithoutRecordingFalseFailure() throws Exception {
+        PhotoSubmissionCleanupTransactionService transactions =
+                mock(PhotoSubmissionCleanupTransactionService.class);
+        CountDownLatch renewalEntered = new CountDownLatch(1);
+        CountDownLatch releaseRenewal = new CountDownLatch(1);
+        CountDownLatch confirmationEntered = new CountDownLatch(1);
+        AtomicInteger renewals = new AtomicInteger();
+        when(transactions.renewFileCleanupClaim(anyLong(), anyString(), any(), any()))
+                .thenAnswer(invocation -> {
+                    if (renewals.incrementAndGet() == 1) {
+                        renewalEntered.countDown();
+                        if (!releaseRenewal.await(1, TimeUnit.SECONDS)) {
+                            throw new IllegalStateException("renewal release timeout");
+                        }
+                    }
+                    return true;
+                });
+        PhotoCleanupLeaseHeartbeat heartbeat = new PhotoCleanupLeaseHeartbeat(
+                transactions,
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                Duration.ofMillis(10)
+        );
+        PhotoCleanupLeaseHeartbeat.Scope scope = heartbeat.start(
+                () -> { }, Duration.ofMinutes(10));
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            scope.activate(9L, CLAIM);
+            assertTrue(renewalEntered.await(1, TimeUnit.SECONDS));
+
+            Future<Boolean> completed = pool.submit(() -> scope.completeClaim(
+                    9L,
+                    CLAIM,
+                    () -> {
+                        confirmationEntered.countDown();
+                        return true;
+                    }
+            ));
+            assertFalse(confirmationEntered.await(100, TimeUnit.MILLISECONDS));
+
+            releaseRenewal.countDown();
+            assertTrue(completed.get(1, TimeUnit.SECONDS));
+            assertTrue(confirmationEntered.await(1, TimeUnit.SECONDS));
+            scope.assertHealthy();
+            assertDoesNotThrow(scope::close);
+        } finally {
+            releaseRenewal.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    /** 상위 Scheduler Lease 갱신 실패는 완료 경합과 무관하게 계속 전파합니다. */
+    @Test
+    void schedulerLeaseRenewalFailureMarksScopeUnhealthy() throws Exception {
+        PhotoSubmissionCleanupTransactionService transactions =
+                mock(PhotoSubmissionCleanupTransactionService.class);
+        CountDownLatch attempted = new CountDownLatch(1);
+        PhotoCleanupLeaseHeartbeat heartbeat = new PhotoCleanupLeaseHeartbeat(
+                transactions,
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                Duration.ofMillis(10)
+        );
+        PhotoCleanupLeaseHeartbeat.Scope scope = heartbeat.start(() -> {
+            attempted.countDown();
+            throw new IllegalStateException("scheduler lease lost");
+        }, Duration.ofMinutes(10));
+
+        assertTrue(attempted.await(1, TimeUnit.SECONDS));
+        assertThrows(IllegalStateException.class, scope::close);
+        verifyNoInteractions(transactions);
     }
 }

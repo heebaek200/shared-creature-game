@@ -22,6 +22,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.LongStream;
 
@@ -309,6 +315,64 @@ class PhotoSubmissionCleanupWorkTest {
         verify(transactions).confirmFileDeletion(
                 44L, RetentionKind.INVALID, "long.jpg", "claim",
                 NOW, NOW.plus(Duration.ofMinutes(11)));
+    }
+
+    /** 진행 중 Heartbeat와 삭제 완료가 겹쳐도 정상 항목을 성공으로 집계합니다. */
+    @Test
+    void inFlightHeartbeatDoesNotTurnCompletedDeletionIntoFailure() throws Exception {
+        CountDownLatch renewalEntered = new CountDownLatch(1);
+        CountDownLatch releaseRenewal = new CountDownLatch(1);
+        CountDownLatch confirmationEntered = new CountDownLatch(1);
+        AtomicInteger renewals = new AtomicInteger();
+        PhotoCleanupLeaseHeartbeat concurrentHeartbeat = new PhotoCleanupLeaseHeartbeat(
+                transactions, clock, Duration.ofMillis(10));
+        PhotoSubmissionCleanupWork concurrentWork = new PhotoSubmissionCleanupWork(
+                repository, transactions, storage, concurrentHeartbeat, clock);
+        when(repository.findFreshInvalidIds(NOW, PageRequest.of(0, 101))).thenReturn(List.of(47L));
+        when(transactions.claimEligibleFile(eq(47L), eq(RetentionKind.INVALID), anyString(),
+                eq(NOW), eq(NOW), eq(NOW.plus(Duration.ofMinutes(10)))))
+                .thenReturn(Optional.of(new FileCandidate(47L, "racing.jpg", "claim")));
+        when(transactions.renewFileCleanupClaim(anyLong(), anyString(), any(), any()))
+                .thenAnswer(invocation -> {
+                    if (renewals.incrementAndGet() == 1) {
+                        renewalEntered.countDown();
+                        if (!releaseRenewal.await(5, TimeUnit.SECONDS)) {
+                            throw new IllegalStateException("renewal release timeout");
+                        }
+                    }
+                    return true;
+                });
+        doAnswer(invocation -> {
+            if (!renewalEntered.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("heartbeat start timeout");
+            }
+            return null;
+        }).when(storage).delete("racing.jpg");
+        when(transactions.confirmFileDeletion(
+                47L, RetentionKind.INVALID, "racing.jpg", "claim", NOW, NOW))
+                .thenAnswer(invocation -> {
+                    confirmationEntered.countDown();
+                    return true;
+                });
+
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            Future<PhotoRetentionWork.Summary> result = pool.submit(() -> concurrentWork.cleanup(NOW));
+            assertTrue(renewalEntered.await(5, TimeUnit.SECONDS));
+            assertFalse(confirmationEntered.await(100, TimeUnit.MILLISECONDS));
+
+            releaseRenewal.countDown();
+            PhotoRetentionWork.Summary summary = result.get(5, TimeUnit.SECONDS);
+
+            assertEquals(1, summary.invalidFilesDeleted());
+            assertEquals(0, summary.failedCount());
+            verify(storage).delete("racing.jpg");
+            verify(transactions).confirmFileDeletion(
+                    47L, RetentionKind.INVALID, "racing.jpg", "claim", NOW, NOW);
+        } finally {
+            releaseRenewal.countDown();
+            pool.shutdownNow();
+        }
     }
 
     /** 작업 시작 10분 뒤의 다음 사진은 고정 정책 시각이 아닌 실제 시각으로 Claim을 생성합니다. */

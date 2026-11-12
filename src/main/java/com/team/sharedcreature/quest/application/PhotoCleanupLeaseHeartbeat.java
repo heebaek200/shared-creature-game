@@ -13,6 +13,8 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BooleanSupplier;
 
 /**
  * 사진 파일 I/O 중 Scheduler Lease와 현재 단건 claim을 함께 갱신합니다.
@@ -83,6 +85,7 @@ public class PhotoCleanupLeaseHeartbeat {
         private final AtomicReference<Claim> activeClaim = new AtomicReference<>();
         private final AtomicReference<RuntimeException> failure = new AtomicReference<>();
         private final AtomicBoolean closed = new AtomicBoolean(false);
+        private final ReentrantLock renewalLock = new ReentrantLock();
         private ScheduledFuture<?> scheduled;
 
         private Scope(
@@ -116,11 +119,39 @@ public class PhotoCleanupLeaseHeartbeat {
             }
         }
 
-        /** 파일 삭제 직후 동기 갱신으로 Scheduler와 단건 claim 소유권을 확인합니다. */
-        public void renewNow() {
-            assertHealthy();
-            renew();
-            assertHealthy();
+        /**
+         * Scheduler와 단건 Claim을 재검증한 뒤 같은 최소 임계구역에서 DB 완료를 확정합니다.
+         * 완료된 Claim을 이미 읽은 비동기 갱신이 뒤늦게 실행되는 경합을 차단합니다.
+         */
+        public boolean completeClaim(
+                Long submissionId,
+                String claimToken,
+                BooleanSupplier confirmation
+        ) {
+            Objects.requireNonNull(submissionId, "submissionId");
+            Objects.requireNonNull(claimToken, "claimToken");
+            Objects.requireNonNull(confirmation, "confirmation");
+
+            renewalLock.lock();
+            try {
+                assertHealthy();
+                Claim claim = activeClaim.get();
+                if (claim == null
+                        || !Objects.equals(claim.submissionId(), submissionId)
+                        || !Objects.equals(claim.claimToken(), claimToken)) {
+                    throw new IllegalStateException("완료할 사진 claim이 활성 상태가 아닙니다.");
+                }
+
+                renew();
+                assertHealthy();
+                boolean completed = confirmation.getAsBoolean();
+                if (completed) {
+                    activeClaim.compareAndSet(claim, null);
+                }
+                return completed;
+            } finally {
+                renewalLock.unlock();
+            }
         }
 
         /** 백그라운드 갱신 실패를 업무 스레드에 전달합니다. */
@@ -135,10 +166,16 @@ public class PhotoCleanupLeaseHeartbeat {
             if (closed.get() || failure.get() != null) {
                 return;
             }
+            renewalLock.lock();
             try {
+                if (closed.get() || failure.get() != null) {
+                    return;
+                }
                 renew();
             } catch (RuntimeException exception) {
                 failure.compareAndSet(null, exception);
+            } finally {
+                renewalLock.unlock();
             }
         }
 
