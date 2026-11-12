@@ -87,6 +87,38 @@ class GroupStompAuthorizationInterceptorTest {
     }
 
     @Test
+    void Broker가_SUBSCRIBE를_수락하지_못하면_Presence를_제거하고_퇴장_이벤트를_발행한다() {
+        GroupMembership membership = activeMembership(20L);
+        when(membershipRepository.findActiveWithGroupByUserId(10L))
+                .thenReturn(Optional.of(membership));
+        GroupLivePayloads.PresenceJoined payload = new GroupLivePayloads.PresenceJoined(
+                10L,
+                "새싹",
+                1,
+                30L,
+                new CreatureHomeResponse.EquipmentSlotsResponse(null, null, null, null)
+        );
+        when(payloadProvider.getPresenceJoined(20L, 10L)).thenReturn(payload);
+        Message<byte[]> subscribe = message(
+                StompCommand.SUBSCRIBE,
+                "/topic/groups/20/live",
+                "sub-1",
+                null
+        );
+        interceptor.preSend(subscribe, channel);
+
+        interceptor.afterSendCompletion(subscribe, channel, false, null);
+
+        assertThat(presenceService.activeUserIds(20L)).isEmpty();
+        verify(eventPublisher).publish(
+                eq(20L),
+                eq("PRESENCE_LEFT"),
+                any(),
+                eq(new GroupLivePayloads.PresenceLeft(10L))
+        );
+    }
+
+    @Test
     void 다른_그룹_구독은_ROLE_FORBIDDEN이다() {
         GroupMembership membership = activeMembership(20L);
         when(membershipRepository.findActiveWithGroupByUserId(10L))
