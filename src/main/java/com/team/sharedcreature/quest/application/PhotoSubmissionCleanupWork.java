@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.io.IOException;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -38,6 +39,8 @@ public class PhotoSubmissionCleanupWork implements PhotoRetentionWork {
     private final PhotoSubmissionRepository repository;
     private final PhotoSubmissionCleanupTransactionService transactions;
     private final PhotoFileStorage fileStorage;
+    private final PhotoCleanupLeaseHeartbeat leaseHeartbeat;
+    private final Clock clock;
 
     /**
      * 후보 조회, DB 상태 전이, 파일 저장소를 명시적으로 분리합니다.
@@ -47,11 +50,15 @@ public class PhotoSubmissionCleanupWork implements PhotoRetentionWork {
     public PhotoSubmissionCleanupWork(
             PhotoSubmissionRepository repository,
             PhotoSubmissionCleanupTransactionService transactions,
-            PhotoFileStorage fileStorage
+            PhotoFileStorage fileStorage,
+            PhotoCleanupLeaseHeartbeat leaseHeartbeat,
+            Clock clock
     ) {
         this.repository = repository;
         this.transactions = transactions;
         this.fileStorage = fileStorage;
+        this.leaseHeartbeat = leaseHeartbeat;
+        this.clock = clock;
     }
 
     /**
@@ -77,18 +84,30 @@ public class PhotoSubmissionCleanupWork implements PhotoRetentionWork {
             throw new IllegalStateException("사진 파일 정리는 DB 트랜잭션 밖에서만 실행해야 합니다.");
         }
 
+        try (PhotoCleanupLeaseHeartbeat.Scope leaseScope = leaseHeartbeat.start(heartbeat, CLAIM_LEASE)) {
+            return cleanupWithinLease(now, heartbeat, leaseScope);
+        }
+    }
+
+    /** 고정 정책 시각과 실제 Lease 시각을 분리한 상태에서 후보를 처리합니다. */
+    private Summary cleanupWithinLease(
+            Instant policyNow,
+            Runnable heartbeat,
+            PhotoCleanupLeaseHeartbeat.Scope leaseScope
+    ) {
+
         PageRequest page = PageRequest.of(0, FETCH_SIZE);
         CandidateBatch pending = mergeCandidates(
-                repository.findFreshStalePendingIds(now.minus(Duration.ofHours(1)), now, page),
-                repository.findRetryStalePendingIds(now.minus(Duration.ofHours(1)), now, page)
+                repository.findFreshStalePendingIds(policyNow.minus(Duration.ofHours(1)), policyNow, page),
+                repository.findRetryStalePendingIds(policyNow.minus(Duration.ofHours(1)), policyNow, page)
         );
         CandidateBatch invalid = mergeCandidates(
-                repository.findFreshInvalidIds(now, page),
-                repository.findRetryInvalidIds(now, page)
+                repository.findFreshInvalidIds(policyNow, page),
+                repository.findRetryInvalidIds(policyNow, page)
         );
         CandidateBatch valid = mergeCandidates(
-                repository.findFreshExpiredValidIds(now.minus(Duration.ofDays(30)), now, page),
-                repository.findRetryExpiredValidIds(now.minus(Duration.ofDays(30)), now, page)
+                repository.findFreshExpiredValidIds(policyNow.minus(Duration.ofDays(30)), policyNow, page),
+                repository.findRetryExpiredValidIds(policyNow.minus(Duration.ofDays(30)), policyNow, page)
         );
 
         int pendingCount = 0;
@@ -102,22 +121,24 @@ public class PhotoSubmissionCleanupWork implements PhotoRetentionWork {
         for (Long id : pending.ids()) {
             if (attempted++ % 20 == 0) heartbeat.run();
             try {
-                if (transactions.expirePending(id, now)) pendingCount++;
+                if (transactions.expirePending(id, policyNow)) pendingCount++;
             } catch (RuntimeException exception) {
                 failures++;
                 log.warn("사진 PENDING 만료 실패. submissionId={}", id, exception);
-                deferPendingAfterFailure(id, now);
+                deferPendingAfterFailure(id);
             }
         }
         for (Long id : invalid.ids()) {
             if (attempted++ % 20 == 0) heartbeat.run();
-            CleanupOutcome outcome = cleanupOneFile(id, RetentionKind.INVALID, now, heartbeat);
+            CleanupOutcome outcome = cleanupOneFile(
+                    id, RetentionKind.INVALID, policyNow, leaseScope);
             if (outcome == CleanupOutcome.SUCCEEDED) invalidCount++;
             else if (outcome == CleanupOutcome.FAILED) failures++;
         }
         for (Long id : valid.ids()) {
             if (attempted++ % 20 == 0) heartbeat.run();
-            CleanupOutcome outcome = cleanupOneFile(id, RetentionKind.VALID, now, heartbeat);
+            CleanupOutcome outcome = cleanupOneFile(
+                    id, RetentionKind.VALID, policyNow, leaseScope);
             if (outcome == CleanupOutcome.SUCCEEDED) validCount++;
             else if (outcome == CleanupOutcome.FAILED) failures++;
         }
@@ -130,15 +151,20 @@ public class PhotoSubmissionCleanupWork implements PhotoRetentionWork {
      * 파일 삭제에 성공하면 별도 쓰기 트랜잭션으로 위치·키를 제거합니다.
      * 단건 예외는 삼켜 나머지 파일 정리를 계속 진행합니다.
      */
-    private CleanupOutcome cleanupOneFile(Long id, RetentionKind kind, Instant now, Runnable heartbeat) {
+    private CleanupOutcome cleanupOneFile(
+            Long id,
+            RetentionKind kind,
+            Instant policyNow,
+            PhotoCleanupLeaseHeartbeat.Scope leaseScope
+    ) {
         String claimToken = UUID.randomUUID().toString();
         Optional<FileCandidate> candidate;
+        Instant claimNow = clock.instant();
         try {
             candidate = transactions.claimEligibleFile(
-                    id, kind, claimToken, now, now.plus(CLAIM_LEASE));
-        } catch (RuntimeException exception) {
-            log.warn("사진 정리 claim 실패. submissionId={}, kind={}", id, kind, exception);
-            return CleanupOutcome.FAILED;
+                    id, kind, claimToken, policyNow, claimNow, claimNow.plus(CLAIM_LEASE));
+        } catch (RuntimeException claimFailure) {
+            return handleClaimFailure(id, kind, claimToken, policyNow, claimFailure);
         }
         if (candidate.isEmpty()) {
             return CleanupOutcome.SKIPPED;
@@ -147,23 +173,60 @@ public class PhotoSubmissionCleanupWork implements PhotoRetentionWork {
         FileCandidate claimed = candidate.orElseThrow();
         String key = claimed.storageKey();
         String activeClaimToken = claimed.claimToken();
+        leaseScope.activate(id, activeClaimToken);
         try {
-            if (key != null) fileStorage.delete(key);
-        } catch (IOException | RuntimeException exception) {
-            log.warn("사진 파일/위치 정리 실패. submissionId={}, kind={}", id, kind, exception);
-            deferFileAfterFailure(id, activeClaimToken, now);
-            return CleanupOutcome.FAILED;
-        }
+            try {
+                if (key != null) fileStorage.delete(key);
+            } catch (IOException | RuntimeException exception) {
+                log.warn("사진 파일/위치 정리 실패. submissionId={}, kind={}", id, kind, exception);
+                deferFileAfterFailure(id, activeClaimToken);
+                return CleanupOutcome.FAILED;
+            }
 
-        // 파일 I/O가 길어졌다면 DB 확정 전에 실행권 소유 여부를 다시 확인합니다.
-        heartbeat.run();
+            // 파일 I/O 직후 두 Lease와 토큰을 동기 검증한 실행만 DB를 확정합니다.
+            leaseScope.renewNow();
+            try {
+                return transactions.confirmFileDeletion(
+                        id, kind, key, activeClaimToken, policyNow, clock.instant())
+                        ? CleanupOutcome.SUCCEEDED
+                        : CleanupOutcome.SKIPPED;
+            } catch (RuntimeException exception) {
+                log.warn("사진 삭제 DB 확정 실패. submissionId={}, kind={}", id, kind, exception);
+                deferFileAfterFailure(id, activeClaimToken);
+                return CleanupOutcome.FAILED;
+            }
+        } finally {
+            leaseScope.deactivate(id, activeClaimToken);
+        }
+    }
+
+    /** Claim 획득 예외 뒤 현재 토큰을 재검증해 안전하면 5분 재시도를 예약합니다. */
+    private CleanupOutcome handleClaimFailure(
+            Long id,
+            RetentionKind kind,
+            String attemptedClaimToken,
+            Instant policyNow,
+            RuntimeException claimFailure
+    ) {
+        Instant controlNow = clock.instant();
         try {
-            return transactions.confirmFileDeletion(id, kind, key, activeClaimToken, now)
-                    ? CleanupOutcome.SUCCEEDED
-                    : CleanupOutcome.SKIPPED;
-        } catch (RuntimeException exception) {
-            log.warn("사진 삭제 DB 확정 실패. submissionId={}, kind={}", id, kind, exception);
-            deferFileAfterFailure(id, activeClaimToken, now);
+            var resolution = transactions.deferAfterClaimFailure(
+                    id,
+                    kind,
+                    attemptedClaimToken,
+                    policyNow,
+                    controlNow,
+                    controlNow.plus(RETRY_DELAY)
+            );
+            log.warn("사진 정리 claim 실패. submissionId={}, kind={}, resolution={}",
+                    id, kind, resolution, claimFailure);
+            return resolution == PhotoSubmissionCleanupTransactionService.ClaimFailureResolution.SKIPPED
+                    ? CleanupOutcome.SKIPPED
+                    : CleanupOutcome.FAILED;
+        } catch (RuntimeException recordingFailure) {
+            claimFailure.addSuppressed(recordingFailure);
+            log.warn("사진 정리 claim 및 재시도 예약 실패. submissionId={}, kind={}",
+                    id, kind, claimFailure);
             return CleanupOutcome.FAILED;
         }
     }
@@ -187,18 +250,18 @@ public class PhotoSubmissionCleanupWork implements PhotoRetentionWork {
     }
 
     /** PENDING 단건 실패를 5분 뒤로 보내고 기록 실패는 원래 실패와 함께 로그로 남깁니다. */
-    private void deferPendingAfterFailure(Long id, Instant now) {
+    private void deferPendingAfterFailure(Long id) {
         try {
-            transactions.deferPendingCleanup(id, now.plus(RETRY_DELAY));
+            transactions.deferPendingCleanup(id, clock.instant().plus(RETRY_DELAY));
         } catch (RuntimeException exception) {
             log.warn("사진 PENDING 재시도 예약 실패. submissionId={}", id, exception);
         }
     }
 
     /** 파일 정리 실패의 claim을 해제하고 5분 뒤 재시도하도록 예약합니다. */
-    private void deferFileAfterFailure(Long id, String claimToken, Instant now) {
+    private void deferFileAfterFailure(Long id, String claimToken) {
         try {
-            transactions.deferFileCleanup(id, claimToken, now.plus(RETRY_DELAY));
+            transactions.deferFileCleanup(id, claimToken, clock.instant().plus(RETRY_DELAY));
         } catch (RuntimeException exception) {
             log.warn("사진 파일 재시도 예약 실패. submissionId={}", id, exception);
         }

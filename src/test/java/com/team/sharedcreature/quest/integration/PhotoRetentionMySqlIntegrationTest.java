@@ -4,6 +4,7 @@ import com.team.sharedcreature.admin.application.SchedulerExecutionLifecycleServ
 import com.team.sharedcreature.admin.application.SchedulerJobRunner;
 import com.team.sharedcreature.quest.application.PhotoRetentionNormalizationService;
 import com.team.sharedcreature.quest.application.PhotoRetentionWork;
+import com.team.sharedcreature.quest.application.PhotoCleanupLeaseHeartbeat;
 import com.team.sharedcreature.quest.application.PhotoSubmissionCleanupTransactionService;
 import com.team.sharedcreature.quest.application.PhotoSubmissionCleanupWork;
 import com.team.sharedcreature.quest.infrastructure.PhotoFileStorage;
@@ -40,6 +41,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.ArrayList;
@@ -51,9 +53,11 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -79,6 +83,7 @@ class PhotoRetentionMySqlIntegrationTest {
     private static final Path DIRECTORY = createTemporaryDirectory();
     private static final byte[] MINIMAL_FILE = {(byte) 0xff, (byte) 0xd8, 0, (byte) 0xff, (byte) 0xd9};
     private static final String CLAIM = "11111111-1111-1111-1111-111111111111";
+    private static final String NEW_CLAIM = "22222222-2222-2222-2222-222222222222";
 
     @TestConfiguration(proxyBeanMethods = false)
     static class TestClockConfiguration {
@@ -89,9 +94,26 @@ class PhotoRetentionMySqlIntegrationTest {
          */
         @Bean
         @Primary
-        Clock photoRetentionIntegrationClock() {
-            return Clock.fixed(NOW, ZoneOffset.UTC);
+        AdjustableClock photoRetentionIntegrationClock() {
+            return new AdjustableClock(NOW);
         }
+    }
+
+    /** 실제 대기 없이 Claim과 재시도 제어 시각을 이동하는 테스트 Clock입니다. */
+    static final class AdjustableClock extends Clock {
+        private final AtomicReference<Instant> current;
+
+        AdjustableClock(Instant initial) {
+            this.current = new AtomicReference<>(initial);
+        }
+
+        void set(Instant instant) {
+            current.set(instant);
+        }
+
+        @Override public ZoneId getZone() { return ZoneOffset.UTC; }
+        @Override public Clock withZone(ZoneId zone) { return Clock.fixed(instant(), zone); }
+        @Override public Instant instant() { return current.get(); }
     }
 
     /**
@@ -126,6 +148,8 @@ class PhotoRetentionMySqlIntegrationTest {
     @Autowired private SchedulerExecutionLifecycleService lifecycle;
     @Autowired private SchedulerJobRunner jobRunner;
     @Autowired private ApplicationContext context;
+    @Autowired private PhotoCleanupLeaseHeartbeat leaseHeartbeat;
+    @Autowired private AdjustableClock clock;
 
     private Long userId;
     private Long seasonId;
@@ -142,6 +166,7 @@ class PhotoRetentionMySqlIntegrationTest {
      */
     @BeforeEach
     void setUp() {
+        clock.set(NOW);
         bulkUserIds.clear();
         assertEquals(0L, count("SELECT COUNT(*) FROM seasons"),
                 "반드시 별도의 빈 shared_creature_game_test DB에서 이 테스트만 실행하세요.");
@@ -278,13 +303,13 @@ class PhotoRetentionMySqlIntegrationTest {
     @Test
     void pendingBoundaryIsStrictlyMoreThanOneHour() throws Exception {
         Long id = createPhoto("PENDING", NOW.minus(Duration.ofHours(1)), null);
-        assertEquals(0, work.cleanup(NOW).pendingInvalidated());
+        assertEquals(0, cleanupAt(work, NOW).pendingInvalidated());
         assertEquals("PENDING", textColumn(id, "verification_status"));
 
         // 기한을 1마이크로초 초과하도록 조정한 뒤 같은 작업을 다시 호출합니다.
         jdbc.update("UPDATE photo_submissions SET created_at = ? WHERE id = ?",
                 at(NOW.minus(Duration.ofHours(1)).minusNanos(1_000)), id);
-        assertEquals(1, work.cleanup(NOW).pendingInvalidated());
+        assertEquals(1, cleanupAt(work, NOW).pendingInvalidated());
         assertEquals("INVALID", textColumn(id, "verification_status"));
         assertEquals("PHOTO_PROCESSING_FAILED", textColumn(id, "failure_reason"));
         assertNotNull(textColumn(id, "storage_key"));
@@ -299,10 +324,10 @@ class PhotoRetentionMySqlIntegrationTest {
     void pendingFailureIsDeletedOnNextCleanupCycle() throws Exception {
         Long id = createPhoto("PENDING", NOW.minus(Duration.ofHours(2)), null);
         String key = textColumn(id, "storage_key");
-        assertEquals(1, work.cleanup(NOW).pendingInvalidated());
+        assertEquals(1, cleanupAt(work, NOW).pendingInvalidated());
         assertTrue(Files.exists(DIRECTORY.resolve(key)));
 
-        assertEquals(1, work.cleanup(NOW.plus(Duration.ofMinutes(5))).invalidFilesDeleted());
+        assertEquals(1, cleanupAt(work, NOW.plus(Duration.ofMinutes(5))).invalidFilesDeleted());
         assertFalse(Files.exists(DIRECTORY.resolve(key)));
         assertNull(textColumn(id, "storage_key"));
         assertEquals("PHOTO_PROCESSING_FAILED", textColumn(id, "failure_reason"));
@@ -317,7 +342,7 @@ class PhotoRetentionMySqlIntegrationTest {
     void invalidFileCleanupPreservesMinimalAuditHistory() throws Exception {
         Long id = createPhoto("INVALID", NOW, "EXIF_GPS_MISSING");
         String key = textColumn(id, "storage_key");
-        assertEquals(1, work.cleanup(NOW).invalidFilesDeleted());
+        assertEquals(1, cleanupAt(work, NOW).invalidFilesDeleted());
         assertFalse(Files.exists(DIRECTORY.resolve(key)));
         assertNull(textColumn(id, "storage_key"));
         assertNull(textColumn(id, "latitude"));
@@ -336,11 +361,11 @@ class PhotoRetentionMySqlIntegrationTest {
     void validPhotosRequireEndedSeasonAndThirtyDays() throws Exception {
         Long id = createPhoto("VALID", NOW.minus(Duration.ofDays(40)), null);
         String key = textColumn(id, "storage_key");
-        assertEquals(0, work.cleanup(NOW).validFilesDeleted());
+        assertEquals(0, cleanupAt(work, NOW).validFilesDeleted());
         assertTrue(Files.exists(DIRECTORY.resolve(key)));
 
         jdbc.update("UPDATE seasons SET status = 'ENDED' WHERE id = ?", seasonId);
-        assertEquals(1, work.cleanup(NOW).validFilesDeleted());
+        assertEquals(1, cleanupAt(work, NOW).validFilesDeleted());
         assertFalse(Files.exists(DIRECTORY.resolve(key)));
         assertEquals("VALID", textColumn(id, "verification_status"));
         assertNull(textColumn(id, "latitude"));
@@ -357,11 +382,11 @@ class PhotoRetentionMySqlIntegrationTest {
         Long id = createPhoto("VALID", NOW.minus(Duration.ofDays(40)), null);
         jdbc.update("UPDATE seasons SET status = 'ENDED', end_at = ? WHERE id = ?",
                 at(NOW.minus(Duration.ofDays(30)).plusNanos(1_000)), seasonId);
-        assertEquals(0, work.cleanup(NOW).validFilesDeleted());
+        assertEquals(0, cleanupAt(work, NOW).validFilesDeleted());
 
         jdbc.update("UPDATE seasons SET end_at = ? WHERE id = ?",
                 at(NOW.minus(Duration.ofDays(30))), seasonId);
-        assertEquals(1, work.cleanup(NOW).validFilesDeleted());
+        assertEquals(1, cleanupAt(work, NOW).validFilesDeleted());
         assertNotNull(textColumn(id, "file_deleted_at"));
     }
 
@@ -380,14 +405,15 @@ class PhotoRetentionMySqlIntegrationTest {
                 throw new IOException("simulated storage outage");
             }
         };
-        PhotoSubmissionCleanupWork failedWork = new PhotoSubmissionCleanupWork(repository, transactions, unavailable);
-        assertEquals(1, failedWork.cleanup(NOW).failedCount());
+        PhotoSubmissionCleanupWork failedWork = new PhotoSubmissionCleanupWork(
+                repository, transactions, unavailable, leaseHeartbeat, clock);
+        assertEquals(1, cleanupAt(failedWork, NOW).failedCount());
         assertTrue(Files.exists(DIRECTORY.resolve(key)));
         assertEquals(key, textColumn(id, "storage_key"));
         assertNull(textColumn(id, "file_deleted_at"));
 
-        assertEquals(0, work.cleanup(NOW).invalidFilesDeleted());
-        assertEquals(1, work.cleanup(NOW.plus(Duration.ofMinutes(5))).invalidFilesDeleted());
+        assertEquals(0, cleanupAt(work, NOW).invalidFilesDeleted());
+        assertEquals(1, cleanupAt(work, NOW.plus(Duration.ofMinutes(5))).invalidFilesDeleted());
         assertFalse(Files.exists(DIRECTORY.resolve(key)));
         assertNull(textColumn(id, "storage_key"));
     }
@@ -409,8 +435,8 @@ class PhotoRetentionMySqlIntegrationTest {
             }
         };
         PhotoSubmissionCleanupWork checkingWork = new PhotoSubmissionCleanupWork(
-                repository, transactions, checkingStorage);
-        assertEquals(1, checkingWork.cleanup(NOW).invalidFilesDeleted());
+                repository, transactions, checkingStorage, leaseHeartbeat, clock);
+        assertEquals(1, cleanupAt(checkingWork, NOW).invalidFilesDeleted());
         assertNotNull(textColumn(id, "file_deleted_at"));
     }
 
@@ -428,10 +454,10 @@ class PhotoRetentionMySqlIntegrationTest {
         assertEquals(key, textColumn(id, "storage_key"));
         assertNull(textColumn(id, "file_deleted_at"));
 
-        assertEquals(1, work.cleanup(NOW).invalidFilesDeleted());
+        assertEquals(1, cleanupAt(work, NOW).invalidFilesDeleted());
         assertNull(textColumn(id, "storage_key"));
         assertNotNull(textColumn(id, "file_deleted_at"));
-        assertEquals(0, work.cleanup(NOW).invalidFilesDeleted());
+        assertEquals(0, cleanupAt(work, NOW).invalidFilesDeleted());
     }
 
     /**
@@ -446,7 +472,7 @@ class PhotoRetentionMySqlIntegrationTest {
         storage.delete(key);
         jdbc.update("UPDATE photo_submissions SET storage_key = NULL WHERE id = ?", id);
 
-        assertEquals(1, work.cleanup(NOW).invalidFilesDeleted());
+        assertEquals(1, cleanupAt(work, NOW).invalidFilesDeleted());
         assertNull(textColumn(id, "latitude"));
         assertNull(textColumn(id, "longitude"));
         assertNotNull(textColumn(id, "file_deleted_at"));
@@ -467,6 +493,7 @@ class PhotoRetentionMySqlIntegrationTest {
                 id,
                 PhotoSubmissionCleanupTransactionService.RetentionKind.INVALID,
                 CLAIM,
+                NOW,
                 NOW,
                 NOW.plus(Duration.ofMinutes(10))
         ).isPresent());
@@ -514,13 +541,13 @@ class PhotoRetentionMySqlIntegrationTest {
             }
         };
         PhotoSubmissionCleanupWork concurrentWork = new PhotoSubmissionCleanupWork(
-                repository, transactions, blockingStorage);
+                repository, transactions, blockingStorage, leaseHeartbeat, clock);
         ExecutorService pool = Executors.newFixedThreadPool(2);
         try {
-            Future<PhotoRetentionWork.Summary> first = pool.submit(() -> concurrentWork.cleanup(NOW));
+            Future<PhotoRetentionWork.Summary> first = pool.submit(() -> cleanupAt(concurrentWork, NOW));
             assertTrue(deleting.await(10, TimeUnit.SECONDS));
             Future<PhotoRetentionWork.Summary> second = pool.submit(
-                    () -> concurrentWork.cleanup(NOW.plus(Duration.ofMinutes(5))));
+                    () -> cleanupAt(concurrentWork, NOW.plus(Duration.ofMinutes(5))));
             PhotoRetentionWork.Summary skipped = second.get(10, TimeUnit.SECONDS);
             release.countDown();
             PhotoRetentionWork.Summary completed = first.get(10, TimeUnit.SECONDS);
@@ -533,6 +560,140 @@ class PhotoRetentionMySqlIntegrationTest {
             pool.shutdownNow();
             assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS));
         }
+    }
+
+    /**
+     * Claim 만료 직전에는 다른 실행을 차단하고 정확한 만료 시각부터 재선점을 허용합니다.
+     * 재선점 뒤 이전 토큰은 파일 삭제 완료를 DB에 확정할 수 없습니다.
+     */
+    @Test
+    void claimBoundaryAllowsOnlyCurrentTokenToConfirm() throws Exception {
+        Long id = createPhoto("INVALID", NOW, "EXIF_GPS_MISSING");
+        String key = textColumn(id, "storage_key");
+        Instant expiresAt = NOW.plus(Duration.ofMinutes(10));
+        assertTrue(transactions.claimEligibleFile(
+                id, PhotoSubmissionCleanupTransactionService.RetentionKind.INVALID,
+                CLAIM, NOW, NOW, expiresAt).isPresent());
+
+        assertTrue(transactions.claimEligibleFile(
+                id, PhotoSubmissionCleanupTransactionService.RetentionKind.INVALID,
+                NEW_CLAIM, NOW, expiresAt.minusNanos(1_000), expiresAt.plus(Duration.ofMinutes(10)))
+                .isEmpty());
+        assertTrue(transactions.claimEligibleFile(
+                id, PhotoSubmissionCleanupTransactionService.RetentionKind.INVALID,
+                NEW_CLAIM, NOW, expiresAt, expiresAt.plus(Duration.ofMinutes(10)))
+                .isPresent());
+
+        storage.delete(key);
+        assertFalse(transactions.confirmFileDeletion(
+                id, PhotoSubmissionCleanupTransactionService.RetentionKind.INVALID,
+                key, CLAIM, NOW, expiresAt));
+        assertTrue(transactions.confirmFileDeletion(
+                id, PhotoSubmissionCleanupTransactionService.RetentionKind.INVALID,
+                key, NEW_CLAIM, NOW, expiresAt));
+        assertNull(textColumn(id, "storage_key"));
+    }
+
+    /**
+     * 파일 I/O 도중 Claim이 강제로 만료·재선점되면 이전 실행은 DB 확정을 중단합니다.
+     * 새 소유자는 멱등 파일 삭제 후 동일 이력을 안전하게 복구합니다.
+     */
+    @Test
+    @Timeout(20)
+    void reclaimedClaimStopsPreviousLongRunningDeletion() throws Exception {
+        Long id = createPhoto("INVALID", NOW, "EXIF_GPS_MISSING");
+        String key = textColumn(id, "storage_key");
+        CountDownLatch deleting = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        PhotoFileStorage blockingStorage = new PhotoFileStorage(DIRECTORY.toString()) {
+            @Override
+            public void delete(String storageKey) throws IOException {
+                deleting.countDown();
+                try {
+                    if (!release.await(10, TimeUnit.SECONDS)) throw new IOException("release timeout");
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("interrupted", exception);
+                }
+                super.delete(storageKey);
+            }
+        };
+        PhotoSubmissionCleanupWork blockingWork = new PhotoSubmissionCleanupWork(
+                repository, transactions, blockingStorage, leaseHeartbeat, clock);
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            Future<PhotoRetentionWork.Summary> previous = pool.submit(() -> cleanupAt(blockingWork, NOW));
+            assertTrue(deleting.await(10, TimeUnit.SECONDS));
+            jdbc.update("UPDATE photo_submissions SET cleanup_claim_expires_at = ? WHERE id = ?",
+                    at(NOW.minusNanos(1_000)), id);
+            Instant reclaimedAt = NOW.plus(Duration.ofMinutes(11));
+            clock.set(reclaimedAt);
+            assertTrue(transactions.claimEligibleFile(
+                    id, PhotoSubmissionCleanupTransactionService.RetentionKind.INVALID,
+                    NEW_CLAIM, NOW, reclaimedAt, reclaimedAt.plus(Duration.ofMinutes(10)))
+                    .isPresent());
+
+            release.countDown();
+            assertThrows(ExecutionException.class, () -> previous.get(10, TimeUnit.SECONDS));
+            assertEquals(key, textColumn(id, "storage_key"));
+
+            storage.delete(key);
+            assertTrue(transactions.confirmFileDeletion(
+                    id, PhotoSubmissionCleanupTransactionService.RetentionKind.INVALID,
+                    key, NEW_CLAIM, NOW, reclaimedAt));
+            assertNull(textColumn(id, "storage_key"));
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+            assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS));
+        }
+    }
+
+    /** Claim 획득 실패 후 별도 트랜잭션이 실제 MySQL 행에 5분 재시도를 기록합니다. */
+    @Test
+    void claimFailureDeferralPersistsWithoutOverwritingOtherOwner() throws Exception {
+        Long deferredId = createPhoto("INVALID", NOW, "EXIF_GPS_MISSING");
+        Instant retryAt = NOW.plus(Duration.ofMinutes(5));
+        assertEquals(
+                PhotoSubmissionCleanupTransactionService.ClaimFailureResolution.DEFERRED,
+                transactions.deferAfterClaimFailure(
+                        deferredId,
+                        PhotoSubmissionCleanupTransactionService.RetentionKind.INVALID,
+                        CLAIM,
+                        NOW,
+                        NOW,
+                        retryAt
+                )
+        );
+        assertEquals(at(retryAt), jdbc.queryForObject(
+                "SELECT cleanup_next_attempt_at FROM photo_submissions WHERE id = ?",
+                Timestamp.class,
+                deferredId
+        ));
+
+        jdbc.update("DELETE FROM photo_submissions WHERE id = ?", deferredId);
+        Long claimedId = createPhoto("INVALID", NOW, "EXIF_GPS_MISSING");
+        assertTrue(transactions.claimEligibleFile(
+                claimedId,
+                PhotoSubmissionCleanupTransactionService.RetentionKind.INVALID,
+                NEW_CLAIM,
+                NOW,
+                NOW,
+                NOW.plus(Duration.ofMinutes(10))
+        ).isPresent());
+        assertEquals(
+                PhotoSubmissionCleanupTransactionService.ClaimFailureResolution.SKIPPED,
+                transactions.deferAfterClaimFailure(
+                        claimedId,
+                        PhotoSubmissionCleanupTransactionService.RetentionKind.INVALID,
+                        CLAIM,
+                        NOW,
+                        NOW,
+                        retryAt
+                )
+        );
+        assertEquals(NEW_CLAIM, textColumn(claimedId, "cleanup_claim_token"));
+        assertNull(textColumn(claimedId, "cleanup_next_attempt_at"));
     }
 
     /**
@@ -562,16 +723,16 @@ class PhotoRetentionMySqlIntegrationTest {
             }
         };
         PhotoSubmissionCleanupWork failingWork = new PhotoSubmissionCleanupWork(
-                repository, transactions, partiallyUnavailable);
+                repository, transactions, partiallyUnavailable, leaseHeartbeat, clock);
         for (int run = 0; run < 5; run++) {
-            failingWork.cleanup(NOW.plus(Duration.ofMinutes(5L * run)));
+            cleanupAt(failingWork, NOW.plus(Duration.ofMinutes(5L * run)));
         }
 
         assertEquals(200L, count("SELECT COUNT(*) FROM photo_submissions WHERE storage_key IS NULL"));
         assertEquals(100L, count("SELECT COUNT(*) FROM photo_submissions WHERE storage_key IS NOT NULL"));
         assertEquals(100L, count("SELECT COUNT(*) FROM photo_submissions WHERE cleanup_next_attempt_at IS NOT NULL"));
 
-        assertEquals(100, work.cleanup(NOW.plus(Duration.ofMinutes(25))).invalidFilesDeleted());
+        assertEquals(100, cleanupAt(work, NOW.plus(Duration.ofMinutes(25))).invalidFilesDeleted());
         assertEquals(300L, count("SELECT COUNT(*) FROM photo_submissions WHERE storage_key IS NULL"));
     }
 
@@ -621,7 +782,14 @@ class PhotoRetentionMySqlIntegrationTest {
             throw new IllegalStateException("interrupted", exception);
         }
         return transactions.confirmFileDeletion(id,
-                PhotoSubmissionCleanupTransactionService.RetentionKind.INVALID, key, CLAIM, NOW);
+                PhotoSubmissionCleanupTransactionService.RetentionKind.INVALID,
+                key, CLAIM, NOW, NOW);
+    }
+
+    /** 정책 시각과 실제 제어 시각을 함께 이동해 사진 정리를 실행합니다. */
+    private PhotoRetentionWork.Summary cleanupAt(PhotoSubmissionCleanupWork target, Instant now) {
+        clock.set(now);
+        return target.cleanup(now);
     }
 
     /**

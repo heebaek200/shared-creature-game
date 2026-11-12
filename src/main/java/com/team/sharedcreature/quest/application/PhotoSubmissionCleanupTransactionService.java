@@ -20,6 +20,7 @@ import java.util.Optional;
 public class PhotoSubmissionCleanupTransactionService {
 
     public enum RetentionKind { INVALID, VALID }
+    public enum ClaimFailureResolution { DEFERRED, SKIPPED }
     public record FileCandidate(Long id, String storageKey, String claimToken) { }
 
     private final PhotoSubmissionRepository repository;
@@ -76,11 +77,12 @@ public class PhotoSubmissionCleanupTransactionService {
             Long id,
             RetentionKind kind,
             String claimToken,
-            Instant now,
+            Instant policyNow,
+            Instant controlNow,
             Instant claimExpiresAt
     ) {
         PhotoSubmission submission = repository.findForCleanupUpdate(id).orElse(null);
-        if (submission == null || !eligibleForClaim(submission, kind, now)) {
+        if (submission == null || !eligibleForClaim(submission, kind, policyNow, controlNow)) {
             return Optional.empty();
         }
 
@@ -100,19 +102,76 @@ public class PhotoSubmissionCleanupTransactionService {
             RetentionKind kind,
             String deletedStorageKey,
             String claimToken,
-            Instant now
+            Instant policyNow,
+            Instant completedAt
     ) {
         PhotoSubmission submission = repository.findForCleanupUpdate(id).orElse(null);
-        if (submission == null || !eligibleByPolicy(submission, kind, now)
+        if (submission == null || !eligibleByPolicy(submission, kind, policyNow)
                 || !Objects.equals(submission.getCleanupClaimToken(), claimToken)
                 || !Objects.equals(submission.getStorageKey(), deletedStorageKey)) {
             return false;
         }
 
         // 파일 삭제 후에만 위치·키를 제거하고 최소 판정 이력은 남깁니다.
-        submission.markPhotoAndLocationDataDeleted(now);
+        submission.markPhotoAndLocationDataDeleted(completedAt);
         repository.flush();
         return true;
+    }
+
+    /**
+     * 파일 I/O 중 현재 토큰을 보유한 단건 claim의 만료 시각을 연장합니다.
+     * 재선점 또는 정리 완료 후에는 false를 반환해 이전 실행의 확정을 중단시킵니다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean renewFileCleanupClaim(
+            Long id,
+            String claimToken,
+            Instant controlNow,
+            Instant claimExpiresAt
+    ) {
+        PhotoSubmission submission = repository.findForCleanupUpdate(id).orElse(null);
+        if (submission == null || submission.getFileDeletedAt() != null
+                || !Objects.equals(submission.getCleanupClaimToken(), claimToken)
+                || submission.getCleanupClaimExpiresAt() == null
+                || !submission.getCleanupClaimExpiresAt().isAfter(controlNow)) {
+            return false;
+        }
+
+        submission.claimCleanup(claimToken, claimExpiresAt);
+        repository.flush();
+        return true;
+    }
+
+    /**
+     * Claim 획득 예외 뒤 현재 행 상태를 다시 잠그고 안전하면 5분 재시도를 예약합니다.
+     * 다른 실행자의 유효한 Claim은 보존하고 정상 경합으로 건너뜁니다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public ClaimFailureResolution deferAfterClaimFailure(
+            Long id,
+            RetentionKind kind,
+            String attemptedClaimToken,
+            Instant policyNow,
+            Instant controlNow,
+            Instant nextAttemptAt
+    ) {
+        PhotoSubmission submission = repository.findForCleanupUpdate(id).orElse(null);
+        if (submission == null || !eligibleByPolicy(submission, kind, policyNow)) {
+            return ClaimFailureResolution.SKIPPED;
+        }
+
+        String currentToken = submission.getCleanupClaimToken();
+        boolean otherActiveClaim = currentToken != null
+                && !Objects.equals(currentToken, attemptedClaimToken)
+                && submission.getCleanupClaimExpiresAt() != null
+                && submission.getCleanupClaimExpiresAt().isAfter(controlNow);
+        if (otherActiveClaim) {
+            return ClaimFailureResolution.SKIPPED;
+        }
+
+        submission.deferCleanupUntil(nextAttemptAt);
+        repository.flush();
+        return ClaimFailureResolution.DEFERRED;
     }
 
     /**
@@ -132,17 +191,22 @@ public class PhotoSubmissionCleanupTransactionService {
     }
 
     /** 파일 정리 정책, 재시도 시각과 기존 claim 만료 여부를 함께 검사합니다. */
-    private boolean eligibleForClaim(PhotoSubmission submission, RetentionKind kind, Instant now) {
-        if (!eligibleByPolicy(submission, kind, now)) {
+    private boolean eligibleForClaim(
+            PhotoSubmission submission,
+            RetentionKind kind,
+            Instant policyNow,
+            Instant controlNow
+    ) {
+        if (!eligibleByPolicy(submission, kind, policyNow)) {
             return false;
         }
         if (submission.getCleanupNextAttemptAt() != null
-                && submission.getCleanupNextAttemptAt().isAfter(now)) {
+                && submission.getCleanupNextAttemptAt().isAfter(controlNow)) {
             return false;
         }
         return submission.getCleanupClaimToken() == null
                 || submission.getCleanupClaimExpiresAt() != null
-                && !submission.getCleanupClaimExpiresAt().isAfter(now);
+                && !submission.getCleanupClaimExpiresAt().isAfter(controlNow);
     }
 
     /**

@@ -13,10 +13,16 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.io.IOException;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.LongStream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -35,6 +41,7 @@ class PhotoSubmissionCleanupWorkTest {
     @Mock private PhotoSubmissionCleanupTransactionService transactions;
     @Mock private PhotoFileStorage storage;
     private PhotoSubmissionCleanupWork work;
+    private MutableClock clock;
 
     /**
      * 모든 후보 목록을 빈 목록으로 준비합니다.
@@ -43,7 +50,14 @@ class PhotoSubmissionCleanupWorkTest {
      */
     @BeforeEach
     void setUp() {
-        work = new PhotoSubmissionCleanupWork(repository, transactions, storage);
+        clock = new MutableClock(NOW);
+        PhotoCleanupLeaseHeartbeat leaseHeartbeat = new PhotoCleanupLeaseHeartbeat(
+                transactions, clock, Duration.ofMinutes(1));
+        work = new PhotoSubmissionCleanupWork(
+                repository, transactions, storage, leaseHeartbeat, clock);
+        lenient().when(transactions.renewFileCleanupClaim(
+                        anyLong(), anyString(), any(), any()))
+                .thenReturn(true);
         lenient().when(repository.findFreshStalePendingIds(
                         NOW.minus(Duration.ofHours(1)), NOW, PageRequest.of(0, 101)))
                 .thenReturn(List.of());
@@ -90,17 +104,17 @@ class PhotoSubmissionCleanupWorkTest {
         when(repository.findFreshInvalidIds(NOW, PageRequest.of(0, 101)))
                 .thenReturn(List.of(11L));
         when(transactions.claimEligibleFile(eq(11L), eq(RetentionKind.INVALID), anyString(),
-                eq(NOW), eq(NOW.plus(Duration.ofMinutes(10)))))
+                eq(NOW), eq(NOW), eq(NOW.plus(Duration.ofMinutes(10)))))
                 .thenReturn(Optional.of(new FileCandidate(11L, "invalid-key.jpg", "claim")));
         when(transactions.confirmFileDeletion(eq(11L), eq(RetentionKind.INVALID),
-                eq("invalid-key.jpg"), anyString(), eq(NOW)))
+                eq("invalid-key.jpg"), anyString(), eq(NOW), eq(NOW)))
                 .thenReturn(true);
 
         var result = work.cleanup(NOW);
         assertEquals(1, result.invalidFilesDeleted());
         verify(storage).delete("invalid-key.jpg");
         verify(transactions).confirmFileDeletion(eq(11L), eq(RetentionKind.INVALID),
-                eq("invalid-key.jpg"), anyString(), eq(NOW));
+                eq("invalid-key.jpg"), anyString(), eq(NOW), eq(NOW));
     }
 
     /**
@@ -114,10 +128,10 @@ class PhotoSubmissionCleanupWorkTest {
                 NOW.minus(Duration.ofDays(30)), NOW, PageRequest.of(0, 101)))
                 .thenReturn(List.of(21L));
         when(transactions.claimEligibleFile(eq(21L), eq(RetentionKind.VALID), anyString(),
-                eq(NOW), eq(NOW.plus(Duration.ofMinutes(10)))))
+                eq(NOW), eq(NOW), eq(NOW.plus(Duration.ofMinutes(10)))))
                 .thenReturn(Optional.of(new FileCandidate(21L, "valid-key.jpg", "claim")));
         when(transactions.confirmFileDeletion(eq(21L), eq(RetentionKind.VALID),
-                eq("valid-key.jpg"), anyString(), eq(NOW)))
+                eq("valid-key.jpg"), anyString(), eq(NOW), eq(NOW)))
                 .thenReturn(true);
 
         var result = work.cleanup(NOW);
@@ -135,13 +149,14 @@ class PhotoSubmissionCleanupWorkTest {
         when(repository.findFreshInvalidIds(NOW, PageRequest.of(0, 101)))
                 .thenReturn(List.of(17L));
         when(transactions.claimEligibleFile(eq(17L), eq(RetentionKind.INVALID), anyString(),
-                eq(NOW), eq(NOW.plus(Duration.ofMinutes(10)))))
+                eq(NOW), eq(NOW), eq(NOW.plus(Duration.ofMinutes(10)))))
                 .thenReturn(Optional.of(new FileCandidate(17L, "broken-key.jpg", "claim")));
         doThrow(new IOException("locked file")).when(storage).delete("broken-key.jpg");
 
         var result = work.cleanup(NOW);
         assertEquals(1, result.failedCount());
-        verify(transactions, never()).confirmFileDeletion(anyLong(), any(), any(), anyString(), any());
+        verify(transactions, never()).confirmFileDeletion(
+                anyLong(), any(), any(), anyString(), any(), any());
         verify(transactions).deferFileCleanup(eq(17L), anyString(), eq(NOW.plus(Duration.ofMinutes(5))));
     }
 
@@ -155,7 +170,7 @@ class PhotoSubmissionCleanupWorkTest {
         when(repository.findFreshInvalidIds(NOW, PageRequest.of(0, 101)))
                 .thenReturn(List.of(31L));
         when(transactions.claimEligibleFile(eq(31L), eq(RetentionKind.INVALID), anyString(),
-                eq(NOW), eq(NOW.plus(Duration.ofMinutes(10)))))
+                eq(NOW), eq(NOW), eq(NOW.plus(Duration.ofMinutes(10)))))
                 .thenReturn(Optional.empty());
 
         var result = work.cleanup(NOW);
@@ -218,6 +233,153 @@ class PhotoSubmissionCleanupWorkTest {
         verify(transactions).deferPendingCleanup(9L, NOW.plus(Duration.ofMinutes(5)));
     }
 
+    /** Claim 획득 예외는 실제 실패 시각부터 5분 뒤 재시도로 전환합니다. */
+    @Test
+    void claimFailureSchedulesRetryFromActualTime() {
+        when(repository.findFreshInvalidIds(NOW, PageRequest.of(0, 101))).thenReturn(List.of(41L));
+        RuntimeException claimFailure = new IllegalStateException("claim failure");
+        when(transactions.claimEligibleFile(eq(41L), eq(RetentionKind.INVALID), anyString(),
+                eq(NOW), eq(NOW), eq(NOW.plus(Duration.ofMinutes(10)))))
+                .thenThrow(claimFailure);
+        when(transactions.deferAfterClaimFailure(eq(41L), eq(RetentionKind.INVALID), anyString(),
+                eq(NOW), eq(NOW), eq(NOW.plus(Duration.ofMinutes(5)))))
+                .thenReturn(PhotoSubmissionCleanupTransactionService.ClaimFailureResolution.DEFERRED);
+
+        var result = work.cleanup(NOW);
+
+        assertEquals(1, result.failedCount());
+        verify(transactions).deferAfterClaimFailure(eq(41L), eq(RetentionKind.INVALID), anyString(),
+                eq(NOW), eq(NOW), eq(NOW.plus(Duration.ofMinutes(5))));
+    }
+
+    /** 재시도 예약도 실패하면 원래 Claim 오류에 후속 오류를 함께 보존합니다. */
+    @Test
+    void retryReservationFailureDoesNotHideClaimFailure() {
+        when(repository.findFreshInvalidIds(NOW, PageRequest.of(0, 101))).thenReturn(List.of(42L));
+        RuntimeException claimFailure = new IllegalStateException("claim failure");
+        RuntimeException recordingFailure = new IllegalStateException("recording failure");
+        when(transactions.claimEligibleFile(eq(42L), eq(RetentionKind.INVALID), anyString(),
+                eq(NOW), eq(NOW), eq(NOW.plus(Duration.ofMinutes(10)))))
+                .thenThrow(claimFailure);
+        when(transactions.deferAfterClaimFailure(eq(42L), eq(RetentionKind.INVALID), anyString(),
+                eq(NOW), eq(NOW), eq(NOW.plus(Duration.ofMinutes(5)))))
+                .thenThrow(recordingFailure);
+
+        var result = work.cleanup(NOW);
+
+        assertEquals(1, result.failedCount());
+        assertArrayEquals(new Throwable[]{recordingFailure}, claimFailure.getSuppressed());
+    }
+
+    /** 다른 실행자의 정상 Claim이 확인되면 기술 실패 건수로 중복 집계하지 않습니다. */
+    @Test
+    void claimFailureResolvedByOtherOwnerIsSkipped() {
+        when(repository.findFreshInvalidIds(NOW, PageRequest.of(0, 101))).thenReturn(List.of(43L));
+        when(transactions.claimEligibleFile(eq(43L), eq(RetentionKind.INVALID), anyString(),
+                eq(NOW), eq(NOW), eq(NOW.plus(Duration.ofMinutes(10)))))
+                .thenThrow(new IllegalStateException("claim race"));
+        when(transactions.deferAfterClaimFailure(eq(43L), eq(RetentionKind.INVALID), anyString(),
+                eq(NOW), eq(NOW), eq(NOW.plus(Duration.ofMinutes(5)))))
+                .thenReturn(PhotoSubmissionCleanupTransactionService.ClaimFailureResolution.SKIPPED);
+
+        assertEquals(0, work.cleanup(NOW).failedCount());
+    }
+
+    /** 작업 시작 11분 뒤 완료된 파일도 실제 시각 기준으로 Claim을 갱신하고 확정합니다. */
+    @Test
+    void longFileIoRenewsClaimFromActualTimeBeforeConfirmation() throws Exception {
+        when(repository.findFreshInvalidIds(NOW, PageRequest.of(0, 101))).thenReturn(List.of(44L));
+        when(transactions.claimEligibleFile(eq(44L), eq(RetentionKind.INVALID), anyString(),
+                eq(NOW), eq(NOW), eq(NOW.plus(Duration.ofMinutes(10)))))
+                .thenReturn(Optional.of(new FileCandidate(44L, "long.jpg", "claim")));
+        doAnswer(invocation -> {
+            clock.set(NOW.plus(Duration.ofMinutes(11)));
+            return null;
+        }).when(storage).delete("long.jpg");
+        when(transactions.confirmFileDeletion(
+                44L, RetentionKind.INVALID, "long.jpg", "claim",
+                NOW, NOW.plus(Duration.ofMinutes(11)))).thenReturn(true);
+
+        var result = work.cleanup(NOW);
+
+        assertEquals(1, result.invalidFilesDeleted());
+        verify(transactions).renewFileCleanupClaim(
+                44L, "claim", NOW.plus(Duration.ofMinutes(11)),
+                NOW.plus(Duration.ofMinutes(21)));
+        verify(transactions).confirmFileDeletion(
+                44L, RetentionKind.INVALID, "long.jpg", "claim",
+                NOW, NOW.plus(Duration.ofMinutes(11)));
+    }
+
+    /** 작업 시작 10분 뒤의 다음 사진은 고정 정책 시각이 아닌 실제 시각으로 Claim을 생성합니다. */
+    @Test
+    void laterCandidateUsesActualTimeForNewClaim() throws Exception {
+        Instant later = NOW.plus(Duration.ofMinutes(11));
+        when(repository.findFreshInvalidIds(NOW, PageRequest.of(0, 101)))
+                .thenReturn(List.of(45L, 46L));
+        when(transactions.claimEligibleFile(eq(45L), eq(RetentionKind.INVALID), anyString(),
+                eq(NOW), eq(NOW), eq(NOW.plus(Duration.ofMinutes(10)))))
+                .thenReturn(Optional.of(new FileCandidate(45L, "first.jpg", "first-claim")));
+        doAnswer(invocation -> {
+            clock.set(later);
+            return null;
+        }).when(storage).delete("first.jpg");
+        when(transactions.confirmFileDeletion(
+                45L, RetentionKind.INVALID, "first.jpg", "first-claim", NOW, later))
+                .thenReturn(true);
+        when(transactions.claimEligibleFile(eq(46L), eq(RetentionKind.INVALID), anyString(),
+                eq(NOW), eq(later), eq(later.plus(Duration.ofMinutes(10)))))
+                .thenReturn(Optional.of(new FileCandidate(46L, "second.jpg", "second-claim")));
+        when(transactions.confirmFileDeletion(
+                46L, RetentionKind.INVALID, "second.jpg", "second-claim", NOW, later))
+                .thenReturn(true);
+
+        var result = work.cleanup(NOW);
+
+        assertEquals(2, result.invalidFilesDeleted());
+        verify(transactions).claimEligibleFile(eq(46L), eq(RetentionKind.INVALID), anyString(),
+                eq(NOW), eq(later), eq(later.plus(Duration.ofMinutes(10))));
+    }
+
+    /** 반복 Claim 오류 100건이 신규 사진 200건의 처리 기회를 막지 않습니다. */
+    @Test
+    void repeatedClaimFailuresDoNotStarveFollowingTwoHundredCandidates() {
+        List<Long> failing = LongStream.rangeClosed(1, 100).boxed().toList();
+        when(repository.findFreshInvalidIds(NOW, PageRequest.of(0, 101)))
+                .thenReturn(LongStream.rangeClosed(1, 101).boxed().toList());
+        when(repository.findRetryInvalidIds(NOW, PageRequest.of(0, 101))).thenReturn(List.of());
+        for (int run = 1; run < 5; run++) {
+            Instant runAt = NOW.plus(Duration.ofMinutes(5L * run));
+            long freshStart = 51L + 50L * run;
+            when(repository.findFreshInvalidIds(runAt, PageRequest.of(0, 101)))
+                    .thenReturn(LongStream.rangeClosed(freshStart, Math.min(300, freshStart + 100))
+                            .boxed().toList());
+            when(repository.findRetryInvalidIds(runAt, PageRequest.of(0, 101))).thenReturn(failing);
+        }
+        when(transactions.claimEligibleFile(anyLong(), eq(RetentionKind.INVALID), anyString(),
+                any(), any(), any())).thenAnswer(invocation -> {
+            Long id = invocation.getArgument(0);
+            if (id <= 100) throw new IllegalStateException("persistent claim failure");
+            String token = invocation.getArgument(2);
+            return Optional.of(new FileCandidate(id, id + ".jpg", token));
+        });
+        when(transactions.deferAfterClaimFailure(anyLong(), eq(RetentionKind.INVALID), anyString(),
+                any(), any(), any()))
+                .thenReturn(PhotoSubmissionCleanupTransactionService.ClaimFailureResolution.DEFERRED);
+        Set<Long> confirmed = new HashSet<>();
+        when(transactions.confirmFileDeletion(anyLong(), eq(RetentionKind.INVALID), anyString(),
+                anyString(), any(), any())).thenAnswer(invocation -> confirmed.add(invocation.getArgument(0)));
+
+        for (int run = 0; run < 5; run++) {
+            Instant runAt = NOW.plus(Duration.ofMinutes(5L * run));
+            clock.set(runAt);
+            work.cleanup(runAt);
+        }
+
+        assertEquals(200, confirmed.size());
+        assertTrue(confirmed.containsAll(LongStream.rangeClosed(101, 300).boxed().toList()));
+    }
+
     /**
      * 외부 트랜잭션 안에서 파일 삭제를 시작하면 안 됩니다.
      * 데이터베이스 커넥션을 파일 I/O 동안 점유하지 않도록 보장합니다.
@@ -267,6 +429,23 @@ class PhotoSubmissionCleanupWorkTest {
             throw new IllegalStateException("lease lost");
         }));
         verifyNoInteractions(transactions, storage);
+    }
+
+    /** 테스트에서 실제 대기 없이 Claim 제어 시각을 이동합니다. */
+    private static final class MutableClock extends Clock {
+        private final AtomicReference<Instant> current;
+
+        private MutableClock(Instant initial) {
+            this.current = new AtomicReference<>(initial);
+        }
+
+        private void set(Instant instant) {
+            current.set(instant);
+        }
+
+        @Override public ZoneId getZone() { return ZoneOffset.UTC; }
+        @Override public Clock withZone(ZoneId zone) { return Clock.fixed(instant(), zone); }
+        @Override public Instant instant() { return current.get(); }
     }
 
 }

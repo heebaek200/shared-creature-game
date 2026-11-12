@@ -77,11 +77,12 @@ class PhotoSubmissionCleanupTransactionServiceTest {
         when(submission.getCleanupClaimToken()).thenReturn(null, CLAIM);
 
         var candidate = service.claimEligibleFile(
-                3L, RetentionKind.INVALID, CLAIM, NOW, NOW.plus(Duration.ofMinutes(10))).orElseThrow();
+                3L, RetentionKind.INVALID, CLAIM, NOW, NOW,
+                NOW.plus(Duration.ofMinutes(10))).orElseThrow();
         assertEquals("photo-key.jpg", candidate.storageKey());
         verify(submission).claimCleanup(CLAIM, NOW.plus(Duration.ofMinutes(10)));
         assertTrue(service.confirmFileDeletion(
-                3L, RetentionKind.INVALID, "photo-key.jpg", CLAIM, NOW));
+                3L, RetentionKind.INVALID, "photo-key.jpg", CLAIM, NOW, NOW));
         verify(submission).markPhotoAndLocationDataDeleted(NOW);
     }
 
@@ -96,7 +97,8 @@ class PhotoSubmissionCleanupTransactionServiceTest {
         when(repository.findForCleanupUpdate(4L)).thenReturn(Optional.of(submission));
 
         assertTrue(service.claimEligibleFile(
-                4L, RetentionKind.VALID, CLAIM, NOW, NOW.plus(Duration.ofMinutes(10))).isEmpty());
+                4L, RetentionKind.VALID, CLAIM, NOW, NOW,
+                NOW.plus(Duration.ofMinutes(10))).isEmpty());
         verify(submission, never()).claimCleanup(anyString(), any());
     }
 
@@ -112,9 +114,10 @@ class PhotoSubmissionCleanupTransactionServiceTest {
         when(submission.getCleanupClaimToken()).thenReturn(null, CLAIM);
 
         assertTrue(service.claimEligibleFile(
-                5L, RetentionKind.VALID, CLAIM, NOW, NOW.plus(Duration.ofMinutes(10))).isPresent());
+                5L, RetentionKind.VALID, CLAIM, NOW, NOW,
+                NOW.plus(Duration.ofMinutes(10))).isPresent());
         assertTrue(service.confirmFileDeletion(
-                5L, RetentionKind.VALID, "test-photo.jpg", CLAIM, NOW));
+                5L, RetentionKind.VALID, "test-photo.jpg", CLAIM, NOW, NOW));
         verify(submission).markPhotoAndLocationDataDeleted(NOW);
     }
 
@@ -132,7 +135,7 @@ class PhotoSubmissionCleanupTransactionServiceTest {
         when(submission.getCleanupClaimToken()).thenReturn(CLAIM);
 
         assertFalse(service.confirmFileDeletion(
-                6L, RetentionKind.INVALID, "old-key.jpg", CLAIM, NOW));
+                6L, RetentionKind.INVALID, "old-key.jpg", CLAIM, NOW, NOW));
         verify(submission, never()).markPhotoAndLocationDataDeleted(any());
     }
 
@@ -146,7 +149,8 @@ class PhotoSubmissionCleanupTransactionServiceTest {
         when(submission.getCleanupClaimExpiresAt()).thenReturn(NOW.plus(Duration.ofMinutes(1)));
 
         assertTrue(service.claimEligibleFile(
-                7L, RetentionKind.INVALID, CLAIM, NOW, NOW.plus(Duration.ofMinutes(10))).isEmpty());
+                7L, RetentionKind.INVALID, CLAIM, NOW, NOW,
+                NOW.plus(Duration.ofMinutes(10))).isEmpty());
         verify(submission, never()).claimCleanup(anyString(), any());
     }
 
@@ -161,6 +165,76 @@ class PhotoSubmissionCleanupTransactionServiceTest {
 
         verify(submission).deferCleanupUntil(NOW.plus(Duration.ofMinutes(5)));
         verify(repository).flush();
+    }
+
+    /** Claim 획득 예외 뒤 소유자가 없으면 5분 재시도 대상으로 전환합니다. */
+    @Test
+    void claimFailureWithoutOwnerSchedulesRetry() {
+        PhotoSubmission submission = mock(PhotoSubmission.class);
+        when(repository.findForCleanupUpdate(9L)).thenReturn(Optional.of(submission));
+        when(submission.getVerificationStatus()).thenReturn("INVALID");
+
+        var result = service.deferAfterClaimFailure(
+                9L,
+                RetentionKind.INVALID,
+                CLAIM,
+                NOW,
+                NOW,
+                NOW.plus(Duration.ofMinutes(5))
+        );
+
+        assertEquals(PhotoSubmissionCleanupTransactionService.ClaimFailureResolution.DEFERRED, result);
+        verify(submission).deferCleanupUntil(NOW.plus(Duration.ofMinutes(5)));
+    }
+
+    /** 다른 실행자의 유효한 Claim은 Claim 획득 실패 후에도 해제하거나 덮어쓰지 않습니다. */
+    @Test
+    void claimFailurePreservesOtherActiveClaim() {
+        PhotoSubmission submission = mock(PhotoSubmission.class);
+        when(repository.findForCleanupUpdate(10L)).thenReturn(Optional.of(submission));
+        when(submission.getVerificationStatus()).thenReturn("INVALID");
+        when(submission.getCleanupClaimToken()).thenReturn("other-token");
+        when(submission.getCleanupClaimExpiresAt()).thenReturn(NOW.plus(Duration.ofMinutes(1)));
+
+        var result = service.deferAfterClaimFailure(
+                10L,
+                RetentionKind.INVALID,
+                CLAIM,
+                NOW,
+                NOW,
+                NOW.plus(Duration.ofMinutes(5))
+        );
+
+        assertEquals(PhotoSubmissionCleanupTransactionService.ClaimFailureResolution.SKIPPED, result);
+        verify(submission, never()).deferCleanupUntil(any());
+        verify(repository, never()).flush();
+    }
+
+    /** 재선점으로 토큰이 바뀌면 이전 실행은 단건 Claim을 연장하지 못합니다. */
+    @Test
+    void oldTokenCannotRenewReclaimedFile() {
+        PhotoSubmission submission = mock(PhotoSubmission.class);
+        when(repository.findForCleanupUpdate(11L)).thenReturn(Optional.of(submission));
+        when(submission.getCleanupClaimToken()).thenReturn("new-token");
+
+        assertFalse(service.renewFileCleanupClaim(
+                11L, CLAIM, NOW, NOW.plus(Duration.ofMinutes(10))));
+        verify(submission, never()).claimCleanup(anyString(), any());
+        verify(repository, never()).flush();
+    }
+
+    /** 만료된 Claim은 아직 같은 토큰이 남아 있어도 되살리지 않습니다. */
+    @Test
+    void expiredClaimCannotBeRenewed() {
+        PhotoSubmission submission = mock(PhotoSubmission.class);
+        when(repository.findForCleanupUpdate(12L)).thenReturn(Optional.of(submission));
+        when(submission.getCleanupClaimToken()).thenReturn(CLAIM);
+        when(submission.getCleanupClaimExpiresAt()).thenReturn(NOW);
+
+        assertFalse(service.renewFileCleanupClaim(
+                12L, CLAIM, NOW, NOW.plus(Duration.ofMinutes(10))));
+        verify(submission, never()).claimCleanup(anyString(), any());
+        verify(repository, never()).flush();
     }
 
     /**
