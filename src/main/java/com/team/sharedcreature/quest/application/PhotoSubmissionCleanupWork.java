@@ -12,9 +12,11 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * #18 사진 보존 정책을 #24 Scheduler에서 재사용하는 업무 서비스입니다.
@@ -27,6 +29,11 @@ public class PhotoSubmissionCleanupWork implements PhotoRetentionWork {
 
     private static final int BATCH_SIZE = 100;
     private static final int FETCH_SIZE = BATCH_SIZE + 1;
+    private static final Duration RETRY_DELAY = Duration.ofMinutes(5);
+    private static final Duration CLAIM_LEASE = Duration.ofMinutes(10);
+
+    private enum CleanupOutcome { SUCCEEDED, SKIPPED, FAILED }
+    private record CandidateBatch(List<Long> ids, boolean moreMayRemain) { }
 
     private final PhotoSubmissionRepository repository;
     private final PhotoSubmissionCleanupTransactionService transactions;
@@ -70,39 +77,49 @@ public class PhotoSubmissionCleanupWork implements PhotoRetentionWork {
             throw new IllegalStateException("사진 파일 정리는 DB 트랜잭션 밖에서만 실행해야 합니다.");
         }
 
-        List<Long> pending = repository.findStalePendingIds(now.minus(Duration.ofHours(1)),
-                PageRequest.of(0, FETCH_SIZE));
-        List<Long> invalid = repository.findExpiredInvalidIds(now.minus(Duration.ofHours(24)),
-                PageRequest.of(0, FETCH_SIZE));
-        List<Long> valid = repository.findExpiredValidIds(now.minus(Duration.ofDays(30)),
-                PageRequest.of(0, FETCH_SIZE));
+        PageRequest page = PageRequest.of(0, FETCH_SIZE);
+        CandidateBatch pending = mergeCandidates(
+                repository.findFreshStalePendingIds(now.minus(Duration.ofHours(1)), now, page),
+                repository.findRetryStalePendingIds(now.minus(Duration.ofHours(1)), now, page)
+        );
+        CandidateBatch invalid = mergeCandidates(
+                repository.findFreshInvalidIds(now, page),
+                repository.findRetryInvalidIds(now, page)
+        );
+        CandidateBatch valid = mergeCandidates(
+                repository.findFreshExpiredValidIds(now.minus(Duration.ofDays(30)), now, page),
+                repository.findRetryExpiredValidIds(now.minus(Duration.ofDays(30)), now, page)
+        );
 
         int pendingCount = 0;
         int invalidCount = 0;
         int validCount = 0;
         int failures = 0;
-        boolean more = pending.size() > BATCH_SIZE || invalid.size() > BATCH_SIZE || valid.size() > BATCH_SIZE;
+        boolean more = pending.moreMayRemain() || invalid.moreMayRemain() || valid.moreMayRemain();
 
         // PENDING 실패 확정은 행 잠금과 별도 Commit으로 처리합니다.
         int attempted = 0;
-        for (Long id : pending.subList(0, Math.min(pending.size(), BATCH_SIZE))) {
+        for (Long id : pending.ids()) {
             if (attempted++ % 20 == 0) heartbeat.run();
             try {
                 if (transactions.expirePending(id, now)) pendingCount++;
             } catch (RuntimeException exception) {
                 failures++;
                 log.warn("사진 PENDING 만료 실패. submissionId={}", id, exception);
+                deferPendingAfterFailure(id, now);
             }
         }
-        for (Long id : invalid.subList(0, Math.min(invalid.size(), BATCH_SIZE))) {
+        for (Long id : invalid.ids()) {
             if (attempted++ % 20 == 0) heartbeat.run();
-            if (cleanupOneFile(id, RetentionKind.INVALID, now)) invalidCount++;
-            else failures += isStillEligible(id, RetentionKind.INVALID, now) ? 1 : 0;
+            CleanupOutcome outcome = cleanupOneFile(id, RetentionKind.INVALID, now, heartbeat);
+            if (outcome == CleanupOutcome.SUCCEEDED) invalidCount++;
+            else if (outcome == CleanupOutcome.FAILED) failures++;
         }
-        for (Long id : valid.subList(0, Math.min(valid.size(), BATCH_SIZE))) {
+        for (Long id : valid.ids()) {
             if (attempted++ % 20 == 0) heartbeat.run();
-            if (cleanupOneFile(id, RetentionKind.VALID, now)) validCount++;
-            else failures += isStillEligible(id, RetentionKind.VALID, now) ? 1 : 0;
+            CleanupOutcome outcome = cleanupOneFile(id, RetentionKind.VALID, now, heartbeat);
+            if (outcome == CleanupOutcome.SUCCEEDED) validCount++;
+            else if (outcome == CleanupOutcome.FAILED) failures++;
         }
 
         return new Summary(pendingCount, invalidCount, validCount, failures, more);
@@ -113,32 +130,77 @@ public class PhotoSubmissionCleanupWork implements PhotoRetentionWork {
      * 파일 삭제에 성공하면 별도 쓰기 트랜잭션으로 위치·키를 제거합니다.
      * 단건 예외는 삼켜 나머지 파일 정리를 계속 진행합니다.
      */
-    private boolean cleanupOneFile(Long id, RetentionKind kind, Instant now) {
+    private CleanupOutcome cleanupOneFile(Long id, RetentionKind kind, Instant now, Runnable heartbeat) {
+        String claimToken = UUID.randomUUID().toString();
+        Optional<FileCandidate> candidate;
         try {
-            Optional<FileCandidate> candidate = transactions.findEligibleFile(id, kind, now);
-            if (candidate.isEmpty()) return false;
+            candidate = transactions.claimEligibleFile(
+                    id, kind, claimToken, now, now.plus(CLAIM_LEASE));
+        } catch (RuntimeException exception) {
+            log.warn("사진 정리 claim 실패. submissionId={}, kind={}", id, kind, exception);
+            return CleanupOutcome.FAILED;
+        }
+        if (candidate.isEmpty()) {
+            return CleanupOutcome.SKIPPED;
+        }
 
-            // 삭제 실패 시 DB 이력은 그대로 남아 다음 Scheduler가 재시도할 수 있습니다.
-            String key = candidate.orElseThrow().storageKey();
+        FileCandidate claimed = candidate.orElseThrow();
+        String key = claimed.storageKey();
+        String activeClaimToken = claimed.claimToken();
+        try {
             if (key != null) fileStorage.delete(key);
-            return transactions.confirmFileDeletion(id, kind, key, now);
         } catch (IOException | RuntimeException exception) {
             log.warn("사진 파일/위치 정리 실패. submissionId={}, kind={}", id, kind, exception);
-            return false;
+            deferFileAfterFailure(id, activeClaimToken, now);
+            return CleanupOutcome.FAILED;
+        }
+
+        // 파일 I/O가 길어졌다면 DB 확정 전에 실행권 소유 여부를 다시 확인합니다.
+        heartbeat.run();
+        try {
+            return transactions.confirmFileDeletion(id, kind, key, activeClaimToken, now)
+                    ? CleanupOutcome.SUCCEEDED
+                    : CleanupOutcome.SKIPPED;
+        } catch (RuntimeException exception) {
+            log.warn("사진 삭제 DB 확정 실패. submissionId={}, kind={}", id, kind, exception);
+            deferFileAfterFailure(id, activeClaimToken, now);
+            return CleanupOutcome.FAILED;
         }
     }
 
     /**
-     * 처리 경쟁으로 다른 실행자가 먼저 완료했다면 실패로 집계하지 않습니다.
-     * 아직 대상이면서 처리가 실패했다면 해당 실행을 FAILED로 표시합니다.
-     * 재확인 자체가 실패하면 안전하게 실패 건수에 포함합니다.
+     * 신규 대상과 기한이 된 재시도 대상을 번갈아 최대 100건 선택합니다.
+     * 어느 한 목록이 비면 다른 목록으로 남은 처리량을 채웁니다.
      */
-    private boolean isStillEligible(Long id, RetentionKind kind, Instant now) {
+    private CandidateBatch mergeCandidates(List<Long> fresh, List<Long> retry) {
+        int total = Math.min(BATCH_SIZE, fresh.size() + retry.size());
+        ArrayList<Long> merged = new ArrayList<>(total);
+        int freshIndex = 0;
+        int retryIndex = 0;
+        while (merged.size() < total) {
+            if (freshIndex < fresh.size()) merged.add(fresh.get(freshIndex++));
+            if (merged.size() >= total) break;
+            if (retryIndex < retry.size()) merged.add(retry.get(retryIndex++));
+            if (freshIndex >= fresh.size() && retryIndex >= retry.size()) break;
+        }
+        return new CandidateBatch(List.copyOf(merged), fresh.size() + retry.size() > BATCH_SIZE);
+    }
+
+    /** PENDING 단건 실패를 5분 뒤로 보내고 기록 실패는 원래 실패와 함께 로그로 남깁니다. */
+    private void deferPendingAfterFailure(Long id, Instant now) {
         try {
-            return transactions.findEligibleFile(id, kind, now).isPresent();
+            transactions.deferPendingCleanup(id, now.plus(RETRY_DELAY));
         } catch (RuntimeException exception) {
-            log.warn("사진 보존 대상 재검증 실패. submissionId={}", id, exception);
-            return true;
+            log.warn("사진 PENDING 재시도 예약 실패. submissionId={}", id, exception);
+        }
+    }
+
+    /** 파일 정리 실패의 claim을 해제하고 5분 뒤 재시도하도록 예약합니다. */
+    private void deferFileAfterFailure(Long id, String claimToken, Instant now) {
+        try {
+            transactions.deferFileCleanup(id, claimToken, now.plus(RETRY_DELAY));
+        } catch (RuntimeException exception) {
+            log.warn("사진 파일 재시도 예약 실패. submissionId={}", id, exception);
         }
     }
 }

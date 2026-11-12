@@ -20,7 +20,7 @@ import java.util.Optional;
 public class PhotoSubmissionCleanupTransactionService {
 
     public enum RetentionKind { INVALID, VALID }
-    public record FileCandidate(Long id, String storageKey) { }
+    public record FileCandidate(Long id, String storageKey, String claimToken) { }
 
     private final PhotoSubmissionRepository repository;
 
@@ -53,15 +53,40 @@ public class PhotoSubmissionCleanupTransactionService {
     }
 
     /**
-     * 파일 삭제 작업 직전에 이력의 보존 기한을 읽습니다.
-     * 이 트랜잭션은 반환 전에 종료되며 파일 I/O 중 DB 잠금을 보유하지 않습니다.
-     * 반환된 storageKey가 실제 삭제 후에도 같은지 별도 확정 트랜잭션에서 검증합니다.
+     * 처리하지 못한 PENDING을 다음 실행 뒤로 보내 후속 후보가 막히지 않게 합니다.
+     * 원래 판정·생성 시각은 변경하지 않고 재시도 제어값만 기록합니다.
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
-    public Optional<FileCandidate> findEligibleFile(Long id, RetentionKind kind, Instant now) {
-        return repository.findById(id)
-                .filter(submission -> eligible(submission, kind, now))
-                .map(submission -> new FileCandidate(submission.getId(), submission.getStorageKey()));
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void deferPendingCleanup(Long id, Instant nextAttemptAt) {
+        PhotoSubmission submission = repository.findForCleanupUpdate(id).orElse(null);
+        if (submission == null || !"PENDING".equals(submission.getVerificationStatus())) {
+            return;
+        }
+
+        submission.deferCleanupUntil(nextAttemptAt);
+        repository.flush();
+    }
+
+    /**
+     * 파일 삭제 직전에 행을 잠그고 만료 가능한 단건 claim을 기록합니다.
+     * 트랜잭션은 파일 I/O 전에 종료하며 storageKey는 확정 단계에서 다시 검사합니다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Optional<FileCandidate> claimEligibleFile(
+            Long id,
+            RetentionKind kind,
+            String claimToken,
+            Instant now,
+            Instant claimExpiresAt
+    ) {
+        PhotoSubmission submission = repository.findForCleanupUpdate(id).orElse(null);
+        if (submission == null || !eligibleForClaim(submission, kind, now)) {
+            return Optional.empty();
+        }
+
+        submission.claimCleanup(claimToken, claimExpiresAt);
+        repository.flush();
+        return Optional.of(new FileCandidate(submission.getId(), submission.getStorageKey(), claimToken));
     }
 
     /**
@@ -70,9 +95,16 @@ public class PhotoSubmissionCleanupTransactionService {
      * DB Commit 실패 시 파일은 이미 없을 수 있으나 다음 실행이 안전하게 재시도합니다.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean confirmFileDeletion(Long id, RetentionKind kind, String deletedStorageKey, Instant now) {
+    public boolean confirmFileDeletion(
+            Long id,
+            RetentionKind kind,
+            String deletedStorageKey,
+            String claimToken,
+            Instant now
+    ) {
         PhotoSubmission submission = repository.findForCleanupUpdate(id).orElse(null);
-        if (submission == null || !eligible(submission, kind, now)
+        if (submission == null || !eligibleByPolicy(submission, kind, now)
+                || !Objects.equals(submission.getCleanupClaimToken(), claimToken)
                 || !Objects.equals(submission.getStorageKey(), deletedStorageKey)) {
             return false;
         }
@@ -84,17 +116,45 @@ public class PhotoSubmissionCleanupTransactionService {
     }
 
     /**
-     * 제출 상태와 보존 정책을 한곳에서 검증합니다.
-     * VALID는 논리 종료 시각뿐 아니라 실제 시즌 ENDED 상태를 요구합니다.
-     * INVALID는 실패가 확정된 updatedAt부터 24시간 이후에만 삭제합니다.
+     * 파일 삭제 실패를 기록하고 claim을 해제해 지정 시각 이후 재시도합니다.
+     * 다른 실행이 claim을 재선점했다면 그 실행의 제어값을 변경하지 않습니다.
      */
-    private boolean eligible(PhotoSubmission submission, RetentionKind kind, Instant now) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void deferFileCleanup(Long id, String claimToken, Instant nextAttemptAt) {
+        PhotoSubmission submission = repository.findForCleanupUpdate(id).orElse(null);
+        if (submission == null || submission.getFileDeletedAt() != null
+                || !Objects.equals(submission.getCleanupClaimToken(), claimToken)) {
+            return;
+        }
+
+        submission.deferCleanupUntil(nextAttemptAt);
+        repository.flush();
+    }
+
+    /** 파일 정리 정책, 재시도 시각과 기존 claim 만료 여부를 함께 검사합니다. */
+    private boolean eligibleForClaim(PhotoSubmission submission, RetentionKind kind, Instant now) {
+        if (!eligibleByPolicy(submission, kind, now)) {
+            return false;
+        }
+        if (submission.getCleanupNextAttemptAt() != null
+                && submission.getCleanupNextAttemptAt().isAfter(now)) {
+            return false;
+        }
+        return submission.getCleanupClaimToken() == null
+                || submission.getCleanupClaimExpiresAt() != null
+                && !submission.getCleanupClaimExpiresAt().isAfter(now);
+    }
+
+    /**
+     * 제출 상태와 확정 보존 정책을 검사합니다.
+     * INVALID는 다음 정리 실행부터, VALID는 시즌 ENDED 후 30일부터 대상입니다.
+     */
+    private boolean eligibleByPolicy(PhotoSubmission submission, RetentionKind kind, Instant now) {
         if (submission.getFileDeletedAt() != null) {
             return false;
         }
         if (kind == RetentionKind.INVALID) {
-            return "INVALID".equals(submission.getVerificationStatus())
-                    && !submission.getUpdatedAt().isAfter(now.minus(Duration.ofHours(24)));
+            return "INVALID".equals(submission.getVerificationStatus());
         }
 
         // 종료 처리 중인 시즌의 파일은 최종 Snapshot 확정 전까지 삭제하지 않습니다.

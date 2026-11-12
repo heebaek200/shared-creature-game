@@ -44,11 +44,21 @@ class PhotoSubmissionCleanupWorkTest {
     @BeforeEach
     void setUp() {
         work = new PhotoSubmissionCleanupWork(repository, transactions, storage);
-        lenient().when(repository.findStalePendingIds(NOW.minus(Duration.ofHours(1)), PageRequest.of(0, 101)))
+        lenient().when(repository.findFreshStalePendingIds(
+                        NOW.minus(Duration.ofHours(1)), NOW, PageRequest.of(0, 101)))
                 .thenReturn(List.of());
-        lenient().when(repository.findExpiredInvalidIds(NOW.minus(Duration.ofHours(24)), PageRequest.of(0, 101)))
+        lenient().when(repository.findRetryStalePendingIds(
+                        NOW.minus(Duration.ofHours(1)), NOW, PageRequest.of(0, 101)))
                 .thenReturn(List.of());
-        lenient().when(repository.findExpiredValidIds(NOW.minus(Duration.ofDays(30)), PageRequest.of(0, 101)))
+        lenient().when(repository.findFreshInvalidIds(NOW, PageRequest.of(0, 101)))
+                .thenReturn(List.of());
+        lenient().when(repository.findRetryInvalidIds(NOW, PageRequest.of(0, 101)))
+                .thenReturn(List.of());
+        lenient().when(repository.findFreshExpiredValidIds(
+                        NOW.minus(Duration.ofDays(30)), NOW, PageRequest.of(0, 101)))
+                .thenReturn(List.of());
+        lenient().when(repository.findRetryExpiredValidIds(
+                        NOW.minus(Duration.ofDays(30)), NOW, PageRequest.of(0, 101)))
                 .thenReturn(List.of());
     }
 
@@ -59,7 +69,8 @@ class PhotoSubmissionCleanupWorkTest {
      */
     @Test
     void expiresStalePendingWithoutDeletingFile() {
-        when(repository.findStalePendingIds(NOW.minus(Duration.ofHours(1)), PageRequest.of(0, 101)))
+        when(repository.findFreshStalePendingIds(
+                NOW.minus(Duration.ofHours(1)), NOW, PageRequest.of(0, 101)))
                 .thenReturn(List.of(7L));
         when(transactions.expirePending(7L, NOW)).thenReturn(true);
 
@@ -76,17 +87,20 @@ class PhotoSubmissionCleanupWorkTest {
      */
     @Test
     void deletesInvalidFileThenConfirmsDbCleanup() throws Exception {
-        when(repository.findExpiredInvalidIds(NOW.minus(Duration.ofHours(24)), PageRequest.of(0, 101)))
+        when(repository.findFreshInvalidIds(NOW, PageRequest.of(0, 101)))
                 .thenReturn(List.of(11L));
-        when(transactions.findEligibleFile(11L, RetentionKind.INVALID, NOW))
-                .thenReturn(Optional.of(new FileCandidate(11L, "invalid-key.jpg")));
-        when(transactions.confirmFileDeletion(11L, RetentionKind.INVALID, "invalid-key.jpg", NOW))
+        when(transactions.claimEligibleFile(eq(11L), eq(RetentionKind.INVALID), anyString(),
+                eq(NOW), eq(NOW.plus(Duration.ofMinutes(10)))))
+                .thenReturn(Optional.of(new FileCandidate(11L, "invalid-key.jpg", "claim")));
+        when(transactions.confirmFileDeletion(eq(11L), eq(RetentionKind.INVALID),
+                eq("invalid-key.jpg"), anyString(), eq(NOW)))
                 .thenReturn(true);
 
         var result = work.cleanup(NOW);
         assertEquals(1, result.invalidFilesDeleted());
         verify(storage).delete("invalid-key.jpg");
-        verify(transactions).confirmFileDeletion(11L, RetentionKind.INVALID, "invalid-key.jpg", NOW);
+        verify(transactions).confirmFileDeletion(eq(11L), eq(RetentionKind.INVALID),
+                eq("invalid-key.jpg"), anyString(), eq(NOW));
     }
 
     /**
@@ -96,11 +110,14 @@ class PhotoSubmissionCleanupWorkTest {
      */
     @Test
     void deletesValidFileAfterEligibilityCheck() throws Exception {
-        when(repository.findExpiredValidIds(NOW.minus(Duration.ofDays(30)), PageRequest.of(0, 101)))
+        when(repository.findFreshExpiredValidIds(
+                NOW.minus(Duration.ofDays(30)), NOW, PageRequest.of(0, 101)))
                 .thenReturn(List.of(21L));
-        when(transactions.findEligibleFile(21L, RetentionKind.VALID, NOW))
-                .thenReturn(Optional.of(new FileCandidate(21L, "valid-key.jpg")));
-        when(transactions.confirmFileDeletion(21L, RetentionKind.VALID, "valid-key.jpg", NOW))
+        when(transactions.claimEligibleFile(eq(21L), eq(RetentionKind.VALID), anyString(),
+                eq(NOW), eq(NOW.plus(Duration.ofMinutes(10)))))
+                .thenReturn(Optional.of(new FileCandidate(21L, "valid-key.jpg", "claim")));
+        when(transactions.confirmFileDeletion(eq(21L), eq(RetentionKind.VALID),
+                eq("valid-key.jpg"), anyString(), eq(NOW)))
                 .thenReturn(true);
 
         var result = work.cleanup(NOW);
@@ -115,15 +132,17 @@ class PhotoSubmissionCleanupWorkTest {
      */
     @Test
     void ioFailureKeepsDatabasePendingForRetry() throws Exception {
-        when(repository.findExpiredInvalidIds(NOW.minus(Duration.ofHours(24)), PageRequest.of(0, 101)))
+        when(repository.findFreshInvalidIds(NOW, PageRequest.of(0, 101)))
                 .thenReturn(List.of(17L));
-        when(transactions.findEligibleFile(17L, RetentionKind.INVALID, NOW))
-                .thenReturn(Optional.of(new FileCandidate(17L, "broken-key.jpg")));
+        when(transactions.claimEligibleFile(eq(17L), eq(RetentionKind.INVALID), anyString(),
+                eq(NOW), eq(NOW.plus(Duration.ofMinutes(10)))))
+                .thenReturn(Optional.of(new FileCandidate(17L, "broken-key.jpg", "claim")));
         doThrow(new IOException("locked file")).when(storage).delete("broken-key.jpg");
 
         var result = work.cleanup(NOW);
         assertEquals(1, result.failedCount());
-        verify(transactions, never()).confirmFileDeletion(anyLong(), any(), any(), any());
+        verify(transactions, never()).confirmFileDeletion(anyLong(), any(), any(), anyString(), any());
+        verify(transactions).deferFileCleanup(eq(17L), anyString(), eq(NOW.plus(Duration.ofMinutes(5))));
     }
 
     /**
@@ -133,9 +152,10 @@ class PhotoSubmissionCleanupWorkTest {
      */
     @Test
     void alreadyCompletedCandidateIsSkipped() {
-        when(repository.findExpiredInvalidIds(NOW.minus(Duration.ofHours(24)), PageRequest.of(0, 101)))
+        when(repository.findFreshInvalidIds(NOW, PageRequest.of(0, 101)))
                 .thenReturn(List.of(31L));
-        when(transactions.findEligibleFile(31L, RetentionKind.INVALID, NOW))
+        when(transactions.claimEligibleFile(eq(31L), eq(RetentionKind.INVALID), anyString(),
+                eq(NOW), eq(NOW.plus(Duration.ofMinutes(10)))))
                 .thenReturn(Optional.empty());
 
         var result = work.cleanup(NOW);
@@ -152,13 +172,50 @@ class PhotoSubmissionCleanupWorkTest {
     @Test
     void limitsEachCategoryToOneHundred() {
         List<Long> ids = LongStream.rangeClosed(1, 101).boxed().toList();
-        when(repository.findStalePendingIds(NOW.minus(Duration.ofHours(1)), PageRequest.of(0, 101)))
+        when(repository.findFreshStalePendingIds(
+                NOW.minus(Duration.ofHours(1)), NOW, PageRequest.of(0, 101)))
                 .thenReturn(ids);
 
         var result = work.cleanup(NOW);
         assertTrue(result.moreMayRemain());
         verify(transactions, times(100)).expirePending(anyLong(), eq(NOW));
         verify(transactions, never()).expirePending(101L, NOW);
+    }
+
+    /**
+     * 신규 후보와 재시도 후보가 모두 많아도 양쪽에 처리 기회를 배정합니다.
+     * 영구 실패 재시도만 또는 신규 항목만 앞쪽 100건을 독점하지 않습니다.
+     */
+    @Test
+    void interleavesFreshAndRetryCandidatesWithinBatchLimit() {
+        List<Long> fresh = LongStream.rangeClosed(1, 101).boxed().toList();
+        List<Long> retry = LongStream.rangeClosed(1_001, 1_101).boxed().toList();
+        when(repository.findFreshStalePendingIds(
+                NOW.minus(Duration.ofHours(1)), NOW, PageRequest.of(0, 101))).thenReturn(fresh);
+        when(repository.findRetryStalePendingIds(
+                NOW.minus(Duration.ofHours(1)), NOW, PageRequest.of(0, 101))).thenReturn(retry);
+
+        var result = work.cleanup(NOW);
+
+        assertTrue(result.moreMayRemain());
+        verify(transactions, times(100)).expirePending(anyLong(), eq(NOW));
+        verify(transactions).expirePending(50L, NOW);
+        verify(transactions).expirePending(1_050L, NOW);
+        verify(transactions, never()).expirePending(51L, NOW);
+        verify(transactions, never()).expirePending(1_051L, NOW);
+    }
+
+    /** 실패한 PENDING은 5분 뒤로 예약해 다음 후보가 후속 실행에서 먼저 처리되게 합니다. */
+    @Test
+    void failedPendingIsDeferredForFiveMinutes() {
+        when(repository.findFreshStalePendingIds(
+                NOW.minus(Duration.ofHours(1)), NOW, PageRequest.of(0, 101))).thenReturn(List.of(9L));
+        when(transactions.expirePending(9L, NOW)).thenThrow(new IllegalStateException("row failure"));
+
+        var result = work.cleanup(NOW);
+
+        assertEquals(1, result.failedCount());
+        verify(transactions).deferPendingCleanup(9L, NOW.plus(Duration.ofMinutes(5)));
     }
 
     /**
@@ -185,7 +242,8 @@ class PhotoSubmissionCleanupWorkTest {
     @Test
     void heartbeatEveryTwentyAttempts() {
         List<Long> ids = LongStream.rangeClosed(1, 21).boxed().toList();
-        when(repository.findStalePendingIds(NOW.minus(Duration.ofHours(1)), PageRequest.of(0, 101)))
+        when(repository.findFreshStalePendingIds(
+                NOW.minus(Duration.ofHours(1)), NOW, PageRequest.of(0, 101)))
                 .thenReturn(ids);
         java.util.concurrent.atomic.AtomicInteger heartbeats = new java.util.concurrent.atomic.AtomicInteger();
 
@@ -202,7 +260,8 @@ class PhotoSubmissionCleanupWorkTest {
      */
     @Test
     void heartbeatFailureAbortsWork() {
-        when(repository.findStalePendingIds(NOW.minus(Duration.ofHours(1)), PageRequest.of(0, 101)))
+        when(repository.findFreshStalePendingIds(
+                NOW.minus(Duration.ofHours(1)), NOW, PageRequest.of(0, 101)))
                 .thenReturn(List.of(4L));
         assertThrows(IllegalStateException.class, () -> work.cleanup(NOW, () -> {
             throw new IllegalStateException("lease lost");

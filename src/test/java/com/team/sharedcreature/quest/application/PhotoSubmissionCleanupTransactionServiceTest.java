@@ -23,6 +23,7 @@ import static org.mockito.Mockito.*;
 class PhotoSubmissionCleanupTransactionServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-11-10T09:07:45Z");
+    private static final String CLAIM = "11111111-1111-1111-1111-111111111111";
     private final PhotoSubmissionRepository repository = mock(PhotoSubmissionRepository.class);
     private final PhotoSubmissionCleanupTransactionService service =
             new PhotoSubmissionCleanupTransactionService(repository);
@@ -62,23 +63,25 @@ class PhotoSubmissionCleanupTransactionServiceTest {
     }
 
     /**
-     * INVALID 사진은 실패 확정 후 정확히 24시간부터 삭제할 수 있습니다.
-     * 후보 조회와 최종 확정은 서로 다른 Repository 호출을 사용합니다.
+     * INVALID 사진은 실패 확정 후 다음 정리 실행에서 바로 삭제할 수 있습니다.
+     * claim과 최종 확정은 서로 다른 짧은 트랜잭션을 사용합니다.
      * 삭제 완료 시 필요한 DB 상태 변경은 도메인 메서드에 위임합니다.
      */
     @Test
-    void invalidFileBecomesEligibleAfterTwentyFourHours() {
+    void invalidFileIsEligibleOnNextCleanup() {
         PhotoSubmission submission = mock(PhotoSubmission.class);
-        when(repository.findById(3L)).thenReturn(Optional.of(submission));
         when(repository.findForCleanupUpdate(3L)).thenReturn(Optional.of(submission));
         when(submission.getVerificationStatus()).thenReturn("INVALID");
-        when(submission.getUpdatedAt()).thenReturn(NOW.minus(Duration.ofHours(24)));
         when(submission.getId()).thenReturn(3L);
         when(submission.getStorageKey()).thenReturn("photo-key.jpg");
+        when(submission.getCleanupClaimToken()).thenReturn(null, CLAIM);
 
-        var candidate = service.findEligibleFile(3L, RetentionKind.INVALID, NOW).orElseThrow();
+        var candidate = service.claimEligibleFile(
+                3L, RetentionKind.INVALID, CLAIM, NOW, NOW.plus(Duration.ofMinutes(10))).orElseThrow();
         assertEquals("photo-key.jpg", candidate.storageKey());
-        assertTrue(service.confirmFileDeletion(3L, RetentionKind.INVALID, "photo-key.jpg", NOW));
+        verify(submission).claimCleanup(CLAIM, NOW.plus(Duration.ofMinutes(10)));
+        assertTrue(service.confirmFileDeletion(
+                3L, RetentionKind.INVALID, "photo-key.jpg", CLAIM, NOW));
         verify(submission).markPhotoAndLocationDataDeleted(NOW);
     }
 
@@ -90,10 +93,11 @@ class PhotoSubmissionCleanupTransactionServiceTest {
     @Test
     void validFileInClosingSeasonIsNotEligible() {
         PhotoSubmission submission = validSubmission(4L, "CLOSING", NOW.minus(Duration.ofDays(40)));
-        when(repository.findById(4L)).thenReturn(Optional.of(submission));
+        when(repository.findForCleanupUpdate(4L)).thenReturn(Optional.of(submission));
 
-        assertTrue(service.findEligibleFile(4L, RetentionKind.VALID, NOW).isEmpty());
-        verify(repository, never()).findForCleanupUpdate(anyLong());
+        assertTrue(service.claimEligibleFile(
+                4L, RetentionKind.VALID, CLAIM, NOW, NOW.plus(Duration.ofMinutes(10))).isEmpty());
+        verify(submission, never()).claimCleanup(anyString(), any());
     }
 
     /**
@@ -104,11 +108,13 @@ class PhotoSubmissionCleanupTransactionServiceTest {
     @Test
     void validFileInEndedSeasonIsEligible() {
         PhotoSubmission submission = validSubmission(5L, "ENDED", NOW.minus(Duration.ofDays(30)));
-        when(repository.findById(5L)).thenReturn(Optional.of(submission));
         when(repository.findForCleanupUpdate(5L)).thenReturn(Optional.of(submission));
+        when(submission.getCleanupClaimToken()).thenReturn(null, CLAIM);
 
-        assertTrue(service.findEligibleFile(5L, RetentionKind.VALID, NOW).isPresent());
-        assertTrue(service.confirmFileDeletion(5L, RetentionKind.VALID, "test-photo.jpg", NOW));
+        assertTrue(service.claimEligibleFile(
+                5L, RetentionKind.VALID, CLAIM, NOW, NOW.plus(Duration.ofMinutes(10))).isPresent());
+        assertTrue(service.confirmFileDeletion(
+                5L, RetentionKind.VALID, "test-photo.jpg", CLAIM, NOW));
         verify(submission).markPhotoAndLocationDataDeleted(NOW);
     }
 
@@ -122,11 +128,39 @@ class PhotoSubmissionCleanupTransactionServiceTest {
         PhotoSubmission submission = mock(PhotoSubmission.class);
         when(repository.findForCleanupUpdate(6L)).thenReturn(Optional.of(submission));
         when(submission.getVerificationStatus()).thenReturn("INVALID");
-        when(submission.getUpdatedAt()).thenReturn(NOW.minus(Duration.ofDays(2)));
         when(submission.getStorageKey()).thenReturn("new-key.jpg");
+        when(submission.getCleanupClaimToken()).thenReturn(CLAIM);
 
-        assertFalse(service.confirmFileDeletion(6L, RetentionKind.INVALID, "old-key.jpg", NOW));
+        assertFalse(service.confirmFileDeletion(
+                6L, RetentionKind.INVALID, "old-key.jpg", CLAIM, NOW));
         verify(submission, never()).markPhotoAndLocationDataDeleted(any());
+    }
+
+    /** 유효한 기존 claim이 있으면 다른 실행이 같은 파일을 중복 삭제하도록 넘겨주지 않습니다. */
+    @Test
+    void activeClaimPreventsConcurrentFileCleanup() {
+        PhotoSubmission submission = mock(PhotoSubmission.class);
+        when(repository.findForCleanupUpdate(7L)).thenReturn(Optional.of(submission));
+        when(submission.getVerificationStatus()).thenReturn("INVALID");
+        when(submission.getCleanupClaimToken()).thenReturn("other-claim");
+        when(submission.getCleanupClaimExpiresAt()).thenReturn(NOW.plus(Duration.ofMinutes(1)));
+
+        assertTrue(service.claimEligibleFile(
+                7L, RetentionKind.INVALID, CLAIM, NOW, NOW.plus(Duration.ofMinutes(10))).isEmpty());
+        verify(submission, never()).claimCleanup(anyString(), any());
+    }
+
+    /** 파일 삭제 실패는 원래 판정 시각을 바꾸지 않고 5분 뒤 재시도로 전환합니다. */
+    @Test
+    void fileFailureReleasesClaimAndSchedulesRetry() {
+        PhotoSubmission submission = mock(PhotoSubmission.class);
+        when(repository.findForCleanupUpdate(8L)).thenReturn(Optional.of(submission));
+        when(submission.getCleanupClaimToken()).thenReturn(CLAIM);
+
+        service.deferFileCleanup(8L, CLAIM, NOW.plus(Duration.ofMinutes(5)));
+
+        verify(submission).deferCleanupUntil(NOW.plus(Duration.ofMinutes(5)));
+        verify(repository).flush();
     }
 
     /**

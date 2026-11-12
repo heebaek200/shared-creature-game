@@ -42,14 +42,18 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Comparator;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -74,6 +78,7 @@ class PhotoRetentionMySqlIntegrationTest {
     private static final Instant SEASON_START = SEASON_END.minus(Duration.ofDays(28));
     private static final Path DIRECTORY = createTemporaryDirectory();
     private static final byte[] MINIMAL_FILE = {(byte) 0xff, (byte) 0xd8, 0, (byte) 0xff, (byte) 0xd9};
+    private static final String CLAIM = "11111111-1111-1111-1111-111111111111";
 
     @TestConfiguration(proxyBeanMethods = false)
     static class TestClockConfiguration {
@@ -128,6 +133,7 @@ class PhotoRetentionMySqlIntegrationTest {
     private Long templateId;
     private Long versionId;
     private Long assignmentId;
+    private final List<Long> bulkUserIds = new ArrayList<>();
 
     /**
      * 단일 사용자·시즌·PHOTO_EXIF 배정을 실제 MySQL에 준비합니다.
@@ -136,6 +142,7 @@ class PhotoRetentionMySqlIntegrationTest {
      */
     @BeforeEach
     void setUp() {
+        bulkUserIds.clear();
         assertEquals(0L, count("SELECT COUNT(*) FROM seasons"),
                 "반드시 별도의 빈 shared_creature_game_test DB에서 이 테스트만 실행하세요.");
 
@@ -241,6 +248,7 @@ class PhotoRetentionMySqlIntegrationTest {
             if (versionId != null) jdbc.update("DELETE FROM quest_template_versions WHERE id = ?", versionId);
             if (templateId != null) jdbc.update("DELETE FROM quest_templates WHERE id = ?", templateId);
             if (seasonId != null) jdbc.update("DELETE FROM seasons WHERE id = ?", seasonId);
+            for (Long bulkUserId : bulkUserIds) jdbc.update("DELETE FROM users WHERE id = ?", bulkUserId);
             if (userId != null) jdbc.update("DELETE FROM users WHERE id = ?", userId);
         } finally {
             // 남은 파일은 이 테스트 전용 디렉터리에 한정하여 삭제합니다.
@@ -283,40 +291,32 @@ class PhotoRetentionMySqlIntegrationTest {
     }
 
     /**
-     * 1시간 초과 PENDING은 실패 상태로 확정하되 사진 파일을 보존합니다.
-     * 24시간이 추가로 지나기 전까지 사진·좌표를 정리하지 않습니다.
-     * 확정된 실패 시각을 기준으로 24시간 후 정리합니다.
+     * 1시간 초과 PENDING은 현재 실행에서 실패 상태로 확정합니다.
+     * 후보 목록은 실행 시작 시 고정되므로 파일은 다음 5분 실행에서 정리합니다.
+     * 실패 사유와 제출 이력은 파일 정리 후에도 보존합니다.
      */
     @Test
-    void pendingFailureRetainsFileUntilTwentyFourHoursAfterDecision() throws Exception {
+    void pendingFailureIsDeletedOnNextCleanupCycle() throws Exception {
         Long id = createPhoto("PENDING", NOW.minus(Duration.ofHours(2)), null);
         String key = textColumn(id, "storage_key");
         assertEquals(1, work.cleanup(NOW).pendingInvalidated());
         assertTrue(Files.exists(DIRECTORY.resolve(key)));
-        assertEquals(0, work.cleanup(NOW.plus(Duration.ofHours(24)).minusNanos(1_000)).invalidFilesDeleted());
 
-        assertEquals(1, work.cleanup(NOW.plus(Duration.ofHours(24))).invalidFilesDeleted());
+        assertEquals(1, work.cleanup(NOW.plus(Duration.ofMinutes(5))).invalidFilesDeleted());
         assertFalse(Files.exists(DIRECTORY.resolve(key)));
         assertNull(textColumn(id, "storage_key"));
         assertEquals("PHOTO_PROCESSING_FAILED", textColumn(id, "failure_reason"));
     }
 
     /**
-     * INVALID 사진은 실패 확정 24시간이 되기 전에는 남겨 둡니다.
+     * INVALID 사진은 다음 정리 실행에서 즉시 삭제합니다.
      * 정리 후에도 제출 이력, 판정 사유, 촬영 시각은 보존합니다.
      * 파일 키와 GPS 좌표만 제거합니다.
      */
     @Test
     void invalidFileCleanupPreservesMinimalAuditHistory() throws Exception {
-        Long id = createPhoto("INVALID", NOW.minus(Duration.ofDays(2)), "EXIF_GPS_MISSING");
+        Long id = createPhoto("INVALID", NOW, "EXIF_GPS_MISSING");
         String key = textColumn(id, "storage_key");
-        jdbc.update("UPDATE photo_submissions SET updated_at = ? WHERE id = ?",
-                at(NOW.minus(Duration.ofHours(24)).plusNanos(1_000)), id);
-        assertEquals(0, work.cleanup(NOW).invalidFilesDeleted());
-        assertTrue(Files.exists(DIRECTORY.resolve(key)));
-
-        jdbc.update("UPDATE photo_submissions SET updated_at = ? WHERE id = ?",
-                at(NOW.minus(Duration.ofHours(24))), id);
         assertEquals(1, work.cleanup(NOW).invalidFilesDeleted());
         assertFalse(Files.exists(DIRECTORY.resolve(key)));
         assertNull(textColumn(id, "storage_key"));
@@ -386,7 +386,8 @@ class PhotoRetentionMySqlIntegrationTest {
         assertEquals(key, textColumn(id, "storage_key"));
         assertNull(textColumn(id, "file_deleted_at"));
 
-        assertEquals(1, work.cleanup(NOW).invalidFilesDeleted());
+        assertEquals(0, work.cleanup(NOW).invalidFilesDeleted());
+        assertEquals(1, work.cleanup(NOW.plus(Duration.ofMinutes(5))).invalidFilesDeleted());
         assertFalse(Files.exists(DIRECTORY.resolve(key)));
         assertNull(textColumn(id, "storage_key"));
     }
@@ -462,6 +463,13 @@ class PhotoRetentionMySqlIntegrationTest {
     void concurrentConfirmationChangesDatabaseOnlyOnce() throws Exception {
         Long id = createPhoto("INVALID", NOW.minus(Duration.ofDays(2)), "EXIF_GPS_MISSING");
         String key = textColumn(id, "storage_key");
+        assertTrue(transactions.claimEligibleFile(
+                id,
+                PhotoSubmissionCleanupTransactionService.RetentionKind.INVALID,
+                CLAIM,
+                NOW,
+                NOW.plus(Duration.ofMinutes(10))
+        ).isPresent());
         storage.delete(key);
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService pool = Executors.newFixedThreadPool(2);
@@ -478,6 +486,93 @@ class PhotoRetentionMySqlIntegrationTest {
             pool.shutdownNow();
             assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS));
         }
+    }
+
+    /**
+     * 실행 구간이 다른 두 작업이 같은 후보를 보더라도 단건 claim으로 파일 삭제를 직렬화합니다.
+     * 첫 실행의 파일 I/O 동안 두 번째 실행은 후보를 건너뛰며 물리 삭제는 한 번만 호출됩니다.
+     */
+    @Test
+    @Timeout(20)
+    void concurrentCleanupClaimsFileOnlyOnce() throws Exception {
+        Long id = createPhoto("INVALID", NOW, "EXIF_GPS_MISSING");
+        CountDownLatch deleting = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger deleteCalls = new AtomicInteger();
+        PhotoFileStorage blockingStorage = new PhotoFileStorage(DIRECTORY.toString()) {
+            @Override
+            public void delete(String storageKey) throws IOException {
+                deleteCalls.incrementAndGet();
+                deleting.countDown();
+                try {
+                    if (!release.await(10, TimeUnit.SECONDS)) throw new IOException("release timeout");
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("interrupted", exception);
+                }
+                super.delete(storageKey);
+            }
+        };
+        PhotoSubmissionCleanupWork concurrentWork = new PhotoSubmissionCleanupWork(
+                repository, transactions, blockingStorage);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<PhotoRetentionWork.Summary> first = pool.submit(() -> concurrentWork.cleanup(NOW));
+            assertTrue(deleting.await(10, TimeUnit.SECONDS));
+            Future<PhotoRetentionWork.Summary> second = pool.submit(
+                    () -> concurrentWork.cleanup(NOW.plus(Duration.ofMinutes(5))));
+            PhotoRetentionWork.Summary skipped = second.get(10, TimeUnit.SECONDS);
+            release.countDown();
+            PhotoRetentionWork.Summary completed = first.get(10, TimeUnit.SECONDS);
+
+            assertEquals(1, completed.invalidFilesDeleted() + skipped.invalidFilesDeleted());
+            assertEquals(1, deleteCalls.get());
+            assertNull(textColumn(id, "storage_key"));
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+            assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS));
+        }
+    }
+
+    /**
+     * 앞선 100건이 계속 실패해도 뒤의 200건을 여러 실행에 걸쳐 모두 정리합니다.
+     * 실패 대상은 5분 뒤 재시도 목록으로 순환하며 저장소 복구 후 정상 정리됩니다.
+     */
+    @Test
+    @Timeout(60)
+    void persistentFailuresDoNotStarveFollowingTwoHundredPhotos() throws Exception {
+        Set<String> failingKeys = new HashSet<>();
+        Long currentUserId = userId;
+        for (int index = 0; index < 300; index++) {
+            if (index > 0 && index % 5 == 0) {
+                currentUserId = createBulkUser(index);
+                bulkUserIds.add(currentUserId);
+            }
+            Long id = createPhotoForUser(
+                    currentUserId, index % 5 + 1, "INVALID", NOW.minus(Duration.ofDays(1)), "EXIF_GPS_MISSING");
+            if (index < 100) failingKeys.add(textColumn(id, "storage_key"));
+        }
+
+        PhotoFileStorage partiallyUnavailable = new PhotoFileStorage(DIRECTORY.toString()) {
+            @Override
+            public void delete(String storageKey) throws IOException {
+                if (failingKeys.contains(storageKey)) throw new IOException("persistent failure");
+                super.delete(storageKey);
+            }
+        };
+        PhotoSubmissionCleanupWork failingWork = new PhotoSubmissionCleanupWork(
+                repository, transactions, partiallyUnavailable);
+        for (int run = 0; run < 5; run++) {
+            failingWork.cleanup(NOW.plus(Duration.ofMinutes(5L * run)));
+        }
+
+        assertEquals(200L, count("SELECT COUNT(*) FROM photo_submissions WHERE storage_key IS NULL"));
+        assertEquals(100L, count("SELECT COUNT(*) FROM photo_submissions WHERE storage_key IS NOT NULL"));
+        assertEquals(100L, count("SELECT COUNT(*) FROM photo_submissions WHERE cleanup_next_attempt_at IS NOT NULL"));
+
+        assertEquals(100, work.cleanup(NOW.plus(Duration.ofMinutes(25))).invalidFilesDeleted());
+        assertEquals(300L, count("SELECT COUNT(*) FROM photo_submissions WHERE storage_key IS NULL"));
     }
 
     /**
@@ -526,7 +621,7 @@ class PhotoRetentionMySqlIntegrationTest {
             throw new IllegalStateException("interrupted", exception);
         }
         return transactions.confirmFileDeletion(id,
-                PhotoSubmissionCleanupTransactionService.RetentionKind.INVALID, key, NOW);
+                PhotoSubmissionCleanupTransactionService.RetentionKind.INVALID, key, CLAIM, NOW);
     }
 
     /**
@@ -535,6 +630,17 @@ class PhotoRetentionMySqlIntegrationTest {
      * INVALID의 실패 확정은 판정 시각에 해당하는 updated_at으로 보존합니다.
      */
     private Long createPhoto(String status, Instant decidedAt, String failureReason) throws Exception {
+        return createPhotoForUser(userId, 1, status, decidedAt, failureReason);
+    }
+
+    /** 대량 정리 검증에서 사용자별 5회 제약을 지키며 사진 제출을 생성합니다. */
+    private Long createPhotoForUser(
+            Long targetUserId,
+            int attemptNumber,
+            String status,
+            Instant decidedAt,
+            String failureReason
+    ) throws Exception {
         String key = storage.store(MINIMAL_FILE);
         return insert("""
                 INSERT INTO photo_submissions (
@@ -552,9 +658,26 @@ class PhotoRetentionMySqlIntegrationTest {
                   , created_at
                   , updated_at
                 )
-                VALUES (?, ?, ?, 1, ?, ?, 35.1234567, 129.1234567, ?, ?, NULL, ?, ?)
-                """, userId, assignmentId, key, at(decidedAt), at(decidedAt),
+                VALUES (?, ?, ?, ?, ?, ?, 35.1234567, 129.1234567, ?, ?, NULL, ?, ?)
+                """, targetUserId, assignmentId, key, attemptNumber, at(decidedAt), at(decidedAt),
                 status, failureReason, at(decidedAt), at(decidedAt));
+    }
+
+    /** 대량 사진 fixture용 사용자를 최소 필드로 생성합니다. */
+    private Long createBulkUser(int sequence) {
+        return insert("""
+                INSERT INTO users (
+                    status
+                  , global_role
+                  , last_login_at
+                  , last_active_at
+                  , version
+                  , created_at
+                  , updated_at
+                )
+                VALUES ('ACTIVE', 'USER', ?, ?, 0, ?, ?)
+                """, at(NOW.plusSeconds(sequence)), at(NOW.plusSeconds(sequence)),
+                at(NOW.plusSeconds(sequence)), at(NOW.plusSeconds(sequence)));
     }
 
     /**
