@@ -17,4 +17,14 @@ public interface SeasonGroupRankSnapshotRepository extends JpaRepository<SeasonG
      */
     List<SeasonGroupRankSnapshot> findAllBySeasonId(Long seasonId);
 
+    /**
+     * 한 시즌의 확정된 전체 그룹 랭킹을 순위순으로 조회합니다.
+     * 종료 시점에 저장한 그룹명·점수·도달 시각을 그대로 사용합니다.
+     *
+     * @param seasonId 조회할 시즌 ID
+     * @return 확정 순위 오름차순의 그룹 랭킹 Snapshot
+     */
+    List<SeasonGroupRankSnapshot>
+    findAllBySeasonIdOrderByRankNumberAsc(Long seasonId);
+
 }
