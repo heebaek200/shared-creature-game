@@ -14,6 +14,8 @@ import com.team.sharedcreature.payment.api.AdminRefundResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.team.sharedcreature.payment.application.RefundApprovalTransactionService.CommandResponse;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.time.Clock;
 import java.util.Set;
@@ -42,6 +44,9 @@ public class RefundService {
     private final UserRepository userRepository;
     private final RefundLockService refundLockService;
     private final RefundQueryService refundQueryService;
+    private final RefundApprovalTransactionService approvalTransactionService;
+    private final RefundGateway refundGateway;
+    private final RefundResultTransactionService resultTransactionService;
 
     /**
      * 본인의 결제 완료·미사용 아이템에 대해 환불 요청을 생성합니다.
@@ -182,6 +187,55 @@ public class RefundService {
 
         // 같은 트랜잭션 안에서 변경 결과를 DTO로 변환합니다.
         return refundQueryService.getAdminRefund(requestId);
+    }
+
+    /**
+     * 승인 준비, 외부 PG 취소 호출, 결과 저장을 순서대로 연결합니다.
+     * PG 호출 중 DB 트랜잭션이 유지되지 않도록 구성합니다.
+     *
+     * @param adminUserId 요청한 관리자 ID
+     * @param requestId 승인할 환불 요청 ID
+     * @param decisionReason 관리자 승인 사유
+     * @param idempotencyKey REST 요청의 멱등 UUID
+     * @param traceId 현재 요청의 추적 ID
+     * @return 최초 HTTP 상태와 응답 또는 기존 요청의 저장된 응답
+     */
+    @Transactional(propagation = Propagation.NEVER)
+    public CommandResponse approveRefund(
+            Long adminUserId,
+            Long requestId,
+            String decisionReason,
+            String idempotencyKey,
+            String traceId
+    ) {
+        // 별도 트랜잭션에서 처리권을 선점하고 Commit까지 완료합니다.
+        var preparation = approvalTransactionService.prepare(
+                adminUserId,
+                requestId,
+                decisionReason,
+                idempotencyKey
+        );
+
+        // 완료된 동일 요청은 PG를 다시 호출하지 않습니다.
+        if (preparation.replayResponse() != null) {
+            return preparation.replayResponse();
+        }
+
+        var command = preparation.command();
+
+        // 승인 준비 트랜잭션이 끝난 뒤 PG 전체 취소를 호출합니다.
+        var result = refundGateway.cancelFully(
+                command.paymentId(),
+                command.reason(),
+                command.pgIdempotencyKey()
+        );
+
+        // 별도 트랜잭션에서 환불 상태와 최초 HTTP 응답을 함께 저장합니다.
+        return resultTransactionService.apply(
+                command,
+                result,
+                traceId
+        );
     }
 
     /**

@@ -15,7 +15,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
+import com.team.sharedcreature._core.api.ErrorResponseFactory;
+import com.team.sharedcreature.admin.domain.ApiIdempotencyRecord;
+import com.team.sharedcreature.payment.application
+        .RefundApprovalTransactionService.CommandResponse;
+import com.team.sharedcreature.payment.infrastructure.RefundIdempotencyRepository;
 
+import java.util.List;
 import java.time.Clock;
 import java.util.Map;
 import java.util.Objects;
@@ -34,18 +40,23 @@ public class RefundResultTransactionService {
     private final RefundQueryService refundQueryService;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final RefundIdempotencyRepository refundIdempotencyRepository;
+    private final ErrorResponseFactory errorResponseFactory;
 
     /**
-     * 승인 선점 이후 받은 PG 결과를 별도 트랜잭션으로 반영합니다.
+     * PG 결과와 최초 HTTP 응답을 하나의 트랜잭션으로 저장합니다.
+     * 결과 불명도 예외 대신 반환값으로 전달하여 상태가 롤백되지 않게 합니다.
      *
-     * @param command 승인 선점 시 반환한 호출 정보
+     * @param command  승인 준비 단계에서 반환한 호출 정보
      * @param received PG 호출 결과
-     * @return DB에 반영한 관리자 환불 상세 응답
+     * @param traceId  최초 요청의 추적 ID
+     * @return 저장된 최초 HTTP 상태와 응답
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public AdminRefundResponse apply(
+    public CommandResponse apply(
             RefundApprovalTransactionService.CancellationCommand command,
-            RefundGateway.CancellationResult received
+            RefundGateway.CancellationResult received,
+            String traceId
     ) {
         Objects.requireNonNull(command, "command");
 
@@ -67,11 +78,46 @@ public class RefundResultTransactionService {
 
         validateCommand(command, purchase, attempt);
 
+        // 환불과 PG 시도 이력을 잠근 다음 멱등 기록을 잠급니다.
+        var idempotencyRecord = refundIdempotencyRepository
+                .findForUpdateByIdAndRefundRequestId(
+                        command.idempotencyRecordId(),
+                        refund.getId()
+                )
+                .orElseThrow(() -> new IllegalStateException(
+                        "승인 요청에 연결된 멱등 기록이 없습니다."
+                ));
+
+        if (!"approveRefund".equals(idempotencyRecord.getOperation())) {
+            throw new IllegalStateException(
+                    "환불 승인 작업의 멱등 기록이 아닙니다."
+            );
+        }
+
+        // 이미 응답을 저장했다면 현재 환불 상태로 다시 만들지 않습니다.
+        if ("COMPLETED".equals(idempotencyRecord.getStatus())) {
+            return objectMapper.readValue(
+                    idempotencyRecord.getResponseSnapshot(),
+                    CommandResponse.class
+            );
+        }
+
+        if (!"PROCESSING".equals(idempotencyRecord.getStatus())) {
+            throw new IllegalStateException(
+                    "처리 중인 멱등 기록이 아닙니다."
+            );
+        }
+
         // 동일 호출의 결과와 이미 확정한 환불을 다시 변경하지 않습니다.
         if (attempt.getCompletedAt() != null
                 || "COMPLETED".equals(refund.getStatus())
                 || "FAILED".equals(refund.getStatus())) {
-            return refundQueryService.getAdminRefund(refund.getId());
+            // 이미 처리된 결과도 최초 HTTP 응답으로 저장하여 반환합니다.
+            return completeResponse(
+                    idempotencyRecord,
+                    refund.getId(),
+                    traceId
+            );
         }
 
         if (!"CANCEL_PENDING".equals(refund.getStatus())
@@ -142,10 +188,56 @@ public class RefundResultTransactionService {
                 now
         );
 
-        return refundQueryService.getAdminRefund(refund.getId());
+        return completeResponse(
+                idempotencyRecord,
+                refund.getId(),
+                traceId
+        );
     }
 
-    /** 승인 당시 정보와 현재 잠근 구매·PG 시도 이력의 연결을 검사합니다. */
+    /**
+     * 환불 상태에 맞는 최초 HTTP 응답을 생성하고 멱등 기록에 저장합니다.
+     * 환불 상태 변경과 응답 저장은 같은 트랜잭션에서 확정됩니다.
+     */
+    private CommandResponse completeResponse(
+            ApiIdempotencyRecord record,
+            Long refundRequestId,
+            String traceId
+    ) {
+        AdminRefundResponse data =
+                refundQueryService.getAdminRefund(refundRequestId);
+
+        CommandResponse response;
+
+        if ("CANCEL_UNKNOWN".equals(data.status())) {
+            // 결과 불명은 상태를 저장한 뒤 HTTP 409로 전달합니다.
+            var error = errorResponseFactory.create(
+                    ErrorCode.PG_CANCEL_RESULT_UNKNOWN,
+                    null,
+                    List.of(),
+                    traceId
+            );
+
+            response = new CommandResponse(409, null, error);
+        } else {
+            response = new CommandResponse(200, data, null);
+        }
+
+        // 이후 재요청에도 최초 HTTP 상태와 응답을 그대로 재사용합니다.
+        record.complete(
+                response.httpStatus(),
+                "REFUND_REQUEST",
+                refundRequestId,
+                objectMapper.writeValueAsString(response),
+                clock.instant()
+        );
+
+        return response;
+    }
+
+    /**
+     * 승인 당시 정보와 현재 잠근 구매·PG 시도 이력의 연결을 검사합니다.
+     */
     private void validateCommand(
             RefundApprovalTransactionService.CancellationCommand command,
             Purchase purchase,
@@ -165,7 +257,9 @@ public class RefundResultTransactionService {
         }
     }
 
-    /** 성공 근거가 부족하거나 응답이 잘못되면 결과 불명으로 처리합니다. */
+    /**
+     * 성공 근거가 부족하거나 응답이 잘못되면 결과 불명으로 처리합니다.
+     */
     private RefundGateway.CancellationResult normalizeResult(
             Purchase purchase,
             RefundGateway.CancellationResult result
@@ -217,7 +311,9 @@ public class RefundResultTransactionService {
         );
     }
 
-    /** 해당 시도의 거래를 재사용하고, 없으면 PG 거래 ID로 확인한 뒤 생성합니다. */
+    /**
+     * 해당 시도의 거래를 재사용하고, 없으면 PG 거래 ID로 확인한 뒤 생성합니다.
+     */
     private PaymentTransaction resolveTransaction(
             Purchase purchase,
             PgApiAttempt attempt,
