@@ -3,6 +3,9 @@ package com.team.sharedcreature.payment.domain;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.avatar.domain.ShopItem;
 import com.team.sharedcreature.group.domain.Group;
+import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature._core.exception.ErrorCode;
+import java.util.Objects;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -139,5 +142,34 @@ public class Purchase {
         }
         status = PurchaseStatus.FAILED.name();
         updatedAt = now;
+    }
+
+    /**
+     * PG 취소 성공이 확정된 구매를 결제 취소 상태로 전환합니다.
+     * 환불 완료와 아이템 회수의 동일 트랜잭션 안에서 호출해야 합니다.
+     *
+     * @param now 구매 취소 결과를 반영하는 서버 시각
+     * @return 처음 CANCELLED로 변경되었으면 true
+     * @throws BusinessException 결제 완료 상태가 아닌 경우
+     */
+    public boolean markCancelledAfterRefund(Instant now) {
+        Objects.requireNonNull(now, "now");
+
+        // 같은 성공 결과를 반복 반영해도 변경 시각을 덮어쓰지 않습니다.
+        if (PurchaseStatus.CANCELLED.name().equals(status)) {
+            return false;
+        }
+
+        if (!PurchaseStatus.PAID.name().equals(status)) {
+            throw new BusinessException(
+                    ErrorCode.CONCURRENT_MODIFICATION,
+                    "결제 완료 구매만 환불 완료로 취소할 수 있습니다."
+            );
+        }
+
+        this.status = PurchaseStatus.CANCELLED.name();
+        this.updatedAt = now;
+
+        return true;
     }
 }

@@ -102,4 +102,21 @@ public interface OwnedItemRepository extends JpaRepository<OwnedItem, Long> {
             @Param("ownedItemId") Long ownedItemId,
             @Param("userId") Long userId
     );
+
+    /**
+     * 구매에 연결된 보유 아이템을 비관적 쓰기 잠금으로 조회합니다.
+     * 호출자는 해당 구매 행을 먼저 잠근 상태여야 합니다.
+     *
+     * @param purchaseId 환불 대상 구매 ID
+     * @return 잠근 보유 아이템, 미지급이면 빈 Optional
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT item
+            FROM OwnedItem item
+            WHERE item.purchase.id = :purchaseId
+            """)
+    Optional<OwnedItem> findByPurchaseIdForUpdate(
+            @Param("purchaseId") Long purchaseId
+    );
 }
