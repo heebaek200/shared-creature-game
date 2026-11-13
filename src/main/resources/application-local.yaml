@@ -42,6 +42,7 @@ spring:
       data-locations:
         - classpath:db/data.sql # 팀 로컬 시연용 시즌·종·상점 시드
         - classpath:db/quest-catalog.sql # 퀘스트 템플릿·버전 시드
+        - classpath:db/manual-test-seed.sql # #93 로컬 수동 테스트 시나리오
 
 app:
   scheduler:
