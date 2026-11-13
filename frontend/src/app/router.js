@@ -11,9 +11,11 @@ import { statusPage } from '../pages/status-page.js';
  */
 export function createRouter(root, routes) {
   let cleanup = () => {};
-
+  let renderVersion = 0;
 
   async function render() {
+    const currentRenderVersion = ++renderVersion;
+
     cleanup();
 
     const route = routes.find((candidate) => {
@@ -28,7 +30,9 @@ export function createRouter(root, routes) {
 
     try {
       me = await getCurrentUser();
+      if (currentRenderVersion !== renderVersion) return;
     } catch (error) {
+      if (currentRenderVersion !== renderVersion) return;
       console.error('사용자 정보 조회 실패:', error);
 
       const errorPage = statusPage(

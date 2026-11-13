@@ -6,7 +6,7 @@
         white-space: nowrap;
     }
     #today-exp {
-        font-size: 1.5rem !important;
+        font-size: 1.5rem;
         white-space: nowrap;
     }
     .contribution-name {
@@ -129,7 +129,7 @@
 }
 
 /* 768px 이하: Header와 크리처 정보를 더 좁은 폭에 맞춤 */
-@media (max-width: 768px) {
+@media (max-width: 770px) {
     /* Header 제목은 아이콘만 표시 */
     .app-header {
         flex-wrap: nowrap;
@@ -181,7 +181,7 @@
     /* 크리처 홈 반응형 */
     /* 크리처 성장 단계 이름표 */
     #growth-stage {
-        font-size: 1.1rem !important;
+        font-size: 1.1rem;
         line-height: 1.2;
     }
 

@@ -11,7 +11,7 @@ export const mockCreatureHomeData = {
         seasonNumber: 1,
         status: "ACTIVE",
         startAt: "2026-11-04T23:59:59Z",
-        endAt: "2026-12-06T23:59:59Z",
+        endAt: "2026-11-13T19:59:59Z",
         seasonName: "시즌 1",
         labName: "새싹 연구소"
     },

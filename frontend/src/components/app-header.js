@@ -10,7 +10,8 @@ export function createAppHeader({ currentUser = null, navigate, showGroupBadge =
     header.innerHTML = `
         <div class="app-header__brand d-flex align-items-center gap-2">
             <span class="app-header__title fs-5 fw-bold d-flex align-items-center gap-2">
-              <img src="${titleIconLight}" alt="" aria-hidden="true" width="24" height="24" class="flex-shrink-0"/>
+              <img src="${titleIconLight}" alt="" aria-hidden="true" width="24" height="24" class="app-header__title-icon app-header__title-icon--light flex-shrink-0"/>
+              <img src="${titleIconDark}" alt="" aria-hidden="true" width="24" height="24" class="app-header__title-icon app-header__title-icon--dark flex-shrink-0"/>
               <span class="app-header__title-text">다 같이 키우는 생명체</span>
             </span>
         </div>

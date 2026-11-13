@@ -2,12 +2,10 @@
 import { getActiveCreatureSpecies, getCreatureHome } from '../features/creature/api.js';
 import { renderCreatureGrowth } from '../features/creature/render.js';
 import { getCurrentSeason } from '../features/season/api.js';
-import { getCurrentUser } from '../features/auth/api.js';
 import { ApiError } from '../api/client.js';
 
 import creatureLv0 from '../../assets/creature/lv0.png';
 import { createAppShell } from '../components/app-shell.js';
-import { formatSeasonRemainingTime, startSeasonCountdown } from '../features/season/season-countdown.js';
 /**
  * 크리처 홈 페이지 마운트 및 렌더링합니다.
  * @param {{ navigate: (path: string) => void }} context
@@ -213,7 +211,23 @@ export function creaturePage(context) {
         return error.status === 429 || error.status >= 500;
     }
 
-    let isAvatarMoving = true;
+    const avatarMovementStorageKey = 'avatarMovementEnabled';
+    let isAvatarMoving =
+        localStorage.getItem(avatarMovementStorageKey) !== 'false';
+
+    function updateMovementButton() {
+        if (!btnToggleMovement) return;
+
+        btnToggleMovement.textContent = isAvatarMoving
+            ? '아바타 이동 : ON'
+            : '아바타 이동 : OFF';
+
+        btnToggleMovement.classList.toggle('is-enabled', isAvatarMoving);
+        btnToggleMovement.classList.toggle('is-disabled', !isAvatarMoving);
+    }
+
+    // 페이지가 열릴 때 저장된 상태 표시
+    updateMovementButton();
 
     const onQuestClick = () => {
         context.navigate('/quests');
@@ -227,20 +241,19 @@ export function creaturePage(context) {
 
     const onToggleMovement = () => {
         isAvatarMoving = !isAvatarMoving;
-        if (btnToggleMovement) {
-            btnToggleMovement.textContent = isAvatarMoving ? '아바타 이동  : ON' : '아바타 이동 : OFF';
-            if (isAvatarMoving) {
-                btnToggleMovement.classList.replace('is-disabled', 'is-enabled');
-            } else {
-                btnToggleMovement.classList.replace('is-enabled', 'is-disabled');
-            }
-        }
+
+        localStorage.setItem(
+            avatarMovementStorageKey,
+            String(isAvatarMoving),
+        );
+
+        updateMovementButton();
     };
     btnToggleMovement?.addEventListener('click', onToggleMovement);
 
     const onMovementFocus = () => {
         if (!btnToggleMovement) return;
-        btnToggleMovement.style.outline = '3px solid var(--app-accent)';
+        btnToggleMovement.style.outline = '3px solid var(--app-primary)';
         btnToggleMovement.style.outlineOffset = '0';
     };
     const onMovementBlur = () => {
@@ -251,10 +264,50 @@ export function creaturePage(context) {
     btnToggleMovement?.addEventListener('focus', onMovementFocus);
     btnToggleMovement?.addEventListener('blur', onMovementBlur);
 
+    const avatarSpotMembers = new WeakMap();
+
     const onAvatarContainerClick = (event) => {
+        if (!(event.target instanceof Element)) return;
+
+        const spot = event.target.closest('.avatar-spot');
+
+        if (spot && avatarContainer?.contains(spot)) {
+            const member = avatarSpotMembers.get(spot);
+            if (!member) return;
+
+            const avatarInfoHeader = element.querySelector('#avatar-info-header');
+            const slotHead = element.querySelector('#slot-head');
+            const slotFace = element.querySelector('#slot-face');
+            const slotBody = element.querySelector('#slot-body');
+            const slotAccessory = element.querySelector('#slot-accessory');
+
+            if (avatarToggleTitle) {
+                avatarToggleTitle.textContent = `USER - [${member.nickname}]`;
+            }
+            if (avatarInfoHeader) {
+                avatarInfoHeader.textContent =
+                    `그룹 ${member.rank}위 · ${member.contributionScore}점`;
+            }
+
+            const equipment = member.avatar?.equipments || {};
+            if (slotHead) slotHead.textContent = equipment.HEAD ? equipment.HEAD.name : '-';
+            if (slotFace) slotFace.textContent = equipment.FACE ? equipment.FACE.name : '-';
+            if (slotBody) slotBody.textContent = equipment.BODY ? equipment.BODY.name : '-';
+            if (slotAccessory) {
+                slotAccessory.textContent = equipment.ACCESSORY
+                    ? equipment.ACCESSORY.name
+                    : '-';
+            }
+
+            avatarInfoCard?.classList.remove('d-none');
+            return;
+        }
+
         if (
             event.target === avatarContainer ||
-            event.target.closest('.d-flex.flex-column.align-items-center.justify-content-center')
+            event.target.closest(
+                '.d-flex.flex-column.align-items-center.justify-content-center',
+            )
         ) {
             avatarInfoCard?.classList.add('d-none');
         }
@@ -267,7 +320,6 @@ export function creaturePage(context) {
     let currentUserId = null;
     let countdownIntervalId = null;
     let deadlineTimeoutId = null;
-    let stopSeasonCountdown = () => {};
 
     /** @type {Set<number>} */
     const growthAnimationTimeoutIds = new Set();
@@ -316,27 +368,9 @@ export function creaturePage(context) {
     }
 
     // 72시간 마감 시각에 크리처 Snapshot을 조회하고 미배정 시 재시도
-    function startRemainingTimeUpdates(seasonData, hatchDeadlineAt, growthStage, groupSeasonStatus) {
+    function startRemainingTimeUpdates(hatchDeadlineAt, growthStage, groupSeasonStatus) {
         if (countdownIntervalId !== null) clearInterval(countdownIntervalId);
         if (deadlineTimeoutId !== null) clearTimeout(deadlineTimeoutId);
-
-        stopSeasonCountdown();
-
-        const updateHeaderSeasonInfo = (seasonText) => {
-            if (!isMounted) return;
-
-            const seasonInfo = element.querySelector('[data-header-season-info]');
-            if (seasonInfo) seasonInfo.textContent = seasonText;
-        };
-
-        if (groupSeasonStatus === 'ENDED') {
-            updateHeaderSeasonInfo(formatSeasonRemainingTime(seasonData));
-        } else {
-            stopSeasonCountdown = startSeasonCountdown(
-                seasonData,
-                updateHeaderSeasonInfo,
-            );
-        }
 
         updateHatchCountdown(hatchDeadlineAt, growthStage);
 
@@ -482,7 +516,7 @@ export function creaturePage(context) {
 
         const growthStage = creatureData.creature?.growthStage;
         const groupSeasonStatus = creatureData.season?.status;
-        startRemainingTimeUpdates(seasonData, growthUnlockAt, growthStage, groupSeasonStatus);
+        startRemainingTimeUpdates(growthUnlockAt, growthStage, groupSeasonStatus);
 
         const todayExp = element.querySelector('#today-exp');
         // 기타 UI (온라인 멤버 및 최근 기여 목록 렌더링)
@@ -540,15 +574,6 @@ export function creaturePage(context) {
             zone.style.bottom = position.bottom || 'auto';
             zone.style.left = position.left || 'auto';
             zone.style.right = position.right || 'auto';
-            zone.style.width = '32%';
-            zone.style.height = '23%';
-            zone.style.boxSizing = 'border-box';
-            zone.style.zIndex = '1';
-            zone.style.border = '2px dashed var(--app-primary)';
-            zone.style.borderRadius = '0.75rem';
-            zone.style.pointerEvents = 'none';
-            zone.style.gap = '0.5rem';
-            zone.style.overflow = 'hidden';
 
             const zoneLabel = document.createElement('span');
             zoneLabel.textContent = `구역 ${zoneIndex + 1}`;
@@ -557,10 +582,6 @@ export function creaturePage(context) {
 
             const membersRow = document.createElement('div');
             membersRow.className = 'avatar-zone-members d-flex flex-row align-items-center gap-2';
-            membersRow.style.flexWrap = 'nowrap';
-            membersRow.style.width = '100%';
-            membersRow.style.minWidth = '0';
-            membersRow.style.overflow = 'hidden';
             zone.appendChild(membersRow);
             avatarContainer?.appendChild(zone);
         });
@@ -574,74 +595,17 @@ export function creaturePage(context) {
             spot.type = 'button';
             spot.className = `btn border rounded-pill px-3 py-1.5 shadow-sm avatar-spot d-flex align-items-center gap-2${isMe ? ' is-current-user' : ''}`;
             spot.setAttribute('aria-label', `${member.nickname}${isMe ? ' (나)' : ''} 아바타 정보 보기`);
-            spot.style.position = 'relative';
-            spot.style.zIndex = '2';
-            spot.style.whiteSpace = 'nowrap';
-            spot.style.flex = '0 1 auto';
-            spot.style.minWidth = '0';
-            spot.style.maxWidth = 'calc(50% - 0.25rem)';
-            spot.style.width = 'fit-content';
-            spot.style.overflow = 'hidden';
-            spot.style.font = 'inherit';
-            spot.style.lineHeight = 'inherit';
-            spot.style.textAlign = 'left';
-            spot.style.appearance = 'none';
-            spot.style.cursor = 'pointer';
-            spot.style.pointerEvents = 'auto';
-
-            // 키보드 tab을 통한 이름표 포커스를 선명하게
-            const originalFontWeight = spot.style.fontWeight;
-
-            spot.addEventListener('focus', () => {
-                spot.style.fontWeight = '800';
-            });
-
-            spot.addEventListener('blur', () => {
-                spot.style.fontWeight = originalFontWeight;
-            });
-
-            spot.addEventListener('blur', () => {
-                spot.style.boxShadow = '';
-            });
 
             const dot = document.createElement('span');
             dot.className = `rounded-circle d-inline-block flex-shrink-0 avatar-spot__dot${isMe ? ' is-current-user' : ''}`;
-            dot.style.width = '8px';
-            dot.style.height = '8px';
 
             const nameSpan = document.createElement('span');
+            nameSpan.className = 'avatar-spot__name';
             nameSpan.textContent = isMe ? `나` : member.nickname;
-            nameSpan.style.minWidth = '0';
-            nameSpan.style.flex = '0 1 auto';
-            nameSpan.style.overflow = 'hidden';
-            nameSpan.style.textOverflow = 'ellipsis';
 
+            avatarSpotMembers.set(spot, member);
             spot.appendChild(dot);
             spot.appendChild(nameSpan);
-
-            spot.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const avatarInfoHeader = element.querySelector('#avatar-info-header');
-                const slotHead = element.querySelector('#slot-head');
-                const slotFace = element.querySelector('#slot-face');
-                const slotBody = element.querySelector('#slot-body');
-                const slotAccessory = element.querySelector('#slot-accessory');
-
-                if (avatarToggleTitle) {
-                    avatarToggleTitle.textContent = `USER - [${member.nickname}]`;
-                }
-                if (avatarInfoHeader) {
-                    avatarInfoHeader.textContent = `그룹 ${member.rank}위 · ${member.contributionScore}점`;
-                }
-
-                const eq = member.avatar?.equipments || {};
-                if (slotHead) slotHead.textContent = eq.HEAD ? eq.HEAD.name : '-';
-                if (slotFace) slotFace.textContent = eq.FACE ? eq.FACE.name : '-';
-                if (slotBody) slotBody.textContent = eq.BODY ? eq.BODY.name : '-';
-                if (slotAccessory) slotAccessory.textContent = eq.ACCESSORY ? eq.ACCESSORY.name : '-';
-
-                avatarInfoCard?.classList.remove('d-none');
-            });
 
             zone.querySelector('.avatar-zone-members')?.appendChild(spot);
         });
@@ -651,19 +615,23 @@ export function creaturePage(context) {
     async function loadCreaturePageData() {
         if (retryButton) retryButton.disabled = true;
         try {
-            const [creatureData, seasonData, speciesList, currentUserData] = await Promise.all([
+            const authenticatedUser =
+                context.currentUser?.data || context.currentUser;
+
+            currentUserId = authenticatedUser?.user?.userId ?? null;
+
+            const [creatureData, seasonData, speciesList] = await Promise.all([
                 getCreatureHome(),
                 getCurrentSeason(),
                 getActiveCreatureSpecies(),
-                getCurrentUser()
             ]);
+
             if (!isMounted) return;
-            const authenticatedUser = currentUserData.data || currentUserData;
-            currentUserId = authenticatedUser?.user?.userId ?? null;
+
             updateUI(
                 creatureData.data || creatureData,
                 seasonData.data || seasonData,
-                speciesList.data || speciesList
+                speciesList.data || speciesList,
             );
         } catch (error) {
             if (isMounted) showLoadError(error);
@@ -685,7 +653,6 @@ export function creaturePage(context) {
             isMounted = false;
             if (countdownIntervalId !== null) clearInterval(countdownIntervalId);
             if (deadlineTimeoutId !== null) clearTimeout(deadlineTimeoutId);
-            stopSeasonCountdown();
             growthAnimationTimeoutIds.forEach(timeoutId => clearTimeout(timeoutId));
             growthAnimationTimeoutIds.clear();
             retryButton?.removeEventListener('click', onRetryLoad);
