@@ -10,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.time.Instant;
 import java.util.Optional;
 
 /**
@@ -126,5 +127,25 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, Lo
             """)
     Optional<Long> findPurchaseIdByRequestId(
             @Param("requestId") Long requestId
+    );
+
+    /**
+     * 취소 처리권 선점 후 기준 시각까지 결과가 확정되지 않은 환불을 조회합니다.
+     * 실제 처리 전에는 구매부터 잠그고 상태와 경과 시간을 재검사해야 합니다.
+     *
+     * @param cutoff 현재 시각에서 5분을 뺀 시각
+     * @param pageable 첫 페이지와 최대 100건의 조회 제한
+     * @return 오래된 순서로 정렬된 복구 후보 환불 ID
+     */
+    @Query("""
+        SELECT refund.id
+        FROM RefundRequest refund
+        WHERE refund.status IN ('CANCEL_PENDING', 'CANCEL_UNKNOWN')
+          AND refund.cancelClaimedAt <= :cutoff
+        ORDER BY refund.cancelClaimedAt ASC, refund.id ASC
+        """)
+    List<Long> findStaleCancellationIds(
+            @Param("cutoff") Instant cutoff,
+            Pageable pageable
     );
 }

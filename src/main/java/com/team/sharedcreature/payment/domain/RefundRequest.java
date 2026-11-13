@@ -217,6 +217,38 @@ public class RefundRequest {
     }
 
     /**
+     * 미확정 환불의 경과 시간을 재검사하고 최신 상태 조회 처리권을 선점합니다.
+     * 호출자는 구매 → 보유 아이템 → 환불 순서로 DB 잠금을 획득해야 합니다.
+     *
+     * @param now 잠금 획득 후 Clock에서 읽은 현재 시각
+     * @return 복구 처리권을 선점했으면 true, 대상이 아니면 false
+     */
+    public boolean tryClaimRecovery(Instant now) {
+        Objects.requireNonNull(now, "now");
+
+        // 이미 확정됐거나 아직 승인하지 않은 환불은 처리하지 않습니다.
+        if (!"CANCEL_PENDING".equals(status)
+                && !"CANCEL_UNKNOWN".equals(status)) {
+            return false;
+        }
+
+        Instant cutoff = now.minusSeconds(300);
+
+        // 선점 이력이 없거나 마지막 선점 후 5분이 지나지 않았다면 제외합니다.
+        // 정확히 5분이 지난 경우에는 isAfter()가 false이므로 포함됩니다.
+        if (cancelClaimedAt == null || cancelClaimedAt.isAfter(cutoff)) {
+            return false;
+        }
+
+        // 이번 조회의 선점 시각을 기록하여 다른 작업의 즉시 중복 선점을 막습니다.
+        this.cancelClaimedAt = now;
+        this.updatedAt = now;
+
+        // 조회를 준비하는 단계이므로 환불 상태와 관리자 심사 정보는 유지합니다.
+        return true;
+    }
+
+    /**
      * 진행 중인 취소에만 PG 결과를 반영합니다.
      * 이미 확정된 결과와 동일 상태의 반복 반영은 변경 없이 종료합니다.
      *

@@ -125,6 +125,84 @@ public class PgApiAttempt {
     }
 
     /**
+     * 기존 취소 요청의 결과를 확인할 최신 상태 조회 이력을 생성합니다.
+     * 새로운 PG 취소 요청을 생성하거나 기존 호출 결과를 덮어쓰지 않습니다.
+     *
+     * @param refund 복구 처리권을 선점한 환불 요청
+     * @param cancellation 최초 취소 요청 이력
+     * @param attemptNumber 같은 멱등 키를 사용하는 이력의 다음 번호
+     * @param now 조회 준비 시각
+     * @return 아직 조회 결과가 기록되지 않은 이력
+     */
+    public static PgApiAttempt prepareCancellationLookup(
+            RefundRequest refund,
+            PgApiAttempt cancellation,
+            int attemptNumber,
+            Instant now
+    ) {
+        Objects.requireNonNull(refund, "refund");
+        Objects.requireNonNull(cancellation, "cancellation");
+        Objects.requireNonNull(now, "now");
+
+        // 저장된 동일 환불의 취소 요청 이력만 연결할 수 있습니다.
+        if (refund.getId() == null
+                || cancellation.getId() == null
+                || cancellation.getRefundRequest() == null
+                || !"CANCELLATION".equals(cancellation.getOperation())
+                || !Objects.equals(
+                refund.getId(),
+                cancellation.getRefundRequest().getId()
+        )
+                || !Objects.equals(
+                refund.getPurchase().getId(),
+                cancellation.getPurchase().getId()
+        )) {
+            throw new IllegalArgumentException(
+                    "동일 환불의 저장된 취소 요청 이력이 필요합니다."
+            );
+        }
+
+        if (!"CANCEL_PENDING".equals(refund.getStatus())
+                && !"CANCEL_UNKNOWN".equals(refund.getStatus())) {
+            throw new IllegalStateException(
+                    "취소 결과가 미확정인 환불만 조회를 준비할 수 있습니다."
+            );
+        }
+
+        if (cancellation.getAttemptNumber() == null
+                || attemptNumber <= cancellation.getAttemptNumber()) {
+            throw new IllegalArgumentException(
+                    "조회 이력 번호는 기존 취소 이력 번호보다 커야 합니다."
+            );
+        }
+
+        String key = cancellation.getIdempotencyKey();
+
+        if (key == null || key.isBlank() || key.length() > 128) {
+            throw new IllegalStateException(
+                    "기존 취소 요청의 멱등 키가 올바르지 않습니다."
+            );
+        }
+
+        PgApiAttempt attempt = new PgApiAttempt();
+        attempt.purchase = refund.getPurchase();
+        attempt.refundRequest = refund;
+
+        // 실제 취소 호출과 결과 확인용 조회를 구분합니다.
+        attempt.operation = "CANCELLATION_LOOKUP";
+
+        // 최초 취소 요청과의 연결을 유지합니다.
+        attempt.idempotencyKey = key;
+        attempt.attemptNumber = attemptNumber;
+        attempt.paymentTransaction = cancellation.getPaymentTransaction();
+        attempt.resultType = "STARTED";
+        attempt.startedAt = now;
+        attempt.createdAt = now;
+
+        return attempt;
+    }
+
+    /**
      * 한 번의 PG 호출에서 확인한 결과를 기록합니다.
      * 이미 기록된 호출 결과는 복구 조회 결과로 덮어쓰지 않습니다.
      *
