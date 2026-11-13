@@ -15,7 +15,21 @@ function loadMockState() {
 
 const savedMockState = loadMockState();
 
+const MOCK_SIDEBAR_ROLE_KEY = 'shared-creature-mock-sidebar-role';
+const MOCK_SIDEBAR_ROLES = ['MEMBER', 'PRIMARY', 'DEPUTY'];
+const requestedSidebarRole = new URLSearchParams(location.search).get('mockSidebarRole');
+
+if (requestedSidebarRole && MOCK_SIDEBAR_ROLES.includes(requestedSidebarRole)) {
+  sessionStorage.setItem(MOCK_SIDEBAR_ROLE_KEY, requestedSidebarRole);
+}
+
+const savedSidebarRole = sessionStorage.getItem(MOCK_SIDEBAR_ROLE_KEY);
+let mockSidebarRole = MOCK_SIDEBAR_ROLES.includes(savedSidebarRole ?? '')
+    ? savedSidebarRole
+    : null;
+
 let mockMembership = savedMockState?.mockMembership ?? null;
+let mockGlobalRoles = savedMockState?.mockGlobalRoles ?? [];
 let nextMockGroupId = 501;
 let mockAuthenticationState =
     savedMockState?.mockAuthenticationState ?? 'SIGNUP_PENDING';
@@ -103,11 +117,34 @@ const mockGroups = [
 /** 실제 API 계약과 같은 정상·오류 시나리오를 제공합니다. */
 export const mockApi = {
   async getCurrentUser() {
+    if (mockSidebarRole) {
+      return {
+        authenticationState: 'AUTHENTICATED',
+        onboardingState: 'COMPLETED',
+        user: {
+          userId: 101,
+          nickname: mockSignupNickname,
+        },
+        membership: {
+          membershipId: 501,
+          groupId: 501,
+          role: mockSidebarRole,
+          status: 'ACTIVE',
+          joinedAt: '2026-01-01T00:00:00Z',
+        },
+        roles: [mockSidebarRole],
+        restrictionUntil: null,
+        onboardingReason: null,
+      };
+    }
+
     const isAuthenticated =
         mockAuthenticationState !== 'ANONYMOUS';
 
     const isSignupPending =
         mockAuthenticationState === 'SIGNUP_PENDING';
+
+    const isSuperAdmin = mockGlobalRoles.includes('SUPER_ADMIN');
 
     return {
       authenticationState: mockAuthenticationState,
@@ -116,7 +153,7 @@ export const mockApi = {
           ? 'NOT_STARTED'
           : isSignupPending
               ? 'SIGNUP_REQUIRED'
-              : mockMembership
+              : (mockMembership || isSuperAdmin)
                   ? 'COMPLETED'
                   : 'GROUP_REQUIRED',
 
@@ -127,15 +164,64 @@ export const mockApi = {
           }
           : null,
 
-      membership: mockMembership,
+      membership: isSuperAdmin ? null : mockMembership,
 
-      roles: mockMembership
-          ? [mockMembership.role]
-          : [],
+      roles: isSuperAdmin
+          ? ['SUPER_ADMIN']
+          : mockMembership
+              ? [mockMembership.role]
+              : [],
 
       restrictionUntil: null,
       onboardingReason: null
     };
+  },
+
+  async getMyGroup() {
+    const membership = mockSidebarRole
+        ? {
+          membershipId: 501,
+          groupId: 501,
+          role: mockSidebarRole,
+          status: 'ACTIVE',
+          joinedAt: '2026-01-01T00:00:00Z',
+        }
+        : mockMembership;
+
+    if (!membership) {
+      throw new ApiError(403, {
+        code: 'ROLE_FORBIDDEN',
+        message: '그룹에 가입한 사용자만 조회할 수 있습니다.',
+        fieldErrors: [],
+        traceId: 'mock-my-group-forbidden',
+      });
+    }
+
+    return {
+      group: {
+        groupId: membership.groupId,
+        name: '새싹 연구소',
+        description: '함께 생명체를 키우고 성장시키는 그룹입니다.',
+        currentMemberCount: 14,
+        capacity: 20,
+        remainingCapacity: 6,
+        joinable: true,
+        joinBlockedReason: null,
+      },
+      primaryAdmin: {
+        userId: 101,
+        nickname: '새싹지기',
+      },
+      myMembership: membership,
+    };
+  },
+
+  async logout() {
+    mockAuthenticationState = 'ANONYMOUS';
+    mockSidebarRole = null;
+    sessionStorage.removeItem(MOCK_SIDEBAR_ROLE_KEY);
+    saveMockState();
+    return {};
   },
 
   async createOAuthAttempt(returnRoute = 'DEFAULT') {
@@ -484,6 +570,7 @@ function saveMockState() {
         mockMembership,
         mockAuthenticationState,
         mockSignupNickname,
+        mockGlobalRoles,
       })
   );
 }

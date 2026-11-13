@@ -4,13 +4,14 @@ import {
     listPublicGroups,
     joinGroup,
 } from '../features/group/api.js';
+import { createAppShell } from '../components/app-shell.js';
 
 /**
  * 공개 그룹 검색·가입 및 그룹 생성 Page를 생성합니다.
  */
-export function groupSelectPage({navigate}) {
-    const element = document.createElement('main');
-    element.className = 'app-shell';
+export function groupSelectPage({navigate, currentUser}) {
+    const content = document.createElement('main');
+    content.className = 'app-shell';
 
     const PAGE_SIZE = 5;
 
@@ -21,96 +22,91 @@ export function groupSelectPage({navigate}) {
     let joining = false;
     let totalPages = 0;
 
-    element.innerHTML = `
-<header class="page-header">
-  <div>
-    <p class="eyebrow">새로운 공동체</p>
-    <h1 class="fw-bold">그룹 선택</h1>
-    <p class="text-secondary mb-0">
-        함께 활동할 공개 그룹을 찾아 참여해 보세요~
-    </p>
-  </div>
-  
-  <button class="btn btn-outline-secondary theme-toggle" type="button">테마 전환</button>
-</header>
-
-<section class="card border-0 shadow-sm rounded-4 mb-4">
-    <div class="card-body p-3 p-md-4">
-        <div class="d-flex flex-wrap align-content-center justify-content-between gap-3 mb-4">
-            <h2 class="h5 fw-bold mb-0">공개 그룹 선택</h2>
-            <span class="badge text-bg-light border text-secondary">공개 그룹</span>
-        </div>
-        
-        <div class="row align-items-end g-3 mb-4">
-            <div class="col-md-8">
-                <form class="search-form">
-                    <label for="group-search" class="form-label fw-semibold">
-                        그룹명 검색
-                    </label>
-                    
-                    <div class="d-flex gap-2">
-                        <input id="group-search" class="form-control" type="search" maxlength="30" placeholder="그룹명 입력">
-                        <button class="btn btn-outline-success search-button" type="submit">검색</button>
-                    </div>
-                </form>
+    content.innerHTML = `
+    <section class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-3 p-md-4">
+            <div class="d-flex flex-wrap align-content-center justify-content-between gap-3 mb-4">
+                <h2 class="h5 fw-bold mb-0">공개 그룹 선택</h2>
+                <span class="badge text-bg-light border text-secondary">공개 그룹</span>
             </div>
             
-            <div class="col-md-4">
-                <button class="btn btn-outline-success w-100 create-toggle" type="button" aria-expanded="false">+ 새 그룹 생성</button>
+            <div class="row align-items-end g-3 mb-4">
+                <div class="col-md-8">
+                    <form class="search-form">
+                        <label for="group-search" class="form-label fw-semibold">
+                            그룹명 검색
+                        </label>
+                        
+                        <div class="d-flex gap-2">
+                            <input id="group-search" class="form-control" type="search" maxlength="30" placeholder="그룹명 입력">
+                            <button class="btn btn-outline-success search-button text-nowrap flex-shrink-0" type="submit">검색</button>
+                        </div>
+                    </form>
+                </div>
+                
+                <div class="col-md-4">
+                    <button class="btn btn-outline-success w-100 create-toggle" type="button" aria-expanded="false">+ 새 그룹 생성</button>
+                </div>
             </div>
-        </div>
-        
-        <section class="create-panel d-none mb-4">
-            <div class="border rounded-3 p-3 p-md-4">
-                <h3 class="h6 fw-bold mb-3">새 그룹 만들기</h3>
-                <form class="group-form">
-                    <div class="mb-3">
-                        <label class="form-label" for="group-name">그룹명</label>
-                        <input class="form-control" id="group-name" name="name" minlength="2" maxlength="30" required placeholder="그룹명을 입력하세요">
-                        <div class="form-text">2~30자 · 전역 중복 불가</div>
-                        <div class="invalid-feedback" id="group-name-error"></div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label" for="group-description">그룹 소개</label>
-                        <textarea class="form-control" id="group-description" name="description" maxlength="500" rows="4" placeholder="그룹 소개 (선택 · 최대 500자)"></textarea>
-                        <div class="invalid-feedback" id="group-description-error"></div>
-                    </div>
-                                                   
-                    <button class="btn btn-success create-submit" type="submit">그룹 생성</button>
-                    <div class="alert d-none create-alert mt-3 mb-0" role="status" aria-live="polite"></div>
-                    
-                </form>
-            </div>
-        </section>
-        
-        <div class="alert d-none list-alert" role="status" aria-live="polite"></div>
-        <div class="table-responsive">
-            <table class="table align-middle mb-3">
-            <thead class="table-light">
-            <tr>  
-                <th scope="col">그룹</th>
-                <th scope="col">현재 인원</th>
-                <th scope="col">남은 자리</th>
-                <th scope="col">동작</th>
-            </tr>
-            </thead>
             
-            <tbody class="group-list">
-                <tr>
-                    <td colspan="4" class="text-center py-4">그룹 목록을 불러오는 중입니다.</td>
+            <section class="create-panel d-none mb-4">
+                <div class="border rounded-3 p-3 p-md-4">
+                    <h3 class="h6 fw-bold mb-3">새 그룹 만들기</h3>
+                    <form class="group-form">
+                        <div class="mb-3">
+                            <label class="form-label" for="group-name">그룹명</label>
+                            <input class="form-control" id="group-name" name="name" minlength="2" maxlength="30" required placeholder="그룹명을 입력하세요">
+                            <div class="form-text">2~30자 · 전역 중복 불가</div>
+                            <div class="invalid-feedback" id="group-name-error"></div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label" for="group-description">그룹 소개</label>
+                            <textarea class="form-control" id="group-description" name="description" maxlength="500" rows="4" placeholder="그룹 소개 (선택 · 최대 500자)"></textarea>
+                            <div class="invalid-feedback" id="group-description-error"></div>
+                        </div>
+                                                       
+                        <button class="btn btn-success create-submit" type="submit">그룹 생성</button>
+                        <div class="alert d-none create-alert mt-3 mb-0" role="status" aria-live="polite"></div>
+                        
+                    </form>
+                </div>
+            </section>
+            
+            <div class="alert d-none list-alert" role="status" aria-live="polite"></div>
+            <div class="table-responsive">
+                <table class="table align-middle mb-3">
+                <thead class="table-light">
+                <tr>  
+                    <th scope="col">그룹</th>
+                    <th scope="col">현재 인원</th>
+                    <th scope="col">남은 자리</th>
+                    <th scope="col">동작</th>
                 </tr>
-            </tbody>
-            </table>
+                </thead>
+                
+                <tbody class="group-list">
+                    <tr>
+                        <td colspan="4" class="text-center py-4">그룹 목록을 불러오는 중입니다.</td>
+                    </tr>
+                </tbody>
+                </table>
+            </div>
+            
+            <nav class="pagination-area" aria-label="그룹 목록 페이지">
+                <ul class="pagination justify-content-center mb-3"></ul>
+            </nav>        
+            <div class="alert alert-secondary border-0 small mb-0" role="status"></div>
         </div>
-        
-        <nav class="pagination-area" aria-label="그룹 목록 페이지">
-            <ul class="pagination justify-content-center mb-3"></ul>
-        </nav>        
-        <div class="alert alert-secondary border-0 small mb-0" role="status"></div>
-    </div>
-</section>
-`;
+    </section>
+    `;
+
+    const element = createAppShell({
+        content,
+        currentPath: location.pathname,
+        currentUser,
+        navigate,
+    });
 
     const searchForm = element.querySelector('.search-form')
     const searchInput = element.querySelector('#group-search')
@@ -174,7 +170,6 @@ export function groupSelectPage({navigate}) {
 
     const groupList = element.querySelector('.group-list')
     const pagination = element.querySelector('.pagination-area .pagination')
-    const themeButton = element.querySelector('.theme-toggle')
 
     const showAlert = (target, message, type = 'danger') => {
         target.classList.remove(
@@ -641,14 +636,6 @@ export function groupSelectPage({navigate}) {
         loadGroup();
     };
 
-    const onTheme = () => {
-        const current = document.documentElement.dataset.bsTheme;
-        const next = current === 'dark' ? 'light' : 'dark';
-
-        document.documentElement.dataset.bsTheme = next;
-        localStorage.setItem('theme', next);
-    };
-
     searchForm.addEventListener('submit', onSearch);
     createToggle.addEventListener('click', onCreateToggle);
     createForm.addEventListener('submit', onCreate);
@@ -656,7 +643,6 @@ export function groupSelectPage({navigate}) {
     groupDescriptionInput.addEventListener('input', clearGroupDescriptionError);
     groupList.addEventListener('click', onGroupListClick);
     pagination.addEventListener('click', onPagination);
-    themeButton.addEventListener('click', onTheme);
 
     loadGroup();
 
@@ -670,7 +656,6 @@ export function groupSelectPage({navigate}) {
             groupDescriptionInput.removeEventListener('input', clearGroupDescriptionError);
             groupList.removeEventListener('click', onGroupListClick);
             pagination.removeEventListener('click', onPagination);
-            themeButton.removeEventListener('click', onTheme);
         },
     };
 }
