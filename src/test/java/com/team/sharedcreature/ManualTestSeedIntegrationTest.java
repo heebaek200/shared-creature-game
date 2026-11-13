@@ -47,6 +47,7 @@ class ManualTestSeedIntegrationTest {
                      , status = 'ACTIVE'
                  WHERE season_number = 1
                 """);
+        prepareInterruptedTemporaryTables();
         insertUserWithoutProfile();
 
         run("db/manual-test-seed.sql");
@@ -117,6 +118,7 @@ class ManualTestSeedIntegrationTest {
                  WHERE period_type = 'WEEKLY'
                 """));
 
+        insertGeneralSeasonData();
         jdbc.update("""
                 UPDATE seasons
                    SET status = 'ENDED'
@@ -127,6 +129,43 @@ class ManualTestSeedIntegrationTest {
         run("db/manual-test-seed.sql");
         assertEquals(10L, count("SELECT COUNT(*) FROM season_group_rank_snapshots"));
         assertEquals(52L, count("SELECT COUNT(*) FROM season_member_rank_snapshots"));
+        assertEquals(0L, count("""
+                SELECT COUNT(*)
+                  FROM season_group_rank_snapshots AS snapshot
+                  JOIN game_groups AS general_group ON general_group.id = snapshot.group_id
+                 WHERE general_group.normalized_name = 'general_snapshot_group'
+                """));
+        assertEquals(0L, count("""
+                SELECT COUNT(*)
+                  FROM season_member_rank_snapshots AS snapshot
+                  JOIN game_groups AS general_group ON general_group.id = snapshot.group_id
+                 WHERE general_group.normalized_name = 'general_snapshot_group'
+                """));
+    }
+
+    /** 같은 세션에서 중단된 이전 실행의 임시 계획 행을 재현합니다. */
+    private void prepareInterruptedTemporaryTables() {
+        jdbc.execute("CREATE TEMPORARY TABLE IF NOT EXISTS mt93_numbers (n INT NOT NULL PRIMARY KEY)");
+        jdbc.update("INSERT INTO mt93_numbers (n) VALUES (1)");
+        jdbc.execute("""
+                CREATE TEMPORARY TABLE IF NOT EXISTS mt93_group_plan (
+                    group_number INT NOT NULL PRIMARY KEY
+                  , primary_user_number INT NULL
+                )
+                """);
+        jdbc.update("INSERT INTO mt93_group_plan (group_number, primary_user_number) VALUES (1, 1)");
+        jdbc.execute("""
+                CREATE TEMPORARY TABLE IF NOT EXISTS mt93_assignment_plan (
+                    period_type VARCHAR(30) NOT NULL
+                  , template_code VARCHAR(50) NOT NULL
+                  , slot_number INT NOT NULL
+                  , PRIMARY KEY (period_type, slot_number)
+                )
+                """);
+        jdbc.update("""
+                INSERT INTO mt93_assignment_plan (period_type, template_code, slot_number)
+                VALUES ('DAILY', 'D-L-01', 1)
+                """);
     }
 
     /** 사용자 INSERT만 반영된 중간 상태를 구성해 프로필 복구 경로를 검증합니다. */
@@ -180,6 +219,144 @@ class ManualTestSeedIntegrationTest {
                    SET contribution.contribution_score = 0
                      , contribution.version = 0
                  WHERE seed_group.normalized_name = 'mt93_group_02'
+                """);
+    }
+
+    /** 종료 Snapshot 범위 밖에 있는 일반 그룹과 회원 기여도를 구성합니다. */
+    private void insertGeneralSeasonData() {
+        jdbc.update("""
+                INSERT INTO game_groups (
+                    name
+                  , normalized_name
+                  , description
+                  , visibility
+                  , status
+                  , capacity
+                  , current_member_count
+                  , primary_admin_user_id
+                  , version
+                  , created_at
+                  , updated_at
+                )
+                SELECT '일반 Snapshot 그룹'
+                     , 'general_snapshot_group'
+                     , '시드 범위 제한 검증용 일반 그룹'
+                     , 'PUBLIC'
+                     , 'ACTIVE'
+                     , 20
+                     , 1
+                     , profile.user_id
+                     , 0
+                     , UTC_TIMESTAMP(6) - INTERVAL 20 DAY
+                     , UTC_TIMESTAMP(6)
+                  FROM user_profiles AS profile
+                 WHERE profile.normalized_nickname = 'mt93_user_053'
+                """);
+        jdbc.update("""
+                INSERT INTO group_memberships (
+                    group_id
+                  , user_id
+                  , role
+                  , status
+                  , joined_at
+                  , ended_at
+                  , ended_by_user_id
+                  , exit_reason
+                  , version
+                  , created_at
+                  , updated_at
+                )
+                SELECT general_group.id
+                     , profile.user_id
+                     , 'PRIMARY'
+                     , 'ACTIVE'
+                     , UTC_TIMESTAMP(6) - INTERVAL 19 DAY
+                     , NULL
+                     , NULL
+                     , NULL
+                     , 0
+                     , UTC_TIMESTAMP(6) - INTERVAL 19 DAY
+                     , UTC_TIMESTAMP(6)
+                  FROM game_groups AS general_group
+                  JOIN user_profiles AS profile
+                    ON profile.normalized_nickname = 'mt93_user_053'
+                 WHERE general_group.normalized_name = 'general_snapshot_group'
+                """);
+        jdbc.update("""
+                INSERT INTO group_seasons (
+                    group_id
+                  , season_id
+                  , selection_deadline_at
+                  , selected_species_id
+                  , selected_by_user_id
+                  , selection_source
+                  , selected_at
+                  , status
+                  , version
+                  , created_at
+                  , updated_at
+                )
+                SELECT general_group.id
+                     , season.id
+                     , UTC_TIMESTAMP(6) - INTERVAL 7 DAY
+                     , species.id
+                     , profile.user_id
+                     , 'ADMIN'
+                     , UTC_TIMESTAMP(6) - INTERVAL 8 DAY
+                     , 'ACTIVE'
+                     , 0
+                     , UTC_TIMESTAMP(6) - INTERVAL 10 DAY
+                     , UTC_TIMESTAMP(6)
+                  FROM game_groups AS general_group
+                  JOIN seasons AS season ON season.season_number = 1
+                  JOIN creature_species AS species ON species.display_order = 1
+                  JOIN user_profiles AS profile ON profile.normalized_nickname = 'mt93_user_053'
+                 WHERE general_group.normalized_name = 'general_snapshot_group'
+                """);
+        jdbc.update("""
+                INSERT INTO season_group_scores (
+                    group_season_id
+                  , score
+                  , score_reached_at
+                  , version
+                  , created_at
+                  , updated_at
+                )
+                SELECT group_season.id
+                     , 999999
+                     , UTC_TIMESTAMP(6) - INTERVAL 1 DAY
+                     , 0
+                     , group_season.created_at
+                     , UTC_TIMESTAMP(6)
+                  FROM group_seasons AS group_season
+                  JOIN game_groups AS general_group ON general_group.id = group_season.group_id
+                 WHERE general_group.normalized_name = 'general_snapshot_group'
+                """);
+        jdbc.update("""
+                INSERT INTO season_member_contributions (
+                    group_season_id
+                  , user_id
+                  , latest_membership_id
+                  , contribution_score
+                  , score_reached_at
+                  , participant_status
+                  , version
+                  , created_at
+                  , updated_at
+                )
+                SELECT group_season.id
+                     , membership.user_id
+                     , membership.id
+                     , 9999
+                     , UTC_TIMESTAMP(6) - INTERVAL 1 DAY
+                     , 'ACTIVE'
+                     , 0
+                     , group_season.created_at
+                     , UTC_TIMESTAMP(6)
+                  FROM group_seasons AS group_season
+                  JOIN game_groups AS general_group ON general_group.id = group_season.group_id
+                  JOIN group_memberships AS membership ON membership.group_id = general_group.id
+                 WHERE general_group.normalized_name = 'general_snapshot_group'
                 """);
     }
 
@@ -314,6 +491,25 @@ class ManualTestSeedIntegrationTest {
                 """));
         assertEquals(0L, count("""
                 SELECT COUNT(*)
+                  FROM refund_requests AS refund
+                  JOIN purchases AS purchase ON purchase.id = refund.purchase_id
+                 WHERE refund.request_reason LIKE 'MT93 환불 요청 %'
+                   AND (
+                       refund.requested_at < purchase.created_at
+                        OR refund.requested_at > UTC_TIMESTAMP(6)
+                        OR (refund.reviewed_at IS NOT NULL AND refund.reviewed_at < refund.requested_at)
+                        OR (refund.reviewed_at IS NOT NULL AND refund.reviewed_at > UTC_TIMESTAMP(6))
+                        OR (refund.cancel_claimed_at IS NOT NULL AND refund.cancel_claimed_at < refund.requested_at)
+                        OR (refund.cancel_claimed_at IS NOT NULL AND refund.cancel_claimed_at > UTC_TIMESTAMP(6))
+                        OR (refund.completed_at IS NOT NULL AND refund.completed_at < refund.requested_at)
+                        OR (refund.completed_at IS NOT NULL AND refund.completed_at > UTC_TIMESTAMP(6))
+                        OR (refund.status = 'REQUESTED' AND refund.reviewed_at IS NOT NULL)
+                        OR (refund.status = 'COMPLETED' AND refund.completed_at IS NULL)
+                        OR (refund.status IN ('REJECTED', 'FAILED') AND refund.reviewed_at IS NULL)
+                   )
+                """));
+        assertEquals(0L, count("""
+                SELECT COUNT(*)
                   FROM season_group_scores AS score
                   JOIN (
                        SELECT completion.group_season_id
@@ -410,11 +606,20 @@ class ManualTestSeedIntegrationTest {
                   FROM group_memberships AS membership
                   JOIN game_groups AS seed_group ON seed_group.id = membership.group_id
                   JOIN user_profiles AS profile ON profile.user_id = membership.user_id
+                  JOIN users AS seed_user ON seed_user.id = membership.user_id
                  WHERE profile.normalized_nickname LIKE 'mt93_user_%'
                    AND (
-                       membership.joined_at < seed_group.created_at
+                       membership.joined_at < seed_user.created_at
+                        OR membership.joined_at < seed_group.created_at
                         OR (membership.ended_at IS NOT NULL AND membership.ended_at < membership.joined_at)
                    )
+                """));
+        assertEquals(0L, count("""
+                SELECT COUNT(*)
+                  FROM game_groups AS seed_group
+                  JOIN users AS primary_admin ON primary_admin.id = seed_group.primary_admin_user_id
+                 WHERE seed_group.normalized_name LIKE 'mt93_group_%'
+                   AND seed_group.created_at < primary_admin.created_at
                 """));
         assertEquals(0L, count("""
                 SELECT COUNT(*)

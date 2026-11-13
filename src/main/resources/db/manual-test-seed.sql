@@ -11,6 +11,8 @@ CREATE TEMPORARY TABLE IF NOT EXISTS mt93_numbers (
     n INT NOT NULL PRIMARY KEY
 );
 
+DELETE FROM mt93_numbers;
+
 INSERT INTO mt93_numbers (n)
 WITH RECURSIVE sequence AS (
     SELECT 1 AS n
@@ -108,6 +110,8 @@ CREATE TEMPORARY TABLE IF NOT EXISTS mt93_group_plan (
   , primary_user_number INT NULL
 );
 
+DELETE FROM mt93_group_plan;
+
 INSERT INTO mt93_group_plan (group_number, primary_user_number) VALUES
     (1, 1)
   , (2, 20)
@@ -156,8 +160,8 @@ SELECT CONCAT('MT93 테스트 그룹 ', LPAD(plan.group_number, 2, '0'))
        END
      , primary_profile.user_id
      , 0
-     , @mt93_history_anchor - INTERVAL (120 - plan.group_number) DAY
-     , @mt93_history_anchor - INTERVAL (120 - plan.group_number) DAY
+     , @mt93_history_anchor - INTERVAL 70 DAY + INTERVAL plan.group_number HOUR
+     , @mt93_history_anchor - INTERVAL 70 DAY + INTERVAL plan.group_number HOUR
   FROM mt93_group_plan AS plan
   LEFT JOIN user_profiles AS primary_profile
     ON primary_profile.normalized_nickname =
@@ -191,7 +195,7 @@ SELECT seed_group.id
        END
      , 'ACTIVE'
      , CASE
-           WHEN numbers.n = 1 THEN @mt93_history_anchor - INTERVAL 100 DAY
+           WHEN numbers.n = 1 THEN @mt93_history_anchor - INTERVAL 68 DAY
            ELSE @mt93_history_anchor - INTERVAL (30 - MOD(numbers.n, 10)) DAY
        END
      , NULL
@@ -199,7 +203,7 @@ SELECT seed_group.id
      , NULL
      , 0
      , CASE
-           WHEN numbers.n = 1 THEN @mt93_history_anchor - INTERVAL 100 DAY
+           WHEN numbers.n = 1 THEN @mt93_history_anchor - INTERVAL 68 DAY
            ELSE @mt93_history_anchor - INTERVAL (30 - MOD(numbers.n, 10)) DAY
        END
      , @mt93_history_anchor - INTERVAL MOD(numbers.n, 24) HOUR
@@ -252,8 +256,8 @@ SELECT seed_group.id
      , 'MEMBER'
      , CASE WHEN numbers.n <= 5 OR MOD(numbers.n, 2) = 0 THEN 'REMOVED' ELSE 'LEFT' END
      , @mt93_history_anchor
-       - INTERVAL (100 - MOD(numbers.n, 10) + FLOOR((numbers.n - 1) / 60)) DAY
-     , @mt93_history_anchor - INTERVAL (50 - MOD(numbers.n, 10)) DAY
+       - INTERVAL (65 - MOD(numbers.n, 10) + FLOOR((numbers.n - 1) / 60)) DAY
+     , @mt93_history_anchor - INTERVAL (40 - MOD(numbers.n, 10)) DAY
      , CASE
            WHEN numbers.n <= 5 OR MOD(numbers.n, 2) = 0 THEN historical_admin.user_id
            ELSE profile.user_id
@@ -265,8 +269,8 @@ SELECT seed_group.id
        END
      , 0
      , @mt93_history_anchor
-       - INTERVAL (100 - MOD(numbers.n, 10) + FLOOR((numbers.n - 1) / 60)) DAY
-     , @mt93_history_anchor - INTERVAL (50 - MOD(numbers.n, 10)) DAY
+       - INTERVAL (65 - MOD(numbers.n, 10) + FLOOR((numbers.n - 1) / 60)) DAY
+     , @mt93_history_anchor - INTERVAL (40 - MOD(numbers.n, 10)) DAY
   FROM mt93_numbers AS numbers
   JOIN user_profiles AS profile
     ON profile.normalized_nickname = CONCAT(
@@ -287,7 +291,7 @@ SELECT seed_group.id
         WHERE existing.group_id = seed_group.id
           AND existing.user_id = profile.user_id
           AND existing.joined_at = @mt93_history_anchor
-              - INTERVAL (100 - MOD(numbers.n, 10) + FLOOR((numbers.n - 1) / 60)) DAY
+              - INTERVAL (65 - MOD(numbers.n, 10) + FLOOR((numbers.n - 1) / 60)) DAY
    );
 
 INSERT INTO group_invite_links (
@@ -735,6 +739,8 @@ CREATE TEMPORARY TABLE IF NOT EXISTS mt93_assignment_plan (
   , slot_number INT NOT NULL
   , PRIMARY KEY (period_type, slot_number)
 );
+
+DELETE FROM mt93_assignment_plan;
 
 INSERT INTO mt93_assignment_plan (period_type, template_code, slot_number) VALUES
     ('DAILY', 'D-L-01', 1)
@@ -1285,8 +1291,18 @@ SELECT CONCAT('93000000-0000-0000-0000-', LPAD(numbers.n, 12, '0'))
            ELSE 'CANCELLED'
        END
      , 0
-     , @mt93_now - INTERVAL MOD(numbers.n, 30) DAY
-     , @mt93_now - INTERVAL MOD(numbers.n, 30) DAY
+     , @mt93_now - INTERVAL (
+           CASE
+               WHEN numbers.n BETWEEN 1 AND 30 OR numbers.n BETWEEN 111 AND 120
+                   THEN GREATEST(MOD(numbers.n, 30), 3)
+               ELSE MOD(numbers.n, 30)
+           END
+       ) DAY
+     , CASE
+           WHEN numbers.n > 110 THEN
+               @mt93_now - INTERVAL GREATEST(MOD(numbers.n, 30), 3) DAY + INTERVAL 3 DAY
+           ELSE @mt93_now - INTERVAL MOD(numbers.n, 30) DAY
+       END
   FROM mt93_numbers AS numbers
   JOIN user_profiles AS profile
     ON profile.normalized_nickname =
@@ -1535,7 +1551,7 @@ SELECT reporter.user_id
      , CASE
            WHEN numbers.n <= 10 THEN NULL
            WHEN numbers.n <= 15
-               THEN @mt93_history_anchor - INTERVAL (60 - numbers.n) DAY
+               THEN @mt93_history_anchor - INTERVAL (50 - numbers.n) DAY
            ELSE @mt93_history_anchor - INTERVAL (30 - numbers.n) DAY
        END
      , CASE
@@ -1547,14 +1563,14 @@ SELECT reporter.user_id
            WHEN numbers.n <= 10
                THEN @mt93_history_anchor - INTERVAL (20 - numbers.n) DAY
            WHEN numbers.n <= 15
-               THEN @mt93_history_anchor - INTERVAL (61 - numbers.n) DAY
+               THEN @mt93_history_anchor - INTERVAL (51 - numbers.n) DAY
            ELSE @mt93_history_anchor - INTERVAL (35 - numbers.n) DAY
        END
      , CASE
            WHEN numbers.n <= 10
                THEN @mt93_history_anchor - INTERVAL (20 - numbers.n) DAY
            WHEN numbers.n <= 15
-               THEN @mt93_history_anchor - INTERVAL (60 - numbers.n) DAY
+               THEN @mt93_history_anchor - INTERVAL (50 - numbers.n) DAY
            ELSE @mt93_history_anchor - INTERVAL (30 - numbers.n) DAY
        END
   FROM mt93_numbers AS numbers
@@ -1740,6 +1756,7 @@ SELECT ranked.season_id
             , group_score.score
             , COALESCE(group_score.score_reached_at, group_season.created_at) AS score_reached_at
             , seed_group.name AS group_name
+            , seed_group.normalized_name
             , season.updated_at AS snapshot_at
          FROM seasons AS season
          JOIN group_seasons AS group_season
@@ -1751,7 +1768,8 @@ SELECT ranked.season_id
         WHERE season.status = 'ENDED'
           AND season.closing_from_status = 'ACTIVE'
        ) AS ranked
- WHERE NOT EXISTS (
+ WHERE ranked.normalized_name LIKE 'mt93_group_%'
+   AND NOT EXISTS (
        SELECT 1
          FROM season_group_rank_snapshots AS existing
         WHERE existing.season_id = ranked.season_id
@@ -1795,10 +1813,13 @@ SELECT ranked.season_id
             , COALESCE(contribution.score_reached_at, contribution.created_at) AS score_reached_at
             , contribution.participant_status
             , profile.nickname
+            , seed_group.normalized_name
             , season.updated_at AS snapshot_at
          FROM seasons AS season
          JOIN group_seasons AS group_season
            ON group_season.season_id = season.id
+         JOIN game_groups AS seed_group
+           ON seed_group.id = group_season.group_id
          JOIN season_member_contributions AS contribution
            ON contribution.group_season_id = group_season.id
          JOIN user_profiles AS profile
@@ -1806,7 +1827,8 @@ SELECT ranked.season_id
         WHERE season.status = 'ENDED'
           AND season.closing_from_status = 'ACTIVE'
        ) AS ranked
- WHERE NOT EXISTS (
+ WHERE ranked.normalized_name LIKE 'mt93_group_%'
+   AND NOT EXISTS (
        SELECT 1
          FROM season_member_rank_snapshots AS existing
         WHERE existing.group_season_id = ranked.group_season_id
