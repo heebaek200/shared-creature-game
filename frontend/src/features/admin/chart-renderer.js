@@ -106,7 +106,7 @@ export async function renderDashboardCharts(root, dashboard, isCurrent) {
             // 차트 3
             key: 'top-groups',
             type: 'BarChart',
-            row: [
+            rows: [
                 ['그룹', '시즌 점수'],
                 ... dashboard.topGroups.map(item => [
                     item.groupName,
@@ -119,13 +119,24 @@ export async function renderDashboardCharts(root, dashboard, isCurrent) {
             // 차트 4
             key: 'payments',
             type: 'ComboChart',
-            row: [
+            rows: [
                 ['날짜', '결제(원)', '환불(원)'],
                 ... dashboard.paymentSeries.map(item => [
                     item.date,
                     Number(item.paidAmountKrw),
                     Number(item.refundedAmountKrw)
                 ])
+            ]
+        },
+
+        {
+            // 차트 5
+            key: 'capacity',
+            type: 'PieChart',
+            rows: [
+                ['정원 구분', '인원'],
+                ['사용', Number(dashboard.capacityUsage.occupied)],
+                ['잔여', Number(dashboard.capacityUsage.remaining)]
             ]
         },
 

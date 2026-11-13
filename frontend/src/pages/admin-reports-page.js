@@ -245,6 +245,7 @@ export function adminReportsPage() {
         detailVersion += 1;
         selectedReport = null;
         detailStatus.textContent = message;
+        detailFields.replaceChildren();
         actions.classList.add('d-none');
         updateControls();
     }
@@ -280,7 +281,7 @@ export function adminReportsPage() {
 
             const dd = document.createElement('dd');
             dd.className = 'col-8 text-break';
-            dt.textContent = value == null ? '-' : String(value);
+            dd.textContent = value == null ? '-' : String(value);
             detailFields.append(dt, dd);
         }
 

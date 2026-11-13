@@ -342,6 +342,10 @@ export function adminDashboardPage() {
                     dashboard,
                     () => ! disposed && version === requestVersion
                 );
+
+                if (!disposed && version === requestVersion) {
+                    chartStatus.textContent = '';
+                }
             } catch (error) {
                 if (! disposed && version === requestVersion) {
                     element.querySelectorAll('[data-admin-chart]').forEach(node => {
@@ -387,7 +391,8 @@ export function adminDashboardPage() {
     filterForm.addEventListener('submit', onSubmit);
     rangeInput.addEventListener('change', onFilterChange);
     groupInput.addEventListener('change', onFilterChange);
-    refreshButton.addEventListener('visibilitychange', onVisibilityChange);
+    refreshButton.addEventListener('click', onRefresh);
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     // 숨겨진 탭에서는 서버 조회를 생략하고 다시 보일 때 갱신한다.
     const intervalId = setInterval(() => {
