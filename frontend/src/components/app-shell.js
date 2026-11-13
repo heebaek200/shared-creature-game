@@ -3,6 +3,7 @@ import { createAdminNavigation, createAppNavigation, createAppMobileNavigation, 
 
 import { getCurrentSeason } from '../features/season/api.js';
 import { formatSeasonRemainingTime } from '../features/season/season-countdown.js';
+import { getMyGroup } from '../features/group/api.js';
 
 /**
  * 공통 Shell 과 페이지 콘텐츠 영역을 생성합니다.
@@ -11,16 +12,10 @@ import { formatSeasonRemainingTime } from '../features/season/season-countdown.j
 export function createBaseLayout({ currentUser, navigate, showGroupBadge = true } = {}) {
     const shell = document.createElement('div');
     shell.className =
-        'd-flex flex-column min-vh-100 app-shell w-100 m-0 p-0 overflow-x-hidden';
-    shell.style.backgroundColor = 'var(--app-background)';
-    shell.style.color = 'var(--app-text)';
-    shell.style.padding = '0';
-    shell.style.margin = '0';
-    shell.style.maxWidth = 'none';
+        'd-flex flex-column min-vh-100 app-shell app-shell-root w-100 m-0 p-0 overflow-x-hidden';
 
     const body = document.createElement('div');
-    body.className = 'd-flex flex-grow-1 w-100';
-    body.style.paddingTop = '60px';
+    body.className = 'd-flex flex-grow-1 w-100 app-shell__body';
 
     const header = createAppHeader({ currentUser, navigate, showGroupBadge });
     shell.append(header, body);
@@ -43,6 +38,26 @@ export function createBaseLayout({ currentUser, navigate, showGroupBadge = true 
                 seasonInfo.textContent = '시즌 정보 확인 불가';
             }
         });
+
+    if (showGroupBadge && currentUser?.membership) {
+        void getMyGroup()
+            .then((response) => {
+                if (!header.isConnected) return;
+
+                const groupData = response.data || response;
+                const groupName = groupData.group?.name;
+                const groupNameElement = header.querySelector(
+                    '[data-header-group-name]',
+                );
+
+                if (groupNameElement && groupName) {
+                    groupNameElement.textContent = groupName;
+                }
+            })
+            .catch(() => {
+                // 그룹 정보 조회에 실패해도 페이지와 공통 Header는 그대로 표시.
+            });
+    }
 
     return {shell, body};
 }

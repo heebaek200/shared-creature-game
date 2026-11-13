@@ -9,7 +9,7 @@ export function createAppHeader({ currentUser = null, navigate, showGroupBadge =
         currentUser?.authenticationState === 'AUTHENTICATED';
     header.innerHTML = `
         <div class="app-header__brand d-flex align-items-center gap-2">
-            <span class="app-header__title fs-5 fw-bold d-flex align-items-center gap-2" style="color: var(--app-primary);">
+            <span class="app-header__title fs-5 fw-bold d-flex align-items-center gap-2">
               <img src="${titleIconLight}" alt="" aria-hidden="true" width="24" height="24" class="flex-shrink-0"/>
               <span class="app-header__title-text">다 같이 키우는 생명체</span>
             </span>
@@ -20,17 +20,15 @@ export function createAppHeader({ currentUser = null, navigate, showGroupBadge =
         
           ${showGroupBadge ? `
             <span
-                class="badge border px-2 py-2"
-                style="background-color: var(--app-background); color: var(--app-text); border-color: var(--app-border) !important;"
+                class="badge border px-2 py-2 app-header__group-badge"
                 data-header-group-name>
                 소속 그룹 없음
             </span>
           ` : ''}
         
-          <span class="badge rounded-pill text-nowrap ms-auto me-2 px-3 py-2"
-                style="background-color: var(--app-text); color: var(--app-surface);"
+          <span class="badge rounded-pill text-nowrap ms-auto me-2 px-3 py-2 app-header__connection-status"
                 data-header-connection-status aria-label="실시간 연결 상태">
-            <span class="me-2" style="color: var(--app-primary);" aria-hidden="true">●</span>
+            <span class="me-2 app-header__connection-dot" aria-hidden="true">●</span>
             <span class="connection-status-label">실시간</span>
           </span>
         </div>        
@@ -76,8 +74,5 @@ export function createAppHeader({ currentUser = null, navigate, showGroupBadge =
         .prepend(createThemeToggle());
     header.className =
         'app-header position-fixed top-0 start-0 w-100 border-bottom px-4 py-3 d-flex justify-content-between align-items-center z-3';
-    header.style.cssText =
-        'background-color: var(--app-surface); border-color: var(--app-border) !important; height: 60px';
-
     return header;
 }

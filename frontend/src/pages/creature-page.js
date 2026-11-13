@@ -21,12 +21,12 @@ export function creaturePage(context) {
     <div class="d-flex justify-content-between align-items-center mb-3 px-1">
         <div>
           <div class="d-flex align-items-center gap-2">
-            <h1 class="h3 mb-0 fw-bold" style="color: var(--app-text);">크리처 홈</h1>
+            <h1 class="h3 mb-0 fw-bold text-app" >크리처 홈</h1>
           </div>
         </div>
         <div class="d-flex align-items-center gap-3">
-          <button type="button" class="btn border px-3 py-1.5 fw-bold" style="background-color: var(--app-surface); color: var(--app-primary); border-color: var(--app-border) !important;" id="btn-toggle-movement">
-            모션 감소 : OFF
+          <button type="button" class="btn border px-3 py-1.5 fw-bold avatar-movement-toggle is-enabled" id="btn-toggle-movement">
+            아바타 이동 : ON
           </button>
         </div>
         </div>
@@ -43,40 +43,40 @@ export function creaturePage(context) {
         </div>
         
         <!-- 메인 콘텐츠 대시보드 -->
-        <div class="row g-4 flex-grow-1 align-items-stretch">
+        <div class="row g-4 flex-grow-1 align-items-stretch creature-dashboard-row">
         
         <!-- 좌측: 공동 크리처 영역 -->
-        <div class="col-xl-9 col-lg-8 d-flex flex-column">
-          <div class="card shadow-sm flex-grow-1 border" style="background-color: var(--app-surface); border-color: var(--app-border) !important; border-radius: 1.25rem;">
+        <div class="col-xl-9 col-lg-9 d-flex flex-column creature-dashboard-column">
+          <div class="card shadow-sm flex-grow-1 border app-surface-card">
             <div class="card-body d-flex flex-column justify-content-between p-3 p-xxl-4 h-100">
               <div class="d-flex flex-column flex-grow-1">
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                  <h2 class="h5 card-title mb-0 fw-bold" style="color: var(--app-text);" id="creature-title-name">시즌 크리처 - ???</h2>
-                  <span class="badge rounded-pill py-2 px-3" style="background-color: var(--app-muted); color: var(--app-surface);" id="online-count">접속 0명</span>
+                  <h2 class="h5 card-title mb-0 fw-bold text-app" id="creature-title-name">시즌 크리처 - ???</h2>
+                  <span class="badge rounded-pill py-2 px-3 online-count-badge" id="online-count">접속 0명</span>
                 </div>
         
                 <!-- 크리처 및 아바타 이동 구역 -->
-                <div class="border rounded-3 p-4 text-center position-relative my-2 flex-grow-1 d-flex flex-column justify-content-center align-items-center" style="min-height: 480px; background-color: var(--app-background); border-color: var(--app-border) !important;" id="avatar-container">
+                <div class="border rounded-3 p-4 text-center position-relative my-2 flex-grow-1 d-flex flex-column justify-content-center align-items-center creature-avatar-container" style="min-height: 480px;" id="avatar-container">
                   
                   <div id="creature-display" class="d-flex flex-column align-items-center justify-content-center" style="visibility: hidden;">
                     <div id="creature-img-wrapper" class="mb-1 d-flex align-items-center justify-content-center">
                       <img src="${creatureLv0}" alt="크리처 이미지" id="creature-image" style="image-rendering: pixelated; image-rendering: crisp-edges;" />
                     </div>
-                    <h3 class="h4 mb-0 fw-bold" style="color: var(--app-text);" id="growth-stage">미선택 알</h3>
-                    <span class="small" style="color: var(--app-muted);" id="species-subtitle">???</span>
-                    <span class="small" style="color: var(--app-muted);" id="hatch-countdown" aria-live="polite"></span>
+                    <h3 class="h4 mb-0 fw-bold text-app" id="growth-stage">미선택 알</h3>
+                    <span class="small text-app-muted" id="species-subtitle">???</span>
+                    <span class="small text-app-muted" id="hatch-countdown" aria-live="polite"></span>
                   </div>
                 </div>
               </div>
         
               <!-- 경험치 및 퀘스트 하단 구역 -->
               <div class="mt-2">
-                <div class="d-flex justify-content-end fw-bold mb-2" style="color: var(--app-text);" id="exp-text">
+                <div class="d-flex justify-content-end fw-bold mb-2 text-app" id="exp-text">
                   <span>0 / - XP</span>
                 </div>
-                <div class="progress mb-3" style="height: 12px; background-color: var(--app-border);">
+                <div class="progress mb-3" style="height: 12px;">
                   <!-- 부드러운 바 차오름을 위한 CSS 트랜지션 추가 -->
-                  <div class="progress-bar" role="progressbar" id="exp-bar" aria-label="크리처 성장 경험치 진행률" aria-valuetext="경험치 정보 불러오는 중" style="width: 0%; background-color: var(--app-primary); transition: width 2.8s ease-in-out;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                  <div class="progress-bar" role="progressbar" id="exp-bar" aria-label="크리처 성장 경험치 진행률" aria-valuetext="경험치 정보 불러오는 중" style="width: 0%; transition: width 2.8s ease-in-out;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                 </div>
                 <div class="text-center">
                   <button type="button" class="btn btn-primary fw-bold px-4 py-2" id="btn-quest">오늘 퀘스트 확인</button>
@@ -87,55 +87,55 @@ export function creaturePage(context) {
         </div>
         
         <!-- 우측: 아바타 상세 정보 카드 영역 -->
-        <div class="col-xl-3 col-lg-4 d-flex flex-column">
-          <div class="card shadow-sm flex-grow-1 border" style="background-color: var(--app-surface); border-color: var(--app-border) !important; border-radius: 1.25rem;">
+        <div class="col-xl-3 col-lg-3 d-flex flex-column creature-dashboard-column">
+          <div class="card shadow-sm flex-grow-1 border app-surface-card">
             <div class="card-body p-4 d-flex flex-column justify-content-between h-100">
               <div>
-                <h2 class="h6 mb-2" style="color: var(--app-muted);">오늘 그룹 경험치</h2>
-                <div class="h3 fw-bold mb-4" style="color: var(--app-text);" id="today-exp">+0 XP</div>
+                <h2 class="h6 mb-2 group-experience-title text-app-muted">오늘 그룹 경험치</h2>
+                <div class="h3 fw-bold mb-4 text-app" id="today-exp">+0 XP</div>
         
-                <h3 class="h6 fw-bold mb-3" style="color: var(--app-text);">최근 기여</h3>
+                <h3 class="h6 fw-bold mb-3 text-app">최근 기여</h3>
                 <ul class="list-group list-group-flush mb-4" id="recent-contributions-list"></ul>
               </div>
         
               <!-- 아바타 선택 시에만 나타나는 유저 정보창 -->
-              <div class="card border mt-3 d-none shadow-sm" style="background-color: var(--app-surface); border-color: var(--app-border) !important;" id="avatar-info-card">
-                <div class="card-header py-2.5" style="background-color: var(--app-surface); border-color: var(--app-border) !important;">
+              <div class="card border mt-3 d-none shadow-sm app-surface-bordered" id="avatar-info-card">
+                <div class="card-header py-2.5 app-surface-bordered">
                   <div class="d-flex justify-content-between align-items-center">
-                    <span class="fw-bold text-nowrap" id="avatar-toggle-title">USER INFO [ON]</span>
+                    <span class="fw-bold text-nowrap text-app" id="avatar-toggle-title">USER INFO [ON]</span>
                   </div>
                 </div>
                 <div class="card-body collapse show pt-2" id="avatar-detail-collapse" style="overflow-x: auto; overflow-y: hidden;">
-                  <p class="mb-2 fw-bold text-nowrap" style="color: var(--app-primary);" id="avatar-info-header">-</p>
-                  <table class="table table-sm align-middle mb-2" style="color: var(--app-text); border-color: var(--app-border); white-space: nowrap;">
+                  <p class="mb-2 fw-bold text-nowrap text-app-primary" id="avatar-info-header">-</p>
+                  <table class="table table-sm align-middle mb-2 text-app border-app text-nowrap">
                     <thead>
-                      <tr style="background-color: var(--app-background); color: var(--app-text);">
-                        <th style="font-style: italic" class="py-1.5">slot</th>
-                        <th style="font-style: italic" class="py-1.5">item</th>
+                      <tr class="text-app bg-app-background">
+                        <th class="py-1.5 fst-italic">slot</th>
+                        <th class="py-1.5 fst-italic">item</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr>
-                        <td style="color: var(--app-muted);" class="py-1.5">HEAD</td>
+                        <td class="py-1.5 text-app-muted">HEAD</td>
                         <td id="slot-head" class="py-1.5">-</td>
                       </tr>
                       <tr>
-                        <td style="color: var(--app-muted);" class="py-1.5">FACE</td>
+                        <td class="py-1.5 text-app-muted">FACE</td>
                         <td id="slot-face" class="py-1.5">-</td>
                       </tr>
                       <tr>
-                        <td style="color: var(--app-muted);" class="py-1.5">BODY</td>
+                        <td class="py-1.5 text-app-muted">BODY</td>
                         <td id="slot-body" class="py-1.5">-</td>
                       </tr>
                       <tr>
-                        <td style="color: var(--app-muted);" class="py-1.5">ACCESSORY</td>
+                        <td class="py-1.5 text-app-muted">ACCESSORY</td>
                         <td id="slot-accessory" class="py-1.5">-</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
                 <div class="card-footer bg-transparent border-0 pt-0 pb-3 text-center">
-                  <button type="button" class="btn btn-sm px-3 fw-bold w-100 py-1.5" style="background-color: var(--app-background); color: var(--app-primary); border: 1px solid var(--app-border);" id="btn-goto-shop">상점에서 보기</button>
+                  <button type="button" class="btn btn-sm px-3 fw-bold w-100 py-1.5 text-app-primary bg-app-background border-app" id="btn-goto-shop">상점에서 보기</button>
                 </div>
               </div>
         
@@ -228,13 +228,11 @@ export function creaturePage(context) {
     const onToggleMovement = () => {
         isAvatarMoving = !isAvatarMoving;
         if (btnToggleMovement) {
-            btnToggleMovement.textContent = isAvatarMoving ? '모션 감소 : OFF' : '모션 감소 : ON';
+            btnToggleMovement.textContent = isAvatarMoving ? '아바타 이동  : ON' : '아바타 이동 : OFF';
             if (isAvatarMoving) {
-                btnToggleMovement.style.color = 'var(--app-primary)';
-                btnToggleMovement.style.backgroundColor = 'var(--app-surface)';
+                btnToggleMovement.classList.replace('is-disabled', 'is-enabled');
             } else {
-                btnToggleMovement.style.color = 'var(--app-muted)';
-                btnToggleMovement.style.backgroundColor = 'var(--app-background)';
+                btnToggleMovement.classList.replace('is-enabled', 'is-disabled');
             }
         }
     };
@@ -242,7 +240,7 @@ export function creaturePage(context) {
 
     const onMovementFocus = () => {
         if (!btnToggleMovement) return;
-        btnToggleMovement.style.outline = '3px solid #146c43';
+        btnToggleMovement.style.outline = '3px solid var(--app-accent)';
         btnToggleMovement.style.outlineOffset = '0';
     };
     const onMovementBlur = () => {
@@ -472,12 +470,6 @@ export function creaturePage(context) {
             && userId !== undefined
             && String(userId) === String(currentUserId);
 
-        element
-            .querySelectorAll('#group-name-badge, [data-header-group-name]')
-            .forEach((badge) => {
-                badge.textContent = creatureData.groupName || '소속 그룹 없음';
-            });
-
         const growthUnlockAt = renderCreatureGrowth({
             element,
             creatureData,
@@ -504,17 +496,16 @@ export function creaturePage(context) {
             contributionsList.innerHTML = '';
             recentContributions.forEach(contribution => {
                 const li = document.createElement('li');
-                li.className = 'list-group-item d-flex justify-content-between align-items-center px-0 bg-transparent py-1';
-                li.style.borderColor = 'var(--app-border)';
-                li.style.color = 'var(--app-text)';
+                li.className = 'list-group-item d-flex justify-content-between align-items-center px-0 bg-transparent py-1 border-app text-app';
 
                 const spanName = document.createElement('span');
+                spanName.className = 'contribution-name';
                 const isMe = isCurrentUser(contribution.userId);
                 spanName.textContent = isMe ? `${contribution.nickname} (나)` : contribution.nickname;
 
                 const spanAmount = document.createElement('span');
-                spanAmount.className = 'fw-bold';
-                spanAmount.style.color = 'var(--app-primary)';
+                spanAmount.className =
+                    'fw-bold contribution-amount text-app-primary';
                 spanAmount.textContent = `+${contribution.amount} XP`;
 
                 li.appendChild(spanName);
@@ -553,18 +544,15 @@ export function creaturePage(context) {
             zone.style.height = '23%';
             zone.style.boxSizing = 'border-box';
             zone.style.zIndex = '1';
-            zone.style.border = '2px dashed #198754';
+            zone.style.border = '2px dashed var(--app-primary)';
             zone.style.borderRadius = '0.75rem';
-            zone.style.backgroundColor = 'rgba(25, 135, 84, 0.08)';
             zone.style.pointerEvents = 'none';
             zone.style.gap = '0.5rem';
             zone.style.overflow = 'hidden';
 
             const zoneLabel = document.createElement('span');
             zoneLabel.textContent = `구역 ${zoneIndex + 1}`;
-            zoneLabel.className = 'small fw-bold align-self-start px-1';
-            zoneLabel.style.color = '#146c43';
-            zoneLabel.style.backgroundColor = 'var(--app-surface)';
+            zoneLabel.className = 'small fw-bold align-self-start px-1 avatar-zone-label';
             zone.appendChild(zoneLabel);
 
             const membersRow = document.createElement('div');
@@ -584,7 +572,7 @@ export function creaturePage(context) {
 
             const spot = document.createElement('button');
             spot.type = 'button';
-            spot.className = 'btn border rounded-pill px-3 py-1.5 shadow-sm avatar-spot d-flex align-items-center gap-2';
+            spot.className = `btn border rounded-pill px-3 py-1.5 shadow-sm avatar-spot d-flex align-items-center gap-2${isMe ? ' is-current-user' : ''}`;
             spot.setAttribute('aria-label', `${member.nickname}${isMe ? ' (나)' : ''} 아바타 정보 보기`);
             spot.style.position = 'relative';
             spot.style.zIndex = '2';
@@ -600,16 +588,8 @@ export function creaturePage(context) {
             spot.style.appearance = 'none';
             spot.style.cursor = 'pointer';
             spot.style.pointerEvents = 'auto';
-            spot.style.backgroundColor = isMe ? 'var(--app-primary)' : 'var(--app-surface)';
-            spot.style.color = isMe ? '#ffffff' : 'var(--app-text)';
-            spot.style.borderColor = 'var(--app-border)';
-
-            spot.style.backgroundColor = isMe ? 'var(--app-primary)' : 'var(--app-surface)';
-            spot.style.color = isMe ? '#ffffff' : 'var(--app-text)';
-            spot.style.borderColor = 'var(--app-border)';
 
             // 키보드 tab을 통한 이름표 포커스를 선명하게
-            const originalBorderColor = spot.style.borderColor;
             const originalFontWeight = spot.style.fontWeight;
 
             spot.addEventListener('focus', () => {
@@ -618,7 +598,6 @@ export function creaturePage(context) {
 
             spot.addEventListener('blur', () => {
                 spot.style.fontWeight = originalFontWeight;
-                spot.style.borderColor = originalBorderColor;
             });
 
             spot.addEventListener('blur', () => {
@@ -626,10 +605,9 @@ export function creaturePage(context) {
             });
 
             const dot = document.createElement('span');
-            dot.className = 'rounded-circle d-inline-block flex-shrink-0';
+            dot.className = `rounded-circle d-inline-block flex-shrink-0 avatar-spot__dot${isMe ? ' is-current-user' : ''}`;
             dot.style.width = '8px';
             dot.style.height = '8px';
-            dot.style.backgroundColor = isMe ? '#ffffff' : '#198754';
 
             const nameSpan = document.createElement('span');
             nameSpan.textContent = isMe ? `나` : member.nickname;
@@ -651,7 +629,6 @@ export function creaturePage(context) {
 
                 if (avatarToggleTitle) {
                     avatarToggleTitle.textContent = `USER - [${member.nickname}]`;
-                    avatarToggleTitle.style.color = 'var(--app-text)';
                 }
                 if (avatarInfoHeader) {
                     avatarInfoHeader.textContent = `그룹 ${member.rank}위 · ${member.contributionScore}점`;

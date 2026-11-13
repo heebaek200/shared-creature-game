@@ -1,4 +1,21 @@
 /*
+ * 공통 함수
+ */
+function updateActiveNavigation(nav, currentPath) {
+    nav.querySelectorAll('a[data-link]').forEach((link) => {
+        const isCurrent = link.getAttribute('href') === currentPath;
+
+        link.classList.toggle('active', isCurrent);
+
+        if (isCurrent) {
+            link.setAttribute('aria-current', 'page');
+        } else {
+            link.removeAttribute('aria-current');
+        }
+    });
+}
+
+/*
  * 기본 메뉴 (일반 유저 + 그룹 관리자)
  */
 export function createAppNavigation(currentPath, currentUser = null) {
@@ -9,7 +26,7 @@ export function createAppNavigation(currentPath, currentUser = null) {
 
     nav.innerHTML =
         `
-    <div class="fs-6 px-2 mb-3 mt-2 fw-bold" style="color: var(--app-muted);">서비스 메뉴</div>
+    <div class="fs-6 px-2 mb-3 mt-2 fw-bold app-navigation__heading">서비스 메뉴</div>
     <ul class="nav nav-pills flex-column mb-auto gap-1">
         <li class="nav-item">
             <a href="/creature" class="nav-link py-2 px-3" data-link>크리처</a>
@@ -41,25 +58,9 @@ export function createAppNavigation(currentPath, currentUser = null) {
     `;
 
     nav.className =
-        'd-none d-lg-flex flex-column flex-shrink-0 p-2 border-end';
-    nav.style.cssText =
-        'width: 230px; background-color: var(--app-surface); border-color: var(--app-border) !important;';
+        'app-navigation d-none d-lg-flex flex-column flex-shrink-0 p-2 border-end';
 
-    // 현재 메뉴 활성화
-    nav.querySelectorAll('a[data-link]').forEach((link) => {
-        const isCurrent = link.getAttribute('href') === currentPath;
-
-        link.classList.toggle('active', isCurrent);
-        link.classList.toggle('text-white', isCurrent);
-        link.style.backgroundColor = isCurrent ? 'var(--app-primary)' : '';
-        link.style.color = isCurrent ? '' : 'var(--app-text)';
-
-        if (isCurrent) {
-            link.setAttribute('aria-current', 'page');
-        } else {
-            link.removeAttribute('aria-current');
-        }
-    });
+    updateActiveNavigation(nav, currentPath);
 
     return nav;
 }
@@ -71,8 +72,7 @@ export function createAdminNavigation(currentPath) {
     const nav = document.createElement('nav');
 
     nav.innerHTML = `
-        <div class="fs-6 px-2 mb-3 mt-2 fw-bold"
-             style="color: var(--app-muted);">
+        <div class="fs-6 px-2 mb-3 mt-2 fw-bold app-navigation__heading">
             관리자 메뉴
         </div>
 
@@ -93,24 +93,9 @@ export function createAdminNavigation(currentPath) {
     `;
 
     nav.className =
-        'd-none d-lg-flex flex-column flex-shrink-0 p-2 border-end';
-    nav.style.cssText =
-        'width: 230px; background-color: var(--app-surface); border-color: var(--app-border) !important;';
+        'app-navigation d-none d-lg-flex flex-column flex-shrink-0 p-2 border-end';
 
-    nav.querySelectorAll('a[data-link]').forEach((link) => {
-        const isCurrent = link.getAttribute('href') === currentPath;
-
-        link.classList.toggle('active', isCurrent);
-        link.classList.toggle('text-white', isCurrent);
-        link.style.backgroundColor = isCurrent ? 'var(--app-primary)' : '';
-        link.style.color = isCurrent ? '' : 'var(--app-text)';
-
-        if (isCurrent) {
-            link.setAttribute('aria-current', 'page');
-        } else {
-            link.removeAttribute('aria-current');
-        }
-    });
+    updateActiveNavigation(nav, currentPath);
 
     return nav;
 }

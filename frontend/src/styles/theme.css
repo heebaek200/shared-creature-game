@@ -7,8 +7,11 @@
   --app-text: #18332d;
   --app-muted: #5b716b;
   --app-border: #cfe4da;
+  --app-header-height: 60px;
+  --app-navigation-width: 230px;
   --bs-primary: var(--app-primary);
   --bs-primary-rgb: 22, 131, 111;
+  --app-on-primary: var(--app-surface);
 }
 
 [data-bs-theme='dark'] {
@@ -21,6 +24,90 @@
   --app-border: #315047;
   --bs-primary: var(--app-primary);
   --bs-primary-rgb: 95, 195, 170;
+  --app-on-primary: var(--app-background);
+}
+
+.app-shell {
+  color: var(--app-text);
+  background-color: var(--app-background);
+}
+
+.app-shell.app-shell-root {
+  width: 100%;
+  min-height: 100vh;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.app-shell__body {
+  padding-top: var(--app-header-height);
+}
+
+.app-header,
+.app-navigation {
+  background-color: var(--app-surface);
+  border-color: var(--app-border) !important;
+}
+
+.app-header {
+  height: var(--app-header-height);
+}
+
+.app-navigation {
+  width: var(--app-navigation-width);
+}
+
+.app-header__title,
+.app-header__connection-dot {
+  color: var(--app-primary);
+}
+
+.app-header__group-badge,
+.creature-avatar-container {
+  background-color: var(--app-background);
+  color: var(--app-text);
+  border-color: var(--app-border) !important;
+}
+
+.app-header__connection-status {
+  color: var(--app-surface);
+  background-color: var(--app-text);
+}
+
+.mobile-navigation {
+  border-color: var(--app-border);
+  border-top-color: var(--app-border) !important;
+  background-color: var(--app-surface);
+}
+
+.mobile-navigation__link,
+.mobile-navigation__menu a {
+  color: var(--app-text);
+}
+
+.mobile-navigation__menu {
+  border-color: var(--app-border);
+  background-color: var(--app-surface);
+}
+
+.mobile-navigation__menu a:hover,
+.mobile-navigation__menu a:focus-visible {
+  background-color: var(--app-background);
+}
+
+.app-navigation__heading {
+  color: var(--app-muted);
+}
+
+.app-shell nav.d-lg-flex .nav-link {
+  color: var(--app-text);
+}
+
+.app-shell nav.d-lg-flex .nav-link.active,
+.mobile-navigation__link.active {
+  color: var(--app-on-primary);
+  background-color: var(--app-primary);
 }
 
 body {
@@ -49,6 +136,90 @@ body {
   border-radius: 1.5rem;
   background: var(--app-surface);
   box-shadow: 0 1rem 3rem color-mix(in srgb, var(--app-primary) 12%, transparent);
+}
+
+.app-surface-card,
+.app-surface-bordered {
+  background-color: var(--app-surface);
+  border-color: var(--app-border) !important;
+}
+
+.app-surface-card {
+  border-radius: 1.25rem;
+}
+
+.progress {
+  --bs-progress-bg: var(--app-border);
+}
+
+.progress-bar {
+  --bs-progress-bar-bg: var(--app-primary);
+}
+
+.online-count-badge {
+  color: var(--app-surface);
+  background-color: var(--app-muted);
+}
+
+.avatar-movement-toggle.is-enabled {
+  color: var(--app-primary);
+  background-color: var(--app-surface);
+  border-color: var(--app-border) !important;
+}
+
+.avatar-movement-toggle.is-disabled {
+  color: var(--app-muted);
+  background-color: var(--app-background);
+  border-color: var(--app-border) !important;
+}
+
+.avatar-zone {
+  border-color: var(--app-primary) !important;
+  background-color: color-mix(in srgb, var(--app-primary) 8%, transparent);
+}
+
+.avatar-zone-label {
+  color: var(--app-primary);
+  background-color: var(--app-surface);
+}
+
+.avatar-spot {
+  color: var(--app-text);
+  background-color: var(--app-surface);
+  border-color: var(--app-border) !important;
+}
+
+.avatar-spot.is-current-user {
+  color: var(--app-on-primary);
+  background-color: var(--app-primary);
+}
+
+.avatar-spot__dot {
+  background-color: var(--app-primary);
+}
+
+.avatar-spot.is-current-user .avatar-spot__dot {
+  background-color: var(--app-on-primary);
+}
+
+.text-app-muted {
+  color: var(--app-muted) !important;
+}
+
+.text-app {
+  color: var(--app-text) !important;
+}
+
+.text-app-primary {
+  color: var(--app-primary) !important;
+}
+
+.border-app {
+  border-color: var(--app-border) !important;
+}
+
+.bg-app-background {
+  background-color: var(--app-background) !important;
 }
 
 .auth-card {
@@ -143,21 +314,37 @@ body {
   font-weight: 700
 }
 
-@media (max-width: 576px) {
-  .app-shell {
-    padding: 1.5rem 0;
-  }
 
-  .page-header {
-    flex-direction: column;
-  }
+.mobile-navigation {
+  display: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
-  }
+.theme-toggle-icon {
+  display: none;
+}
+
+/* [크리처홈] 데스크톱에서는 크리처 홈 제목의 줄바꿈 문자를 공백처럼 표시 */
+#creature-title-name {
+  white-space: normal;
+}
+
+/* [크리처홈] 아바타 정보 카드 제목 넘침 방지 */
+#avatar-info-card .card-header {
+  overflow: hidden;
+}
+
+#avatar-info-card .card-header > .d-flex {
+  display: block !important;
+  width: 100%;
+  min-width: 0;
+}
+
+#avatar-toggle-title {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

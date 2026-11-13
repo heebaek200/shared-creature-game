@@ -1,22 +1,43 @@
-.mobile-navigation {
-    display: none;
+/* 1200px ~ 1033px */
+@media (min-width: 1033px) and (max-width: 1200px) {
+    /* [크리처홈] 그룹 경험치 넘침 방지 */
+    .group-experience-title {
+        font-size: 0.8rem;
+        white-space: nowrap;
+    }
+    #today-exp {
+        font-size: 1.5rem !important;
+        white-space: nowrap;
+    }
+    .contribution-name {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .contribution-amount {
+        flex: 0 0 auto;
+        margin-left: 0.5rem;
+        white-space: nowrap;
+    }
 }
 
-.theme-toggle-icon {
-    display: none;
-}
+/* 1032px 이하: 데스크톱 레이아웃을 모바일 레이아웃으로 전환 */
+@media (max-width: 1032px) {
+    /* 크리처 홈: 크리처 카드와 최근 경험치 카드를 세로로 배치 */
+    .creature-dashboard-row > .creature-dashboard-column {
+        flex: 0 0 100%;
+        width: 100%;
+    }
 
-/* 데스크톱에서는 제목의 줄바꿈 문자를 공백처럼 표시 */
-#creature-title-name {
-    white-space: normal;
-}
-
-@media (max-width: 991.98px) {
+    /* 좌측 데스크톱 사이드바 숨김 */
     .app-shell > .d-flex.flex-grow-1 > nav.d-lg-flex {
         display: none !important;
     }
 
-    .mobile-navigation {
+    /* 모바일 하단 내비게이션 바 */
+    .app-shell .mobile-navigation {
         position: fixed;
         z-index: 1030;
         right: 0;
@@ -24,10 +45,11 @@
         left: 0;
         display: flex;
         padding: 0 0 env(safe-area-inset-bottom);
-        border-top: 1px solid var(--app-border);
-        background-color: var(--app-surface);
+        border-top-width: 1px;
+        border-top-style: solid;
     }
 
+    /* 하단 내비게이션의 각 메뉴 */
     .mobile-navigation__link {
         display: flex;
         min-width: 0;
@@ -36,7 +58,6 @@
         align-items: center;
         justify-content: center;
         padding: 0.35rem 0.15rem;
-        color: var(--app-text);
         font-size: 0.95rem;
         line-height: 1.2;
         text-align: center;
@@ -44,6 +65,12 @@
         overflow-wrap: anywhere;
     }
 
+    .mobile-navigation__link.active {
+        border-radius: 0;
+        font-weight: 700;
+    }
+
+    /* 더보기 메뉴를 하단 바 위에 표시 */
     .mobile-navigation__more {
         position: relative;
         display: flex;
@@ -61,26 +88,6 @@
         display: none;
     }
 
-    .mobile-navigation__link.active {
-        color: var(--bs-white);
-        background-color: var(--app-primary);
-        border-radius: 0;
-        font-weight: 700;
-    }
-
-    .app-shell .container-fluid {
-        padding-bottom: 5.5rem !important;
-    }
-
-    .connection-status-label,
-    .theme-toggle-label {
-        display: none;
-    }
-
-    .theme-toggle-icon {
-        display: inline;
-    }
-
     .mobile-navigation__more[open] .mobile-navigation__menu {
         position: absolute;
         right: 0;
@@ -91,27 +98,39 @@
         min-width: 9rem;
         max-width: calc(100vw - 1rem);
         padding: 0.4rem;
-        border: 1px solid var(--app-border);
+        border-width: 1px;
+        border-style: solid;
         border-radius: 0.5rem 0.5rem 0 0;
-        background-color: var(--app-surface);
         box-shadow: 0 -0.4rem 1rem rgb(0 0 0 / 12%);
     }
 
     .mobile-navigation__menu a {
         display: block;
         padding: 0.65rem 0.8rem;
-        color: var(--app-text);
         text-decoration: none;
         white-space: nowrap;
     }
 
-    .mobile-navigation__menu a:hover,
-    .mobile-navigation__menu a:focus-visible {
-        background-color: var(--app-background);
+    /* 하단 메뉴에 가려지지 않도록 본문 아래 공간 확보 */
+    .app-shell .container-fluid {
+        padding-bottom: 5.5rem !important;
     }
+
+    /* Header 상태 표시를 아이콘 중심으로 축약 */
+    .connection-status-label,
+    .theme-toggle-label {
+        display: none;
+    }
+
+    .app-header .theme-toggle-icon {
+        display: inline;
+    }
+
 }
 
+/* 768px 이하: Header와 크리처 정보를 더 좁은 폭에 맞춤 */
 @media (max-width: 768px) {
+    /* Header 제목은 아이콘만 표시 */
     .app-header {
         flex-wrap: nowrap;
     }
@@ -120,6 +139,7 @@
         display: none;
     }
 
+    /* Header의 시즌·그룹·연결 상태 영역 */
     .app-header__status {
         flex: 1 1 0;
         min-width: 0;
@@ -158,6 +178,8 @@
         gap: 0.25rem !important;
     }
 
+    /* 크리처 홈 반응형 */
+    /* 크리처 성장 단계 이름표 */
     #growth-stage {
         font-size: 1.1rem !important;
         line-height: 1.2;
@@ -167,20 +189,41 @@
     #creature-title-name {
         white-space: pre-line;
     }
-
+    /* 크리처 이미지 축소 */
     #creature-img-wrapper {
         zoom: 0.85;
     }
 }
 
+/* 576px 이하 */
 @media (max-width: 576px) {
+    /* 메인 콘텐츠 영역 좌우 여백 축소 */
+    .app-shell .container-fluid {
+        padding-right: 1rem !important;
+        padding-left: 1rem !important;
+    }
+
+    /* [크리처홈] 크리처 이미지 추가 축소 */
     #creature-img-wrapper {
         zoom: 0.75;
     }
 }
 
+/* 390px 이하 */
 @media (max-width: 390px) {
+    /* [크리처홈] 크리처 이미지 추가 축소 */
     #creature-img-wrapper {
         zoom: 0.65;
+    }
+}
+
+/* 모션 감소 설정 시 전환 효과 최소화 */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        animation: none !important;
+        transition: none !important;
     }
 }

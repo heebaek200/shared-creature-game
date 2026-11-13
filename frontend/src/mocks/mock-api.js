@@ -177,6 +177,45 @@ export const mockApi = {
     };
   },
 
+  async getMyGroup() {
+    const membership = mockSidebarRole
+        ? {
+          membershipId: 501,
+          groupId: 501,
+          role: mockSidebarRole,
+          status: 'ACTIVE',
+          joinedAt: '2026-01-01T00:00:00Z',
+        }
+        : mockMembership;
+
+    if (!membership) {
+      throw new ApiError(403, {
+        code: 'ROLE_FORBIDDEN',
+        message: '그룹에 가입한 사용자만 조회할 수 있습니다.',
+        fieldErrors: [],
+        traceId: 'mock-my-group-forbidden',
+      });
+    }
+
+    return {
+      group: {
+        groupId: membership.groupId,
+        name: '새싹 연구소',
+        description: '함께 생명체를 키우고 성장시키는 그룹입니다.',
+        currentMemberCount: 14,
+        capacity: 20,
+        remainingCapacity: 6,
+        joinable: true,
+        joinBlockedReason: null,
+      },
+      primaryAdmin: {
+        userId: 101,
+        nickname: '새싹지기',
+      },
+      myMembership: membership,
+    };
+  },
+
   async logout() {
     mockAuthenticationState = 'ANONYMOUS';
     mockSidebarRole = null;
