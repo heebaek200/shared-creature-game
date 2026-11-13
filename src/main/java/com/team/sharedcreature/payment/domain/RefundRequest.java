@@ -216,35 +216,49 @@ public class RefundRequest {
         return applyCancellationState("CANCEL_UNKNOWN", null, now);
     }
 
-    /**
-     * 미확정 환불의 경과 시간을 재검사하고 최신 상태 조회 처리권을 선점합니다.
-     * 호출자는 구매 → 보유 아이템 → 환불 순서로 DB 잠금을 획득해야 합니다.
-     *
-     * @param now 잠금 획득 후 Clock에서 읽은 현재 시각
-     * @return 복구 처리권을 선점했으면 true, 대상이 아니면 false
-     */
     public boolean tryClaimRecovery(Instant now) {
+        // Scheduler는 기존과 동일하게 5분 경과를 요구합니다.
+        return tryClaimRecovery(now, false);
+    }
+
+    /**
+     * 호출 목적에 따라 미확정 환불의 복구 처리권을 선점합니다.
+     * 호출자는 DB 잠금과 진행 중인 조회 이력 검사를 먼저 수행해야 합니다.
+     *
+     * @param now 잠금 획득 후 읽은 현재 시각
+     * @param allowImmediateUnknown 관리자 수동 요청의 결과 불명 즉시 조회 허용 여부
+     * @return 처리권을 선점했으면 true
+     */
+    public boolean tryClaimRecovery(
+            Instant now,
+            boolean allowImmediateUnknown
+    ) {
         Objects.requireNonNull(now, "now");
 
-        // 이미 확정됐거나 아직 승인하지 않은 환불은 처리하지 않습니다.
         if (!"CANCEL_PENDING".equals(status)
                 && !"CANCEL_UNKNOWN".equals(status)) {
             return false;
         }
 
-        Instant cutoff = now.minusSeconds(300);
-
-        // 선점 이력이 없거나 마지막 선점 후 5분이 지나지 않았다면 제외합니다.
-        // 정확히 5분이 지난 경우에는 isAfter()가 false이므로 포함됩니다.
-        if (cancelClaimedAt == null || cancelClaimedAt.isAfter(cutoff)) {
+        // 선점 이력이 없거나 현재보다 미래 시각이면 처리하지 않습니다.
+        if (cancelClaimedAt == null || cancelClaimedAt.isAfter(now)) {
             return false;
         }
 
-        // 이번 조회의 선점 시각을 기록하여 다른 작업의 즉시 중복 선점을 막습니다.
+        boolean immediateUnknown = allowImmediateUnknown
+                && "CANCEL_UNKNOWN".equals(status);
+
+        Instant cutoff = now.minusSeconds(300);
+
+        // 관리자 결과 불명 재조회 외에는 정확히 5분 경과를 요구합니다.
+        if (!immediateUnknown && cancelClaimedAt.isAfter(cutoff)) {
+            return false;
+        }
+
+        // 조회 준비 단계이므로 상태·심사 사유·완료 시각은 유지합니다.
         this.cancelClaimedAt = now;
         this.updatedAt = now;
 
-        // 조회를 준비하는 단계이므로 환불 상태와 관리자 심사 정보는 유지합니다.
         return true;
     }
 

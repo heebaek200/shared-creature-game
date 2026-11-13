@@ -53,4 +53,26 @@ public interface PgApiAttemptRepository extends JpaRepository<PgApiAttempt, Long
     List<PgApiAttempt> findCancellationAttemptsForUpdate(
             @Param("requestId") Long requestId
     );
+
+    /**
+     * 환불의 취소 요청과 최신 상태 조회 이력을 함께 잠금 조회합니다.
+     * 호출자는 구매 → 보유 아이템 → 환불 순서로 먼저 잠가야 합니다.
+     *
+     * @param requestId 환불 요청 ID
+     * @return 시도 번호와 ID 오름차순으로 정렬된 취소·조회 이력
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT attempt
+        FROM PgApiAttempt attempt
+        WHERE attempt.refundRequest.id = :requestId
+        AND attempt.operation IN (
+              'CANCELLATION',
+              'CANCELLATION_LOOKUP'
+          )
+        ORDER BY attempt.attemptNumber ASC, attempt.id ASC
+        """)
+    List<PgApiAttempt> findCancellationHistoryForUpdate(
+            @Param("requestId") Long requestId
+    );
 }

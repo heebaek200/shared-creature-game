@@ -6,6 +6,7 @@ import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.payment.application.RefundQueryService;
 import com.team.sharedcreature.payment.application.RefundService;
+import com.team.sharedcreature.payment.application.RefundReconciliationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -34,6 +35,7 @@ public class AdminRefundController {
 
     private final RefundService refundService;
     private final RefundQueryService refundQueryService;
+    private final RefundReconciliationService reconciliationService;
 
     /**
      * 전체 사용자의 환불 요청을 페이지 단위로 조회합니다.
@@ -120,6 +122,36 @@ public class AdminRefundController {
                         body.decisionReason()
                 )
         );
+    }
+
+    /**
+     * 미확정 환불의 최신 PG 상태를 조회하고 결과를 복구합니다.
+     * 취소 요청을 재전송하지 않으며 요청 본문은 사용하지 않습니다.
+     */
+    @PostMapping("/{requestId}/reconciliations")
+    public ResponseEntity<?> reconcileRefund(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @PathVariable(name = "requestId") @Min(1) Long requestId,
+            @RequestHeader(name = "Idempotency-Key")
+            @Pattern(regexp = UUID_PATTERN) String idempotencyKey,
+            HttpServletRequest request
+    ) {
+        var result = reconciliationService.reconcileRefund(
+                loginUser.id(),
+                requestId,
+                idempotencyKey,
+                traceId(request)
+        );
+
+        // 상태와 최초 응답이 Commit된 뒤 저장된 오류를 전달합니다.
+        if (result.error() != null) {
+            return ResponseEntity.status(result.httpStatus())
+                    .body(result.error());
+        }
+
+        // 내부 처리용 객체 대신 공통 성공 Envelope을 반환합니다.
+        return ResponseEntity.status(result.httpStatus())
+                .body(ApiResponse.success(result.data()));
     }
 
     /** 기존 요청 필터가 부여한 추적 ID를 가져옵니다. */
