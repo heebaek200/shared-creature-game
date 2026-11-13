@@ -292,6 +292,15 @@ export function adminDashboardPage() {
                     numberFormat.format(x.paidAmountKrw),
                     numberFormat.format(x.refundedAmountKrw)
                 ])
+            ],
+
+            [
+                'capacity',
+                ['정원 구분', '인원'],
+                [
+                    ['사용', numberFormat.format(data.capacityUsage.occupied)],
+                    ['잔여', numberFormat.format(data.capacityUsage.remaining)]
+                ]
             ]
 
         ];
