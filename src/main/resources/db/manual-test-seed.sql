@@ -64,8 +64,9 @@ SELECT CASE WHEN numbers.n <= 56 THEN 'ACTIVE' ELSE 'WITHDRAWN' END
  WHERE numbers.n <= 60
    AND NOT EXISTS (
        SELECT 1
-         FROM user_profiles AS profile
-        WHERE profile.normalized_nickname = CONCAT('mt93_user_', LPAD(numbers.n, 3, '0'))
+         FROM users AS existing
+        WHERE existing.created_at = DATE_ADD(@mt93_user_marker, INTERVAL numbers.n SECOND)
+          AND existing.global_role = CASE WHEN numbers.n = 60 THEN 'SUPER_ADMIN' ELSE 'USER' END
    );
 
 INSERT INTO user_profiles (
@@ -84,13 +85,18 @@ SELECT seed_user.id
      , seed_user.updated_at
   FROM mt93_numbers AS numbers
   JOIN users AS seed_user
-    ON seed_user.created_at = DATE_ADD(@mt93_user_marker, INTERVAL numbers.n SECOND)
-   AND seed_user.global_role = CASE WHEN numbers.n = 60 THEN 'SUPER_ADMIN' ELSE 'USER' END
+    ON seed_user.id = (
+       SELECT MIN(candidate.id)
+         FROM users AS candidate
+        WHERE candidate.created_at = DATE_ADD(@mt93_user_marker, INTERVAL numbers.n SECOND)
+          AND candidate.global_role = CASE WHEN numbers.n = 60 THEN 'SUPER_ADMIN' ELSE 'USER' END
+    )
  WHERE numbers.n <= 60
    AND NOT EXISTS (
        SELECT 1
          FROM user_profiles AS existing
-        WHERE existing.normalized_nickname = CONCAT('mt93_user_', LPAD(numbers.n, 3, '0'))
+        WHERE existing.user_id = seed_user.id
+           OR existing.normalized_nickname = CONCAT('mt93_user_', LPAD(numbers.n, 3, '0'))
    );
 
 -- ============================================================
@@ -150,8 +156,8 @@ SELECT CONCAT('MT93 테스트 그룹 ', LPAD(plan.group_number, 2, '0'))
        END
      , primary_profile.user_id
      , 0
-     , @mt93_now - INTERVAL (35 - plan.group_number) DAY
-     , @mt93_now - INTERVAL plan.group_number HOUR
+     , @mt93_history_anchor - INTERVAL (120 - plan.group_number) DAY
+     , @mt93_history_anchor - INTERVAL (120 - plan.group_number) DAY
   FROM mt93_group_plan AS plan
   LEFT JOIN user_profiles AS primary_profile
     ON primary_profile.normalized_nickname =
@@ -184,13 +190,19 @@ SELECT seed_group.id
            ELSE 'MEMBER'
        END
      , 'ACTIVE'
-     , @mt93_now - INTERVAL (30 - MOD(numbers.n, 10)) DAY
+     , CASE
+           WHEN numbers.n = 1 THEN @mt93_history_anchor - INTERVAL 100 DAY
+           ELSE @mt93_history_anchor - INTERVAL (30 - MOD(numbers.n, 10)) DAY
+       END
      , NULL
      , NULL
      , NULL
      , 0
-     , @mt93_now - INTERVAL (30 - MOD(numbers.n, 10)) DAY
-     , @mt93_now - INTERVAL MOD(numbers.n, 24) HOUR
+     , CASE
+           WHEN numbers.n = 1 THEN @mt93_history_anchor - INTERVAL 100 DAY
+           ELSE @mt93_history_anchor - INTERVAL (30 - MOD(numbers.n, 10)) DAY
+       END
+     , @mt93_history_anchor - INTERVAL MOD(numbers.n, 24) HOUR
   FROM mt93_numbers AS numbers
   JOIN user_profiles AS profile
     ON profile.normalized_nickname = CONCAT('mt93_user_', LPAD(numbers.n, 3, '0'))
@@ -239,8 +251,9 @@ SELECT seed_group.id
      , profile.user_id
      , 'MEMBER'
      , CASE WHEN numbers.n <= 5 OR MOD(numbers.n, 2) = 0 THEN 'REMOVED' ELSE 'LEFT' END
-     , @mt93_history_anchor - INTERVAL (95 - MOD(numbers.n, 10)) DAY
-     , @mt93_history_anchor - INTERVAL (45 - MOD(numbers.n, 10)) DAY
+     , @mt93_history_anchor
+       - INTERVAL (100 - MOD(numbers.n, 10) + FLOOR((numbers.n - 1) / 60)) DAY
+     , @mt93_history_anchor - INTERVAL (50 - MOD(numbers.n, 10)) DAY
      , CASE
            WHEN numbers.n <= 5 OR MOD(numbers.n, 2) = 0 THEN historical_admin.user_id
            ELSE profile.user_id
@@ -251,8 +264,9 @@ SELECT seed_group.id
            ELSE 'SELF'
        END
      , 0
-     , @mt93_history_anchor - INTERVAL (95 - MOD(numbers.n, 10)) DAY
-     , @mt93_history_anchor - INTERVAL (45 - MOD(numbers.n, 10)) DAY
+     , @mt93_history_anchor
+       - INTERVAL (100 - MOD(numbers.n, 10) + FLOOR((numbers.n - 1) / 60)) DAY
+     , @mt93_history_anchor - INTERVAL (50 - MOD(numbers.n, 10)) DAY
   FROM mt93_numbers AS numbers
   JOIN user_profiles AS profile
     ON profile.normalized_nickname = CONCAT(
@@ -272,8 +286,8 @@ SELECT seed_group.id
          FROM group_memberships AS existing
         WHERE existing.group_id = seed_group.id
           AND existing.user_id = profile.user_id
-          AND existing.joined_at =
-              @mt93_history_anchor - INTERVAL (95 - MOD(numbers.n, 10)) DAY
+          AND existing.joined_at = @mt93_history_anchor
+              - INTERVAL (100 - MOD(numbers.n, 10) + FLOOR((numbers.n - 1) / 60)) DAY
    );
 
 INSERT INTO group_invite_links (
@@ -321,13 +335,17 @@ SELECT seed_group.id
      , 'INITIAL_PRIMARY'
      , NULL
      , 'PRIMARY'
-     , seed_group.created_at
+     , primary_membership.joined_at
   FROM mt93_group_plan AS plan
   JOIN game_groups AS seed_group
     ON seed_group.normalized_name = CONCAT('mt93_group_', LPAD(plan.group_number, 2, '0'))
   JOIN user_profiles AS primary_profile
     ON primary_profile.normalized_nickname =
        CONCAT('mt93_user_', LPAD(plan.primary_user_number, 3, '0'))
+  JOIN group_memberships AS primary_membership
+    ON primary_membership.group_id = seed_group.id
+   AND primary_membership.user_id = primary_profile.user_id
+   AND primary_membership.status = 'ACTIVE'
  WHERE plan.group_number <= 10
    AND NOT EXISTS (
        SELECT 1
@@ -352,7 +370,7 @@ SELECT seed_group.id
      , 'GRANT_DEPUTY'
      , 'MEMBER'
      , 'DEPUTY'
-     , seed_group.created_at + INTERVAL 1 DAY
+     , deputy_membership.joined_at
   FROM mt93_group_plan AS plan
   JOIN game_groups AS seed_group
     ON seed_group.normalized_name = CONCAT('mt93_group_', LPAD(plan.group_number, 2, '0'))
@@ -442,23 +460,29 @@ INSERT INTO group_seasons (
 )
 SELECT seed_group.id
      , @mt93_season_id
-     , @mt93_now - INTERVAL 7 DAY
-     , CASE WHEN plan.group_number = 1 THEN NULL ELSE species.id END
-     , CASE WHEN plan.group_number = 1 THEN NULL ELSE primary_profile.user_id END
-     , CASE WHEN plan.group_number = 1 THEN NULL ELSE 'ADMIN' END
-     , CASE WHEN plan.group_number = 1 THEN NULL ELSE @mt93_now - INTERVAL 8 DAY END
-     , 'ACTIVE'
+     , CASE
+           WHEN plan.group_number = 10
+               THEN LEAST(@mt93_now + INTERVAL 1 DAY, active_season.end_at - INTERVAL 1 MICROSECOND)
+           ELSE @mt93_now - INTERVAL 7 DAY
+       END
+     , CASE WHEN plan.group_number = 10 THEN NULL ELSE species.id END
+     , CASE WHEN plan.group_number = 10 THEN NULL ELSE primary_profile.user_id END
+     , CASE WHEN plan.group_number = 10 THEN NULL ELSE 'ADMIN' END
+     , CASE WHEN plan.group_number = 10 THEN NULL ELSE @mt93_now - INTERVAL 8 DAY END
+     , CASE WHEN plan.group_number = 10 THEN 'PREPARING' ELSE 'ACTIVE' END
      , 0
      , @mt93_now - INTERVAL 10 DAY
      , @mt93_now - INTERVAL 1 DAY
   FROM mt93_group_plan AS plan
   JOIN game_groups AS seed_group
     ON seed_group.normalized_name = CONCAT('mt93_group_', LPAD(plan.group_number, 2, '0'))
+  JOIN seasons AS active_season
+    ON active_season.id = @mt93_season_id
   JOIN user_profiles AS primary_profile
     ON primary_profile.normalized_nickname =
        CONCAT('mt93_user_', LPAD(plan.primary_user_number, 3, '0'))
   LEFT JOIN creature_species AS species
-    ON species.display_order = MOD(plan.group_number - 2, 3) + 1
+    ON species.display_order = MOD(plan.group_number - 1, 3) + 1
    AND species.status = 'ACTIVE'
  WHERE plan.group_number <= 10
    AND @mt93_season_id IS NOT NULL
@@ -468,6 +492,16 @@ SELECT seed_group.id
         WHERE existing.group_id = seed_group.id
           AND existing.season_id = @mt93_season_id
    );
+
+-- 같은 실제 시즌에서는 최초 시드 실행일을 고정해 날짜·주간 경계 재실행도 같은 기간을 사용합니다.
+SET @mt93_season_seed_anchor = COALESCE((
+    SELECT MIN(group_season.created_at) + INTERVAL 10 DAY
+      FROM group_seasons AS group_season
+      JOIN game_groups AS seed_group
+        ON seed_group.id = group_season.group_id
+     WHERE seed_group.normalized_name LIKE 'mt93_group_%'
+       AND group_season.season_id = @mt93_season_id
+), @mt93_now);
 
 INSERT INTO group_creatures (
     group_season_id
@@ -568,10 +602,10 @@ SELECT group_season.id
 -- 현재 KST 일일·주간 기간과 공식 퀘스트 10개
 -- ============================================================
 
-SET @mt93_daily_start = TIMESTAMP(DATE(@mt93_now + INTERVAL 9 HOUR)) - INTERVAL 9 HOUR;
+SET @mt93_daily_start = TIMESTAMP(DATE(@mt93_season_seed_anchor + INTERVAL 9 HOUR)) - INTERVAL 9 HOUR;
 SET @mt93_daily_end = @mt93_daily_start + INTERVAL 1 DAY;
 SET @mt93_weekly_start =
-    @mt93_daily_start - INTERVAL WEEKDAY(DATE(@mt93_now + INTERVAL 9 HOUR)) DAY;
+    @mt93_daily_start - INTERVAL WEEKDAY(DATE(@mt93_season_seed_anchor + INTERVAL 9 HOUR)) DAY;
 SET @mt93_weekly_end = @mt93_weekly_start + INTERVAL 7 DAY;
 
 INSERT INTO quest_periods (
@@ -708,11 +742,11 @@ INSERT INTO mt93_assignment_plan (period_type, template_code, slot_number) VALUE
   , ('DAILY', 'D-H-01', 3)
   , ('WEEKLY', 'W-L-01', 1)
   , ('WEEKLY', 'W-L-02', 2)
-  , ('WEEKLY', 'W-M-01', 3)
-  , ('WEEKLY', 'W-M-02', 4)
-  , ('WEEKLY', 'W-M-03', 5)
-  , ('WEEKLY', 'W-H-01', 6)
-  , ('WEEKLY', 'W-H-02', 7);
+  , ('WEEKLY', 'W-L-03', 3)
+  , ('WEEKLY', 'W-L-04', 4)
+  , ('WEEKLY', 'W-L-05', 5)
+  , ('WEEKLY', 'W-L-06', 6)
+  , ('WEEKLY', 'W-M-01', 7);
 
 INSERT INTO quest_assignments (
     quest_period_id
@@ -768,7 +802,172 @@ SELECT period.id
  )
  ORDER BY period.start_at, plan.slot_number;
 
--- 52개 활성 멤버십과 10개 배정 조합 중 앞 500건을 완료 처리합니다.
+-- SERVER_EVENT와 주간 집계 퀘스트가 참조하는 실제 체크인 근거를 먼저 구성합니다.
+INSERT INTO user_activity_events (
+    user_id
+  , event_type
+  , source_type
+  , source_id
+  , membership_id
+  , group_season_id
+  , business_date
+  , occurred_at
+  , deduplication_key
+  , metadata
+  , created_at
+)
+SELECT membership.user_id
+     , 'SERVICE_CHECK_IN'
+     , 'MANUAL_TEST_SEED'
+     , membership.id
+     , membership.id
+     , group_season.id
+     , period.period_date
+     , LEAST(@mt93_season_seed_anchor, period.start_at + INTERVAL 7 HOUR)
+     , CONCAT('MT93:CHECKIN:', membership.id, ':', DATE_FORMAT(period.period_date, '%Y%m%d'))
+     , JSON_OBJECT('seed', 'issue-93', 'morning', TRUE)
+     , LEAST(@mt93_season_seed_anchor, period.start_at + INTERVAL 7 HOUR)
+  FROM group_memberships AS membership
+  JOIN user_profiles AS profile
+    ON profile.user_id = membership.user_id
+   AND profile.normalized_nickname LIKE 'mt93_user_%'
+  JOIN group_seasons AS group_season
+    ON group_season.group_id = membership.group_id
+   AND group_season.season_id = @mt93_season_id
+  JOIN quest_periods AS period
+    ON period.season_id = @mt93_season_id
+   AND period.period_type = 'DAILY'
+   AND period.start_at BETWEEN @mt93_daily_start - INTERVAL 6 DAY AND @mt93_daily_start
+ WHERE membership.status = 'ACTIVE'
+   AND NOT EXISTS (
+       SELECT 1
+         FROM user_activity_events AS existing
+        WHERE existing.deduplication_key =
+              CONCAT('MT93:CHECKIN:', membership.id, ':', DATE_FORMAT(period.period_date, '%Y%m%d'))
+   );
+
+INSERT INTO service_check_ins (
+    user_id
+  , activity_event_id
+  , check_in_date
+  , checked_in_at
+  , is_morning
+  , created_at
+)
+SELECT event.user_id
+     , event.id
+     , event.business_date
+     , event.occurred_at
+     , TRUE
+     , event.created_at
+  FROM user_activity_events AS event
+ WHERE event.deduplication_key LIKE 'MT93:CHECKIN:%'
+   AND NOT EXISTS (
+       SELECT 1
+         FROM service_check_ins AS existing
+        WHERE existing.activity_event_id = event.id
+   );
+
+CREATE TEMPORARY TABLE IF NOT EXISTS mt93_completion_plan (
+    user_id             BIGINT      NOT NULL
+  , assignment_id       BIGINT      NOT NULL
+  , group_season_id     BIGINT      NOT NULL
+  , membership_id       BIGINT      NOT NULL
+  , completed_at        DATETIME(6) NOT NULL
+  , period_start_at     DATETIME(6) NOT NULL
+  , experience_amount   BIGINT      NOT NULL
+  , contribution_amount BIGINT      NOT NULL
+  , PRIMARY KEY (user_id, assignment_id)
+);
+
+DELETE FROM mt93_completion_plan;
+
+-- 그룹 1은 GROWING, 그룹 10은 EGG, 나머지는 HATCHLING 시나리오가 되도록 500건을 고정합니다.
+INSERT INTO mt93_completion_plan (
+    user_id
+  , assignment_id
+  , group_season_id
+  , membership_id
+  , completed_at
+  , period_start_at
+  , experience_amount
+  , contribution_amount
+)
+SELECT ranked.user_id
+     , ranked.assignment_id
+     , ranked.group_season_id
+     , ranked.membership_id
+     , ranked.completed_at
+     , ranked.period_start_at
+     , ranked.experience_amount
+     , ranked.contribution_amount
+  FROM (
+       SELECT candidates.*
+            , ROW_NUMBER() OVER (
+                  ORDER BY candidates.seed_priority
+                         , candidates.period_start_at
+                         , candidates.assignment_id
+                         , candidates.user_number
+              ) AS seed_order
+         FROM (
+              SELECT membership.user_id
+                   , assignment.id AS assignment_id
+                   , group_season.id AS group_season_id
+                   , membership.id AS membership_id
+                   , period.start_at AS period_start_at
+                   , CAST(RIGHT(profile.normalized_nickname, 3) AS UNSIGNED) AS user_number
+                   , assignment.creature_experience_snapshot AS experience_amount
+                   , assignment.contribution_score_snapshot AS contribution_amount
+                   , CASE
+                         WHEN seed_group.normalized_name = 'mt93_group_01'
+                          AND (
+                              period.period_type = 'DAILY'
+                               OR (period.period_type = 'WEEKLY' AND assignment.slot_number <= 3)
+                          ) THEN 0
+                         WHEN seed_group.normalized_name = 'mt93_group_01' THEN 2
+                         ELSE 1
+                     END AS seed_priority
+                   , CASE
+                         WHEN period.period_type = 'WEEKLY' THEN @mt93_season_seed_anchor
+                         WHEN assignment.verification_type_snapshot = 'SERVER_EVENT'
+                             THEN LEAST(@mt93_season_seed_anchor, period.start_at + INTERVAL 8 HOUR)
+                         ELSE LEAST(
+                             @mt93_season_seed_anchor,
+                             period.start_at
+                             + INTERVAL MOD(
+                                 CAST(RIGHT(profile.normalized_nickname, 3) AS UNSIGNED)
+                                 * 17 + assignment.slot_number,
+                                 600
+                               ) MINUTE
+                         )
+                     END AS completed_at
+                FROM group_memberships AS membership
+                JOIN user_profiles AS profile
+                  ON profile.user_id = membership.user_id
+                 AND profile.normalized_nickname LIKE 'mt93_user_%'
+                JOIN game_groups AS seed_group
+                  ON seed_group.id = membership.group_id
+                JOIN group_seasons AS group_season
+                  ON group_season.group_id = membership.group_id
+                 AND group_season.season_id = @mt93_season_id
+                JOIN quest_periods AS period
+                  ON period.season_id = @mt93_season_id
+                 AND (
+                     (
+                         period.period_type = 'DAILY'
+                         AND period.start_at BETWEEN @mt93_daily_start - INTERVAL 6 DAY
+                                                 AND @mt93_daily_start
+                     )
+                      OR
+                     (period.period_type = 'WEEKLY' AND period.start_at = @mt93_weekly_start)
+                 )
+                JOIN quest_assignments AS assignment
+                  ON assignment.quest_period_id = period.id
+               WHERE membership.status = 'ACTIVE'
+              ) AS candidates
+       ) AS ranked
+ WHERE ranked.seed_order <= 500;
+
 INSERT INTO quest_completions (
     user_id
   , quest_assignment_id
@@ -780,82 +979,42 @@ INSERT INTO quest_completions (
   , group_season_score_after
   , created_at
 )
-SELECT candidates.user_id
-     , candidates.assignment_id
-     , candidates.group_season_id
-     , candidates.membership_id
-     , candidates.completed_at
-     , candidates.creature_balance
+SELECT planned.user_id
+     , planned.assignment_id
+     , planned.group_season_id
+     , planned.membership_id
+     , planned.completed_at
+     , planned.creature_balance
      , CASE
-           WHEN candidates.creature_balance >= 150000 THEN 'COMPLETE'
-           WHEN candidates.creature_balance >= 97500 THEN 'MATURE'
-           WHEN candidates.creature_balance >= 45000 THEN 'GROWING'
+           WHEN planned.creature_balance >= 150000 THEN 'COMPLETE'
+           WHEN planned.creature_balance >= 97500 THEN 'MATURE'
+           WHEN planned.creature_balance >= 45000 THEN 'GROWING'
            ELSE 'HATCHLING'
        END
-     , candidates.group_score_balance
-     , candidates.completed_at
+     , planned.group_score_balance
+     , planned.completed_at
   FROM (
-       SELECT membership.user_id
-            , assignment.id AS assignment_id
-            , group_season.id AS group_season_id
-            , membership.id AS membership_id
-            , LEAST(
-                  @mt93_now,
-                  period.start_at
-                  + INTERVAL MOD(
-                      CAST(RIGHT(profile.normalized_nickname, 3) AS UNSIGNED)
-                      * 17 + assignment.slot_number,
-                      600
-                    ) MINUTE
-              ) AS completed_at
-            , SUM(assignment.creature_experience_snapshot) OVER (
-                  PARTITION BY membership.group_id
-                  ORDER BY period.start_at
-                         , assignment.id
-                         , CAST(RIGHT(profile.normalized_nickname, 3) AS UNSIGNED)
+       SELECT completion_plan.*
+            , SUM(completion_plan.experience_amount) OVER (
+                  PARTITION BY completion_plan.group_season_id
+                  ORDER BY completion_plan.completed_at
+                         , completion_plan.assignment_id
+                         , completion_plan.user_id
               ) AS creature_balance
-            , SUM(assignment.contribution_score_snapshot) OVER (
-                  PARTITION BY membership.group_id
-                  ORDER BY period.start_at
-                         , assignment.id
-                         , CAST(RIGHT(profile.normalized_nickname, 3) AS UNSIGNED)
+            , SUM(completion_plan.contribution_amount) OVER (
+                  PARTITION BY completion_plan.group_season_id
+                  ORDER BY completion_plan.completed_at
+                         , completion_plan.assignment_id
+                         , completion_plan.user_id
               ) AS group_score_balance
-            , ROW_NUMBER() OVER (
-                  ORDER BY period.start_at
-                         , assignment.id
-                         , CAST(RIGHT(profile.normalized_nickname, 3) AS UNSIGNED)
-              ) AS seed_order
-         FROM group_memberships AS membership
-         JOIN user_profiles AS profile
-           ON profile.user_id = membership.user_id
-          AND profile.normalized_nickname LIKE 'mt93_user_%'
-         JOIN group_seasons AS group_season
-           ON group_season.group_id = membership.group_id
-          AND group_season.season_id = @mt93_season_id
-         JOIN quest_periods AS period
-           ON period.season_id = @mt93_season_id
-          AND (
-              (
-                  period.period_type = 'DAILY'
-                  AND period.start_at BETWEEN @mt93_daily_start - INTERVAL 6 DAY
-                                          AND @mt93_daily_start
-              )
-               OR
-              (period.period_type = 'WEEKLY' AND period.start_at = @mt93_weekly_start)
-          )
-         JOIN quest_assignments AS assignment
-           ON assignment.quest_period_id = period.id
-        WHERE membership.status = 'ACTIVE'
-       ) AS candidates
- WHERE candidates.seed_order <= 500
-   AND NOT EXISTS (
+         FROM mt93_completion_plan AS completion_plan
+       ) AS planned
+ WHERE NOT EXISTS (
        SELECT 1
          FROM quest_completions AS existing
-        WHERE existing.user_id = candidates.user_id
-          AND existing.quest_assignment_id = candidates.assignment_id
- );
-
-SET @mt93_inserted_completions = ROW_COUNT();
+        WHERE existing.user_id = planned.user_id
+          AND existing.quest_assignment_id = planned.assignment_id
+   );
 
 INSERT INTO quest_reward_ledgers (
     quest_completion_id
@@ -974,7 +1133,7 @@ JOIN (
      , contribution.score_reached_at = aggregate.reached_at
      , contribution.updated_at = aggregate.reached_at
      , contribution.version = contribution.version + 1
- WHERE @mt93_inserted_completions > 0;
+ WHERE contribution.version = 0;
 
 UPDATE season_group_scores AS group_score
 JOIN (
@@ -994,7 +1153,7 @@ JOIN (
      , group_score.score_reached_at = aggregate.reached_at
      , group_score.updated_at = aggregate.reached_at
      , group_score.version = group_score.version + 1
- WHERE @mt93_inserted_completions > 0;
+ WHERE group_score.version = 0;
 
 UPDATE group_creatures AS creature
 JOIN (
@@ -1024,7 +1183,7 @@ JOIN (
        END
      , creature.updated_at = aggregate.reached_at
      , creature.version = creature.version + 1
- WHERE @mt93_inserted_completions > 0;
+ WHERE creature.version = 0;
 
 INSERT INTO user_activity_events (
     user_id
@@ -1373,14 +1532,31 @@ SELECT reporter.user_id
            ELSE 'REJECTED'
        END
      , CASE WHEN numbers.n <= 10 THEN NULL ELSE historical_admin.user_id END
-     , CASE WHEN numbers.n <= 10 THEN NULL ELSE @mt93_now - INTERVAL (30 - numbers.n) DAY END
+     , CASE
+           WHEN numbers.n <= 10 THEN NULL
+           WHEN numbers.n <= 15
+               THEN @mt93_history_anchor - INTERVAL (60 - numbers.n) DAY
+           ELSE @mt93_history_anchor - INTERVAL (30 - numbers.n) DAY
+       END
      , CASE
            WHEN numbers.n <= 10 THEN NULL
            WHEN numbers.n <= 20 THEN '신고 검토 및 조치 완료'
            ELSE '증거 부족으로 기각'
        END
-     , @mt93_now - INTERVAL (35 - numbers.n) DAY
-     , @mt93_now - INTERVAL (30 - numbers.n) DAY
+     , CASE
+           WHEN numbers.n <= 10
+               THEN @mt93_history_anchor - INTERVAL (20 - numbers.n) DAY
+           WHEN numbers.n <= 15
+               THEN @mt93_history_anchor - INTERVAL (61 - numbers.n) DAY
+           ELSE @mt93_history_anchor - INTERVAL (35 - numbers.n) DAY
+       END
+     , CASE
+           WHEN numbers.n <= 10
+               THEN @mt93_history_anchor - INTERVAL (20 - numbers.n) DAY
+           WHEN numbers.n <= 15
+               THEN @mt93_history_anchor - INTERVAL (60 - numbers.n) DAY
+           ELSE @mt93_history_anchor - INTERVAL (30 - numbers.n) DAY
+       END
   FROM mt93_numbers AS numbers
   JOIN user_profiles AS reporter
     ON reporter.normalized_nickname = 'mt93_user_001'
@@ -1529,6 +1705,115 @@ SELECT historical_admin.user_id
         WHERE existing.reason = CONCAT('MT93 신고 감사 ', LPAD(numbers.n, 2, '0'))
    );
 
+-- ============================================================
+-- 실제 활성 상태에서 종료된 시즌의 누락 랭킹 Snapshot
+-- ============================================================
+
+INSERT INTO season_group_rank_snapshots (
+    season_id
+  , group_season_id
+  , group_id
+  , rank_number
+  , score
+  , score_reached_at
+  , group_name_snapshot
+  , created_at
+)
+SELECT ranked.season_id
+     , ranked.group_season_id
+     , ranked.group_id
+     , ranked.rank_number
+     , ranked.score
+     , ranked.score_reached_at
+     , ranked.group_name
+     , ranked.snapshot_at
+  FROM (
+       SELECT season.id AS season_id
+            , group_season.id AS group_season_id
+            , seed_group.id AS group_id
+            , ROW_NUMBER() OVER (
+                  PARTITION BY season.id
+                  ORDER BY group_score.score DESC
+                         , COALESCE(group_score.score_reached_at, group_season.created_at)
+                         , seed_group.id
+              ) AS rank_number
+            , group_score.score
+            , COALESCE(group_score.score_reached_at, group_season.created_at) AS score_reached_at
+            , seed_group.name AS group_name
+            , season.updated_at AS snapshot_at
+         FROM seasons AS season
+         JOIN group_seasons AS group_season
+           ON group_season.season_id = season.id
+         JOIN game_groups AS seed_group
+           ON seed_group.id = group_season.group_id
+         JOIN season_group_scores AS group_score
+           ON group_score.group_season_id = group_season.id
+        WHERE season.status = 'ENDED'
+          AND season.closing_from_status = 'ACTIVE'
+       ) AS ranked
+ WHERE NOT EXISTS (
+       SELECT 1
+         FROM season_group_rank_snapshots AS existing
+        WHERE existing.season_id = ranked.season_id
+          AND existing.group_id = ranked.group_id
+   );
+
+INSERT INTO season_member_rank_snapshots (
+    season_id
+  , group_season_id
+  , group_id
+  , user_id
+  , rank_number
+  , contribution_score
+  , score_reached_at
+  , participant_status
+  , nickname_snapshot
+  , created_at
+)
+SELECT ranked.season_id
+     , ranked.group_season_id
+     , ranked.group_id
+     , ranked.user_id
+     , ranked.rank_number
+     , ranked.contribution_score
+     , ranked.score_reached_at
+     , ranked.participant_status
+     , ranked.nickname
+     , ranked.snapshot_at
+  FROM (
+       SELECT season.id AS season_id
+            , group_season.id AS group_season_id
+            , group_season.group_id
+            , contribution.user_id
+            , ROW_NUMBER() OVER (
+                  PARTITION BY group_season.id
+                  ORDER BY contribution.contribution_score DESC
+                         , COALESCE(contribution.score_reached_at, contribution.created_at)
+                         , contribution.user_id
+              ) AS rank_number
+            , contribution.contribution_score
+            , COALESCE(contribution.score_reached_at, contribution.created_at) AS score_reached_at
+            , contribution.participant_status
+            , profile.nickname
+            , season.updated_at AS snapshot_at
+         FROM seasons AS season
+         JOIN group_seasons AS group_season
+           ON group_season.season_id = season.id
+         JOIN season_member_contributions AS contribution
+           ON contribution.group_season_id = group_season.id
+         JOIN user_profiles AS profile
+           ON profile.user_id = contribution.user_id
+        WHERE season.status = 'ENDED'
+          AND season.closing_from_status = 'ACTIVE'
+       ) AS ranked
+ WHERE NOT EXISTS (
+       SELECT 1
+         FROM season_member_rank_snapshots AS existing
+        WHERE existing.group_season_id = ranked.group_season_id
+          AND existing.user_id = ranked.user_id
+   );
+
+DROP TEMPORARY TABLE IF EXISTS mt93_completion_plan;
 DROP TEMPORARY TABLE IF EXISTS mt93_assignment_plan;
 DROP TEMPORARY TABLE IF EXISTS mt93_group_plan;
 DROP TEMPORARY TABLE IF EXISTS mt93_numbers;
