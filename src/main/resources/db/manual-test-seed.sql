@@ -749,10 +749,70 @@ INSERT INTO mt93_assignment_plan (period_type, template_code, slot_number) VALUE
   , ('WEEKLY', 'W-L-01', 1)
   , ('WEEKLY', 'W-L-02', 2)
   , ('WEEKLY', 'W-L-03', 3)
-  , ('WEEKLY', 'W-L-04', 4)
-  , ('WEEKLY', 'W-L-05', 5)
-  , ('WEEKLY', 'W-L-06', 6)
-  , ('WEEKLY', 'W-M-01', 7);
+  , ('WEEKLY', 'W-M-02', 4)
+  , ('WEEKLY', 'W-M-03', 5)
+  , ('WEEKLY', 'W-H-01', 6)
+  , ('WEEKLY', 'W-H-04', 7);
+
+-- #93 구버전 시드가 만든 잘못된 주간 난이도 배열만 복구합니다.
+-- 완료와 사진 인증 시도가 없는 슬롯 4~7로 제한해 기존 사용자 결과를 보존합니다.
+SET @mt93_legacy_weekly_period_id = (
+    SELECT period.id
+      FROM quest_periods AS period
+     WHERE period.season_id = @mt93_season_id
+       AND period.period_type = 'WEEKLY'
+       AND period.start_at = @mt93_weekly_start
+       AND (
+           SELECT GROUP_CONCAT(
+                      CONCAT(assignment.slot_number, ':', template.code)
+                      ORDER BY assignment.slot_number SEPARATOR ','
+                  )
+             FROM quest_assignments AS assignment
+             JOIN quest_templates AS template ON template.id = assignment.quest_template_id
+            WHERE assignment.quest_period_id = period.id
+       ) = '1:W-L-01,2:W-L-02,3:W-L-03,4:W-L-04,5:W-L-05,6:W-L-06,7:W-M-01'
+       AND NOT EXISTS (
+           SELECT 1
+             FROM quest_completions AS completion
+             JOIN quest_assignments AS assignment ON assignment.id = completion.quest_assignment_id
+            WHERE assignment.quest_period_id = period.id
+              AND assignment.slot_number BETWEEN 4 AND 7
+       )
+       AND NOT EXISTS (
+           SELECT 1
+             FROM photo_submissions AS submission
+             JOIN quest_assignments AS assignment ON assignment.id = submission.quest_assignment_id
+            WHERE assignment.quest_period_id = period.id
+              AND assignment.slot_number BETWEEN 4 AND 7
+       )
+     LIMIT 1
+);
+
+UPDATE quest_assignments AS assignment
+  JOIN (
+       SELECT 4 AS slot_number, 'W-M-02' AS template_code
+       UNION ALL
+       SELECT 5, 'W-M-03'
+       UNION ALL
+       SELECT 6, 'W-H-01'
+       UNION ALL
+       SELECT 7, 'W-H-04'
+  ) AS repair ON repair.slot_number = assignment.slot_number
+  JOIN quest_templates AS template ON template.code = repair.template_code
+  JOIN quest_template_versions AS version
+    ON version.quest_template_id = template.id
+   AND version.version_number = 1
+   SET assignment.quest_template_id = template.id
+     , assignment.quest_template_version_id = version.id
+     , assignment.title_snapshot = version.title
+     , assignment.description_snapshot = version.description
+     , assignment.difficulty_snapshot = template.difficulty
+     , assignment.verification_type_snapshot = version.verification_type
+     , assignment.verification_parameters_snapshot = version.verification_parameters
+     , assignment.creature_experience_snapshot = version.creature_experience
+     , assignment.contribution_score_snapshot = version.contribution_score
+ WHERE assignment.quest_period_id = @mt93_legacy_weekly_period_id
+   AND assignment.slot_number BETWEEN 4 AND 7;
 
 INSERT INTO quest_assignments (
     quest_period_id
