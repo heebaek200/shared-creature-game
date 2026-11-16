@@ -207,6 +207,11 @@ export function adminReportsPage() {
     let listVersion = 0;
     let detailVersion = 0;
 
+    // 마지막 조회 버튼 클릭 시 확정한 신고 상태 필터입니다.
+    // 화면에서 선택만 한 값은 조회에 반영하지 않습니다.
+    // 새로고침과 페이징에서도 동일한 조건을 사용합니다.
+    let appliedStatus = statusInput.value || undefined;
+
     /**
      * 페이지 상단에 조회, 처리 결과를 표시한다.
      * 성공, 경고, 실패를 Bootstrap 알림 스타일로 구분한다.
@@ -351,8 +356,9 @@ export function adminReportsPage() {
         updateControls();
 
         try {
+            // 입력 중인 값 대신 확정된 신고 상태로 조회합니다.
             const result = await listAdminReports({
-                status: statusInput.value || undefined,
+                status: appliedStatus,
                 page,
                 size: PAGE_SIZE
             });
@@ -522,18 +528,28 @@ export function adminReportsPage() {
         }
     }
 
+
     /**
-     * 조회 폼 제출 시 페이지와 선택 상태를 초기화합니다.
-     * 상태 필터 변경 사항을 적용해 첫 페이지부터 다시 조회합니다.
-     * @param {SubmitEvent} event 조회 폼 제출 이벤트
+     * 신고 상태 조회 Form의 제출을 처리합니다.
+     * 선택한 신고 상태를 확정하고 첫 페이지부터 다시 조회합니다.
+     * 이전에 선택한 신고 상세는 초기화합니다.
+     *
+     * @param {SubmitEvent} event 조회 Form 제출 이벤트
      * @returns {void}
      */
     function onFilterSubmit(event) {
         event.preventDefault();
+
+        // 신고 처리 작업 중에는 필터 조회를 시작하지 않습니다.
         if (processing) return;
 
+        // 조회 버튼을 눌렀을 때만 선택한 상태를 확정합니다.
+        appliedStatus = statusInput.value || undefined;
+
+        // 새로운 필터는 첫 페이지부터 조회합니다.
         page = 0;
         clearDetail();
+
         void loadReports();
     }
 

@@ -154,6 +154,13 @@ export function adminDashboardPage() {
     let requestVersion = 0;
     let disposeChart = () => {};
 
+    // 자동 갱신에는 마지막으로 확정한 조회 조건을 사용합니다.
+    // 화면에 입력 중인 값은 submit 전까지 API 요청에 반영하지 않습니다.
+    let appliedFilters = {
+        range: rangeInput.value,
+        groupId: undefined
+    };
+
     /**
      * 조회 중 성공, 실패 메시지를 한 영역에서 표시한다.
      * API 오류일 때는 기존 성공 상태와 구분해 안내한다.
@@ -312,29 +319,45 @@ export function adminDashboardPage() {
     }
 
     /**
-     * 현재 필터로 서버 통계를 요청하고 Page를 최신 결과로 갱신한다.
-     * 이전 응답과 차트 로딩 완료가 늦게 도착해도 최신 화면을 덮지 않는다.
-     * @returns {Promise<void>} 조회 완료 시 종료
+     * 마지막으로 확정한 필터를 이용해 대시보드 데이터를 조회합니다.
+     * applyForm이 true이면 현재 폼의 값을 검증하고 조회 조건에 반영합니다.
+     * 자동 갱신과 새로고침은 확정된 조건을 그대로 재사용합니다.
+     *
+     * @param {boolean} [applyForm=false] 현재 폼의 필터를 적용할지 여부
+     * @returns {Promise<void>} 대시보드 조회 완료
      */
-    async function loadDashboard() {
+    async function loadDashboard(applyForm = false) {
         const version = ++requestVersion;
-        let groupId;
-        try {
-            groupId = readGroupId();
-        } catch (error) {
-            showStatus(error instanceof Error ? error.message : '그룹 ID를 확인해 주세요.', 'danger');
-            refreshButton.disabled = false;
-            return;
+
+        // 조회 버튼을 눌렀을 때만 입력한 조건을 확정합니다.
+        if (applyForm) {
+            let groupId;
+
+            try {
+                groupId = readGroupId();
+            } catch (error) {
+                showStatus(
+                    error instanceof Error
+                        ? error.message
+                        : '그룹 ID를 확인해 주세요.',
+                    'danger'
+                );
+                refreshButton.disabled = false;
+                return;
+            }
+
+            appliedFilters = {
+                range: rangeInput.value,
+                groupId
+            };
         }
 
         refreshButton.disabled = true;
         showStatus('대시보드 데이터를 불러오는 중입니다.');
 
         try {
-            const dashboard = await getAdminDashboard({
-                range: rangeInput.value,
-                groupId
-            });
+            // 입력 중인 값이 아니라 확정된 필터로 요청합니다.
+            const dashboard = await getAdminDashboard(appliedFilters);
             if (disposed || version !== requestVersion) return;
 
             // 데이터 조회는 차트 로딩보다 먼저 확정하고 즉시 표시한다.
@@ -381,25 +404,30 @@ export function adminDashboardPage() {
     }
 
     /**
-     * 기본 폼 제출을 막고 조건에 따라 서버 집계를 다시 조회한다.
-     * 입력값 검증과 실제 요청은 loadDashboard에 위임한다.
-     * @param {SubmitEvent} event 폼 제출 이벤트
+     * 조건 조회 버튼으로 제출된 필터를 적용합니다.
+     * 기본 HTML Form 제출에 따른 페이지 이동을 차단합니다.
+     * 입력값 검증과 API 요청은 loadDashboard에 위임합니다.
+     *
+     * @param {SubmitEvent} event 조회 폼 제출 이벤트
      * @returns {void}
      */
     function onSubmit(event) {
         event.preventDefault();
-        void loadDashboard();
+
+        // submit일 때만 현재 입력값을 조회 조건에 반영합니다.
+        void loadDashboard(true);
     }
 
-    const onFilterChange = () => {void loadDashboard();};
-    const onRefresh = () => {void loadDashboard();};
+    // 수동 새로고침은 기존 조회 조건을 유지합니다.
+    const onRefresh = () => {
+        void loadDashboard();
+    };
+
     const onVisibilityChange = () => {
         if (document.visibilityState === 'visible') void loadDashboard();
     };
 
     filterForm.addEventListener('submit', onSubmit);
-    rangeInput.addEventListener('change', onFilterChange);
-    groupInput.addEventListener('change', onFilterChange);
     refreshButton.addEventListener('click', onRefresh);
     document.addEventListener('visibilitychange', onVisibilityChange);
 
@@ -418,8 +446,6 @@ export function adminDashboardPage() {
             clearInterval(intervalId);
             disposeChart();
             filterForm.removeEventListener('submit', onSubmit);
-            rangeInput.removeEventListener('change', onFilterChange);
-            groupInput.removeEventListener('change', onFilterChange);
             refreshButton.removeEventListener('click', onRefresh);
             document.removeEventListener('visibilitychange', onVisibilityChange);
         }

@@ -107,27 +107,35 @@ export function adminOperationsPage() {
       <div class="card-body">
         <h2 class="h5 mb-3">현재 운영 경고</h2>
 
-        <div class="row g-3 align-items-end mb-3">
-          <div class="col-12 col-md-5">
-            <label for="warning-type" class="form-label">경고 유형</label>
-            <select id="warning-type" class="form-select" data-warning-type>
-              <option value="">전체 유형</option>
-              <option value="SCHEDULER_FAILED">스케줄러 실패</option>
-              <option value="SEASON_STATE_INVALID">시즌 상태 이상</option>
-              <option value="TEMPLATE_SHORTAGE">퀘스트 템플릿 부족</option>
-              <option value="QUEST_PERIOD_FAILED">퀘스트 기간 실패</option>
-              <option value="MEMBER_COUNT_MISMATCH">그룹 인원 불일치</option>
-              <option value="PAYMENT_UNCERTAIN">결제 결과 불명</option>
-              <option value="REFUND_UNCERTAIN">환불 결과 불명</option>
-              <option value="PHOTO_DELETION_FAILED">사진 삭제 실패</option>
-            </select>
-          </div>
-
-          <div class="col-12 col-md-auto">
-            <button type="button" class="btn btn-outline-primary"
-                    data-warning-refresh>새로고침</button>
-          </div>
-        </div>
+        <form data-warning-filter-form class="row g-3 align-items-end mb-3">
+            <div class="col-12 col-md-5">
+                <label for="warning-type" class="form-label">경고 유형</label>
+                <select id="warning-type" class="form-select" data-warning-type>
+                    <option value="">전체 유형</option>
+                    <option value="SCHEDULER_FAILED">스케줄러 실패</option>
+                    <option value="SEASON_STATE_INVALID">시즌 상태 이상</option>
+                    <option value="TEMPLATE_SHORTAGE">퀘스트 템플릿 부족</option>
+                    <option value="QUEST_PERIOD_FAILED">퀘스트 기간 실패</option>
+                    <option value="MEMBER_COUNT_MISMATCH">그룹 인원 불일치</option>
+                    <option value="PAYMENT_UNCERTAIN">결제 결과 불명</option>
+                    <option value="REFUND_UNCERTAIN">환불 결과 불명</option>
+                    <option value="PHOTO_DELETION_FAILED">사진 삭제 실패</option>
+                </select>
+            </div>
+        
+            <div class="col-12 col-md-auto d-flex gap-2">
+                <!-- 조회는 Form의 submit 이벤트를 발생시킵니다. -->
+                <button type="submit" class="btn btn-primary">
+                    조회
+                </button>
+        
+                <!-- 새로고침은 Form을 제출하지 않습니다. -->
+                <button type="button" class="btn btn-outline-secondary"
+                        data-warning-refresh>
+                    새로고침
+                </button>
+            </div>
+        </form>
 
         <div class="alert alert-info" role="status" aria-live="polite"
              data-warning-notice>운영 경고 조회 중...</div>
@@ -232,6 +240,7 @@ export function adminOperationsPage() {
 
     const find = selector => element.querySelector(selector);
 
+    const warningFilterForm = /** @type {HTMLFormElement} */ (find('[data-warning-filter-form]'));
     const typeInput = /** @type {HTMLSelectElement} */ (find('[data-warning-type]'));
     const refreshButton = /** @type {HTMLButtonElement} */ (find('[data-warning-refresh]'));
     const warningNotice = /** @type {HTMLElement} */ (find('[data-warning-notice]'));
@@ -260,6 +269,10 @@ export function adminOperationsPage() {
     let page = 0;
     let totalPages = 0;
     let requestVersion = 0;
+
+    // 사용자가 마지막으로 조회 버튼을 눌러 확정한 경고 유형입니다.
+    // 셀렉트박스의 미적용 변경값은 자동 갱신과 페이징에 반영하지 않습니다.
+    let appliedType = typeInput.value || undefined;
 
     /** @type {{groupId: number, targetUserId: number, reason: string}|null} */
     let pendingTransfer = null;
@@ -364,10 +377,11 @@ export function adminOperationsPage() {
         showNotice(warningNotice, '운영 경고를 조회하고 있습니다.');
 
         try {
+            // 마지막으로 확정한 필터를 사용합니다.
             const result = await listOperationalWarnings({
-                type: typeInput.value || undefined,
+                type: appliedType,
                 page,
-                size: PAGE_SIZE,
+                size: PAGE_SIZE
             });
 
             if (disposed || version !== requestVersion) return false;
@@ -518,12 +532,27 @@ export function adminOperationsPage() {
         if (processing) event.preventDefault();
     }
 
-    // 일반 조회는 POST와 달리 화면이 보일 때만 자동 갱신합니다.
-    const onTypeChange = () => {
+    /**
+     * 경고 유형 조회 Form의 제출을 처리합니다.
+     * 선택한 유형을 확정하고 페이지를 첫 페이지로 초기화합니다.
+     * 기본 Form 제출을 차단해 SPA 화면을 유지합니다.
+     *
+     * @param {SubmitEvent} event Form 제출 이벤트
+     * @returns {void}
+     */
+    function onWarningFilterSubmit(event) {
+        event.preventDefault();
+
+        // 관리자 변경 작업 중에는 새로운 조회를 시작하지 않습니다.
         if (processing) return;
+
+        // 조회 버튼을 눌렀을 때만 선택값을 반영합니다.
+        appliedType = typeInput.value || undefined;
         page = 0;
+
         void loadWarnings();
-    };
+    }
+
     const onRefresh = () => {
         if (!processing) void loadWarnings();
     };
@@ -549,7 +578,8 @@ export function adminOperationsPage() {
         }
     };
 
-    typeInput.addEventListener('change', onTypeChange);
+    // 경고 유형 변경 대신 Form 제출 시에만 조회합니다.
+    warningFilterForm.addEventListener('submit', onWarningFilterSubmit);
     refreshButton.addEventListener('click', onRefresh);
     prevButton.addEventListener('click', onPrev);
     nextButton.addEventListener('click', onNext);
@@ -578,7 +608,8 @@ export function adminOperationsPage() {
 
             if (dialog.open) dialog.close();
 
-            typeInput.removeEventListener('change', onTypeChange);
+            // 화면 종료 시 경고 필터 Form의 이벤트를 정리합니다.
+            warningFilterForm.removeEventListener('submit', onWarningFilterSubmit);
             refreshButton.removeEventListener('click', onRefresh);
             prevButton.removeEventListener('click', onPrev);
             nextButton.removeEventListener('click', onNext);
