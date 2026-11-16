@@ -13,7 +13,6 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
-import org.springframework.session.jdbc.config.annotation.web.http.EnableJdbcHttpSession;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -25,7 +24,6 @@ import java.util.ArrayList;
  * 설계된 공개·인증·관리자 경로와 세션·CSRF 정책을 적용합니다.
  */
 @Configuration
-@EnableJdbcHttpSession
 public class SecurityConfiguration {
     /**
      * REST 경로 등급과 인증·인가 실패 응답을 구성합니다.

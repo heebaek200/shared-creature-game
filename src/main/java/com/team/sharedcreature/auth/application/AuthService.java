@@ -392,7 +392,7 @@ public class AuthService {
 
             List<Map.Entry<String, ? extends Session>> previousSessions = new ArrayList<>(sessions.entrySet());
             previousSessions.removeIf(entry -> entry.getKey().equals(currentSession.getId()));
-            previousSessions.sort(Comparator.comparing(entry -> entry.getValue().getLastAccessedTime()));
+            previousSessions.sort(Comparator.comparing(entry -> entry.getValue().getCreationTime()));
 
             while (previousSessions.size() > 2) {
                 Map.Entry<String, ? extends Session> oldest = previousSessions.remove(0);

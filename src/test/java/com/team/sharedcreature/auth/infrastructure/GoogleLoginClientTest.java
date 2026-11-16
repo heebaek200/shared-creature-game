@@ -91,7 +91,7 @@ class GoogleLoginClientTest {
                         MediaType.APPLICATION_JSON
                 ));
 
-        SocialLoginClient.SocialProfile profile = client.exchange("authorization-code", "expected-nonce");
+        SocialLoginClient.SocialProfile profile = client.exchange("authorization-code", "expected-nonce", "expected-state");
 
         assertThat(profile.providerUserId()).isEqualTo("google-user-1");
         assertThat(profile.email()).isEqualTo("user@example.com");
@@ -109,7 +109,7 @@ class GoogleLoginClientTest {
                         MediaType.APPLICATION_JSON
                 ));
 
-        assertThatThrownBy(() -> client.exchange("authorization-code", "expected-nonce"))
+        assertThatThrownBy(() -> client.exchange("authorization-code", "expected-nonce", "expected-state"))
                 .isInstanceOfSatisfying(BusinessException.class, exception -> {
                     assertThat(exception.status().value()).isEqualTo(401);
                     assertThat(exception.code()).isEqualTo("OAUTH_ID_TOKEN_INVALID");
