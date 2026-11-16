@@ -112,18 +112,24 @@
 
 #### ③ 아이템 파츠 리소스 예시 (`../../frontend/assets/item/`)
 
-| 레이어 | 구분 | 파일명 | 해상도 | 샘플 이미지 | 설명 |
-| :---: | :--- | :--- | :---: | :---: | :--- |
-| **Layer 1** | 얼굴 (정지 좌) | `stop-left-face.png` | $60 \times 60\text{ px}$ | ![얼굴 좌](../../frontend/assets/item/stop-left-face.png) | 좌측 대기 시 눈/입 표정 파츠 |
-| **Layer 1** | 얼굴 (정지 우) | `stop-right-face.png` | $60 \times 60\text{ px}$ | ![얼굴 우](../../frontend/assets/item/stop-right-face.png) | 우측 대기 시 눈/입 표정 파츠 |
-| **Layer 2** | 의상 (정지 좌) | `stop-left-cloth.png` | $60 \times 60\text{ px}$ | ![의상 좌](../../frontend/assets/item/stop-left-cloth.png) | 좌측 대기 시 상하의 및 신발 세트 파츠 |
-| **Layer 2** | 의상 (정지 우) | `stop-right-cloth.png` | $60 \times 60\text{ px}$ | ![의상 우](../../frontend/assets/item/stop-right-cloth.png) | 우측 대기 시 상하의 및 신발 세트 파츠 |
-| **Layer 3** | 헤어 (정지 좌) | `stop-left-hair.png` | $60 \times 60\text{ px}$ | ![헤어 좌](../../frontend/assets/item/stop-left-hair.png) | 좌측 대기 시 헤어스타일 파츠 |
-| **Layer 3** | 헤어 (정지 우) | `stop-right-hair-1.png` | $60 \times 60\text{ px}$ | ![헤어 우](../../frontend/assets/item/stop-right-hair-1.png) | 우측 대기 시 헤어스타일 파츠 |
-| **Layer 3** | 헤어 (이동 우 #1) | `walk-right-hair-1.png` | $60 \times 60\text{ px}$ | ![헤어 이동1](../../frontend/assets/item/walk-right-hair-1.png) | 우측 보행 프레임 #1에 대응하는 헤어 파츠 |
-| **Layer 3** | 헤어 (이동 우 #2) | `walk-right-hair-2.png` | $60 \times 60\text{ px}$ | ![헤어 이동2](../../frontend/assets/item/walk-right-hair-2.png) | 우측 보행 프레임 #2에 대응하는 헤어 파츠 |
-| **Layer 4** | 액세서리 (정지 좌) | `stop-left-ac.png` | $60 \times 60\text{ px}$ | ![액세서리 좌](../../frontend/assets/item/stop-left-ac.png) | 좌측 대기 시 머리핀/모자 장식 액세서리 |
-| **Layer 4** | 액세서리 (정지 우) | `stop-right-ac.png` | $60 \times 60\text{ px}$ | ![액세서리 우](../../frontend/assets/item/stop-right-ac.png) | 우측 대기 시 머리핀/모자 장식 액세서리 |
+상품 파츠 파일명은 `{state}-{direction}-{part}-{assetKey}-{frame}.png` 형식이다. `assetKey`에는 DB 숫자 ID 대신 API가 반환하는 논리 키를 사용한다.
+
+| 항목 | 허용 값 |
+|---|---|
+| `state` | `stop` \| `walk` |
+| `direction` | `left` \| `right` |
+| `part` | `face` \| `cloth` \| `hair` \| `ac` |
+| `assetKey` | `default-face` \| `default-hair` \| `hat-leaf` \| `body-cape` |
+| `frame` | `stop`은 `1`; `walk`는 `1` \| `2` |
+
+| 레이어 | 용도 | `part` | `assetKey` |
+|---:|---|---|---|
+| 1 | 기본 얼굴 | `face` | `default-face` |
+| 2 | `BODY_CAPE` | `cloth` | `body-cape` |
+| 3 | 기본 헤어 | `hair` | `default-hair` |
+| 4 | `HAT_LEAF` | `ac` | `hat-leaf` |
+
+예: `stop-left-ac-hat-leaf-1.png`, `walk-right-cloth-body-cape-2.png`.
 
 ## 4. 필드 배치 및 겹침 처리 규칙 (Z-Index Hierarchy)
 
@@ -207,16 +213,14 @@
     │       │   ├── sample_creature_lv4.png
     │       │   └── sample_creature_lv5.png
     │       └── item/
-    │           ├── stop-left-ac.png
-    │           ├── stop-left-cloth.png
-    │           ├── stop-left-face.png
-    │           ├── stop-left-hair.png
-    │           ├── stop-right-ac.png
-    │           ├── stop-right-cloth.png
-    │           ├── stop-right-face.png
-    │           ├── stop-right-hair-1.png
-    │           ├── walk-right-hair-1.png
-    │           └── walk-right-hair-2.png
+    │           ├── stop-left-face-default-face-1.png
+    │           ├── walk-right-face-default-face-2.png
+    │           ├── stop-left-hair-default-hair-1.png
+    │           ├── walk-right-hair-default-hair-2.png
+    │           ├── stop-left-ac-hat-leaf-1.png
+    │           ├── walk-right-ac-hat-leaf-2.png
+    │           ├── stop-left-cloth-body-cape-1.png
+    │           └── walk-right-cloth-body-cape-2.png
     └── spikes/
     └── asset-sourcing.md
    ```

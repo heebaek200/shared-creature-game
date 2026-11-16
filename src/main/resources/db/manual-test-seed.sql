@@ -485,17 +485,50 @@ SELECT seed_group.id
   JOIN user_profiles AS primary_profile
     ON primary_profile.normalized_nickname =
        CONCAT('mt93_user_', LPAD(plan.primary_user_number, 3, '0'))
-  LEFT JOIN creature_species AS species
-    ON species.display_order = MOD(plan.group_number - 1, 3) + 1
-   AND species.status = 'ACTIVE'
+  LEFT JOIN (
+       SELECT active_species.id
+            , ROW_NUMBER() OVER (
+                  ORDER BY active_species.display_order, active_species.id
+              ) AS species_number
+            , COUNT(*) OVER () AS species_count
+         FROM creature_species AS active_species
+        WHERE active_species.status = 'ACTIVE'
+  ) AS species
+    ON plan.group_number < 10
+   AND species.species_number = MOD(plan.group_number - 1, species.species_count) + 1
  WHERE plan.group_number <= 10
    AND @mt93_season_id IS NOT NULL
+   AND (plan.group_number = 10 OR species.id IS NOT NULL)
    AND NOT EXISTS (
        SELECT 1
          FROM group_seasons AS existing
         WHERE existing.group_id = seed_group.id
           AND existing.season_id = @mt93_season_id
    );
+
+-- 기존 #93 테스트 그룹의 레거시 종만 현재 활성 카탈로그로 결정적으로 정합화합니다.
+UPDATE group_seasons AS group_season
+  JOIN game_groups AS seed_group
+    ON seed_group.id = group_season.group_id
+   AND seed_group.normalized_name REGEXP '^mt93_group_[0-9]{2}$'
+  JOIN creature_species AS legacy_species
+    ON legacy_species.id = group_season.selected_species_id
+   AND legacy_species.code IN ('SPROUT', 'CLOUD', 'EMBER')
+  JOIN (
+       SELECT active_species.id
+            , ROW_NUMBER() OVER (
+                  ORDER BY active_species.display_order, active_species.id
+              ) AS species_number
+            , COUNT(*) OVER () AS species_count
+         FROM creature_species AS active_species
+        WHERE active_species.status = 'ACTIVE'
+  ) AS replacement
+    ON replacement.species_number = MOD(
+       CAST(RIGHT(seed_group.normalized_name, 2) AS UNSIGNED) - 1,
+       replacement.species_count
+    ) + 1
+   SET group_season.selected_species_id = replacement.id
+ WHERE group_season.season_id = @mt93_season_id;
 
 -- 같은 실제 시즌에서는 최초 시드 실행일을 고정해 날짜·주간 경계 재실행도 같은 기간을 사용합니다.
 SET @mt93_season_seed_anchor = COALESCE((
@@ -541,6 +574,31 @@ SELECT group_season.id
          FROM group_creatures AS existing
         WHERE existing.group_season_id = group_season.id
    );
+
+UPDATE group_creatures AS creature
+  JOIN group_seasons AS group_season
+    ON group_season.id = creature.group_season_id
+   AND group_season.season_id = @mt93_season_id
+  JOIN game_groups AS seed_group
+    ON seed_group.id = group_season.group_id
+   AND seed_group.normalized_name REGEXP '^mt93_group_[0-9]{2}$'
+  JOIN creature_species AS legacy_species
+    ON legacy_species.id = creature.species_id
+   AND legacy_species.code IN ('SPROUT', 'CLOUD', 'EMBER')
+  JOIN (
+       SELECT active_species.id
+            , ROW_NUMBER() OVER (
+                  ORDER BY active_species.display_order, active_species.id
+              ) AS species_number
+            , COUNT(*) OVER () AS species_count
+         FROM creature_species AS active_species
+        WHERE active_species.status = 'ACTIVE'
+  ) AS replacement
+    ON replacement.species_number = MOD(
+       CAST(RIGHT(seed_group.normalized_name, 2) AS UNSIGNED) - 1,
+       replacement.species_count
+    ) + 1
+   SET creature.species_id = replacement.id;
 
 INSERT INTO season_group_scores (
     group_season_id

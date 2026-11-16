@@ -25,9 +25,11 @@ INSERT INTO creature_species (
   , created_at
   , updated_at
 ) VALUES
-    ('SPROUT', '새싹이', 'creatures/sprout', 'ACTIVE', 1, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
-  , ('CLOUD', '구름이', 'creatures/cloud', 'ACTIVE', 2, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
-  , ('EMBER', '불씨', 'creatures/ember', 'ACTIVE', 3, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+    ('MOSS_GOLEM', '이끼 낀 바위 골렘', 'moss-golem', 'ACTIVE', 1, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+  , ('ABYSS_JELLYFISH', '공허 속 우주 해파리', 'abyss-jellyfish', 'ACTIVE', 2, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+  , ('SPROUT', '새싹이', 'creatures/sprout', 'INACTIVE', 1, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+  , ('CLOUD', '구름이', 'creatures/cloud', 'INACTIVE', 2, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+  , ('EMBER', '불씨', 'creatures/ember', 'INACTIVE', 3, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
 ON DUPLICATE KEY UPDATE
     name = VALUES(name)
   , asset_key = VALUES(asset_key)
@@ -47,8 +49,8 @@ INSERT INTO shop_items (
   , created_at
   , updated_at
 ) VALUES
-    ('HAT_LEAF', '새싹 모자', '가볍게 쓸 수 있는 새싹 모자', 1000, 'HEAD', 'items/hat-leaf', 'ACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
-  , ('BODY_CAPE', '초록 망토', '함께 성장하는 모습을 담은 망토', 2000, 'BODY', 'items/body-cape', 'ACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+    ('HAT_LEAF', '새싹 모자', '가볍게 쓸 수 있는 새싹 모자', 1000, 'HEAD', 'hat-leaf', 'ACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+  , ('BODY_CAPE', '초록 망토', '함께 성장하는 모습을 담은 망토', 2000, 'BODY', 'body-cape', 'ACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
 ON DUPLICATE KEY UPDATE
     name = VALUES(name)
   , description = VALUES(description)

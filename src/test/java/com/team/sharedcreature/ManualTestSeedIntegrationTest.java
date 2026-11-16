@@ -12,6 +12,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.sql.DataSource;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -54,11 +57,15 @@ class ManualTestSeedIntegrationTest {
         assertScenarioCounts();
         assertScenarioConsistency();
         assertTimelineConsistency();
+        insertLegacyGeneralCreature();
+        simulateLegacySeedCreature();
         simulateLegacyWeeklyAssignmentPlan();
         simulateInterruptedAggregateApplication();
+        run("db/data.sql");
         run("db/manual-test-seed.sql");
         assertScenarioCounts();
         assertScenarioConsistency();
+        assertLegacyGeneralCreaturePreserved();
 
         long dailyPeriodCount = count("""
                 SELECT COUNT(*)
@@ -223,6 +230,131 @@ class ManualTestSeedIntegrationTest {
                 """);
     }
 
+    /** 기존 #93 테스트 그룹의 레거시 종 참조를 재현합니다. */
+    private void simulateLegacySeedCreature() {
+        jdbc.update("""
+                UPDATE group_seasons AS group_season
+                  JOIN game_groups AS seed_group ON seed_group.id = group_season.group_id
+                  JOIN creature_species AS legacy_species ON legacy_species.code = 'SPROUT'
+                   SET group_season.selected_species_id = legacy_species.id
+                 WHERE seed_group.normalized_name = 'mt93_group_01'
+                """);
+        jdbc.update("""
+                UPDATE group_creatures AS creature
+                  JOIN group_seasons AS group_season ON group_season.id = creature.group_season_id
+                  JOIN game_groups AS seed_group ON seed_group.id = group_season.group_id
+                  JOIN creature_species AS legacy_species ON legacy_species.code = 'SPROUT'
+                   SET creature.species_id = legacy_species.id
+                 WHERE seed_group.normalized_name = 'mt93_group_01'
+                """);
+    }
+
+    /** 시드 소유가 아닌 그룹의 레거시 종 참조 보존 대상을 구성합니다. */
+    private void insertLegacyGeneralCreature() {
+        jdbc.update("""
+                INSERT INTO game_groups (
+                    name
+                  , normalized_name
+                  , description
+                  , visibility
+                  , status
+                  , capacity
+                  , current_member_count
+                  , primary_admin_user_id
+                  , version
+                  , created_at
+                  , updated_at
+                )
+                SELECT '레거시 종 보존 그룹'
+                     , 'legacy_asset_group'
+                     , '시드 외부 레거시 종 참조 보존 검증'
+                     , 'PRIVATE'
+                     , 'ACTIVE'
+                     , 20
+                     , 0
+                     , profile.user_id
+                     , 0
+                     , UTC_TIMESTAMP(6) - INTERVAL 20 DAY
+                     , UTC_TIMESTAMP(6)
+                  FROM user_profiles AS profile
+                 WHERE profile.normalized_nickname = 'mt93_user_060'
+                """);
+        jdbc.update("""
+                INSERT INTO group_seasons (
+                    group_id
+                  , season_id
+                  , selection_deadline_at
+                  , selected_species_id
+                  , selected_by_user_id
+                  , selection_source
+                  , selected_at
+                  , status
+                  , version
+                  , created_at
+                  , updated_at
+                )
+                SELECT general_group.id
+                     , season.id
+                     , UTC_TIMESTAMP(6) - INTERVAL 7 DAY
+                     , legacy_species.id
+                     , profile.user_id
+                     , 'ADMIN'
+                     , UTC_TIMESTAMP(6) - INTERVAL 8 DAY
+                     , 'ACTIVE'
+                     , 0
+                     , UTC_TIMESTAMP(6) - INTERVAL 10 DAY
+                     , UTC_TIMESTAMP(6)
+                  FROM game_groups AS general_group
+                  JOIN seasons AS season ON season.season_number = 1
+                  JOIN creature_species AS legacy_species ON legacy_species.code = 'SPROUT'
+                  JOIN user_profiles AS profile ON profile.normalized_nickname = 'mt93_user_060'
+                 WHERE general_group.normalized_name = 'legacy_asset_group'
+                """);
+        jdbc.update("""
+                INSERT INTO group_creatures (
+                    group_season_id
+                  , species_id
+                  , selection_source
+                  , total_experience
+                  , growth_stage
+                  , growth_stage_reached_at
+                  , hatched_at
+                  , status
+                  , version
+                  , created_at
+                  , updated_at
+                )
+                SELECT group_season.id
+                     , legacy_species.id
+                     , 'ADMIN'
+                     , 0
+                     , 'HATCHLING'
+                     , UTC_TIMESTAMP(6) - INTERVAL 7 DAY
+                     , UTC_TIMESTAMP(6) - INTERVAL 7 DAY
+                     , 'ACTIVE'
+                     , 0
+                     , group_season.created_at
+                     , group_season.updated_at
+                  FROM group_seasons AS group_season
+                  JOIN game_groups AS general_group ON general_group.id = group_season.group_id
+                  JOIN creature_species AS legacy_species ON legacy_species.code = 'SPROUT'
+                 WHERE general_group.normalized_name = 'legacy_asset_group'
+                """);
+    }
+
+    /** 일반 그룹의 레거시 종 FK가 자동 교체되지 않았는지 검사합니다. */
+    private void assertLegacyGeneralCreaturePreserved() {
+        assertEquals("SPROUT:SPROUT", jdbc.queryForObject("""
+                SELECT CONCAT(group_species.code, ':', creature_species.code)
+                  FROM group_seasons AS group_season
+                  JOIN game_groups AS general_group ON general_group.id = group_season.group_id
+                  JOIN creature_species AS group_species ON group_species.id = group_season.selected_species_id
+                  JOIN group_creatures AS creature ON creature.group_season_id = group_season.id
+                  JOIN creature_species AS creature_species ON creature_species.id = creature.species_id
+                 WHERE general_group.normalized_name = 'legacy_asset_group'
+                """, String.class));
+    }
+
     /** 완료 없는 #93 구버전 주간 배정을 재현해 제한 복구 경로를 검증합니다. */
     private void simulateLegacyWeeklyAssignmentPlan() {
         assertEquals(0L, count("""
@@ -357,7 +489,7 @@ class ManualTestSeedIntegrationTest {
                      , UTC_TIMESTAMP(6)
                   FROM game_groups AS general_group
                   JOIN seasons AS season ON season.season_number = 1
-                  JOIN creature_species AS species ON species.display_order = 1
+                  JOIN creature_species AS species ON species.code = 'MOSS_GOLEM'
                   JOIN user_profiles AS profile ON profile.normalized_nickname = 'mt93_user_053'
                  WHERE general_group.normalized_name = 'general_snapshot_group'
                 """);
@@ -507,6 +639,8 @@ class ManualTestSeedIntegrationTest {
 
     /** 그룹·보상·결제의 핵심 불변식과 외부 복구 대상 부재를 검사합니다. */
     private void assertScenarioConsistency() {
+        assertCreatureAssetCatalog();
+        assertAvatarAssetCatalog();
         assertEquals(0L, count("""
                 SELECT COUNT(*)
                   FROM quest_assignments AS assignment
@@ -657,6 +791,100 @@ class ManualTestSeedIntegrationTest {
                   JOIN game_groups AS seed_group ON seed_group.id = group_season.group_id
                  ORDER BY seed_group.normalized_name
                 """).toString());
+    }
+
+    /** 활성 크리처 카탈로그, 실제 이미지와 #93 그룹 배정을 함께 검사합니다. */
+    private void assertCreatureAssetCatalog() {
+        assertEquals(List.of(
+                "MOSS_GOLEM:이끼 낀 바위 골렘:moss-golem:1",
+                "ABYSS_JELLYFISH:공허 속 우주 해파리:abyss-jellyfish:2"
+        ), jdbc.queryForList("""
+                SELECT CONCAT(code, ':', name, ':', asset_key, ':', display_order)
+                  FROM creature_species
+                 WHERE status = 'ACTIVE'
+                 ORDER BY display_order, id
+                """, String.class));
+        assertEquals(3L, count("""
+                SELECT COUNT(*)
+                  FROM creature_species
+                 WHERE code IN ('SPROUT', 'CLOUD', 'EMBER')
+                   AND status = 'INACTIVE'
+                """));
+        assertEquals(
+                "01:MOSS_GOLEM,02:ABYSS_JELLYFISH,03:MOSS_GOLEM,04:ABYSS_JELLYFISH,"
+                        + "05:MOSS_GOLEM,06:ABYSS_JELLYFISH,07:MOSS_GOLEM,08:ABYSS_JELLYFISH,"
+                        + "09:MOSS_GOLEM",
+                jdbc.queryForObject("""
+                        SELECT GROUP_CONCAT(
+                                   CONCAT(RIGHT(seed_group.normalized_name, 2), ':', species.code)
+                                   ORDER BY seed_group.normalized_name SEPARATOR ','
+                               )
+                          FROM group_seasons AS group_season
+                          JOIN game_groups AS seed_group ON seed_group.id = group_season.group_id
+                          JOIN creature_species AS species ON species.id = group_season.selected_species_id
+                         WHERE seed_group.normalized_name REGEXP '^mt93_group_0[1-9]$'
+                        """, String.class));
+        assertEquals(0L, count("""
+                SELECT COUNT(*)
+                  FROM group_creatures AS creature
+                  JOIN group_seasons AS group_season ON group_season.id = creature.group_season_id
+                  JOIN game_groups AS seed_group ON seed_group.id = group_season.group_id
+                 WHERE seed_group.normalized_name LIKE 'mt93_group_%'
+                   AND NOT (creature.species_id <=> group_season.selected_species_id)
+                """));
+
+        Path creatureRoot = Path.of("frontend", "assets", "creature");
+        for (String assetKey : List.of("moss-golem", "abyss-jellyfish")) {
+            for (int level = 1; level <= 5; level++) {
+                Path image = creatureRoot.resolve(assetKey).resolve("lv" + level + ".png");
+                assertTrue(Files.isRegularFile(image), () -> "크리처 이미지가 없습니다: " + image);
+            }
+        }
+        assertTrue(Files.isRegularFile(creatureRoot.resolve("lv0.png")));
+    }
+
+    /** 상점 카탈로그의 논리 에셋 키와 상태·방향·부위·아이템별 이미지 구성을 검사합니다. */
+    private void assertAvatarAssetCatalog() {
+        assertEquals(List.of(
+                "HAT_LEAF:HEAD:hat-leaf:ACTIVE",
+                "BODY_CAPE:BODY:body-cape:ACTIVE"
+        ), jdbc.queryForList("""
+                SELECT CONCAT(code, ':', slot_code, ':', asset_key, ':', status)
+                  FROM shop_items
+                 WHERE code IN ('HAT_LEAF', 'BODY_CAPE')
+                 ORDER BY FIELD(code, 'HAT_LEAF', 'BODY_CAPE')
+                """, String.class));
+
+        Path itemRoot = Path.of("frontend", "assets", "item");
+        for (List<String> asset : List.of(
+                List.of("face", "default-face"),
+                List.of("cloth", "body-cape"),
+                List.of("hair", "default-hair"),
+                List.of("ac", "hat-leaf")
+        )) {
+            String part = asset.get(0);
+            String assetKey = asset.get(1);
+            for (String direction : List.of("left", "right")) {
+                assertItemAssetExists(itemRoot, "stop", direction, part, assetKey, 1);
+                assertItemAssetExists(itemRoot, "walk", direction, part, assetKey, 1);
+                assertItemAssetExists(itemRoot, "walk", direction, part, assetKey, 2);
+            }
+        }
+    }
+
+    /** 에셋 파일명 계약에 맞는 단일 아바타 프레임의 존재를 검사합니다. */
+    private void assertItemAssetExists(
+            Path itemRoot,
+            String state,
+            String direction,
+            String part,
+            String assetKey,
+            int frame
+    ) {
+        Path image = itemRoot.resolve(
+                String.join("-", state, direction, part, assetKey, Integer.toString(frame)) + ".png"
+        );
+        assertTrue(Files.isRegularFile(image), () -> "아바타 이미지가 없습니다: " + image);
     }
 
     /** 그룹 생성부터 신고·조치까지의 시간 순서와 종료 이력의 유일성을 검사합니다. */
