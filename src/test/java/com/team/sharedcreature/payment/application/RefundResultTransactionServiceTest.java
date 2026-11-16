@@ -97,7 +97,12 @@ class RefundResultTransactionServiceTest {
                 : OwnedItemStatus.OWNED_UNUSED);
         assertThat(item.getRevokedAt()).isEqualTo(outcome == RefundGateway.Outcome.SUCCESS ? NOW : null);
         assertThat(item.getUsedAt()).isNull();
-        assertThat(attempt.getResultType()).isEqualTo(outcome.name());
+        assertThat(attempt.getResultType()).isEqualTo(switch (outcome) {
+            case SUCCESS -> PgApiResultType.SUCCESS;
+            case DEFINITIVE_FAILURE -> PgApiResultType.DEFINITIVE_FAILURE;
+            case PENDING -> PgApiResultType.PENDING;
+            case UNKNOWN -> PgApiResultType.UNKNOWN;
+        });
         assertThat(attempt.getCompletedAt()).isEqualTo(NOW);
         assertThat(record.getStatus()).isEqualTo("COMPLETED");
         assertThat(result.httpStatus()).isEqualTo(outcome == RefundGateway.Outcome.UNKNOWN ? 409 : 200);

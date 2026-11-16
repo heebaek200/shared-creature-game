@@ -12,6 +12,10 @@ import com.team.sharedcreature.admin.application.SchedulerJobRunner;
 import com.team.sharedcreature.admin.application.SchedulerExecutionLifecycleService;
 import com.team.sharedcreature.payment.application.*;
 import com.team.sharedcreature.payment.domain.Purchase;
+import com.team.sharedcreature.payment.domain.PgApiAttempt;
+import com.team.sharedcreature.payment.domain.PgApiOperation;
+import com.team.sharedcreature.payment.domain.PgApiResultType;
+import com.team.sharedcreature.payment.infrastructure.PgApiAttemptRepository;
 import com.team.sharedcreature.payment.domain.PaymentWebhookEvent;
 import com.team.sharedcreature.payment.domain.WebhookProcessingStatus;
 import com.team.sharedcreature.payment.infrastructure.PaymentWebhookEventRepository;
@@ -72,6 +76,8 @@ import static org.mockito.Mockito.*;
 @ContextConfiguration(initializers = RefundTransactionMySqlIntegrationTest.TestDatabaseOnly.class)
 class RefundTransactionMySqlIntegrationTest {
     @Autowired private EntityManager em;
+    @Autowired private PgApiAttemptRepository pgAttempts;
+    @Autowired private RefundLockService refundLocks;
     @Autowired private PaymentWebhookEventRepository webhookRepository;
     @Autowired private PurchaseRepository purchaseRepository;
     @Autowired private PaymentTransactionRepository transactionRepository;
@@ -282,6 +288,50 @@ class RefundTransactionMySqlIntegrationTest {
         jdbc.update("UPDATE payment_webhook_events SET processing_status = 'IGNORED' WHERE id = ?", enumWebhookId);
         assertThat(webhookRepository.findById(enumWebhookId).orElseThrow().getProcessingStatus())
                 .isEqualTo(WebhookProcessingStatus.IGNORED);
+    }
+
+    /** PG 작업·결과 Enum의 저장 문자열과 잠금 조회 범위·정렬을 검증합니다. */
+    @ParameterizedTest
+    @EnumSource(PgApiResultType.class)
+    void PG이력은_기존문자열과_호환되고_취소와_조회작업을_구분한다(PgApiResultType result) {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        var ids = new TransactionTemplate(transactionManager).execute(tx -> {
+            var locked = refundLocks.lock(fixture.refundId());
+            locked.refund().claimCancellation(em.find(User.class, fixture.adminId()), "승인", now);
+            var cancellation = PgApiAttempt.prepareCancellation(locked.refund(), 1, now);
+            em.persist(cancellation);
+            em.flush();
+            var lookup = PgApiAttempt.prepareCancellationLookup(locked.refund(), cancellation, 2, now);
+            if (result != PgApiResultType.STARTED) {
+                lookup.complete(result, 200, "PG", "{}", null, now);
+            }
+            em.persist(lookup);
+            em.flush();
+            assertThat(lookup.getIdempotencyKey()).isEqualTo(cancellation.getIdempotencyKey());
+            return List.of(cancellation.getId(), lookup.getId());
+        });
+
+        assertThat(jdbc.queryForObject("SELECT operation FROM pg_api_attempts WHERE id = ?",
+                String.class, ids.getFirst())).isEqualTo("CANCELLATION");
+        assertThat(jdbc.queryForObject("SELECT operation FROM pg_api_attempts WHERE id = ?",
+                String.class, ids.getLast())).isEqualTo("CANCELLATION_LOOKUP");
+        assertThat(jdbc.queryForObject("SELECT result_type FROM pg_api_attempts WHERE id = ?",
+                String.class, ids.getLast())).isEqualTo(result.name());
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
+            refundLocks.lock(fixture.refundId());
+            var cancellations = pgAttempts.findCancellationAttemptsForUpdate(fixture.refundId());
+            assertThat(cancellations).extracting(PgApiAttempt::getId).containsExactly(ids.getFirst());
+            var history = pgAttempts.findCancellationHistoryForUpdate(fixture.refundId());
+            assertThat(history).extracting(PgApiAttempt::getId).containsExactlyElementsOf(ids);
+            assertThat(history.getFirst().getOperation()).isEqualTo(PgApiOperation.CANCELLATION);
+            assertThat(history.getLast().getOperation()).isEqualTo(PgApiOperation.CANCELLATION_LOOKUP);
+            assertThat(history.getLast().getResultType()).isEqualTo(result);
+        });
+
+        // 기존 저장 문자열도 새 영속성 컨텍스트에서 Enum으로 읽혀야 합니다.
+        jdbc.update("UPDATE pg_api_attempts SET result_type = 'UNKNOWN' WHERE id = ?", ids.getLast());
+        assertThat(pgAttempts.findById(ids.getLast()).orElseThrow().getResultType()).isEqualTo(PgApiResultType.UNKNOWN);
     }
 
     /** 모든 환불 상태의 문자열 저장·Enum 조회와 복구 대상 JPQL을 실제 MySQL로 검증합니다. */
