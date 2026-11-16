@@ -7,6 +7,8 @@ import com.team.sharedcreature.payment.domain.PaymentTransaction;
 import com.team.sharedcreature.payment.domain.PaymentTransactionStatus;
 import com.team.sharedcreature.payment.domain.PaymentTransactionType;
 import com.team.sharedcreature.payment.domain.PgApiAttempt;
+import com.team.sharedcreature.payment.domain.PgApiOperation;
+import com.team.sharedcreature.payment.domain.PgApiResultType;
 import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.domain.RefundStatus;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
@@ -196,8 +198,8 @@ public class RefundResultTransactionService {
                 || !Objects.equals(command.paymentId(), purchase.getOrderNumber())
                 || !Objects.equals(command.amountKrw(), purchase.getPriceKrwSnapshot())
                 || !Objects.equals(command.currency(), purchase.getCurrency())
-                || !"CANCELLATION".equals(cancellation.getOperation())
-                || !"CANCELLATION_LOOKUP".equals(lookup.getOperation())
+                || cancellation.getOperation() != PgApiOperation.CANCELLATION
+                || lookup.getOperation() != PgApiOperation.CANCELLATION_LOOKUP
                 || !Objects.equals(
                 cancellation.getIdempotencyKey(),
                 command.pgIdempotencyKey()
@@ -409,7 +411,13 @@ public class RefundResultTransactionService {
         ));
 
         attempt.complete(
-                result.outcome().name(),
+                // PG 결과 분류를 호출 이력의 결과 타입으로 명시적으로 연결합니다.
+                switch (result.outcome()) {
+                    case SUCCESS -> PgApiResultType.SUCCESS;
+                    case DEFINITIVE_FAILURE -> PgApiResultType.DEFINITIVE_FAILURE;
+                    case PENDING -> PgApiResultType.PENDING;
+                    case UNKNOWN -> PgApiResultType.UNKNOWN;
+                },
                 result.httpStatus(),
                 result.providerResultCode(),
                 summary,
@@ -472,7 +480,7 @@ public class RefundResultTransactionService {
                 || !Objects.equals(command.amountKrw(), purchase.getPriceKrwSnapshot())
                 || !Objects.equals(command.currency(), purchase.getCurrency())
                 || !Objects.equals(command.pgIdempotencyKey(), attempt.getIdempotencyKey())
-                || !"CANCELLATION".equals(attempt.getOperation())) {
+                || attempt.getOperation() != PgApiOperation.CANCELLATION) {
             throw new BusinessException(
                     ErrorCode.CONCURRENT_MODIFICATION,
                     "취소 준비 정보와 현재 구매·PG 이력이 일치하지 않습니다."
