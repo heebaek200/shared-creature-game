@@ -25,7 +25,11 @@ export function createRouter(root, routes) {
       return candidate.path === location.pathname;
     }) ?? routes.find((candidate) => candidate.path === '*');
 
-    // Route 진입 시 현재 로그인·그룹 상태를 조회합니다.
+    // 회원가입은 PUBLIC이어도 가입 대기 상태 확인이 필요.
+    const requiresUserInfo =
+        route.access !== 'PUBLIC' ||
+        route.path === '/signup';
+
     let me = null;
 
     try {
@@ -33,19 +37,24 @@ export function createRouter(root, routes) {
       if (currentRenderVersion !== renderVersion) return;
     } catch (error) {
       if (currentRenderVersion !== renderVersion) return;
-      console.error('사용자 정보 조회 실패:', error);
 
-      const errorPage = statusPage(
-          '일시적인 오류가 발생했습니다',
-          '사용자 정보를 확인하지 못했습니다. 잠시 후 페이지를 새로고침해 주세요.'
-      );
+      if (requiresUserInfo) {
+        console.error('사용자 정보 조회 실패:', error);
 
-      const mounted = errorPage({ navigate });
-      root.replaceChildren(mounted.element);
-      cleanup = mounted.cleanup ?? (() => {});
-      return;
+        const errorPage = statusPage(
+            '일시적인 오류가 발생했습니다',
+            '사용자 정보를 확인하지 못했습니다. 잠시 후 페이지를 새로고침해 주세요.'
+        );
+
+        const mounted = errorPage({ navigate });
+        root.replaceChildren(mounted.element);
+        cleanup = mounted.cleanup ?? (() => {});
+        return;
+      }
+
+      // 공개 화면은 사용자 정보 조회에 실패해도 표시.
+      console.warn('공개 화면의 사용자 정보 조회 실패:', error);
     }
-
 
 
     if (route.access === 'HOME') {

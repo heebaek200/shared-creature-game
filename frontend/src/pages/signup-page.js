@@ -121,7 +121,7 @@ export function signupPage({navigate, currentUser }) {
     </div>
     `;
 
-    const element = createHeaderLayout({ content, currentUser, navigate, showGroupBadge: false });
+    const element = createHeaderLayout({ content, currentUser, navigate, showGroupBadge: false, showSeasonInfo: false });
 
     const form = element.querySelector('#signup-form');
     const provider = element.querySelector('#provider');

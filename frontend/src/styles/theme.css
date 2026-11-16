@@ -70,6 +70,17 @@
   border-color: var(--app-border) !important;
 }
 
+/* 연결 확인 전은 중립색으로 표시. */
+.app-header__connection-status[data-connection-state="pending"] {
+  color: var(--bs-secondary-color);
+  background-color: var(--bs-tertiary-bg);
+}
+
+.app-header__connection-status[data-connection-state="pending"]
+.app-header__connection-dot {
+  color: var(--bs-secondary-color);
+}
+
 .app-header__connection-status {
   color: var(--app-surface);
   background-color: var(--app-text);

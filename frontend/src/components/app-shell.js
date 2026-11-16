@@ -6,59 +6,20 @@ import {
     createAdminMobileNavigation
 } from './app-navigation.js';
 
-import {getCurrentSeason} from '../features/season/api.js';
-import {startSeasonCountdown} from '../features/season/season-countdown.js';
+import {initializeSeasonTracker, stopSeasonTracker} from '../features/season/season-tracker.js';
 import {getMyGroup} from '../features/group/api.js';
 
-/*
- * 시즌 정보
- */
-let seasonCountdownStarted = false;
-let currentSeasonHeaderText = '로딩 중...';
-
-function initializeSeasonHeaderCountdown() {
-    if (seasonCountdownStarted) return;
-
-    // 조회 중 다른 레이아웃이 만들어져도 타이머가 중복 시작되지 않게 합니다.
-    seasonCountdownStarted = true;
-
-    void getCurrentSeason()
-        .then((response) => {
-            const seasonData = response.data || response;
-
-            if (!seasonData) {
-                seasonCountdownStarted = false;
-                return;
-            }
-
-            startSeasonCountdown(seasonData, (seasonText) => {
-                currentSeasonHeaderText = seasonText;
-
-                document
-                    .querySelectorAll('[data-header-season-info]')
-                    .forEach((seasonInfo) => {
-                        seasonInfo.textContent = seasonText;
-                    });
-            });
-        })
-        .catch(() => {
-            currentSeasonHeaderText = '시즌 정보 확인 불가';
-            document
-                .querySelectorAll('[data-header-season-info]')
-                .forEach((seasonInfo) => {
-                    seasonInfo.textContent = currentSeasonHeaderText;
-                });
-
-            // 다음 화면 진입 때 다시 조회할 수 있게 합니다.
-            seasonCountdownStarted = false;
-        });
+function updateSeasonHeader(text) {
+    document.querySelectorAll('[data-header-season-info]').forEach((element) => {
+        element.textContent = text;
+    });
 }
 
 /**
  * 공통 Shell 과 페이지 콘텐츠 영역을 생성합니다.
  * @returns {{ shell: HTMLDivElement, body: HTMLDivElement }}
  */
-export function createBaseLayout({currentUser, navigate, showGroupBadge = true} = {}) {
+export function createBaseLayout({currentUser, navigate, showGroupBadge = true, showSeasonInfo = true} = {}) {
     const shell = document.createElement('div');
     shell.className =
         'd-flex flex-column min-vh-100 app-shell app-shell-root w-100 m-0 p-0 overflow-x-hidden';
@@ -66,15 +27,27 @@ export function createBaseLayout({currentUser, navigate, showGroupBadge = true} 
     const body = document.createElement('div');
     body.className = 'd-flex flex-grow-1 w-100 app-shell__body';
 
-    const header = createAppHeader({currentUser, navigate, showGroupBadge});
+    const canShowSeason =
+        showSeasonInfo &&
+        currentUser?.authenticationState === 'AUTHENTICATED';
+
+    const header = createAppHeader({
+        currentUser,
+        navigate,
+        showGroupBadge,
+        showSeasonInfo: canShowSeason
+    });
+
     const seasonInfo = header.querySelector('[data-header-season-info]');
 
-    if (seasonInfo) {
-        seasonInfo.textContent = currentSeasonHeaderText;
+    if (canShowSeason && seasonInfo) {
+        seasonInfo.textContent =
+            initializeSeasonTracker(updateSeasonHeader);
+    } else {
+        stopSeasonTracker();
     }
-    shell.append(header, body);
 
-    initializeSeasonHeaderCountdown();
+    shell.append(header, body);
 
     if (showGroupBadge && currentUser?.membership) {
         void getMyGroup()
@@ -104,8 +77,8 @@ export function createBaseLayout({currentUser, navigate, showGroupBadge = true} 
  * @param {{ content: HTMLElement }} options
  * @returns {HTMLElement}
  */
-export function createHeaderLayout({content, currentUser, navigate, showGroupBadge = true}) {
-    const {shell, body} = createBaseLayout({currentUser, navigate, showGroupBadge});
+export function createHeaderLayout({content, currentUser, navigate, showGroupBadge = true, showSeasonInfo = true}) {
+    const {shell, body} = createBaseLayout({currentUser, navigate, showGroupBadge, showSeasonInfo});
     body.append(content);
     return shell;
 }

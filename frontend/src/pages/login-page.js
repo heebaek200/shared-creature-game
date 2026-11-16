@@ -73,7 +73,7 @@ export function loginPage({ currentUser, navigate }) {
     </div>
     `;
 
-  const element = createHeaderLayout({ content, currentUser, navigate, showGroupBadge: false });
+  const element = createHeaderLayout({ content, currentUser, navigate, showGroupBadge: false, showSeasonInfo: false });
 
   const button = element.querySelector('#google-login-button');
   const feedback = element.querySelector('.feedback');

@@ -2,8 +2,9 @@ import { createThemeToggle } from './app-theme.js';
 import titleIconLight from '../../assets/ui/header-title-icon-light.png';
 import titleIconDark from '../../assets/ui/header-title-icon-dark.png';
 import { logout } from '../features/auth/api.js';
+import {stopSeasonTracker} from '../features/season/season-tracker.js';
 
-export function createAppHeader({ currentUser = null, navigate, showGroupBadge = true } = {}) {
+export function createAppHeader({ currentUser = null, navigate, showGroupBadge = true, showSeasonInfo = true } = {}) {
     const header = document.createElement('header');
     const isAuthenticated =
         currentUser?.authenticationState === 'AUTHENTICATED';
@@ -15,9 +16,8 @@ export function createAppHeader({ currentUser = null, navigate, showGroupBadge =
               <span class="app-header__title-text">다 같이 키우는 생명체</span>
             </span>
         </div>
-        <div class="app-header__status d-flex align-items-center gap-3 flex-grow-1 ms-4"
-             aria-label="현재 서비스 상태">
-          <span data-header-season-info>로딩 중...</span>
+        <div class="app-header__status d-flex align-items-center gap-3 flex-grow-1 ms-4" aria-label="현재 서비스 상태">
+          ${showSeasonInfo ? `<span data-header-season-info>로딩 중...</span>` : ''}
         
           ${showGroupBadge ? `
             <span
@@ -28,9 +28,10 @@ export function createAppHeader({ currentUser = null, navigate, showGroupBadge =
           ` : ''}
         
           <span class="badge rounded-pill text-nowrap ms-auto me-2 px-3 py-2 app-header__connection-status"
-                data-header-connection-status aria-label="실시간 연결 상태">
+            data-header-connection-status data-connection-state="pending" role="status"
+            aria-label="실시간 연결 상태: 연결 확인 중" title="실시간 연결 상태: 연결 확인 중">
             <span class="me-2 app-header__connection-dot" aria-hidden="true">●</span>
-            <span class="connection-status-label">실시간</span>
+            <span class="connection-status-label">연결 확인 중</span>
           </span>
         </div>        
         <div class="app-header__actions d-flex align-items-center gap-2" data-header-actions>
@@ -62,6 +63,7 @@ export function createAppHeader({ currentUser = null, navigate, showGroupBadge =
 
         try {
             await logout();
+            stopSeasonTracker();
             navigate('/login');
         } catch {
             if (logoutFeedback) {
