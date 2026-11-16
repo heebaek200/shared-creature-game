@@ -114,8 +114,239 @@ const mockGroups = [
   }
 ];
 
+const AVATAR_MOCK_KEY = 'shared-creature-avatar-mock';
+
+const AVATAR_SLOTS = ['HEAD', 'FACE', 'BODY', 'ACCESSORY'];
+
+function createAvatarMockState() {
+  const products = [
+    ['HEAD', '단발(갈색)', 'brown-lob'],
+    ['FACE', '웃는 얼굴(노랑)', 'yellow-smile'],
+    ['BODY', '티셔츠 세트(파랑)', 'blue-shirt'],
+    ['ACCESSORY', '리본 머리띠', 'ribbon-hairband'],
+  ];
+
+  return {
+    avatar: {
+      userId: 1,
+      equipments: {
+        HEAD: null,
+        FACE: null,
+        BODY: null,
+        ACCESSORY: null,
+      },
+    },
+    items: products.map(([slot, name, assetKey], index) => ({
+      ownedItemId: index + 1,
+      purchaseId: index + 1,
+      shopItemId: index + 1,
+      name,
+      slot,
+      assetKey,
+      status: 'OWNED_UNUSED',
+      usedAt: null,
+      revokedAt: null,
+      equipped: false,
+    })),
+  };
+}
+
+function loadAvatarMockState() {
+  try {
+    const saved = sessionStorage.getItem(AVATAR_MOCK_KEY);
+
+    return saved
+        ? JSON.parse(saved)
+        : createAvatarMockState();
+  } catch {
+    return createAvatarMockState();
+  }
+}
+
+const avatarMockState = loadAvatarMockState();
+
+function saveAvatarMockState() {
+  sessionStorage.setItem(
+      AVATAR_MOCK_KEY,
+      JSON.stringify(avatarMockState)
+  );
+}
+
+// 호출자가 반환값을 변경해도 Mock 내부 상태는 변경되지 않습니다.
+function copyAvatarMock(value) {
+  return structuredClone(value);
+}
+
+function throwAvatarMockError(status, code, message) {
+  throw new ApiError(status, {
+    code,
+    message,
+    fieldErrors: [],
+    traceId: 'mock-avatar',
+  });
+}
+
+function validateAvatarSlot(slot) {
+  if (!AVATAR_SLOTS.includes(slot)) {
+    throwAvatarMockError(
+        400,
+        'INVALID_FIELD_VALUE',
+        '올바르지 않은 슬롯입니다.'
+    );
+  }
+}
+
 /** 실제 API 계약과 같은 정상·오류 시나리오를 제공합니다. */
 export const mockApi = {
+  async getAvatar() {
+    await delay(200);
+
+    return copyAvatarMock(avatarMockState.avatar);
+  },
+
+  async listOwnedItems({
+                         page = 0,
+                         size = 20,
+                         slot,
+                         status,
+                       } = {}) {
+    await delay(200);
+
+    const validStatuses = [
+      'OWNED_UNUSED',
+      'OWNED_USED',
+      'REVOKED',
+    ];
+
+    if (
+        !Number.isInteger(page) ||
+        page < 0 ||
+        !Number.isInteger(size) ||
+        size < 1 ||
+        size > 50 ||
+        (slot !== undefined && !AVATAR_SLOTS.includes(slot)) ||
+        (status !== undefined && !validStatuses.includes(status))
+    ) {
+      throwAvatarMockError(
+          400,
+          'INVALID_FIELD_VALUE',
+          '조회 조건이 올바르지 않습니다.'
+      );
+    }
+
+    const filtered = avatarMockState.items.filter((item) =>
+        (!slot || item.slot === slot) &&
+        (!status || item.status === status)
+    );
+
+    return {
+      data: copyAvatarMock(
+          filtered.slice(page * size, (page + 1) * size)
+      ),
+      meta: {
+        page,
+        size,
+        totalElements: filtered.length,
+        totalPages: Math.ceil(filtered.length / size),
+      },
+    };
+  },
+
+  async equipAvatarItem(
+      slot,
+      { ownedItemId, confirmFirstUse = false }
+  ) {
+    await delay(200);
+    validateAvatarSlot(slot);
+
+    if (
+        !Number.isSafeInteger(ownedItemId) ||
+        ownedItemId < 1 ||
+        typeof confirmFirstUse !== 'boolean'
+    ) {
+      throwAvatarMockError(
+          400,
+          'INVALID_FIELD_VALUE',
+          '장착 요청 값이 올바르지 않습니다.'
+      );
+    }
+
+    const item = avatarMockState.items.find(
+        (candidate) => candidate.ownedItemId === ownedItemId
+    );
+
+    if (!item || item.status === 'REVOKED') {
+      throwAvatarMockError(
+          404,
+          'RESOURCE_NOT_FOUND',
+          '장착할 수 있는 보유 아이템을 찾지 못했습니다.'
+      );
+    }
+
+    if (item.slot !== slot) {
+      throwAvatarMockError(
+          400,
+          'SLOT_MISMATCH',
+          '아이템과 장착 슬롯이 일치하지 않습니다.'
+      );
+    }
+
+    if (
+        item.status === 'OWNED_UNUSED' &&
+        !confirmFirstUse
+    ) {
+      throwAvatarMockError(
+          409,
+          'FIRST_USE_CONFIRMATION_REQUIRED',
+          '최초 사용 및 환불 불가 전환에 동의해야 합니다.'
+      );
+    }
+
+    // 같은 슬롯에 장착된 기존 아이템의 장착 표시를 해제합니다.
+    for (const ownedItem of avatarMockState.items) {
+      if (ownedItem.slot === slot) {
+        ownedItem.equipped = false;
+      }
+    }
+
+    // 최초 장착일 때만 사용 상태와 최초 사용 시각을 변경합니다.
+    if (item.status === 'OWNED_UNUSED') {
+      item.status = 'OWNED_USED';
+      item.usedAt = new Date().toISOString();
+    }
+
+    item.equipped = true;
+
+    avatarMockState.avatar.equipments[slot] = {
+      ownedItemId: item.ownedItemId,
+      shopItemId: item.shopItemId,
+      name: item.name,
+      assetKey: item.assetKey,
+    };
+
+    saveAvatarMockState();
+
+    return copyAvatarMock(avatarMockState.avatar);
+  },
+
+  async unequipAvatarItem(slot) {
+    await delay(200);
+    validateAvatarSlot(slot);
+
+    for (const item of avatarMockState.items) {
+      if (item.slot === slot) {
+        item.equipped = false;
+      }
+    }
+
+    avatarMockState.avatar.equipments[slot] = null;
+
+    // 장착을 해제해도 사용 상태와 최초 사용 시각은 유지합니다.
+    saveAvatarMockState();
+
+    return copyAvatarMock(avatarMockState.avatar);
+  },
+
   async getCurrentUser() {
     if (mockSidebarRole) {
       return {
