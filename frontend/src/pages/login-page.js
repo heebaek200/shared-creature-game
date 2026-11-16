@@ -120,6 +120,8 @@ export function loginPage() {
         '로그인 요청을 확인할 수 없습니다. 다시 로그인해 주세요.',
     OAUTH_SESSION_EXPIRED:
         '로그인 세션이 만료되었습니다. 다시 로그인해 주세요.',
+    OAUTH_EMAIL_CONFLICT:
+        '이미 가입된 이메일입니다. 기존에 가입한 소셜 계정으로 로그인해 주세요.',
   };
 
   if (oauthError) {

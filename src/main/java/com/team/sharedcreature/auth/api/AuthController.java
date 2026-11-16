@@ -36,7 +36,8 @@ public class AuthController {
         OAUTH_ACCESS_DENIED,
         OAUTH_INVALID_STATE,
         OAUTH_SESSION_EXPIRED,
-        OAUTH_AUTHENTICATION_FAILED
+        OAUTH_AUTHENTICATION_FAILED,
+        OAUTH_EMAIL_CONFLICT
     }
 
     /** 인증 업무 Service를 주입받습니다. */
@@ -180,10 +181,14 @@ public class AuthController {
     /** 내부 업무 오류를 프론트엔드와 합의한 OAuth Callback 오류로 제한합니다. */
     private OAuthCallbackError callbackError(ErrorCode errorCode) {
         return switch (errorCode) {
-            case OAUTH_STATE_INVALID -> OAuthCallbackError.OAUTH_INVALID_STATE;
+            case OAUTH_STATE_INVALID ->
+                    OAuthCallbackError.OAUTH_INVALID_STATE;
             case SESSION_EXPIRED, OAUTH_SESSION_EXPIRED, OAUTH_SESSION_MISMATCH ->
                     OAuthCallbackError.OAUTH_SESSION_EXPIRED;
-            default -> OAuthCallbackError.OAUTH_AUTHENTICATION_FAILED;
+            case SOCIAL_EMAIL_PROVIDER_CONFLICT ->
+                    OAuthCallbackError.OAUTH_EMAIL_CONFLICT;
+            default ->
+                    OAuthCallbackError.OAUTH_AUTHENTICATION_FAILED;
         };
     }
 
