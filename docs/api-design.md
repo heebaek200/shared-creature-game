@@ -1003,6 +1003,36 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
 | 409 | `CONCURRENT_MODIFICATION` | 현재 시즌 정상화 중 또는 시간 경계와 상태 불일치 |
 
+### listRankableSeasons — `GET /api/v1/seasons`
+
+- **Operation ID:** `listRankableSeasons` · **요구사항:** `REQ-RNK-001, REQ-RNK-002` · **인증·권한:** `AUTHENTICATED` · **성공 HTTP:** `200`
+- **엔드포인트 조건:** 랭킹에서 선택할 수 있는 유효한 현재 시즌과 `ACTIVE`에서 정상 종료되어 Snapshot이 확정된 시즌을 시즌 번호 내림차순으로 반환합니다. `SCHEDULED`, `CLOSING`, 시간 범위를 벗어난 `ACTIVE`, 활성화되지 않고 종료된 시즌은 제외합니다.
+
+**요청 필드**
+
+| 위치 | 필드명 | 타입 | 필수 | null | 검증·기본값 |
+|---|---|---|---|---|---|
+| Header | Cookie | string | Y | N | Spring Session 세션 쿠키; HttpOnly / SameSite=Lax |
+
+**성공 응답 필드**
+
+| 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
+|---|---|---|---|---|---|
+| data | array(object) | Y | N | 없으면 [] | 선택 가능한 시즌 목록 |
+| data[].seasonId | integer(int64) | Y | N | 1 이상 | 시즌 ID |
+| data[].seasonNumber | integer | Y | N | 1 이상 | 시즌 번호 |
+| data[].status | string(enum) | Y | N | ACTIVE \| ENDED | 랭킹 확정 상태 |
+| data[].startAt | string(date-time) | Y | N | UTC ISO 8601 | 시작 시각 |
+| data[].endAt | string(date-time) | Y | N | UTC ISO 8601 | 종료 시각 |
+
+**오류 응답**
+
+| HTTP | code | 조건 |
+|---|---|---|
+| 401 | `AUTH_REQUIRED` | 세션 인증 없음 |
+| 401 | `SESSION_EXPIRED` | 인증 세션 만료 |
+| 400 | `INVALID_REQUEST` | 중복 또는 미등록 입력 |
+
 ### getCreatureHome — `GET /api/v1/groups/me/creature-home`
 
 - **Operation ID:** `getCreatureHome` · **요구사항:** `REQ-SEA-001, REQ-SEA-002, REQ-SEA-003, REQ-AVA-002, REQ-RT-001` · **인증·권한:** `GROUP_MEMBER` · **성공 HTTP:** `200`

@@ -301,7 +301,7 @@ Mock ON/OFF를 바꿔 정상·빈 목록·오류를 확인하고 Network에서 G
 | `/groups/select` | `listPublicGroups` | `proofreadGroupDescription`, `createGroup`, `joinGroup` | `/creature` 또는 업무 오류 |
 | `/creature` | `getCurrentSeason`, `getCreatureHome` | WebSocket Event | Snapshot 재조회 |
 | `/quests` | `listCurrentQuests` | `completeQuestAssignment`, `createCheckIn`, `submitQuestPhoto` | 퀘스트 재조회 |
-| `/rankings` | `getMemberRanking`, `getGroupRanking` | Page·시즌 변경 | 선택 랭킹 재조회 |
+| `/rankings` | `listRankableSeasons`, `getMemberRanking`, `getGroupRanking` | Page·시즌 변경 | 선택 랭킹 재조회 |
 | `/group` | `getMyGroup`, `listMyGroupMembers` | `leaveMyGroup`, `createUserReport` | 탈퇴 시 `/groups/select` / 신고 안내 |
 | `/shop` | `listShopItems`, `getShopItem` | `createPurchase`, `verifyPurchasePayment` | 구매·아바타로 이동 |
 | `/avatar` | `getAvatar`, `listOwnedItems` | `equipAvatarItem`, `unequipAvatarItem` | `AvatarResponse` 재렌더 |

@@ -76,7 +76,7 @@
   background-color: var(--bs-tertiary-bg);
 }
 
-.app-header__connection-status[data-connection-state="pending"]
+.app-header__connection-status[data-connection-state="pending"],
 .app-header__connection-dot {
   color: var(--bs-secondary-color);
 }
@@ -445,4 +445,55 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 퀘스트 화면: 상태·보상·사진 입력을 카드 단위로 구분합니다. */
+.quest-period-tabs,
+.rankings-page .nav-pills {
+  gap: 0.5rem;
+}
+
+.quest-period-tabs .nav-link,
+.rankings-page .nav-link {
+  color: var(--app-text);
+  border: 1px solid var(--app-border);
+  background-color: var(--app-surface);
+}
+
+.quest-period-tabs .nav-link.active,
+.rankings-page .nav-link.active {
+  color: var(--app-on-primary);
+  border-color: var(--app-primary);
+  background-color: var(--app-primary);
+}
+
+.quest-card {
+  overflow: hidden;
+}
+
+.quest-card__details .progress {
+  min-width: 8rem;
+  height: 0.65rem;
+}
+
+.quest-photo-input .form-control {
+  min-width: 0;
+}
+
+/* 랭킹 화면: 현재 순위를 목록과 분리해 페이지 밖에서도 유지합니다. */
+.ranking-season-field {
+  min-width: 12rem;
+}
+
+.ranking-current-summary {
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.75rem;
+  background-color: var(--app-background);
+}
+
+.ranking-table > :not(caption) > * > * {
+  color: var(--app-text);
+  background-color: transparent;
+  border-bottom-color: var(--app-border);
 }

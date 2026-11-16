@@ -207,6 +207,23 @@
     #creature-img-wrapper {
         zoom: 0.75;
     }
+
+    /* 퀘스트 사진 입력은 좁은 화면에서 버튼과 세로로 배치합니다. */
+    .quest-photo-input {
+        display: grid;
+        gap: 0.5rem;
+    }
+
+    .quest-photo-input > .form-control,
+    .quest-photo-input > .btn {
+        width: 100%;
+        border-radius: var(--bs-border-radius) !important;
+    }
+
+    /* 시즌 선택은 모바일 Header 아래에서 전체 너비를 사용합니다. */
+    .ranking-season-field {
+        width: 100%;
+    }
 }
 
 /* 390px 이하 */
