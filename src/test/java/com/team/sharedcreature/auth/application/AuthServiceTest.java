@@ -3,6 +3,8 @@ package com.team.sharedcreature.auth.application;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.security.Hashing;
 import com.team.sharedcreature.auth.domain.OauthLoginAttempt;
+import com.team.sharedcreature.auth.domain.OauthLoginIntent;
+import com.team.sharedcreature.auth.domain.SocialProvider;
 import com.team.sharedcreature.auth.infrastructure.InitialSuperAdminProperties;
 import com.team.sharedcreature.auth.infrastructure.OauthLoginAttemptRepository;
 import com.team.sharedcreature.auth.infrastructure.SocialAccountRepository;
@@ -37,8 +39,8 @@ class AuthServiceTest {
         OauthLoginAttempt attempt = OauthLoginAttempt.start(
                 Hashing.sha256("state"),
                 Hashing.sha256(session.getId()),
-                "GOOGLE",
-                "LOGIN",
+                SocialProvider.GOOGLE,
+                OauthLoginIntent.LOGIN,
                 null,
                 "DEFAULT",
                 now.minusSeconds(601)
@@ -57,8 +59,8 @@ class AuthServiceTest {
         OauthLoginAttempt attempt = OauthLoginAttempt.start(
                 Hashing.sha256("state"),
                 Hashing.sha256(session.getId()),
-                "GOOGLE",
-                "LOGIN",
+                SocialProvider.GOOGLE,
+                OauthLoginIntent.LOGIN,
                 null,
                 "DEFAULT",
                 now

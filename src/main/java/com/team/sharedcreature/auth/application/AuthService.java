@@ -6,7 +6,10 @@ import com.team.sharedcreature._core.security.Hashing;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature._core.security.SessionAuthenticationFilter;
 import com.team.sharedcreature.auth.domain.OauthLoginAttempt;
+import com.team.sharedcreature.auth.domain.OauthLoginAttemptStatus;
+import com.team.sharedcreature.auth.domain.OauthLoginIntent;
 import com.team.sharedcreature.auth.domain.SocialAccount;
+import com.team.sharedcreature.auth.domain.SocialProvider;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.GlobalRole;
 import com.team.sharedcreature.auth.domain.UserStatus;
@@ -96,7 +99,7 @@ public class AuthService {
         String state = token();
         String nonce = token();
         GroupInviteLink invitation = null;
-        String intent = "LOGIN";
+        OauthLoginIntent intent = OauthLoginIntent.LOGIN;
         String resolvedRoute = returnRoute == null ? "DEFAULT" : returnRoute;
         if ("INVITE".equals(resolvedRoute)) {
             Object context = session.getAttribute(InvitationSessionContext.SESSION_KEY);
@@ -105,12 +108,12 @@ public class AuthService {
             }
             invitation = inviteLinkRepository.findByIdAndStatus(invitationContext.inviteLinkId(), "ACTIVE")
                     .orElseThrow(() -> conflict(ErrorCode.INVITE_INVALID, "현재 사용할 수 없는 초대입니다."));
-            intent = "INVITE";
+            intent = OauthLoginIntent.INVITE;
         }
         attemptRepository.save(OauthLoginAttempt.start(
                 Hashing.sha256(state),
                 Hashing.sha256(session.getId()),
-                provider,
+                SocialProvider.GOOGLE,
                 intent,
                 invitation,
                 resolvedRoute,
@@ -141,7 +144,7 @@ public class AuthService {
     }
 
     private void validateAttempt(OauthLoginAttempt attempt, String sessionHash, Instant now) {
-        if (!"PENDING".equals(attempt.getStatus())) {
+        if (attempt.getStatus() != OauthLoginAttemptStatus.PENDING) {
             throw conflict(ErrorCode.OAUTH_STATE_INVALID, "이미 사용한 로그인 요청입니다.");
         }
         if (attempt.getExpiresAt().isBefore(now)) {
@@ -162,7 +165,9 @@ public class AuthService {
         OauthLoginAttempt attempt = attemptRepository.findByStateHashForUpdate(stateHash)
                 .orElseThrow(() -> conflict(ErrorCode.OAUTH_STATE_INVALID, "유효하지 않은 로그인 요청입니다."));
         validateAttempt(attempt, sessionHash, now);
-        Long invitationId = "INVITE".equals(attempt.getIntent()) ? currentInvitationId(session) : null;
+        Long invitationId = attempt.getIntent() == OauthLoginIntent.INVITE
+                ? currentInvitationId(session)
+                : null;
         GroupInviteLink latestInvitation = invitationId == null
                 ? null
                 : inviteLinkRepository.findById(invitationId).orElse(null);
@@ -172,7 +177,10 @@ public class AuthService {
             session.removeAttribute(ONBOARDING_REASON);
         }
 
-        var account = socialAccountRepository.findByProviderAndProviderUserId("GOOGLE", profile.providerUserId());
+        var account = socialAccountRepository.findByProviderAndProviderUserId(
+                SocialProvider.GOOGLE,
+                profile.providerUserId()
+        );
         if (account.isPresent()) {
             // 기존 회원 분기
             User user = account.get().getUser();
@@ -230,7 +238,13 @@ public class AuthService {
                 : GlobalRole.USER;
         User user = userRepository.save(User.register(globalRole, now));
         socialAccountRepository.save(SocialAccount.link(
-                user, pending.provider(), pending.providerUserId(), pending.email(), pending.emailVerified(), now));
+                user,
+                SocialProvider.valueOf(pending.provider()),
+                pending.providerUserId(),
+                pending.email(),
+                pending.emailVerified(),
+                now
+        ));
         userProfileRepository.save(UserProfile.create(user, nickname.strip(), normalizedNickname, now));
         if (pending.inviteLinkId() != null) {
             GroupMembershipService.InvitationJoinResult result =

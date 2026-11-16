@@ -27,8 +27,12 @@ public class SocialAccount {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    /**
+     * 회원과 연결된 소셜 인증 공급자입니다.
+     */
+    @Enumerated(EnumType.STRING)
     @Column(name = "provider", length = 30, nullable = false)
-    private String provider;
+    private SocialProvider provider;
 
     @Column(name = "provider_user_id", length = 255, nullable = false)
     private String providerUserId;
@@ -45,7 +49,7 @@ public class SocialAccount {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    private SocialAccount(User user, String provider, String providerUserId, String email, boolean emailVerified, Instant now) {
+    private SocialAccount(User user, SocialProvider provider, String providerUserId, String email, boolean emailVerified, Instant now) {
         this.user = user;
         this.provider = provider;
         this.providerUserId = providerUserId;
@@ -58,7 +62,7 @@ public class SocialAccount {
     /** 검증된 공급자 계정을 내부 회원과 연결합니다. */
     public static SocialAccount link(
             User user,
-            String provider,
+            SocialProvider provider,
             String providerUserId,
             String email,
             boolean emailVerified,

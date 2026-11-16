@@ -3,6 +3,7 @@ package com.team.sharedcreature.auth.infrastructure;
 import org.springframework.boot.ApplicationArguments;
 import com.team.sharedcreature.auth.domain.GlobalRole;
 import com.team.sharedcreature.auth.domain.UserStatus;
+import com.team.sharedcreature.auth.domain.SocialProvider;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -48,7 +49,10 @@ public class InitialSuperAdminValidator implements ApplicationRunner {
             throw new IllegalStateException("현재 최초 전체 관리자 공급자는 GOOGLE만 지원합니다.");
         }
         socialAccountRepository
-                .findByProviderAndProviderUserId(properties.provider().toUpperCase(), properties.providerUserId())
+                .findByProviderAndProviderUserId(
+                        SocialProvider.GOOGLE,
+                        properties.providerUserId()
+                )
                 .ifPresent(account -> {
                     throw new IllegalStateException("최초 전체 관리자 대상이 이미 일반 사용자로 등록되어 있습니다.");
                 });
