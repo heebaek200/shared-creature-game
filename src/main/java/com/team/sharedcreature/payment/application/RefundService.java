@@ -8,6 +8,7 @@ import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.payment.api.RefundResponse;
 import com.team.sharedcreature.payment.domain.RefundRequest;
 import com.team.sharedcreature.payment.domain.RefundStatus;
+import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
 import com.team.sharedcreature.payment.infrastructure.RefundRequestRepository;
 import com.team.sharedcreature.auth.domain.User;
@@ -110,7 +111,7 @@ public class RefundService {
         var refunds = refundRequestRepository
                 .findAllByPurchaseIdForUpdate(purchaseId);
 
-        if (!"PAID".equals(purchase.getStatus())) {
+        if (purchase.getStatus() != PurchaseStatus.PAID) {
             throw new BusinessException(
                     ErrorCode.RESOURCE_NOT_FOUND,
                     "환불 가능한 결제 완료 구매를 찾을 수 없습니다."

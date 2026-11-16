@@ -12,6 +12,8 @@ import com.team.sharedcreature.admin.application.SchedulerJobRunner;
 import com.team.sharedcreature.admin.application.SchedulerExecutionLifecycleService;
 import com.team.sharedcreature.payment.application.*;
 import com.team.sharedcreature.payment.domain.Purchase;
+import com.team.sharedcreature.payment.domain.PurchaseStatus;
+import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
 import com.team.sharedcreature.payment.domain.RefundRequest;
 import com.team.sharedcreature.payment.domain.RefundStatus;
 import com.team.sharedcreature.payment.infrastructure.RefundRequestRepository;
@@ -63,6 +65,7 @@ import static org.mockito.Mockito.*;
 @ContextConfiguration(initializers = RefundTransactionMySqlIntegrationTest.TestDatabaseOnly.class)
 class RefundTransactionMySqlIntegrationTest {
     @Autowired private EntityManager em;
+    @Autowired private PurchaseRepository purchaseRepository;
     @Autowired private RefundRequestRepository refundRepository;
     @Autowired private RefundQueryService refundQueries;
     @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
@@ -154,6 +157,37 @@ class RefundTransactionMySqlIntegrationTest {
             assertThat(shop.getStatus()).isEqualTo(ShopItemStatus.INACTIVE);
             assertThat(purchase.getSlotCodeSnapshot()).isEqualTo(AvatarSlot.HEAD);
         });
+    }
+
+    /** 기존 문자열을 읽고 실제 전환으로 저장한 구매 상태를 사용자 범위 안에서 조회합니다. */
+    @ParameterizedTest
+    @EnumSource(PurchaseStatus.class)
+    void 구매상태는_기존문자열과_호환되고_Enum필터와_사용자범위를_유지한다(PurchaseStatus status) {
+        // 이 테스트의 구매 행만 초기 문자열로 준비하여 기존 데이터 읽기를 검증합니다.
+        jdbc.update("UPDATE purchases SET status = 'READY' WHERE id = ?", fixture.purchaseId());
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
+            var purchase = em.find(Purchase.class, fixture.purchaseId());
+            assertThat(purchase.getStatus()).isEqualTo(PurchaseStatus.READY);
+            switch (status) {
+                case READY -> { }
+                case PAID -> purchase.markPaid(now);
+                case FAILED -> purchase.markFailed(now);
+                case CANCELLED -> {
+                    purchase.markPaid(now);
+                    purchase.markCancelledAfterRefund(now);
+                }
+            }
+        });
+
+        assertThat(jdbc.queryForObject("SELECT status FROM purchases WHERE id = ?",
+                String.class, fixture.purchaseId())).isEqualTo(status.name());
+        var mine = purchaseRepository.findByUserIdAndStatus(
+                fixture.ownerId(), status, PageRequest.of(0, 20));
+        assertThat(mine.getTotalElements()).isEqualTo(1);
+        assertThat(mine.getContent().getFirst().getStatus()).isEqualTo(status);
+        assertThat(purchaseRepository.findByUserIdAndStatus(
+                fixture.adminId(), status, PageRequest.of(0, 20))).isEmpty();
     }
 
     /** 모든 환불 상태의 문자열 저장·Enum 조회와 복구 대상 JPQL을 실제 MySQL로 검증합니다. */

@@ -10,6 +10,7 @@ import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
 import com.team.sharedcreature.payment.api.PurchaseResponse;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
 import com.team.sharedcreature.payment.domain.Purchase;
+import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
 import com.team.sharedcreature.payment.infrastructure.PortOneProperties;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
@@ -105,7 +106,7 @@ class PaymentReconciliationServiceTest {
         PurchaseResponse result = service.reconcileForUser(7L, 10L, PAYMENT_ID);
 
         assertThat(result).isSameAs(expected);
-        assertThat(purchase.getStatus()).isEqualTo("PAID");
+        assertThat(purchase.getStatus()).isEqualTo(PurchaseStatus.PAID);
         verify(ownedItemRepository).save(any(OwnedItem.class));
         verify(transactionRepository).save(any(PaymentTransaction.class));
     }
@@ -119,7 +120,7 @@ class PaymentReconciliationServiceTest {
         assertThatThrownBy(() -> service.reconcileForUser(7L, 10L, PAYMENT_ID))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.errorCode()).isEqualTo(ErrorCode.PAYMENT_AMOUNT_MISMATCH));
-        assertThat(purchase.getStatus()).isEqualTo("READY");
+        assertThat(purchase.getStatus()).isEqualTo(PurchaseStatus.READY);
         verifyNoInteractions(transactionTemplate, ownedItemRepository);
     }
 
@@ -267,7 +268,7 @@ class PaymentReconciliationServiceTest {
         assertThatThrownBy(() -> service.reconcileForUser(7L, 10L, PAYMENT_ID))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.errorCode()).isEqualTo(ErrorCode.PAYMENT_RESULT_UNKNOWN));
-        assertThat(purchase.getStatus()).isEqualTo("PAID");
+        assertThat(purchase.getStatus()).isEqualTo(PurchaseStatus.PAID);
         verify(transactionRepository, never()).save(any());
     }
 

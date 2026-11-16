@@ -13,6 +13,7 @@ import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.payment.domain.Purchase;
+import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import com.team.sharedcreature.payment.domain.RefundRequest;
 import com.team.sharedcreature.payment.domain.RefundStatus;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
@@ -234,7 +235,7 @@ public class AvatarService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
-        if (!"PAID".equals(purchase.getStatus())) {
+        if (purchase.getStatus() != PurchaseStatus.PAID) {
             throw new BusinessException(
                     ErrorCode.CONCURRENT_MODIFICATION,
                     "결제 완료 상태의 아이템만 장착할 수 있습니다."

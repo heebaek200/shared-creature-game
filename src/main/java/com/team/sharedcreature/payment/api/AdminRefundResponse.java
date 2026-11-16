@@ -61,7 +61,8 @@ public record AdminRefundResponse(
                         purchase.getOrderNumber(),
                         purchase.getItemNameSnapshot(),
                         purchase.getPriceKrwSnapshot(),
-                        purchase.getStatus()
+                        // 구매 상태 Enum을 기존 API 문자열로 변환합니다.
+                        purchase.getStatus().name()
                 ),
                 // 미지급 아이템은 빈 객체 대신 null로 반환합니다.
                 item == null ? null : new OwnedItemInfo(

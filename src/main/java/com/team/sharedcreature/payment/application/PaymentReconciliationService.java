@@ -129,7 +129,7 @@ public class PaymentReconciliationService {
     }
 
     private ReconciliationResult reconcileFailed(Purchase locked) {
-        if (PurchaseStatus.READY.name().equals(locked.getStatus())) {
+        if (locked.getStatus() == PurchaseStatus.READY) {
             locked.markFailed(clock.instant());
             PaymentTransaction transaction = transactionRepository.save(PaymentTransaction.failed(
                     locked,
@@ -138,7 +138,7 @@ public class PaymentReconciliationService {
             ));
             return result(locked, transaction);
         }
-        if (PurchaseStatus.FAILED.name().equals(locked.getStatus())) {
+        if (locked.getStatus() == PurchaseStatus.FAILED) {
             PaymentTransaction transaction = transactionRepository
                     .findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
                             locked.getId(),
@@ -152,7 +152,7 @@ public class PaymentReconciliationService {
     }
 
     private ReconciliationResult reconcilePaid(Purchase locked, PaymentSnapshot actual) {
-        if (PurchaseStatus.READY.name().equals(locked.getStatus())) {
+        if (locked.getStatus() == PurchaseStatus.READY) {
             if (transactionRepository.findByProviderAndProviderTransactionId(
                     "PORTONE",
                     actual.transactionId()
@@ -170,7 +170,7 @@ public class PaymentReconciliationService {
             ownedItemRepository.save(OwnedItem.grant(locked, clock.instant()));
             return result(locked, transaction);
         }
-        if (PurchaseStatus.PAID.name().equals(locked.getStatus())) {
+        if (locked.getStatus() == PurchaseStatus.PAID) {
             PaymentTransaction transaction = transactionRepository
                     .findByProviderAndProviderTransactionId("PORTONE", actual.transactionId())
                     .filter(candidate -> isApprovalConsistent(locked, candidate, actual))
@@ -194,7 +194,7 @@ public class PaymentReconciliationService {
         transactionTemplate.execute(status -> {
             Purchase locked = purchaseRepository.findByIdForUpdate(purchaseId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-            if (!PurchaseStatus.READY.name().equals(locked.getStatus())) {
+            if (locked.getStatus() != PurchaseStatus.READY) {
                 return null;
             }
             boolean alreadyUnknown = transactionRepository
@@ -234,7 +234,11 @@ public class PaymentReconciliationService {
     }
 
     private ReconciliationResult result(Purchase purchase, PaymentTransaction transaction) {
-        return new ReconciliationResult(purchase.getId(), transaction.getId(), purchase.getStatus());
+        return new ReconciliationResult(
+                purchase.getId(),
+                transaction.getId(),
+                purchase.getStatus().name()
+        );
     }
 
     private void validate(ExpectedPurchase expected, PaymentSnapshot actual) {

@@ -62,8 +62,10 @@ public class Purchase {
     @Column(name = "currency", length = 3, nullable = false)
     private String currency;
 
+    /** 구매 주문의 결제 진행 및 취소 상태입니다. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    private PurchaseStatus status;
 
     @Version
     @Column(name = "version", nullable = false)
@@ -95,7 +97,7 @@ public class Purchase {
         this.slotCodeSnapshot = slotCodeSnapshot;
         this.priceKrwSnapshot = priceKrwSnapshot;
         this.currency = "KRW";
-        this.status = PurchaseStatus.READY.name();
+        this.status = PurchaseStatus.READY;
         this.createdAt = now;
         this.updatedAt = now;
     }
@@ -128,22 +130,22 @@ public class Purchase {
 
     /** 결제 검증이 끝난 주문을 한 번만 결제 완료 상태로 전환합니다. */
     public void markPaid(Instant now) {
-        if (PurchaseStatus.PAID.name().equals(status)) {
+        if (status == PurchaseStatus.PAID) {
             return;
         }
-        if (!PurchaseStatus.READY.name().equals(status)) {
+        if (status != PurchaseStatus.READY) {
             throw new IllegalStateException("READY 구매만 PAID로 전환할 수 있습니다.");
         }
-        status = PurchaseStatus.PAID.name();
+        status = PurchaseStatus.PAID;
         updatedAt = now;
     }
 
     /** 공급자가 명확히 결제 실패를 확정한 주문을 실패 상태로 전환합니다. */
     public void markFailed(Instant now) {
-        if (!PurchaseStatus.READY.name().equals(status)) {
+        if (status != PurchaseStatus.READY) {
             return;
         }
-        status = PurchaseStatus.FAILED.name();
+        status = PurchaseStatus.FAILED;
         updatedAt = now;
     }
 
@@ -159,18 +161,18 @@ public class Purchase {
         Objects.requireNonNull(now, "now");
 
         // 같은 성공 결과를 반복 반영해도 변경 시각을 덮어쓰지 않습니다.
-        if (PurchaseStatus.CANCELLED.name().equals(status)) {
+        if (status == PurchaseStatus.CANCELLED) {
             return false;
         }
 
-        if (!PurchaseStatus.PAID.name().equals(status)) {
+        if (status != PurchaseStatus.PAID) {
             throw new BusinessException(
                     ErrorCode.CONCURRENT_MODIFICATION,
                     "결제 완료 구매만 환불 완료로 취소할 수 있습니다."
             );
         }
 
-        this.status = PurchaseStatus.CANCELLED.name();
+        this.status = PurchaseStatus.CANCELLED;
         this.updatedAt = now;
 
         return true;

@@ -6,6 +6,7 @@ import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.payment.domain.PgApiAttempt;
 import com.team.sharedcreature.payment.infrastructure.PgApiAttemptRepository;
+import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -131,7 +132,7 @@ public class RefundApprovalTransactionService {
             );
         }
 
-        if (!"PAID".equals(purchase.getStatus())) {
+        if (purchase.getStatus() != PurchaseStatus.PAID) {
             throw new BusinessException(
                     ErrorCode.CONCURRENT_MODIFICATION,
                     "결제 완료 구매만 환불을 승인할 수 있습니다."

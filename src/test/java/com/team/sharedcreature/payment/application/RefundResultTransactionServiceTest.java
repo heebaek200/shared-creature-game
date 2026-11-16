@@ -55,7 +55,7 @@ class RefundResultTransactionServiceTest {
         set(purchase, "orderNumber", "payment");
         set(purchase, "priceKrwSnapshot", 1000L);
         set(purchase, "currency", "KRW");
-        set(purchase, "status", "PAID");
+        set(purchase, "status", PurchaseStatus.PAID);
         item = OwnedItem.grant(purchase, NOW.minusSeconds(600));
         refund = RefundRequest.create(purchase, user, "요청", NOW.minusSeconds(600));
         set(refund, "id", 1L);
@@ -74,7 +74,7 @@ class RefundResultTransactionServiceTest {
         when(queries.getAdminRefund(1L)).thenAnswer(call -> new AdminRefundResponse(
                 1L, 2L, 7L, "요청", "승인", refund.getStatus().name(), NOW.minusSeconds(600),
                 NOW.minusSeconds(300), refund.getCompletedAt(), 7L,
-                new AdminRefundResponse.PurchaseInfo("payment", "아이템", 1000L, purchase.getStatus()),
+                new AdminRefundResponse.PurchaseInfo("payment", "아이템", 1000L, purchase.getStatus().name()),
                 new AdminRefundResponse.OwnedItemInfo(8L, item.getStatus().name(), item.getUsedAt()), null));
     }
 
@@ -89,7 +89,9 @@ class RefundResultTransactionServiceTest {
             case UNKNOWN -> "CANCEL_UNKNOWN";
         };
         assertThat(refund.getStatus().name()).isEqualTo(expected);
-        assertThat(purchase.getStatus()).isEqualTo(outcome == RefundGateway.Outcome.SUCCESS ? "CANCELLED" : "PAID");
+        assertThat(purchase.getStatus()).isEqualTo(outcome == RefundGateway.Outcome.SUCCESS
+                ? PurchaseStatus.CANCELLED
+                : PurchaseStatus.PAID);
         assertThat(item.getStatus()).isEqualTo(outcome == RefundGateway.Outcome.SUCCESS
                 ? OwnedItemStatus.REVOKED
                 : OwnedItemStatus.OWNED_UNUSED);

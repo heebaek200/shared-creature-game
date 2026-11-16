@@ -7,6 +7,7 @@ import com.team.sharedcreature.payment.api.PurchaseResponse;
 import com.team.sharedcreature.payment.api.PurchaseSummaryResponse;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
 import com.team.sharedcreature.payment.domain.Purchase;
+import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import com.team.sharedcreature.payment.domain.RefundRequest;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
@@ -50,9 +51,15 @@ public class PurchaseQueryService {
     /** 생성 시각 내림차순으로 사용자 구매 목록을 조회합니다. */
     public Page<PurchaseSummaryResponse> list(Long userId, int page, int size, String status) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt", "id"));
-        Page<Purchase> purchases = status == null || status.isBlank()
+        PurchaseStatus purchaseStatus = parseStatus(status);
+
+        Page<Purchase> purchases = purchaseStatus == null
                 ? purchaseRepository.findByUserId(userId, pageable)
-                : purchaseRepository.findByUserIdAndStatus(userId, status, pageable);
+                : purchaseRepository.findByUserIdAndStatus(
+                userId,
+                purchaseStatus,
+                pageable
+        );
         return purchases.map(this::summary);
     }
 
@@ -70,7 +77,7 @@ public class PurchaseQueryService {
                 purchase.getItemNameSnapshot(),
                 purchase.getPriceKrwSnapshot(),
                 purchase.getCurrency(),
-                purchase.getStatus(),
+                purchase.getStatus().name(),
                 purchase.getCreatedAt(),
                 ownedStatus,
                 latestRefundStatus
@@ -100,7 +107,8 @@ public class PurchaseQueryService {
                 purchase.getItemNameSnapshot(),
                 purchase.getPriceKrwSnapshot(),
                 purchase.getCurrency(),
-                purchase.getStatus(),
+                // 구매 상태 Enum을 기존 API 문자열로 변환합니다.
+                purchase.getStatus().name(),
                 purchase.getCreatedAt(),
                 ownedStatus,
                 latestRefundStatus,
@@ -135,5 +143,29 @@ public class PurchaseQueryService {
                 refund.getReviewedAt(),
                 refund.getCompletedAt()
         );
+    }
+
+    /**
+     * 구매 상태 필터를 도메인 타입으로 변환합니다.
+     *
+     * @param status 요청 구매 상태
+     * @return 구매 상태, 미지정 또는 공백이면 null
+     * @throws BusinessException 허용되지 않은 구매 상태인 경우
+     */
+    private PurchaseStatus parseStatus(String status) {
+        // 기존 서비스의 미지정·공백 입력에 대한 전체 조회 동작을 유지합니다.
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+
+        try {
+            // 값이 있는 경우 대소문자나 앞뒤 공백을 임의로 보정하지 않습니다.
+            return PurchaseStatus.valueOf(status);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_FIELD_VALUE,
+                    "지원하지 않는 구매 상태입니다."
+            );
+        }
     }
 }
