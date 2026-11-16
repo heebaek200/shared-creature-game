@@ -111,4 +111,25 @@ npm run build
 6. 로그인 시작·`state`·`nonce`·시작 세션 결속과 가입 대기·내부 사용자 연결은 구현되어 있습니다.
 7. Backend는 Authorization Code를 Token으로 교환하고 ID Token과 nonce를 검증한 뒤 UserInfo를 조회합니다. 공급자 Token은 Browser나 DB에 저장하지 않습니다.
 
-Google 공식 구현 기준은 [Web Server OAuth 2.0](https://developers.google.com/identity/protocols/oauth2/web-server)과 [OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect)를 확인합니다. Naver Adapter는 후속 구현 범위입니다.
+Google 공식 구현 기준은 [Web Server OAuth 2.0](https://developers.google.com/identity/protocols/oauth2/web-server)과 [OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect)를 확인합니다.
+
+## Naver OAuth 로컬 설정
+
+1. [Naver Developers](https://developers.naver.com/)에서 **Application → 애플리케이션 등록**으로 이동하여 애플리케이션을 생성합니다.
+2. 사용 API에서 **네이버 로그인**을 선택하고, 제공 정보에 **이메일 주소**를 포함합니다. 현재 구현에서는 사용자 식별자(`id`)와 이메일(`email`)이 필수이며, 닉네임(`nickname`) 또는 이름(`name`)을 추천 닉네임으로 사용합니다.
+3. 로그인 오픈 API 서비스 환경에서 **PC 웹**을 선택하고 다음 주소를 등록합니다.
+   - 서비스 URL: `http://localhost:5173`
+   - Callback URL: `http://localhost:5173/oauth2/callback/naver`
+4. 발급받은 Client ID와 Client Secret을 프로젝트 루트 `.env`에 설정합니다. `NAVER_REDIRECT_URI`는 개발자센터에 등록한 Callback URL과 정확히 일치해야 합니다.
+
+   ```properties
+   NAVER_CLIENT_ID=your_naver_client_id
+   NAVER_CLIENT_SECRET=your_naver_client_secret
+   NAVER_REDIRECT_URI=http://localhost:5173/oauth2/callback/naver
+   ```
+
+5. **개발 중** 상태의 애플리케이션은 등록자 및 관리자·테스터로 등록된 계정만 로그인할 수 있습니다. 다른 팀원이 테스트하려면 개발자센터의 **멤버관리**에서 해당 네이버 계정을 테스터로 추가합니다.
+6. Backend와 Frontend를 실행한 뒤 `http://localhost:5173/login`에서 **Naver로 계속하기** 버튼으로 로그인합니다. 신규 사용자는 닉네임 설정을 거쳐 회원가입을 완료합니다.
+7. 로그인 시작·`state` 검증·시작 세션 결속과 가입 대기·내부 사용자 연결은 구현되어 있습니다. Backend는 Authorization Code를 Access Token으로 교환한 뒤 네이버 사용자 정보 API(`/v1/nid/me`)를 호출하여 사용자 식별자와 이메일을 확인합니다. 공급자 Token은 Browser나 DB에 저장하지 않습니다.
+
+Naver 공식 구현 기준은 [네이버 로그인 개발가이드](https://developers.naver.com/docs/login/devguide)와 [네이버 로그인 API 명세](https://developers.naver.com/docs/login/api/api.md)를 확인합니다. 일반 사용자에게 서비스를 공개하려면 별도의 사전 검수가 필요합니다.

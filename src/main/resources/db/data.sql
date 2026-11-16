@@ -25,9 +25,11 @@ INSERT INTO creature_species (
   , created_at
   , updated_at
 ) VALUES
-    ('SPROUT', '새싹이', 'creatures/sprout', 'ACTIVE', 1, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
-  , ('CLOUD', '구름이', 'creatures/cloud', 'ACTIVE', 2, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
-  , ('EMBER', '불씨', 'creatures/ember', 'ACTIVE', 3, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+    ('MOSS_GOLEM', '이끼 낀 바위 골렘', 'moss-golem', 'ACTIVE', 1, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+  , ('ABYSS_JELLYFISH', '공허 속 우주 해파리', 'abyss-jellyfish', 'ACTIVE', 2, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+  , ('SPROUT', '새싹이', 'creatures/sprout', 'INACTIVE', 1, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+  , ('CLOUD', '구름이', 'creatures/cloud', 'INACTIVE', 2, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+  , ('EMBER', '불씨', 'creatures/ember', 'INACTIVE', 3, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
 ON DUPLICATE KEY UPDATE
     name = VALUES(name)
   , asset_key = VALUES(asset_key)
@@ -47,8 +49,12 @@ INSERT INTO shop_items (
   , created_at
   , updated_at
 ) VALUES
-    ('HAT_LEAF', '새싹 모자', '가볍게 쓸 수 있는 새싹 모자', 1000, 'HEAD', 'items/hat-leaf', 'ACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
-  , ('BODY_CAPE', '초록 망토', '함께 성장하는 모습을 담은 망토', 2000, 'BODY', 'items/body-cape', 'ACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+    ('RIBBON_HAIRBAND', '리본 헤어밴드', '리본 장식 헤어밴드', 1000, 'ACCESSORY', 'ribbon-hairband', 'ACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+  , ('BLUE_SHIRT', '파란 셔츠', '파란색 셔츠 의상', 2000, 'BODY', 'blue-shirt', 'ACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+  , ('YELLOW_SMILE', '노란 미소', '노란색 미소 표정', 1000, 'FACE', 'yellow-smile', 'ACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+  , ('BROWN_LOB', '갈색 단발', '갈색 단발 헤어스타일', 2000, 'HEAD', 'brown-lob', 'ACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+  , ('HAT_LEAF', '새싹 모자', '기존 참조 보존용 판매 종료 상품', 1000, 'HEAD', 'hat-leaf', 'INACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+  , ('BODY_CAPE', '초록 망토', '기존 참조 보존용 판매 종료 상품', 2000, 'BODY', 'body-cape', 'INACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
 ON DUPLICATE KEY UPDATE
     name = VALUES(name)
   , description = VALUES(description)
