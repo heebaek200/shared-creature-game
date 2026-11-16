@@ -1084,6 +1084,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 ### listActiveCreatureSpecies — `GET /api/v1/creature-species`
 
 - **Operation ID:** `listActiveCreatureSpecies` · **요구사항:** `REQ-SEA-002` · **인증·권한:** `GROUP_MEMBER` · **성공 HTTP:** `200`
+- `assetKey`는 `frontend/assets/creature/` 직하위 종 디렉터리명이다. `/`, `creatures/` 접두어, 파일명과 확장자를 포함하지 않으며, 성장 이미지는 `{assetKey}/lv1.png`~`lv5.png`를 사용한다. 미선택 알은 종 키와 무관한 공통 `lv0.png`를 사용한다.
 
 **요청 필드**
 
@@ -1099,7 +1100,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data[].creatureSpeciesId | integer(int64) | Y | N | 1 이상 | 크리처 종 ID |
 | data[].code | string | Y | N | 1~50자 | 코드 |
 | data[].name | string | Y | N | 1~50자 | 성공 데이터 이름 |
-| data[].assetKey | string | Y | N | 1~255자 | 이미지/리소스 키 |
+| data[].assetKey | string | Y | N | 1~255자 | 크리처 종 이미지 디렉터리의 논리 키 |
 | data[].displayOrder | integer | Y | N | 0 이상 | 표시 순서 |
 
 **오류 응답**
@@ -1421,6 +1422,8 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | 409 | `CONCURRENT_MODIFICATION` | `seasonId` 미지정 시 현재 시즌 정상화 중 또는 상태 불일치 |
 
 ## 7. 상점·아바타 API
+
+- 상점·아바타의 `assetKey`는 DB 숫자 ID나 경로가 아닌 소문자 kebab-case 논리 키다. 프론트엔드는 `docs/spikes/asset-sourcing.md`의 파일명 계약으로 상품 파츠를 조회한다.
 
 ### listShopItems — `GET /api/v1/shop-items`
 
