@@ -89,25 +89,19 @@
 
 ### 3.4 아바타 규격 및 레이어 구조 ($60 \times 60\text{ px}$)
 - **크기 및 피벗:** 통일 $60 \times 60\text{ px}$ (하단 $10\text{ px}$ 바닥 피벗 기준).
-- **합성 방식:** 기본 바디 위에 독립된 아이템 파츠(의상, 머리장식 등)를 캔버스 렌더링 시 실시간 오버레이 레이어 스태킹(Layer Stacking) 방식으로 결합.
-
-#### ① 아바타 레이어 구조 (총 5개 레이어 분리):
-1. **Layer 0 (Base):** 기본 캐릭터 바디 (`../../frontend/assets/avatar/`)
-2. **Layer 1 (Face Parts):** 얼굴 파츠 (`../../frontend/assets/item/`)
-3. **Layer 2 (Clothes):** 의상 파츠 (`../../frontend/assets/item/`)
-4. **Layer 3 (Hair):** 헤어 파츠 (`../../frontend/assets/item/`)
-5. **Layer 4 (Accessory):** 손/외곽 아이템 파츠 (`../../frontend/assets/item/`)
+- **기본 아바타:** 표정·헤어·의상을 포함한 통합 이미지이며 DB 상품으로 등록하지 않는다.
+- **합성 방식:** 기본 아바타 위에 장착된 상품의 투명 이미지를 상태·방향·프레임에 맞춰 겹친다. 미장착 슬롯은 이미지를 추가하지 않는다.
 
 #### ② 아바타 베이스 리소스 예시 (`../../frontend/assets/avatar/`)
 
 | 구분 | 파일명 | 해상도 | 샘플 이미지 | 설명 |
 | :--- | :--- | :---: | :---: | :--- |
-| **대기 (좌)** | `stop-left-avatar.png` | $60 \times 60\text{ px}$ | ![대기 좌](../../frontend/assets/avatar/stop-left-avatar.png) | 기본 바디 상태의 좌측 대기(Idle) 프레임 |
-| **대기 (우)** | `stop-right-avatar.png` | $60 \times 60\text{ px}$ | ![대기 우](../../frontend/assets/avatar/stop-right-avatar.png) | 기본 바디 상태의 우측 대기(Idle) 프레임 |
-| **보행 (좌) #1** | `walk-left-avatar-1.png` | $60 \times 60\text{ px}$ | ![보행 좌 1](../../frontend/assets/avatar/walk-left-avatar-1.png) | 기본 바디 상태의 좌측 보행(Walk) 첫 번째 프레임 |
-| **보행 (좌) #2** | `walk-left-avatar-2.png` | $60 \times 60\text{ px}$ | ![보행 좌 2](../../frontend/assets/avatar/walk-left-avatar-2.png) | 기본 바디 상태의 좌측 보행(Walk) 두 번째 프레임 |
-| **보행 (우) #1** | `walk-right-avatar-1.png` | $60 \times 60\text{ px}$ | ![보행 우 1](../../frontend/assets/avatar/walk-right-avatar-1.png) | 기본 바디 상태의 우측 보행(Walk) 첫 번째 프레임 |
-| **보행 (우) #2** | `walk-right-avatar-2.png` | $60 \times 60\text{ px}$ | ![보행 우 2](../../frontend/assets/avatar/walk-right-avatar-2.png) | 기본 바디 상태의 우측 보행(Walk) 두 번째 프레임 |
+| **대기 (좌)** | `stop-left-default-1.png` | $60 \times 60\text{ px}$ | ![대기 좌](../../frontend/assets/avatar/stop-left-default-1.png) | 좌측 대기 프레임 |
+| **대기 (우)** | `stop-right-default-1.png` | $60 \times 60\text{ px}$ | ![대기 우](../../frontend/assets/avatar/stop-right-default-1.png) | 우측 대기 프레임 |
+| **보행 (좌) #1** | `walk-left-default-1.png` | $60 \times 60\text{ px}$ | ![보행 좌 1](../../frontend/assets/avatar/walk-left-default-1.png) | 좌측 보행 첫 번째 프레임 |
+| **보행 (좌) #2** | `walk-left-default-2.png` | $60 \times 60\text{ px}$ | ![보행 좌 2](../../frontend/assets/avatar/walk-left-default-2.png) | 좌측 보행 두 번째 프레임 |
+| **보행 (우) #1** | `walk-right-default-1.png` | $60 \times 60\text{ px}$ | ![보행 우 1](../../frontend/assets/avatar/walk-right-default-1.png) | 우측 보행 첫 번째 프레임 |
+| **보행 (우) #2** | `walk-right-default-2.png` | $60 \times 60\text{ px}$ | ![보행 우 2](../../frontend/assets/avatar/walk-right-default-2.png) | 우측 보행 두 번째 프레임 |
 
 
 #### ③ 아이템 파츠 리소스 예시 (`../../frontend/assets/item/`)
@@ -118,18 +112,18 @@
 |---|---|
 | `state` | `stop` \| `walk` |
 | `direction` | `left` \| `right` |
-| `part` | `face` \| `cloth` \| `hair` \| `ac` |
-| `assetKey` | `default-face` \| `default-hair` \| `hat-leaf` \| `body-cape` |
+| `part` | `head` \| `face` \| `body` \| `accessory` (API/DB 슬롯의 소문자 값) |
+| `assetKey` | 상점 상품의 `asset_key` |
 | `frame` | `stop`은 `1`; `walk`는 `1` \| `2` |
 
-| 레이어 | 용도 | `part` | `assetKey` |
-|---:|---|---|---|
-| 1 | 기본 얼굴 | `face` | `default-face` |
-| 2 | `BODY_CAPE` | `cloth` | `body-cape` |
-| 3 | 기본 헤어 | `hair` | `default-hair` |
-| 4 | `HAT_LEAF` | `ac` | `hat-leaf` |
+| 상품 코드 | `part` | `assetKey` |
+|---|---|---|
+| `RIBBON_HAIRBAND` | `accessory` | `ribbon-hairband` |
+| `BLUE_SHIRT` | `body` | `blue-shirt` |
+| `YELLOW_SMILE` | `face` | `yellow-smile` |
+| `BROWN_LOB` | `head` | `brown-lob` |
 
-예: `stop-left-ac-hat-leaf-1.png`, `walk-right-cloth-body-cape-2.png`.
+예: `stop-left-accessory-ribbon-hairband-1.png`, `walk-right-body-blue-shirt-2.png`.
 
 ## 4. 필드 배치 및 겹침 처리 규칙 (Z-Index Hierarchy)
 
@@ -200,12 +194,12 @@
     ├── images/
     │   └── sample/
     │       ├── avatar/
-    │       │   ├── stop-left-avatar.png
-    │       │   ├── stop-right-avatar.png
-    │       │   ├── walk-left-avatar-1.png
-    │       │   ├── walk-left-avatar-2.png
-    │       │   ├── walk-right-avatar-1.png
-    │       │   └── walk-right-avatar-2.png
+    │       │   ├── stop-left-default-1.png
+    │       │   ├── stop-right-default-1.png
+    │       │   ├── walk-left-default-1.png
+    │       │   ├── walk-left-default-2.png
+    │       │   ├── walk-right-default-1.png
+    │       │   └── walk-right-default-2.png
     │       ├── creature/
     │       │   ├── sample_creature_lv1.png
     │       │   ├── sample_creature_lv2.png
@@ -213,14 +207,14 @@
     │       │   ├── sample_creature_lv4.png
     │       │   └── sample_creature_lv5.png
     │       └── item/
-    │           ├── stop-left-face-default-face-1.png
-    │           ├── walk-right-face-default-face-2.png
-    │           ├── stop-left-hair-default-hair-1.png
-    │           ├── walk-right-hair-default-hair-2.png
-    │           ├── stop-left-ac-hat-leaf-1.png
-    │           ├── walk-right-ac-hat-leaf-2.png
-    │           ├── stop-left-cloth-body-cape-1.png
-    │           └── walk-right-cloth-body-cape-2.png
+    │           ├── stop-left-accessory-ribbon-hairband-1.png
+    │           ├── walk-right-accessory-ribbon-hairband-2.png
+    │           ├── stop-left-body-blue-shirt-1.png
+    │           ├── walk-right-body-blue-shirt-2.png
+    │           ├── stop-left-face-yellow-smile-1.png
+    │           ├── walk-right-face-yellow-smile-2.png
+    │           ├── stop-left-head-brown-lob-1.png
+    │           └── walk-right-head-brown-lob-2.png
     └── spikes/
     └── asset-sourcing.md
    ```

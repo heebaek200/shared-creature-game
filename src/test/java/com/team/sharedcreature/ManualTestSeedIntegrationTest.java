@@ -59,6 +59,7 @@ class ManualTestSeedIntegrationTest {
         assertTimelineConsistency();
         insertLegacyGeneralCreature();
         simulateLegacySeedCreature();
+        simulateLegacySeedShopCatalog();
         simulateLegacyWeeklyAssignmentPlan();
         simulateInterruptedAggregateApplication();
         run("db/data.sql");
@@ -246,6 +247,38 @@ class ManualTestSeedIntegrationTest {
                   JOIN creature_species AS legacy_species ON legacy_species.code = 'SPROUT'
                    SET creature.species_id = legacy_species.id
                  WHERE seed_group.normalized_name = 'mt93_group_01'
+                """);
+    }
+
+    /** 기존 #93 주문·보유·장착 데이터의 가상 상품 참조를 재현합니다. */
+    private void simulateLegacySeedShopCatalog() {
+        jdbc.update("""
+                UPDATE purchases AS purchase
+                  JOIN shop_items AS legacy_item
+                    ON legacy_item.code = CASE
+                        WHEN MOD(CAST(RIGHT(purchase.order_number, 12) AS UNSIGNED), 2) = 0
+                            THEN 'HAT_LEAF'
+                        ELSE 'BODY_CAPE'
+                    END
+                   SET purchase.shop_item_id = legacy_item.id
+                     , purchase.item_code_snapshot = legacy_item.code
+                     , purchase.item_name_snapshot = legacy_item.name
+                     , purchase.slot_code_snapshot = legacy_item.slot_code
+                     , purchase.price_krw_snapshot = legacy_item.price_krw
+                 WHERE purchase.order_number LIKE '93000000-0000-0000-0000-%'
+                """);
+        jdbc.update("""
+                UPDATE owned_items AS owned
+                  JOIN purchases AS purchase ON purchase.id = owned.purchase_id
+                   SET owned.shop_item_id = purchase.shop_item_id
+                 WHERE purchase.order_number LIKE '93000000-0000-0000-0000-%'
+                """);
+        jdbc.update("""
+                UPDATE avatar_equipments AS equipment
+                  JOIN owned_items AS owned ON owned.id = equipment.owned_item_id
+                  JOIN purchases AS purchase ON purchase.id = owned.purchase_id
+                   SET equipment.slot_code = purchase.slot_code_snapshot
+                 WHERE purchase.order_number LIKE '93000000-0000-0000-0000-%'
                 """);
     }
 
@@ -843,24 +876,77 @@ class ManualTestSeedIntegrationTest {
         assertTrue(Files.isRegularFile(creatureRoot.resolve("lv0.png")));
     }
 
-    /** 상점 카탈로그의 논리 에셋 키와 상태·방향·부위·아이템별 이미지 구성을 검사합니다. */
+    /** 통합 기본 아바타와 상점 상품별 투명 레이어 구성을 검사합니다. */
     private void assertAvatarAssetCatalog() {
         assertEquals(List.of(
-                "HAT_LEAF:HEAD:hat-leaf:ACTIVE",
-                "BODY_CAPE:BODY:body-cape:ACTIVE"
+                "RIBBON_HAIRBAND:ACCESSORY:ribbon-hairband:ACTIVE",
+                "BLUE_SHIRT:BODY:blue-shirt:ACTIVE",
+                "YELLOW_SMILE:FACE:yellow-smile:ACTIVE",
+                "BROWN_LOB:HEAD:brown-lob:ACTIVE"
         ), jdbc.queryForList("""
                 SELECT CONCAT(code, ':', slot_code, ':', asset_key, ':', status)
                   FROM shop_items
-                 WHERE code IN ('HAT_LEAF', 'BODY_CAPE')
-                 ORDER BY FIELD(code, 'HAT_LEAF', 'BODY_CAPE')
+                 WHERE status = 'ACTIVE'
+                 ORDER BY FIELD(
+                     code
+                   , 'RIBBON_HAIRBAND'
+                   , 'BLUE_SHIRT'
+                   , 'YELLOW_SMILE'
+                   , 'BROWN_LOB'
+                 )
                 """, String.class));
+        assertEquals(2L, count("""
+                SELECT COUNT(*)
+                  FROM shop_items
+                 WHERE code IN ('HAT_LEAF', 'BODY_CAPE')
+                   AND status = 'INACTIVE'
+                """));
+        assertEquals(4L, count("""
+                SELECT COUNT(DISTINCT purchase.item_code_snapshot)
+                  FROM purchases AS purchase
+                 WHERE purchase.order_number LIKE '93000000-0000-0000-0000-%'
+                """));
+        assertEquals(0L, count("""
+                SELECT COUNT(*)
+                  FROM purchases AS purchase
+                  JOIN shop_items AS item ON item.id = purchase.shop_item_id
+                 WHERE purchase.order_number LIKE '93000000-0000-0000-0000-%'
+                   AND (
+                       purchase.item_code_snapshot <> item.code
+                        OR purchase.item_name_snapshot <> item.name
+                        OR purchase.slot_code_snapshot <> item.slot_code
+                        OR purchase.price_krw_snapshot <> item.price_krw
+                   )
+                """));
+        assertEquals(0L, count("""
+                SELECT COUNT(*)
+                  FROM owned_items AS owned
+                  JOIN purchases AS purchase ON purchase.id = owned.purchase_id
+                 WHERE purchase.order_number LIKE '93000000-0000-0000-0000-%'
+                   AND owned.shop_item_id <> purchase.shop_item_id
+                """));
+        assertEquals(0L, count("""
+                SELECT COUNT(*)
+                  FROM avatar_equipments AS equipment
+                  JOIN owned_items AS owned ON owned.id = equipment.owned_item_id
+                  JOIN purchases AS purchase ON purchase.id = owned.purchase_id
+                 WHERE purchase.order_number LIKE '93000000-0000-0000-0000-%'
+                   AND equipment.slot_code <> purchase.slot_code_snapshot
+                """));
+
+        Path avatarRoot = Path.of("frontend", "assets", "avatar");
+        for (String direction : List.of("left", "right")) {
+            assertAvatarAssetExists(avatarRoot, "stop", direction, 1);
+            assertAvatarAssetExists(avatarRoot, "walk", direction, 1);
+            assertAvatarAssetExists(avatarRoot, "walk", direction, 2);
+        }
 
         Path itemRoot = Path.of("frontend", "assets", "item");
         for (List<String> asset : List.of(
-                List.of("face", "default-face"),
-                List.of("cloth", "body-cape"),
-                List.of("hair", "default-hair"),
-                List.of("ac", "hat-leaf")
+                List.of("accessory", "ribbon-hairband"),
+                List.of("body", "blue-shirt"),
+                List.of("face", "yellow-smile"),
+                List.of("head", "brown-lob")
         )) {
             String part = asset.get(0);
             String assetKey = asset.get(1);
@@ -872,7 +958,15 @@ class ManualTestSeedIntegrationTest {
         }
     }
 
-    /** 에셋 파일명 계약에 맞는 단일 아바타 프레임의 존재를 검사합니다. */
+    /** 파일명 계약에 맞는 통합 기본 아바타 프레임의 존재를 검사합니다. */
+    private void assertAvatarAssetExists(Path avatarRoot, String state, String direction, int frame) {
+        Path image = avatarRoot.resolve(
+                String.join("-", state, direction, "default", Integer.toString(frame)) + ".png"
+        );
+        assertTrue(Files.isRegularFile(image), () -> "기본 아바타 이미지가 없습니다: " + image);
+    }
+
+    /** 파일명 계약에 맞는 단일 장착 아이템 프레임의 존재를 검사합니다. */
     private void assertItemAssetExists(
             Path itemRoot,
             String state,
@@ -884,7 +978,7 @@ class ManualTestSeedIntegrationTest {
         Path image = itemRoot.resolve(
                 String.join("-", state, direction, part, assetKey, Integer.toString(frame)) + ".png"
         );
-        assertTrue(Files.isRegularFile(image), () -> "아바타 이미지가 없습니다: " + image);
+        assertTrue(Files.isRegularFile(image), () -> "장착 아이템 이미지가 없습니다: " + image);
     }
 
     /** 그룹 생성부터 신고·조치까지의 시간 순서와 종료 이력의 유일성을 검사합니다. */

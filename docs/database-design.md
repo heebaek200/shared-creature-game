@@ -1064,8 +1064,12 @@ UPDATE game_groups
 
 | `code` | `slot_code` | `asset_key` | 렌더링 파츠 | `status` |
 |---|---|---|---|---|
-| `HAT_LEAF` | `HEAD` | `hat-leaf` | `ac` | `ACTIVE` |
-| `BODY_CAPE` | `BODY` | `body-cape` | `cloth` | `ACTIVE` |
+| `RIBBON_HAIRBAND` | `ACCESSORY` | `ribbon-hairband` | `accessory` | `ACTIVE` |
+| `BLUE_SHIRT` | `BODY` | `blue-shirt` | `body` | `ACTIVE` |
+| `YELLOW_SMILE` | `FACE` | `yellow-smile` | `face` | `ACTIVE` |
+| `BROWN_LOB` | `HEAD` | `brown-lob` | `head` | `ACTIVE` |
+| `HAT_LEAF` | `HEAD` | `hat-leaf` | — | `INACTIVE` |
+| `BODY_CAPE` | `BODY` | `body-cape` | — | `INACTIVE` |
 
 | 컬럼 | 자료형 | 역할·제약 |
 |---|---|---|

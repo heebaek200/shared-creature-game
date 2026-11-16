@@ -1426,7 +1426,12 @@ SELECT CONCAT('93000000-0000-0000-0000-', LPAD(numbers.n, 12, '0'))
     ON profile.normalized_nickname =
        CONCAT('mt93_user_', LPAD(MOD(numbers.n - 1, 60) + 1, 3, '0'))
   JOIN shop_items AS item
-    ON item.code = CASE WHEN MOD(numbers.n, 2) = 0 THEN 'HAT_LEAF' ELSE 'BODY_CAPE' END
+    ON item.code = CASE MOD(numbers.n, 4)
+                       WHEN 0 THEN 'RIBBON_HAIRBAND'
+                       WHEN 1 THEN 'BLUE_SHIRT'
+                       WHEN 2 THEN 'YELLOW_SMILE'
+                       ELSE 'BROWN_LOB'
+                   END
   LEFT JOIN group_memberships AS active_membership
     ON active_membership.user_id = profile.user_id
    AND active_membership.status = 'ACTIVE'
@@ -1437,6 +1442,25 @@ SELECT CONCAT('93000000-0000-0000-0000-', LPAD(numbers.n, 12, '0'))
         WHERE existing.order_number =
               CONCAT('93000000-0000-0000-0000-', LPAD(numbers.n, 12, '0'))
    );
+
+-- 기존 #93 로컬 DB의 가상 상품 참조만 실제 에셋 상품으로 교체합니다.
+UPDATE purchases AS purchase
+  JOIN mt93_numbers AS numbers
+    ON purchase.order_number =
+       CONCAT('93000000-0000-0000-0000-', LPAD(numbers.n, 12, '0'))
+  JOIN shop_items AS item
+    ON item.code = CASE MOD(numbers.n, 4)
+                       WHEN 0 THEN 'RIBBON_HAIRBAND'
+                       WHEN 1 THEN 'BLUE_SHIRT'
+                       WHEN 2 THEN 'YELLOW_SMILE'
+                       ELSE 'BROWN_LOB'
+                   END
+   SET purchase.shop_item_id = item.id
+     , purchase.item_code_snapshot = item.code
+     , purchase.item_name_snapshot = item.name
+     , purchase.slot_code_snapshot = item.slot_code
+     , purchase.price_krw_snapshot = item.price_krw
+ WHERE numbers.n <= 120;
 
 INSERT INTO payment_transactions (
     purchase_id
@@ -1549,6 +1573,23 @@ SELECT purchase.id
          FROM owned_items AS existing
         WHERE existing.purchase_id = purchase.id
    );
+
+UPDATE owned_items AS owned
+  JOIN purchases AS purchase ON purchase.id = owned.purchase_id
+  JOIN mt93_numbers AS numbers
+    ON purchase.order_number =
+       CONCAT('93000000-0000-0000-0000-', LPAD(numbers.n, 12, '0'))
+   SET owned.shop_item_id = purchase.shop_item_id
+ WHERE numbers.n <= 120;
+
+UPDATE avatar_equipments AS equipment
+  JOIN owned_items AS owned ON owned.id = equipment.owned_item_id
+  JOIN purchases AS purchase ON purchase.id = owned.purchase_id
+  JOIN mt93_numbers AS numbers
+    ON purchase.order_number =
+       CONCAT('93000000-0000-0000-0000-', LPAD(numbers.n, 12, '0'))
+   SET equipment.slot_code = purchase.slot_code_snapshot
+ WHERE numbers.n BETWEEN 31 AND 50;
 
 INSERT INTO avatar_equipments (
     user_id

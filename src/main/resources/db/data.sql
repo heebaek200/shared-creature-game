@@ -49,8 +49,12 @@ INSERT INTO shop_items (
   , created_at
   , updated_at
 ) VALUES
-    ('HAT_LEAF', '새싹 모자', '가볍게 쓸 수 있는 새싹 모자', 1000, 'HEAD', 'hat-leaf', 'ACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
-  , ('BODY_CAPE', '초록 망토', '함께 성장하는 모습을 담은 망토', 2000, 'BODY', 'body-cape', 'ACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+    ('RIBBON_HAIRBAND', '리본 헤어밴드', '리본 장식 헤어밴드', 1000, 'ACCESSORY', 'ribbon-hairband', 'ACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+  , ('BLUE_SHIRT', '파란 셔츠', '파란색 셔츠 의상', 2000, 'BODY', 'blue-shirt', 'ACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+  , ('YELLOW_SMILE', '노란 미소', '노란색 미소 표정', 1000, 'FACE', 'yellow-smile', 'ACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+  , ('BROWN_LOB', '갈색 단발', '갈색 단발 헤어스타일', 2000, 'HEAD', 'brown-lob', 'ACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+  , ('HAT_LEAF', '새싹 모자', '기존 참조 보존용 판매 종료 상품', 1000, 'HEAD', 'hat-leaf', 'INACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+  , ('BODY_CAPE', '초록 망토', '기존 참조 보존용 판매 종료 상품', 2000, 'BODY', 'body-cape', 'INACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
 ON DUPLICATE KEY UPDATE
     name = VALUES(name)
   , description = VALUES(description)
