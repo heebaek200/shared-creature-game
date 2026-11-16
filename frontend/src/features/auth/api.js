@@ -1,5 +1,8 @@
 // @ts-check
-import { apiRequest } from '../../api/client.js';
+import {
+    apiRequest,
+    clearCsrfToken,
+} from '../../api/client.js';
 import { mockApi } from '../../mocks/mock-api.js';
 
 const useMock = import.meta.env.VITE_USE_MOCK_API === 'true';
@@ -37,4 +40,17 @@ export function getSignupContext() {
   return useMock
       ? mockApi.getSignupContext()
       : apiRequest('/api/v1/auth/signup-context');
+}
+
+/** 현재 애플리케이션 세션에서 로그아웃합니다. */
+export async function logout() {
+    if (useMock) {
+        await mockApi.logout();
+    } else {
+        await apiRequest('/api/v1/auth/logout', {
+            method: 'POST',
+        });
+    }
+
+    clearCsrfToken();
 }

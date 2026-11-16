@@ -4,171 +4,157 @@ import {
     acceptInvitation,
     rejectInvitation,
 } from '../features/group/api.js';
+import {createHeaderLayout} from "../components/app-shell.js";
 
 /**
  * 초대 정보를 표시하고 수락·거절을 하는 Page입니다.
  */
-export function invitePage({ navigate }) {
-    const element = document.createElement('main');
-    element.className = 'app-shell';
+export function invitePage({ navigate, currentUser }) {
+    const content = document.createElement('main');
+    content.className = 'app-shell';
 
-    element.innerHTML = `
-        <header class="page-header">
-            <div>
-                <p class="eyebrow">함께 키우는 공동체</p>
-                <h1 class="fw-bold">그룹 초대</h1>
+    content.innerHTML = `
+    <section class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-3 p-md-5">
+            <div class="mb-4">
+                <span class="badge rounded-pill text-bg-success mb-3">
+                    GROUP INVITATION
+                </span>
+
+                <h2 class="h4 fw-bold mb-2">
+                    새로운 그룹에 초대받았습니다
+                </h2>
+
                 <p class="text-secondary mb-0">
-                    초대받은 그룹의 정보를 확인하고 함께 시작해 보세요.
+                    함께 생명체를 키워 나갈 동료를 만나보세요.
                 </p>
             </div>
 
-            <button
-                class="btn btn-outline-secondary theme-toggle"
-                type="button"
-            >
-                테마 전환
-            </button>
-        </header>
+            <div class="row align-items-center g-4 mb-4">
 
-        <section class="card border-0 shadow-sm rounded-4">
-            <div class="card-body p-3 p-md-5">
+                <div class="col-md-4">
+                    <div
+                        class="rounded-4 bg-success-subtle d-flex
+                        align-items-center justify-content-center
+                        mx-auto"
+                        style="width: 100%; min-height: 190px;"
+                    >
+                        <span class="display-1" aria-hidden="true">
+                            
+                        </span>
+                    </div>
+                </div>
 
-                <div class="mb-4">
-                    <span class="badge rounded-pill text-bg-success mb-3">
-                        GROUP INVITATION
+                <div class="col-md-8">
+
+                    <span class="badge text-bg-success mb-2">
+                        공개 그룹
                     </span>
 
-                    <h2 class="h4 fw-bold mb-2">
-                        새로운 그룹에 초대받았습니다
-                    </h2>
+                    <h3 class="group-name fw-bold mb-2">
+                        초대 정보를 불러오는 중...
+                    </h3>
 
-                    <p class="text-secondary mb-0">
-                        함께 생명체를 키워 나갈 동료를 만나보세요.
+                    <p class="group-description text-secondary mb-3">
+                        그룹 정보를 불러오고 있습니다.
                     </p>
-                </div>
 
-                <div class="row align-items-center g-4 mb-4">
+                    <div class="row g-2">
 
-                    <div class="col-md-4">
-                        <div
-                            class="rounded-4 bg-success-subtle d-flex
-                            align-items-center justify-content-center
-                            mx-auto"
-                            style="width: 100%; min-height: 190px;"
-                        >
-                            <span class="display-1" aria-hidden="true">
-                                
-                            </span>
-                        </div>
-                    </div>
-
-                    <div class="col-md-8">
-
-                        <span class="badge text-bg-success mb-2">
-                            공개 그룹
-                        </span>
-
-                        <h3 class="group-name fw-bold mb-2">
-                            초대 정보를 불러오는 중...
-                        </h3>
-
-                        <p class="group-description text-secondary mb-3">
-                            그룹 정보를 불러오고 있습니다.
-                        </p>
-
-                        <div class="row g-2">
-
-                            <div class="col-4">
-                                <div class="bg-body-tertiary rounded-3 p-3 h-100">
-                                    <p class="small text-secondary mb-1">
-                                        현재 인원
-                                    </p>
-                                    <strong class="fs-5 member-count">-</strong>
-                                </div>
+                        <div class="col-4">
+                            <div class="bg-body-tertiary rounded-3 p-3 h-100">
+                                <p class="small text-secondary mb-1">
+                                    현재 인원
+                                </p>
+                                <strong class="fs-5 member-count">-</strong>
                             </div>
-
-                            <div class="col-4">
-                                <div class="bg-body-tertiary rounded-3 p-3 h-100">
-                                    <p class="small text-secondary mb-1">
-                                        그룹 정원
-                                    </p>
-                                    <strong class="fs-5 capacity">-</strong>
-                                </div>
-                            </div>
-
-                            <div class="col-4">
-                                <div class="bg-success-subtle rounded-3 p-3 h-100">
-                                    <p class="small text-success mb-1">
-                                        남은 자리
-                                    </p>
-                                    <strong class="fs-5 text-success remaining-capacity">-</strong>
-                                </div>
-                            </div>
-
-                        </div>
-                    </div>
-
-                </div>
-
-                <div class="alert alert-success border-0 rounded-3 mb-4">
-                    <h5 class="fw-bold mb-2">
-                        🌿 함께 성장하는 그룹
-                    </h5>
-
-                    <p class="small mb-0">
-                        그룹에 참여하면 다른 구성원들과 함께
-                        생명체를 키우고 다양한 퀘스트를 수행할 수 있습니다.
-                    </p>
-                </div>
-
-                <div class="border-top pt-4">
-
-                    <h5 class="fw-bold mb-2">
-                        초대 안내
-                    </h5>
-
-                    <ul class="text-secondary small ps-3 mb-4">
-                        <li class="mb-1">
-                            초대를 수락하면 해당 그룹의 멤버로 참여합니다.
-                        </li>
-                        <li class="mb-1">
-                            그룹 정원이 가득 찬 경우 참여할 수 없습니다.
-                        </li>
-                        <li>
-                            이미 다른 그룹에 가입되어 있다면 참여할 수 없습니다.
-                        </li>
-                    </ul>
-
-                        <div class="alert d-none invite-feedback"
-                             role="status"
-                             aria-live="polite">
                         </div>
 
-                    <div class="d-grid gap-2 d-sm-flex">
+                        <div class="col-4">
+                            <div class="bg-body-tertiary rounded-3 p-3 h-100">
+                                <p class="small text-secondary mb-1">
+                                    그룹 정원
+                                </p>
+                                <strong class="fs-5 capacity">-</strong>
+                            </div>
+                        </div>
 
-                        <button
-                            class="btn btn-primary btn-lg flex-fill accept-button"
-                            type="button"
-                            disabled
-                        >
-                            초대 수락하기
-                        </button>
-
-                        <button
-                            class="btn btn-outline-secondary btn-lg flex-fill reject-button"
-                            type="button"
-                            disabled
-                        >
-                            초대 거절하기
-                        </button>
+                        <div class="col-4">
+                            <div class="bg-success-subtle rounded-3 p-3 h-100">
+                                <p class="small text-success mb-1">
+                                    남은 자리
+                                </p>
+                                <strong class="fs-5 text-success remaining-capacity">-</strong>
+                            </div>
+                        </div>
 
                     </div>
+                </div>
+
+            </div>
+
+            <div class="alert alert-success border-0 rounded-3 mb-4">
+                <h5 class="fw-bold mb-2">
+                    🌿 함께 성장하는 그룹
+                </h5>
+
+                <p class="small mb-0">
+                    그룹에 참여하면 다른 구성원들과 함께
+                    생명체를 키우고 다양한 퀘스트를 수행할 수 있습니다.
+                </p>
+            </div>
+
+            <div class="border-top pt-4">
+
+                <h5 class="fw-bold mb-2">
+                    초대 안내
+                </h5>
+
+                <ul class="text-secondary small ps-3 mb-4">
+                    <li class="mb-1">
+                        초대를 수락하면 해당 그룹의 멤버로 참여합니다.
+                    </li>
+                    <li class="mb-1">
+                        그룹 정원이 가득 찬 경우 참여할 수 없습니다.
+                    </li>
+                    <li>
+                        이미 다른 그룹에 가입되어 있다면 참여할 수 없습니다.
+                    </li>
+                </ul>
+
+                    <div class="alert d-none invite-feedback"
+                         role="status"
+                         aria-live="polite">
+                    </div>
+
+                <div class="d-grid gap-2 d-sm-flex">
+
+                    <button
+                        class="btn btn-primary btn-lg flex-fill accept-button"
+                        type="button"
+                        disabled
+                    >
+                        초대 수락하기
+                    </button>
+
+                    <button
+                        class="btn btn-outline-secondary btn-lg flex-fill reject-button"
+                        type="button"
+                        disabled
+                    >
+                        초대 거절하기
+                    </button>
 
                 </div>
 
             </div>
-        </section>
+
+        </div>
+    </section>
     `;
+
+    // 공통 헤더
+    const element = createHeaderLayout({ content, currentUser, navigate });
 
     const groupName = element.querySelector('.group-name');
     const description = element.querySelector('.group-description');
@@ -178,7 +164,6 @@ export function invitePage({ navigate }) {
     const alert = element.querySelector('.invite-feedback');
     const acceptButton = element.querySelector('.accept-button');
     const rejectButton = element.querySelector('.reject-button');
-    const themeButton = element.querySelector('.theme-toggle');
 
     const token = location.pathname.split('/').filter(Boolean).at(-1);
 
@@ -317,17 +302,8 @@ export function invitePage({ navigate }) {
         }
     };
 
-    const onTheme = () => {
-        const currentTheme = document.documentElement.dataset.bsTheme;
-        const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
-
-        document.documentElement.dataset.bsTheme = nextTheme;
-        localStorage.setItem('theme', nextTheme);
-    };
-
     acceptButton.addEventListener('click', onAccept);
     rejectButton.addEventListener('click', onReject);
-    themeButton.addEventListener('click', onTheme);
 
     loadInvitation();
 
@@ -336,7 +312,6 @@ export function invitePage({ navigate }) {
         cleanup: () => {
             acceptButton.removeEventListener('click', onAccept);
             rejectButton.removeEventListener('click', onReject);
-            themeButton.removeEventListener('click', onTheme);
         },
     };
 }
