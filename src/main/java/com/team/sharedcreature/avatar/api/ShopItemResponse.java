@@ -40,9 +40,10 @@ public record ShopItemResponse(
                 shopItem.getName(),
                 shopItem.getDescription(),
                 shopItem.getPriceKrw(),
-                shopItem.getSlotCode(),
+                // Enum 이름을 사용해 기존 API 문자열을 유지합니다.
+                shopItem.getSlotCode().name(),
                 shopItem.getAssetKey(),
-                shopItem.getStatus()
+                shopItem.getStatus().name()
         );
     }
 }

@@ -9,7 +9,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
-import java.util.Set;
 
 /**
  * avatar_equipments 테이블의 상태와 이력을 보존하는 JPA 엔티티입니다.
@@ -31,8 +30,10 @@ public class AvatarEquipment {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    /** 상품 슬롯과 일치해야 하는 아바타 장착 슬롯입니다. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "slot_code", length = 30, nullable = false)
-    private String slotCode;
+    private AvatarSlot slotCode;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owned_item_id")
@@ -55,7 +56,7 @@ public class AvatarEquipment {
      * @param slotCode 장착 슬롯 코드
      * @param now 서버에서 결정한 현재 시각
      */
-    private AvatarEquipment(User user, String slotCode, Instant now) {
+    private AvatarEquipment(User user, AvatarSlot slotCode, Instant now) {
         this.user = user;
         this.slotCode = slotCode;
         this.createdAt = now;
@@ -63,22 +64,22 @@ public class AvatarEquipment {
     }
 
     /**
-     * 허용된 슬롯 코드로 빈 아바타 슬롯을 생성합니다.
+     * 지정한 슬롯으로 아이템이 장착되지 않은 아바타 슬롯을 생성합니다.
      *
      * @param user 슬롯을 소유한 사용자
-     * @param slotCode HEAD, FACE, BODY, ACCESSORY 중 하나
+     * @param slotCode 장착 슬롯
      * @param now 서버에서 결정한 현재 시각
      * @return 아이템이 장착되지 않은 슬롯
-     * @throws BusinessException 허용되지 않은 슬롯 코드인 경우
+     * @throws BusinessException 슬롯이 null인 경우
      */
     public static AvatarEquipment createEmpty(
             User user,
-            String slotCode,
+            AvatarSlot slotCode,
             Instant now
     ) {
-        if (slotCode == null
-                || !Set.of("HEAD", "FACE", "BODY", "ACCESSORY").contains(slotCode)) {
-            throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE); // 허용하지 않는 슬롯으로 생성 시도
+        // 허용값은 Enum 타입으로 제한하고, 누락된 슬롯은 기존 오류로 거절합니다.
+        if (slotCode == null) {
+            throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE);
         }
 
         return new AvatarEquipment(user, slotCode, now);
@@ -100,16 +101,17 @@ public class AvatarEquipment {
         }
 
         if (item.getRevokedAt() != null
-                || "REVOKED".equals(item.getStatus())) {
+                || item.getStatus() == OwnedItemStatus.REVOKED) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND); // 회수된 아이템이거나 회수 시각이 있음
         }
 
-        if (!slotCode.equals(item.getShopItem().getSlotCode())) {
+        if (slotCode != item.getShopItem().getSlotCode()) {
             throw new BusinessException(ErrorCode.SLOT_MISMATCH); // 아이템의 슬롯과 장착 대상 슬롯이 다름
         }
 
         // 사용 확정을 거치지 않은 아이템이 슬롯에 연결되는 것을 방지합니다.
-        if (!"OWNED_USED".equals(item.getStatus()) || item.getUsedAt() == null) {
+        if (item.getStatus() != OwnedItemStatus.OWNED_USED
+                || item.getUsedAt() == null) {
             throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION); // 사용 확정이 끝나지 않은 아이템을 장착
         }
 

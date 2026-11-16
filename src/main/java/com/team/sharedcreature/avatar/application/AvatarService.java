@@ -4,6 +4,8 @@ import com.team.sharedcreature.avatar.api.AvatarResponse;
 import com.team.sharedcreature.avatar.api.OwnedItemResponse;
 import com.team.sharedcreature.avatar.domain.AvatarEquipment;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.avatar.infrastructure.AvatarEquipmentRepository;
 import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
 import com.team.sharedcreature._core.exception.BusinessException;
@@ -22,7 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -103,8 +105,8 @@ public class AvatarService {
 
         Page<OwnedItem> items = ownedItemRepository.findAllForUser(
                 userId,
-                slot,
-                status,
+                parseSlot(slot),
+                parseOwnedItemStatus(status),
                 pageable
         );
 
@@ -138,7 +140,9 @@ public class AvatarService {
         List<AvatarEquipment> equipments =
                 avatarEquipmentRepository.findAllByUserId(userId);
 
-        Map<String, AvatarResponse.Equipment> slots = new HashMap<>();
+        // 고정된 슬롯 Enum을 키로 사용해 문자열 오타를 방지합니다.
+        Map<AvatarSlot, AvatarResponse.Equipment> slots =
+                new EnumMap<>(AvatarSlot.class);
 
         for (AvatarEquipment equipment : equipments) {
             OwnedItem ownedItem = equipment.getOwnedItem();
@@ -158,10 +162,10 @@ public class AvatarService {
         return new AvatarResponse(
                 userId,
                 new AvatarResponse.Equipments(
-                        slots.get("HEAD"),
-                        slots.get("FACE"),
-                        slots.get("BODY"),
-                        slots.get("ACCESSORY")
+                        slots.get(AvatarSlot.HEAD),
+                        slots.get(AvatarSlot.FACE),
+                        slots.get(AvatarSlot.BODY),
+                        slots.get(AvatarSlot.ACCESSORY)
                 )
         );
     }
@@ -186,7 +190,7 @@ public class AvatarService {
             Long ownedItemId,
             boolean confirmFirstUse
     ) {
-        validateSlot(slot);
+        AvatarSlot avatarSlot = parseRequiredSlot(slot);
 
         // 같은 사용자의 장착·해제를 직렬화하고 최초 슬롯 생성 경합을 막습니다.
         User user = userRepository.findByIdForUpdate(userId)
@@ -224,7 +228,8 @@ public class AvatarService {
         List<RefundRequest> refunds =
                 refundRequestRepository.findAllByPurchaseIdForUpdate(purchaseId);
 
-        if (item.getRevokedAt() != null || "REVOKED".equals(item.getStatus())) {
+        if (item.getRevokedAt() != null
+                || item.getStatus() == OwnedItemStatus.REVOKED) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
@@ -235,7 +240,7 @@ public class AvatarService {
             );
         }
 
-        if (!slot.equals(item.getShopItem().getSlotCode())) {
+        if (avatarSlot != item.getShopItem().getSlotCode()) {
             throw new BusinessException(ErrorCode.SLOT_MISMATCH); // 아이템 슬롯과 장착 대상 슬롯이 다름
         }
 
@@ -253,7 +258,7 @@ public class AvatarService {
         }
 
         AvatarEquipment equipment = avatarEquipmentRepository
-                .findByUserIdAndSlotCodeForUpdate(userId, slot)
+                .findByUserIdAndSlotCodeForUpdate(userId, avatarSlot)
                 .orElse(null);
 
         // 같은 아이템을 다시 지정한 요청은 장착 변경 이벤트를 만들지 않습니다.
@@ -265,7 +270,7 @@ public class AvatarService {
         Instant now = clock.instant();
 
         if (equipment == null) {
-            equipment = AvatarEquipment.createEmpty(user, slot, now);
+            equipment = AvatarEquipment.createEmpty(user, avatarSlot, now);
         }
 
         item.confirmUse(confirmFirstUse, now);
@@ -290,19 +295,22 @@ public class AvatarService {
     }
 
     /**
-     * 아바타 슬롯이 허용된 값인지 검증합니다.
+     * 장착·해제에 필요한 슬롯을 검증하고 도메인 타입으로 변환합니다.
      *
-     * @param slot 검사할 슬롯 코드
-     * @throws BusinessException 허용되지 않은 슬롯인 경우
+     * @param slot 요청 슬롯 코드
+     * @return 검증된 장착 슬롯
+     * @throws BusinessException 슬롯이 없거나 허용되지 않은 값인 경우
      */
-    private void validateSlot(String slot) {
-        if (slot == null
-                || !Set.of("HEAD", "FACE", "BODY", "ACCESSORY").contains(slot)) {
+    private AvatarSlot parseRequiredSlot(String slot) {
+        // 목록 필터와 달리 장착·해제에서는 슬롯 생략을 허용하지 않습니다.
+        if (slot == null) {
             throw new BusinessException(
-                    ErrorCode.INVALID_FIELD_VALUE, // 허용하지 않는 슬롯
+                    ErrorCode.INVALID_FIELD_VALUE,
                     "슬롯은 HEAD, FACE, BODY, ACCESSORY 중 하나여야 합니다."
             );
         }
+
+        return parseSlot(slot);
     }
 
     /**
@@ -317,7 +325,7 @@ public class AvatarService {
      */
     @Transactional
     public AvatarResponse unequipAvatarItem(Long userId, String slot) {
-        validateSlot(slot);
+        AvatarSlot avatarSlot = parseRequiredSlot(slot);
 
         // 장착과 같은 사용자 잠금을 먼저 획득해 동시 변경을 순서대로 처리합니다.
         userRepository.findByIdForUpdate(userId)
@@ -326,7 +334,7 @@ public class AvatarService {
                 );
 
         AvatarEquipment equipment = avatarEquipmentRepository
-                .findByUserIdAndSlotCodeForUpdate(userId, slot)
+                .findByUserIdAndSlotCodeForUpdate(userId, avatarSlot)
                 .orElse(null);
 
         // 슬롯 행이 없거나 이미 비어 있다면 현재 아바타를 그대로 반환합니다.
@@ -377,5 +385,51 @@ public class AvatarService {
                                 )
                         )
                 );
+    }
+
+    /**
+     * 선택적인 슬롯 필터를 도메인 타입으로 변환합니다.
+     *
+     * @param slot 요청 슬롯, 미지정이면 null
+     * @return 장착 슬롯, 미지정이면 null
+     * @throws BusinessException 허용되지 않은 슬롯인 경우
+     */
+    private AvatarSlot parseSlot(String slot) {
+        if (slot == null) {
+            return null;
+        }
+
+        try {
+            // 대소문자와 공백을 보정하지 않고 기존 허용값을 유지합니다.
+            return AvatarSlot.valueOf(slot);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_FIELD_VALUE,
+                    "슬롯은 HEAD, FACE, BODY, ACCESSORY 중 하나여야 합니다."
+            );
+        }
+    }
+
+    /**
+     * 선택적인 보유 상태 필터를 도메인 타입으로 변환합니다.
+     *
+     * @param status 요청 보유 상태, 미지정이면 null
+     * @return 보유 상태, 미지정이면 null
+     * @throws BusinessException 허용되지 않은 보유 상태인 경우
+     */
+    private OwnedItemStatus parseOwnedItemStatus(String status) {
+        if (status == null) {
+            return null;
+        }
+
+        try {
+            // 환불 상태나 상품 판매 상태는 보유 상태로 허용하지 않습니다.
+            return OwnedItemStatus.valueOf(status);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_FIELD_VALUE,
+                    "보유 상태는 OWNED_UNUSED, OWNED_USED, REVOKED 중 하나여야 합니다."
+            );
+        }
     }
 }

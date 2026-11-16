@@ -4,6 +4,7 @@ import com.team.sharedcreature._core.api.ErrorResponseFactory;
 import com.team.sharedcreature.admin.domain.ApiIdempotencyRecord;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.payment.api.AdminRefundResponse;
 import com.team.sharedcreature.payment.domain.*;
 import com.team.sharedcreature.payment.infrastructure.*;
@@ -74,7 +75,7 @@ class RefundResultTransactionServiceTest {
                 1L, 2L, 7L, "요청", "승인", refund.getStatus(), NOW.minusSeconds(600),
                 NOW.minusSeconds(300), refund.getCompletedAt(), 7L,
                 new AdminRefundResponse.PurchaseInfo("payment", "아이템", 1000L, purchase.getStatus()),
-                new AdminRefundResponse.OwnedItemInfo(8L, item.getStatus(), item.getUsedAt()), null));
+                new AdminRefundResponse.OwnedItemInfo(8L, item.getStatus().name(), item.getUsedAt()), null));
     }
 
     @ParameterizedTest
@@ -89,7 +90,9 @@ class RefundResultTransactionServiceTest {
         };
         assertThat(refund.getStatus()).isEqualTo(expected);
         assertThat(purchase.getStatus()).isEqualTo(outcome == RefundGateway.Outcome.SUCCESS ? "CANCELLED" : "PAID");
-        assertThat(item.getStatus()).isEqualTo(outcome == RefundGateway.Outcome.SUCCESS ? "REVOKED" : "OWNED_UNUSED");
+        assertThat(item.getStatus()).isEqualTo(outcome == RefundGateway.Outcome.SUCCESS
+                ? OwnedItemStatus.REVOKED
+                : OwnedItemStatus.OWNED_UNUSED);
         assertThat(item.getRevokedAt()).isEqualTo(outcome == RefundGateway.Outcome.SUCCESS ? NOW : null);
         assertThat(item.getUsedAt()).isNull();
         assertThat(attempt.getResultType()).isEqualTo(outcome.name());

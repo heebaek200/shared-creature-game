@@ -5,6 +5,7 @@ import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
 import com.team.sharedcreature.avatar.domain.ShopItem;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
 import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
 import com.team.sharedcreature.payment.api.PurchaseResponse;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
@@ -58,7 +59,7 @@ class PaymentReconciliationServiceTest {
         user = mock(User.class);
         when(shopItem.getCode()).thenReturn("HAIR-01");
         when(shopItem.getName()).thenReturn("테스트 헤어");
-        when(shopItem.getSlotCode()).thenReturn("HEAD");
+        when(shopItem.getSlotCode()).thenReturn(AvatarSlot.HEAD);
         when(shopItem.getPriceKrw()).thenReturn(1000L);
         lenient().when(shopItem.getId()).thenReturn(101L);
         lenient().when(user.getId()).thenReturn(7L);

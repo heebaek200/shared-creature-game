@@ -5,6 +5,8 @@ import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
 import com.team.sharedcreature.avatar.domain.ShopItem;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
+import com.team.sharedcreature.avatar.domain.ShopItemStatus;
 import com.team.sharedcreature.avatar.application.AvatarService;
 import com.team.sharedcreature.admin.application.SchedulerJobRunner;
 import com.team.sharedcreature.admin.application.SchedulerExecutionLifecycleService;
@@ -86,9 +88,9 @@ class RefundTransactionMySqlIntegrationTest {
             set(shop, "name", "환불 검증 상품");
             set(shop, "description", "이슈 22 테스트");
             set(shop, "priceKrw", 1000L);
-            set(shop, "slotCode", "HEAD");
+            set(shop, "slotCode", AvatarSlot.HEAD);
             set(shop, "assetKey", "refund-test");
-            set(shop, "status", "ACTIVE");
+            set(shop, "status", ShopItemStatus.ACTIVE);
             set(shop, "createdAt", now);
             set(shop, "updatedAt", now);
             em.persist(shop);
@@ -124,6 +126,27 @@ class RefundTransactionMySqlIntegrationTest {
         jdbc.update("DELETE FROM shop_items WHERE id = ?", fixture.shopId());
         jdbc.update("DELETE FROM api_idempotency_records WHERE actor_user_id IN (?, ?)", fixture.ownerId(), fixture.adminId());
         jdbc.update("DELETE FROM users WHERE id IN (?, ?)", fixture.ownerId(), fixture.adminId());
+    }
+
+    @Test
+    void Enum은_기존_DB문자열과_호환되고_구매슬롯Snapshot은_상품변경과_분리된다() {
+        assertThat(jdbc.queryForObject("SELECT slot_code FROM shop_items WHERE id = ?",
+                String.class, fixture.shopId())).isEqualTo("HEAD");
+        assertThat(jdbc.queryForObject("SELECT status FROM shop_items WHERE id = ?",
+                String.class, fixture.shopId())).isEqualTo("ACTIVE");
+        assertThat(jdbc.queryForObject("SELECT slot_code_snapshot FROM purchases WHERE id = ?",
+                String.class, fixture.purchaseId())).isEqualTo("HEAD");
+
+        // 기존 문자열을 직접 저장해도 새 영속성 컨텍스트에서 Enum으로 읽혀야 합니다.
+        jdbc.update("UPDATE shop_items SET slot_code = 'FACE', status = 'INACTIVE' WHERE id = ?",
+                fixture.shopId());
+        new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
+            var shop = em.find(ShopItem.class, fixture.shopId());
+            var purchase = em.find(Purchase.class, fixture.purchaseId());
+            assertThat(shop.getSlotCode()).isEqualTo(AvatarSlot.FACE);
+            assertThat(shop.getStatus()).isEqualTo(ShopItemStatus.INACTIVE);
+            assertThat(purchase.getSlotCodeSnapshot()).isEqualTo(AvatarSlot.HEAD);
+        });
     }
 
     @Test

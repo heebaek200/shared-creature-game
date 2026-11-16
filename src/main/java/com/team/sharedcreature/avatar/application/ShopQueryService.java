@@ -4,6 +4,8 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.avatar.api.ShopItemResponse;
 import com.team.sharedcreature.avatar.domain.ShopItem;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
+import com.team.sharedcreature.avatar.domain.ShopItemStatus;
 import com.team.sharedcreature.avatar.infrastructure.ShopItemRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -47,12 +49,18 @@ public class ShopQueryService {
                 Sort.by(Sort.Direction.ASC, "id")
         );
 
-        // 클라이언트가 상태를 선택하지 못하도록 ACTIVE를 고정합니다.
-        Page<ShopItem> items = slot == null // 슬롯 미지정이면 전체 슬롯 조회
-                ? shopItemRepository.findAllByStatus("ACTIVE", pageable)
+        // 요청 문자열을 도메인 타입으로 변환하며, 미지정은 전체 조회로 유지합니다.
+        AvatarSlot avatarSlot = parseSlot(slot);
+
+        // 클라이언트가 판매 상태를 지정하지 못하도록 ACTIVE로 고정합니다.
+        Page<ShopItem> items = avatarSlot == null
+                ? shopItemRepository.findAllByStatus(
+                ShopItemStatus.ACTIVE,
+                pageable
+        )
                 : shopItemRepository.findAllByStatusAndSlotCode(
-                "ACTIVE",
-                slot,
+                ShopItemStatus.ACTIVE,
+                avatarSlot,
                 pageable
         );
 
@@ -69,11 +77,34 @@ public class ShopQueryService {
     public ShopItemResponse get(Long itemId) {
         // 판매 중이 아닌 상품도 존재하지 않는 상품과 동일하게 처리합니다.
         ShopItem shopItem = shopItemRepository
-                .findByIdAndStatus(itemId, "ACTIVE") // 판매 중인 상품만 조회
+                .findByIdAndStatus(itemId, ShopItemStatus.ACTIVE) // 판매 중인 상품만 조회
                 .orElseThrow(() ->
                         new BusinessException(ErrorCode.RESOURCE_NOT_FOUND) // 404 오류 처리
                 );
 
         return ShopItemResponse.from(shopItem);
+    }
+
+    /**
+     * 요청 슬롯 문자열을 도메인 슬롯으로 변환합니다.
+     *
+     * @param slot 요청 슬롯, 미지정이면 null
+     * @return 장착 슬롯, 미지정이면 null
+     * @throws BusinessException 허용되지 않은 슬롯 문자열인 경우
+     */
+    private AvatarSlot parseSlot(String slot) {
+        if (slot == null) {
+            return null;
+        }
+
+        try {
+            // 대소문자나 공백을 임의로 보정하지 않고 기존 허용값을 유지합니다.
+            return AvatarSlot.valueOf(slot);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_FIELD_VALUE,
+                    "슬롯은 HEAD, FACE, BODY, ACCESSORY 중 하나여야 합니다."
+            );
+        }
     }
 }

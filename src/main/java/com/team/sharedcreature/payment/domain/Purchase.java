@@ -2,6 +2,7 @@ package com.team.sharedcreature.payment.domain;
 
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.avatar.domain.ShopItem;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
@@ -50,8 +51,10 @@ public class Purchase {
     @Column(name = "item_name_snapshot", length = 100, nullable = false)
     private String itemNameSnapshot;
 
+    /** 상품의 현재 슬롯과 별도로 보존하는 구매 당시 장착 슬롯입니다. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "slot_code_snapshot", length = 30, nullable = false)
-    private String slotCodeSnapshot;
+    private AvatarSlot slotCodeSnapshot;
 
     @Column(name = "price_krw_snapshot", nullable = false)
     private Long priceKrwSnapshot;
@@ -79,7 +82,7 @@ public class Purchase {
             ShopItem shopItem,
             String itemCodeSnapshot,
             String itemNameSnapshot,
-            String slotCodeSnapshot,
+            AvatarSlot slotCodeSnapshot,
             Long priceKrwSnapshot,
             Instant now
     ) {

@@ -65,7 +65,8 @@ public record AdminRefundResponse(
                 // 미지급 아이템은 빈 객체 대신 null로 반환합니다.
                 item == null ? null : new OwnedItemInfo(
                         item.getId(),
-                        item.getStatus(),
+                        // 보유 상태 Enum을 기존 API 문자열로 변환합니다.
+                        item.getStatus().name(),
                         item.getUsedAt()
                 ),
                 // 취소 거래가 없다면 latestCancellation 키를 null로 유지합니다.

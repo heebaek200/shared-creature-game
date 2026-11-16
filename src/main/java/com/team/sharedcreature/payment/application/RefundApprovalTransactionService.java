@@ -3,6 +3,7 @@ package com.team.sharedcreature.payment.application;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.payment.domain.PgApiAttempt;
 import com.team.sharedcreature.payment.infrastructure.PgApiAttemptRepository;
 import lombok.RequiredArgsConstructor;
@@ -137,11 +138,12 @@ public class RefundApprovalTransactionService {
             );
         }
 
-        if (item.getUsedAt() != null || "OWNED_USED".equals(item.getStatus())) {
+        if (item.getUsedAt() != null
+                || item.getStatus() == OwnedItemStatus.OWNED_USED) {
             throw new BusinessException(ErrorCode.REFUND_NOT_ALLOWED_USED_ITEM);
         }
 
-        if (!"OWNED_UNUSED".equals(item.getStatus())
+        if (item.getStatus() != OwnedItemStatus.OWNED_UNUSED
                 || item.getRevokedAt() != null) {
             throw new BusinessException(
                     ErrorCode.CONCURRENT_MODIFICATION,

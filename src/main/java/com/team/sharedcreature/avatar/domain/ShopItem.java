@@ -33,14 +33,18 @@ public class ShopItem {
     @Column(name = "price_krw", nullable = false)
     private Long priceKrw;
 
+    /** 상품을 장착할 수 있는 아바타 슬롯입니다. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "slot_code", length = 30, nullable = false)
-    private String slotCode;
+    private AvatarSlot slotCode;
 
     @Column(name = "asset_key", length = 255, nullable = false)
     private String assetKey;
 
+    /** 상품의 판매 상태입니다. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    private ShopItemStatus status;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;

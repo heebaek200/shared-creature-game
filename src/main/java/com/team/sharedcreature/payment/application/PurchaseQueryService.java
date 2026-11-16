@@ -58,7 +58,7 @@ public class PurchaseQueryService {
 
     private PurchaseSummaryResponse summary(Purchase purchase) {
         String ownedStatus = ownedItemRepository.findByPurchaseId(purchase.getId())
-                .map(item -> item.getStatus())
+                .map(item -> item.getStatus().name())
                 .orElse(null);
         String latestRefundStatus = refundRequestRepository
                 .findFirstByPurchaseIdOrderByRequestedAtDesc(purchase.getId())
@@ -79,7 +79,7 @@ public class PurchaseQueryService {
 
     private PurchaseResponse response(Purchase purchase, boolean includeDetails) {
         String ownedStatus = ownedItemRepository.findByPurchaseId(purchase.getId())
-                .map(item -> item.getStatus())
+                .map(item -> item.getStatus().name())
                 .orElse(null);
         var refunds = refundRequestRepository.findByPurchaseIdOrderByRequestedAtAsc(purchase.getId());
         String latestRefundStatus = refunds.isEmpty() ? null : refunds.get(refunds.size() - 1).getStatus();

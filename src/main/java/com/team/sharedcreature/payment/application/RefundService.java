@@ -4,6 +4,7 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.admin.application.ApiIdempotencyService;
 import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.payment.api.RefundResponse;
 import com.team.sharedcreature.payment.domain.RefundRequest;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
@@ -115,11 +116,12 @@ public class RefundService {
         }
 
         // 상태와 최초 사용 이력을 함께 확인합니다.
-        if (item.getUsedAt() != null || "OWNED_USED".equals(item.getStatus())) {
+        if (item.getUsedAt() != null
+                || item.getStatus() == OwnedItemStatus.OWNED_USED) {
             throw new BusinessException(ErrorCode.REFUND_NOT_ALLOWED_USED_ITEM);
         }
 
-        if (!"OWNED_UNUSED".equals(item.getStatus())
+        if (item.getStatus() != OwnedItemStatus.OWNED_UNUSED
                 || item.getRevokedAt() != null
                 || !userId.equals(item.getUser().getId())) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);

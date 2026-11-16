@@ -52,9 +52,10 @@ public record OwnedItemResponse(
                 ownedItem.getPurchase().getId(),
                 shopItem.getId(),
                 shopItem.getName(),
-                shopItem.getSlotCode(),
+                // Enum 이름으로 기존 API의 슬롯·상태 문자열을 유지합니다.
+                shopItem.getSlotCode().name(),
                 shopItem.getAssetKey(),
-                ownedItem.getStatus(),
+                ownedItem.getStatus().name(),
                 ownedItem.getUsedAt(),
                 ownedItem.getRevokedAt(),
                 equipped
