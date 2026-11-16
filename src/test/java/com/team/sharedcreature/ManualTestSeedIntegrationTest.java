@@ -54,6 +54,7 @@ class ManualTestSeedIntegrationTest {
         assertScenarioCounts();
         assertScenarioConsistency();
         assertTimelineConsistency();
+        simulateLegacyWeeklyAssignmentPlan();
         simulateInterruptedAggregateApplication();
         run("db/manual-test-seed.sql");
         assertScenarioCounts();
@@ -220,6 +221,53 @@ class ManualTestSeedIntegrationTest {
                      , contribution.version = 0
                  WHERE seed_group.normalized_name = 'mt93_group_02'
                 """);
+    }
+
+    /** 완료 없는 #93 구버전 주간 배정을 재현해 제한 복구 경로를 검증합니다. */
+    private void simulateLegacyWeeklyAssignmentPlan() {
+        assertEquals(0L, count("""
+                SELECT COUNT(*)
+                  FROM quest_completions AS completion
+                  JOIN quest_assignments AS assignment ON assignment.id = completion.quest_assignment_id
+                  JOIN quest_periods AS period ON period.id = assignment.quest_period_id
+                 WHERE period.period_type = 'WEEKLY'
+                   AND assignment.slot_number BETWEEN 4 AND 7
+                """));
+        assertEquals(0L, count("""
+                SELECT COUNT(*)
+                  FROM photo_submissions AS submission
+                  JOIN quest_assignments AS assignment ON assignment.id = submission.quest_assignment_id
+                  JOIN quest_periods AS period ON period.id = assignment.quest_period_id
+                 WHERE period.period_type = 'WEEKLY'
+                   AND assignment.slot_number BETWEEN 4 AND 7
+                """));
+        updateWeeklyAssignment(4, "W-L-04");
+        updateWeeklyAssignment(5, "W-L-05");
+        updateWeeklyAssignment(6, "W-L-06");
+        updateWeeklyAssignment(7, "W-M-01");
+    }
+
+    /** 기간/템플릿 UNIQUE를 지키면서 주간 배정과 Snapshot을 지정 템플릿으로 변경합니다. */
+    private void updateWeeklyAssignment(int slotNumber, String templateCode) {
+        jdbc.update("""
+                UPDATE quest_assignments AS assignment
+                  JOIN quest_periods AS period ON period.id = assignment.quest_period_id
+                  JOIN quest_templates AS template ON template.code = ?
+                  JOIN quest_template_versions AS version
+                    ON version.quest_template_id = template.id
+                   AND version.version_number = 1
+                   SET assignment.quest_template_id = template.id
+                     , assignment.quest_template_version_id = version.id
+                     , assignment.title_snapshot = version.title
+                     , assignment.description_snapshot = version.description
+                     , assignment.difficulty_snapshot = template.difficulty
+                     , assignment.verification_type_snapshot = version.verification_type
+                     , assignment.verification_parameters_snapshot = version.verification_parameters
+                     , assignment.creature_experience_snapshot = version.creature_experience
+                     , assignment.contribution_score_snapshot = version.contribution_score
+                 WHERE period.period_type = 'WEEKLY'
+                   AND assignment.slot_number = ?
+                """, templateCode, slotNumber);
     }
 
     /** 종료 Snapshot 범위 밖에 있는 일반 그룹과 회원 기여도를 구성합니다. */
@@ -459,6 +507,18 @@ class ManualTestSeedIntegrationTest {
 
     /** 그룹·보상·결제의 핵심 불변식과 외부 복구 대상 부재를 검사합니다. */
     private void assertScenarioConsistency() {
+        assertEquals(0L, count("""
+                SELECT COUNT(*)
+                  FROM quest_assignments AS assignment
+                  JOIN quest_periods AS period ON period.id = assignment.quest_period_id
+                 WHERE period.period_type = 'WEEKLY'
+                   AND assignment.difficulty_snapshot <> CASE
+                       WHEN assignment.slot_number BETWEEN 1 AND 3 THEN 'LOW'
+                       WHEN assignment.slot_number BETWEEN 4 AND 5 THEN 'MEDIUM'
+                       WHEN assignment.slot_number BETWEEN 6 AND 7 THEN 'HIGH'
+                       ELSE 'INVALID'
+                   END
+                """));
         assertEquals(0L, count("""
                 SELECT COUNT(*)
                   FROM game_groups AS seed_group
