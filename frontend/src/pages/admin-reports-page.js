@@ -203,6 +203,7 @@ export function adminReportsPage() {
     /** @type {'dismiss'|'remove'|null} */
     let actionKind = null;
     let processing = false;
+    let loading = false; // 신고 목록을 조회하는 동안 중복 페이징을 막습니다.
     let disposed = false;
     let listVersion = 0;
     let detailVersion = 0;
@@ -225,19 +226,26 @@ export function adminReportsPage() {
     }
 
     /**
-     * 작업 상태에 따라 버튼의 사용 가능 여부를 제어한다.
-     * 상태 변경 요청 중에는 중복 제출과 페이지 전환을 제한한다.
+     * 신고 처리 및 목록 조회 상태에 따라 버튼 사용 가능 여부를 설정합니다.
+     * 목록 조회 중에는 페이징과 수동 새로고침의 중복 실행을 막습니다.
+     * 신고 기각·강퇴의 중복 제출 방지 규칙은 기존과 동일하게 유지합니다.
      * @returns {void}
      */
     function updateControls() {
-        prevButton.disabled    = processing || page <= 0;
-        nextButton.disabled    = processing || totalPages === 0 || page >= totalPages -1;
-        reloadButton.disabled  = processing;
-        statusInput.disabled   = processing;
-        dismissButton.disabled = processing || selectedReport?.status !== 'RECEIVED';
-        removeButton.disabled  = processing || selectedReport?.status !== 'RECEIVED';
+        // 목록 조회 중에는 현재 페이지를 확정할 때까지 이동을 제한합니다.
+        prevButton.disabled = processing || loading || page <= 0;
+        nextButton.disabled =
+            processing || loading || totalPages === 0 || page >= totalPages - 1;
+        reloadButton.disabled = processing || loading;
+
+        // 신고 상태 변경 명령은 기존과 동일하게 보호합니다.
+        statusInput.disabled = processing;
+        dismissButton.disabled =
+            processing || selectedReport?.status !== 'RECEIVED';
+        removeButton.disabled =
+            processing || selectedReport?.status !== 'RECEIVED';
         confirmButton.disabled = processing;
-        cancelButton.disabled  = processing;
+        cancelButton.disabled = processing;
     }
 
     /**
@@ -295,23 +303,26 @@ export function adminReportsPage() {
     }
 
     /**
-     * 현재 페이지의 신고 목록을 테이블 행으로 표시한다.
-     * 버튼의 data-report-id에 신고 ID를 저장해 상세 조회에 사용한다.
-     * @param {any[]} reports 신고 DTO 배열
+     * 서버가 반환한 신고 목록으로 새 테이블 행을 구성합니다.
+     * 화면에 연결되지 않은 DocumentFragment에서 행을 먼저 완성합니다.
+     * 모든 행의 생성이 끝난 뒤 기존 목록을 한 번에 교체합니다.
+     * @param {any[]} reports 현재 페이지 신고 목록
      * @returns {void}
      */
     function renderRows(reports) {
-        rowsNode.replaceChildren();
+        const fragment = document.createDocumentFragment();
 
+        // 빈 결과도 하나의 행으로 표현한다.
         if (reports.length === 0) {
             const row = document.createElement('tr');
             const cell = document.createElement('td');
+
             cell.colSpan = 6;
             cell.className = 'text-center text-body-secondary py-4';
             cell.textContent = '해당 조건에 맞는 신고가 없습니다.';
+
             row.append(cell);
-            rowsNode.append(row);
-            return;
+            fragment.append(row);
         }
 
         for (const report of reports) {
@@ -321,7 +332,7 @@ export function adminReportsPage() {
                 report.groupId,
                 CATEGORY_LABELS[report.category] ?? report.category,
                 STATUS_LABELS[report.status] ?? report.status,
-                formatDateTime(report.createdAt)
+                formatDateTime(report.createAt)
             ];
 
             for (const value of values) {
@@ -330,8 +341,10 @@ export function adminReportsPage() {
                 row.append(cell);
             }
 
+            // 상세 버튼은 기존 이벤트 위임 방식을 그대로 사용
             const actionCell = document.createElement('td');
             const button = document.createElement('button');
+
             button.type = 'button';
             button.className = 'btn btn-outline-primary btn-sm';
             button.dataset.reportId = String(report.reportId);
@@ -339,56 +352,81 @@ export function adminReportsPage() {
 
             actionCell.append(button);
             row.append(actionCell);
-            rowsNode.append(row);
+            fragment.append(row);
         }
+
+        // 마지막 한 번 DOM 변경
+        rowsNode.replaceChildren(fragment);
     }
 
     /**
-     * 상태, 페이지 조건에 맞춰 신고 목록을 서버에서 조회한다.
-     * 가장 최근 요청의 결과만 화면에 반영한다.
-     * @returns {Promise<boolean>} 목록 조회 성공 여부
+     * 신고 목록을 조회하고 성공한 결과만 현재 화면에 반영합니다.
+     * 요청 중에는 기존 행을 유지해 빈 테이블이 나타나지 않게 합니다.
+     * 페이지 번호는 조회 성공 후 확정하며 실패 시 기존 결과를 보존합니다.
+     * @param {number} [requestedPage=page] 조회할 0부터 시작하는 페이지 번호
+     * @returns {Promise<boolean>} 목록 반영 성공 여부
      */
-    async function loadReports() {
-        const version = ++ listVersion;
-        rowsNode.replaceChildren();
-        pageInfo.textContent = '조회 중...';
-        showNotice('신고 목록을 조회하는 중입니다.');
+    async function loadReports(requestedPage = page) {
+        const version = ++listVersion;
+        const table = rowsNode.closest('table');
+
+        loading = true;
+
+        // 기존 목록은 유지하고 로딩 상태만 표시한다.
+        table?.setAttribute('aria-busy', 'true');
+        table?.classList.add('opacity-75');
+        showNotice('신고 목록을 갱신하고 있습니다.');
         updateControls();
 
         try {
-            // 입력 중인 값 대신 확정된 신고 상태로 조회합니다.
+            // 필터 사용
             const result = await listAdminReports({
                 status: appliedStatus,
-                page,
+                page: requestedPage,
                 size: PAGE_SIZE
             });
+
+            // 화면 종료 또는 더 최신 조회가 있으면 결과를 버린다.
             if (disposed || version !== listVersion) return false;
 
-            const reports = result.data;
-            totalPages = result.meta.totalPages;
+            const nextTotalPages = result.totalPages;
 
-            // 마지막 페이지의 신고가 모두 처리됐다면 이전 페이지로 돌아갑니다.
-            if (totalPages > 0 && page >= totalPages) {
-                page = totalPages - 1;
-                return loadReports();
+            // 마지막 페이지가 사라졌다면 유효한 페이지를 재조회한다.
+            if (nextTotalPages > 0 && requestedPage >= nextTotalPages) {
+                return await loadReports(nextTotalPages - 1);
             }
-            if (totalPages === 0) page = 0;
 
-            renderRows(reports);
-            pageInfo.textContent =
-                `${totalPages ? page + 1 : 0} / ${totalPages} 페이지 · ` +
-                `총 ${result.meta.totalElements}건`;
+            // 성공한 결과만 화면과 페이지 상태에 반영
+            renderRows(result.data);
+            page = nextTotalPages === 0 ? 0 : requestedPage;
+            totalPages = nextTotalPages;
 
-            showNotice(`신고 목록 ${reports.length}건을 조회했습니다.`, 'success');
+            pageInfo.textContent
+                = `${totalPages ? page + 1 : 0} / ${totalPages} 페이지 · 총 ${result.meta.totalElements}건`;
+
+            showNotice(
+                `신고 목록 ${result.data.length}건을 조회했습니다.`,
+                'success'
+            );
+
             return true;
         } catch (error) {
             if (disposed || version !== listVersion) return false;
-            totalPages = 0;
-            pageInfo.textContent = '조회 실패';
-            showNotice(getErrorMessage(error), 'danger');
+
+            // 실패한 요청이 기존 정상 데이터를 지우지 않게 합니다.
+            showNotice(
+                `조회에 실패했습니다. 이전 목록을 유지합니다. ${getErrorMessage(error)}`,
+                'danger'
+            );
+
             return false;
         } finally {
-            if (!disposed && version === listVersion) updateControls();
+            if (!disposed && version === listVersion) {
+                loading = false;
+                table?.removeAttribute('aria-busy');
+                table?.classList.remove('opacity-75');
+                updateControls();
+            }
         }
     }
 
@@ -529,29 +567,30 @@ export function adminReportsPage() {
     }
 
 
+
     /**
-     * 신고 상태 조회 Form의 제출을 처리합니다.
-     * 선택한 신고 상태를 확정하고 첫 페이지부터 다시 조회합니다.
-     * 이전에 선택한 신고 상세는 초기화합니다.
+     * 신고 상태 필터를 확정하고 첫 페이지를 조회합니다.
+     * 새로운 조건의 조회가 성공하면 이전 신고 상세를 초기화합니다.
+     * 조회 실패 시에는 기존 목록과 상세 내용을 유지합니다.
      *
      * @param {SubmitEvent} event 조회 Form 제출 이벤트
      * @returns {void}
      */
     function onFilterSubmit(event) {
         event.preventDefault();
-
-        // 신고 처리 작업 중에는 필터 조회를 시작하지 않습니다.
         if (processing) return;
 
-        // 조회 버튼을 눌렀을 때만 선택한 상태를 확정합니다.
+        // 필터는 조회 버튼을 누를 때만 변경합니다.
         appliedStatus = statusInput.value || undefined;
 
-        // 새로운 필터는 첫 페이지부터 조회합니다.
-        page = 0;
-        clearDetail();
-
-        void loadReports();
+        // 성공하기 전에는 현재 페이지와 상세 카드를 유지합니다.
+        void loadReports(0).then(success => {
+            if (success && !disposed) {
+                clearDetail();
+            }
+        });
     }
+
 
     /**
      * 처리 중에는 Escape 키로 Modal을 닫지 못하도록 제한합니다.
@@ -567,17 +606,22 @@ export function adminReportsPage() {
     const onReload = () => {
         if (!processing) void loadReports();
     };
+    // 현재 페이지가 아닌 요청 대상 페이지를 전달합니다.
+    // 조회 성공 후에만 loadReports()가 페이지 번호를 확정합니다.
     const onPrev = () => {
-        if (processing || page <= 0) return;
-        page -= 1;
-        clearDetail();
-        void loadReports();
+        if (processing || loading || page <= 0) return;
+
+        void loadReports(page - 1).then(success => {
+            if (success && !disposed) clearDetail();
+        });
     };
+
     const onNext = () => {
-        if (processing || page >= totalPages - 1) return;
-        page += 1;
-        clearDetail();
-        void loadReports();
+        if (processing || loading || page >= totalPages - 1) return;
+
+        void loadReports(page + 1).then(success => {
+            if (success && !disposed) clearDetail();
+        });
     };
     const onCancel = () => {
         if (!processing) dialog.close();

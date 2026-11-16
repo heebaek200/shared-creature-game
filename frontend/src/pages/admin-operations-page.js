@@ -308,30 +308,36 @@ export function adminOperationsPage() {
     }
 
     /**
-     * 조회한 운영 경고를 테이블에 표시합니다.
-     * 경고 메시지 등 서버 문자열은 textContent로 처리합니다.
-     * @param {any[]} warnings 운영 경고 목록
+     * 운영 경고 목록의 새로운 테이블 행을 생성합니다.
+     * 서버의 경고 메시지는 textContent로 안전하게 표시합니다.
+     * DocumentFragment에서 행을 완성한 후 DOM을 한 번만 교체합니다.
+     *
+     * @param {any[]} warnings 현재 페이지 운영 경고 목록
      * @returns {void}
      */
     function renderWarnings(warnings) {
-        rowsNode.replaceChildren();
+        const fragment = document.createDocumentFragment();
 
+        // 경고가 없는 경우에도 목록 영역은 정상적으로 표시합니다.
         if (warnings.length === 0) {
-            const tr = document.createElement('tr');
-            const td = document.createElement('td');
-            td.colSpan = 5;
-            td.className = 'text-center text-body-secondary py-4';
-            td.textContent = '현재 조건에 해당하는 미해결 운영 경고가 없습니다.';
-            tr.append(td);
-            rowsNode.append(tr);
-            return;
+            const row = document.createElement('tr');
+            const cell = document.createElement('td');
+
+            cell.colSpan = 5;
+            cell.className = 'text-center text-body-secondary py-4';
+            cell.textContent = '현재 조건에 해당하는 미해결 운영 경고가 없습니다.';
+
+            row.append(cell);
+            fragment.append(row);
         }
 
+        // 서버에서 조회한 경고 항목을 순서대로 생성합니다.
         for (const warning of warnings) {
-            const tr = document.createElement('tr');
+            const row = document.createElement('tr');
 
             const severityCell = document.createElement('td');
             const badge = document.createElement('span');
+
             badge.className = warning.severity === 'CRITICAL'
                 ? 'badge text-bg-danger'
                 : 'badge text-bg-warning';
@@ -354,48 +360,65 @@ export function adminOperationsPage() {
             const dateCell = document.createElement('td');
             dateCell.textContent = formatDateTime(warning.detectedAt);
 
-            tr.append(
+            row.append(
                 severityCell,
                 typeCell,
                 resourceCell,
                 messageCell,
                 dateCell
             );
-            rowsNode.append(tr);
+
+            fragment.append(row);
         }
+
+        // 모든 행을 생성한 후 화면의 목록을 갱신합니다.
+        rowsNode.replaceChildren(fragment);
     }
 
+
+
     /**
-     * 선택한 유형과 페이지 조건으로 현재 운영 경고를 조회합니다.
-     * 뒤늦은 응답이 최신 결과를 덮지 않도록 요청 번호를 비교합니다.
-     * @returns {Promise<boolean>} 목록 조회 성공 여부
+     * 현재 적용된 필터로 운영 경고 목록을 조회합니다.
+     * 로딩 중 이전 목록을 유지하며 성공했을 때만 행을 교체합니다.
+     * 실패 시 기존 목록·페이지 번호를 보존하고 오류를 표시합니다.
+     *
+     * @param {number} [requestedPage=page] 조회할 페이지 번호
+     * @returns {Promise<boolean>} 목록 갱신 성공 여부
      */
-    async function loadWarnings() {
+    async function loadWarnings(requestedPage = page) {
         const version = ++requestVersion;
+        const table = rowsNode.closest('table');
+
         loading = true;
+
+        // 기존 목록을 유지한 채 갱신 중임을 표시합니다.
+        table?.setAttribute('aria-busy', 'true');
+        table?.classList.add('opacity-75');
         updateControls();
-        showNotice(warningNotice, '운영 경고를 조회하고 있습니다.');
+        showNotice(warningNotice, '운영 경고를 갱신하고 있습니다.');
 
         try {
-            // 마지막으로 확정한 필터를 사용합니다.
+            // 확정된 필터와 요청 페이지를 사용합니다.
             const result = await listOperationalWarnings({
                 type: appliedType,
-                page,
+                page: requestedPage,
                 size: PAGE_SIZE
             });
 
             if (disposed || version !== requestVersion) return false;
 
-            totalPages = result.meta.totalPages;
+            const nextTotalPages = result.meta.totalPages;
 
-            // 경고 해소로 페이지가 줄었다면 마지막 유효 페이지를 다시 조회합니다.
-            if (totalPages > 0 && page >= totalPages) {
-                page = totalPages - 1;
-                return loadWarnings();
+            // 경고 해소로 마지막 페이지가 사라졌으면 재조회합니다.
+            if (nextTotalPages > 0 && requestedPage >= nextTotalPages) {
+                return await loadWarnings(nextTotalPages - 1);
             }
-            if (totalPages === 0) page = 0;
 
+            // 성공 시점에만 테이블과 페이지 번호를 확정합니다.
             renderWarnings(result.data);
+            page = nextTotalPages === 0 ? 0 : requestedPage;
+            totalPages = nextTotalPages;
+
             pageInfo.textContent =
                 `${totalPages ? page + 1 : 0} / ${totalPages} 페이지 · ` +
                 `총 ${result.meta.totalElements}건`;
@@ -405,18 +428,24 @@ export function adminOperationsPage() {
                 `현재 미해결 경고 ${result.meta.totalElements}건을 확인했습니다.`,
                 'success'
             );
+
             return true;
         } catch (error) {
             if (disposed || version !== requestVersion) return false;
 
-            rowsNode.replaceChildren();
-            totalPages = 0;
-            pageInfo.textContent = '조회 실패';
-            showNotice(warningNotice, getErrorMessage(error), 'danger');
+            // 이전 정상 조회 결과를 유지해 화면이 비지 않도록 합니다.
+            showNotice(
+                warningNotice,
+                `조회에 실패했습니다. 이전 목록을 유지합니다. ${getErrorMessage(error)}`,
+                'danger'
+            );
+
             return false;
         } finally {
             if (!disposed && version === requestVersion) {
                 loading = false;
+                table?.removeAttribute('aria-busy');
+                table?.classList.remove('opacity-75');
                 updateControls();
             }
         }
@@ -546,25 +575,23 @@ export function adminOperationsPage() {
         // 관리자 변경 작업 중에는 새로운 조회를 시작하지 않습니다.
         if (processing) return;
 
-        // 조회 버튼을 눌렀을 때만 선택값을 반영합니다.
+        // 필터를 확정하되 페이지 번호는 조회 성공 후 변경합니다.
         appliedType = typeInput.value || undefined;
-        page = 0;
-
-        void loadWarnings();
+        void loadWarnings(0);
     }
 
     const onRefresh = () => {
         if (!processing) void loadWarnings();
     };
+    // 페이지 번호를 먼저 변경하지 않고 조회 대상만 전달합니다.
     const onPrev = () => {
         if (loading || processing || page <= 0) return;
-        page -= 1;
-        void loadWarnings();
+        void loadWarnings(page - 1);
     };
+
     const onNext = () => {
         if (loading || processing || page >= totalPages - 1) return;
-        page += 1;
-        void loadWarnings();
+        void loadWarnings(page + 1);
     };
     const onCancel = () => {
         if (!processing) dialog.close();
