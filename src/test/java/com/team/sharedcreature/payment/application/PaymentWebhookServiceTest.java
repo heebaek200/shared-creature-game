@@ -1,6 +1,7 @@
 package com.team.sharedcreature.payment.application;
 
 import com.team.sharedcreature.payment.domain.PaymentWebhookEvent;
+import com.team.sharedcreature.payment.domain.WebhookProcessingStatus;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
 import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
@@ -81,7 +82,7 @@ class PaymentWebhookServiceTest {
         assertThat(event.getEventType()).isEqualTo("Transaction.Cancelled");
         assertThat(event.getPayloadSummary()).contains("cancel-1");
         assertThat(event.getPayloadSummary()).doesNotContain("signature");
-        assertThat(event.getProcessingStatus()).isEqualTo("PENDING");
+        assertThat(event.getProcessingStatus()).isEqualTo(WebhookProcessingStatus.PENDING);
         verifyNoInteractions(reconciliationService);
     }
 
@@ -160,7 +161,7 @@ class PaymentWebhookServiceTest {
 
         service.receive(body, "event-1", "signature", "100");
 
-        assertThat(saved.get().getProcessingStatus()).isEqualTo("PROCESSED");
+        assertThat(saved.get().getProcessingStatus()).isEqualTo(WebhookProcessingStatus.PROCESSED);
         assertThat(saved.get().getPurchase()).isSameAs(purchase);
         assertThat(saved.get().getPaymentTransaction()).isSameAs(transaction);
     }
@@ -184,7 +185,7 @@ class PaymentWebhookServiceTest {
         ArgumentCaptor<PaymentWebhookEvent> captor = ArgumentCaptor.forClass(PaymentWebhookEvent.class);
         verify(eventRepository).save(captor.capture());
         assertThat(captor.getValue().getProviderPaymentId()).isEqualTo("unknown-payment");
-        assertThat(captor.getValue().getProcessingStatus()).isEqualTo("FAILED");
+        assertThat(captor.getValue().getProcessingStatus()).isEqualTo(WebhookProcessingStatus.FAILED);
         assertThat(captor.getValue().getFailureDetail()).isEqualTo("PURCHASE_NOT_FOUND");
         verifyNoInteractions(reconciliationService);
     }
@@ -207,7 +208,7 @@ class PaymentWebhookServiceTest {
         var outcome = service.recover(1L, Instant.parse("2026-11-09T07:55:00Z"));
 
         assertThat(outcome).isEqualTo(PaymentWebhookService.RecoveryOutcome.SKIPPED);
-        assertThat(event.getProcessingStatus()).isEqualTo("IGNORED");
+        assertThat(event.getProcessingStatus()).isEqualTo(WebhookProcessingStatus.IGNORED);
         verifyNoInteractions(reconciliationService);
     }
 
@@ -236,7 +237,7 @@ class PaymentWebhookServiceTest {
         var outcome = service.recover(1L, Instant.parse("2026-11-09T07:55:00Z"));
 
         assertThat(outcome).isEqualTo(PaymentWebhookService.RecoveryOutcome.PROCESSED);
-        assertThat(event.getProcessingStatus()).isEqualTo("PROCESSED");
+        assertThat(event.getProcessingStatus()).isEqualTo(WebhookProcessingStatus.PROCESSED);
         assertThat(event.getPurchase()).isSameAs(purchase);
         assertThat(event.getPaymentTransaction()).isSameAs(transaction);
     }
@@ -263,7 +264,7 @@ class PaymentWebhookServiceTest {
         var outcome = service.recover(1L, Instant.parse("2026-11-09T07:55:00Z"));
 
         assertThat(outcome).isEqualTo(PaymentWebhookService.RecoveryOutcome.FAILED);
-        assertThat(event.getProcessingStatus()).isEqualTo("FAILED");
+        assertThat(event.getProcessingStatus()).isEqualTo(WebhookProcessingStatus.FAILED);
         assertThat(event.getFailureDetail()).isEqualTo("PAYMENT_WEBHOOK_INCONSISTENT");
     }
 

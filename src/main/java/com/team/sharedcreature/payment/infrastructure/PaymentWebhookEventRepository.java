@@ -37,8 +37,10 @@ public interface PaymentWebhookEventRepository extends JpaRepository<PaymentWebh
             SELECT event
               FROM PaymentWebhookEvent event
              WHERE event.eventType IN :eventTypes
-               AND ((event.processingStatus = 'FAILED' AND event.updatedAt <= :staleBefore)
-                 OR (event.processingStatus = 'PENDING' AND event.processingStartedAt <= :staleBefore))
+               AND ((event.processingStatus = com.team.sharedcreature.payment.domain.WebhookProcessingStatus.FAILED
+                     AND event.updatedAt <= :staleBefore)
+                 OR (event.processingStatus = com.team.sharedcreature.payment.domain.WebhookProcessingStatus.PENDING
+                     AND event.processingStartedAt <= :staleBefore))
              ORDER BY event.processingStartedAt ASC, event.id ASC
             """)
     List<PaymentWebhookEvent> findRecoverable(

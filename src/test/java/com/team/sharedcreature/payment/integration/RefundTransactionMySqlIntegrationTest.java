@@ -12,6 +12,13 @@ import com.team.sharedcreature.admin.application.SchedulerJobRunner;
 import com.team.sharedcreature.admin.application.SchedulerExecutionLifecycleService;
 import com.team.sharedcreature.payment.application.*;
 import com.team.sharedcreature.payment.domain.Purchase;
+import com.team.sharedcreature.payment.domain.PaymentWebhookEvent;
+import com.team.sharedcreature.payment.domain.WebhookProcessingStatus;
+import com.team.sharedcreature.payment.infrastructure.PaymentWebhookEventRepository;
+import com.team.sharedcreature.payment.domain.PaymentTransaction;
+import com.team.sharedcreature.payment.domain.PaymentTransactionStatus;
+import com.team.sharedcreature.payment.domain.PaymentTransactionType;
+import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
 import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
 import com.team.sharedcreature.payment.domain.RefundRequest;
@@ -65,7 +72,10 @@ import static org.mockito.Mockito.*;
 @ContextConfiguration(initializers = RefundTransactionMySqlIntegrationTest.TestDatabaseOnly.class)
 class RefundTransactionMySqlIntegrationTest {
     @Autowired private EntityManager em;
+    @Autowired private PaymentWebhookEventRepository webhookRepository;
     @Autowired private PurchaseRepository purchaseRepository;
+    @Autowired private PaymentTransactionRepository transactionRepository;
+    @Autowired private PurchaseQueryService purchaseQueries;
     @Autowired private RefundRequestRepository refundRepository;
     @Autowired private RefundQueryService refundQueries;
     @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
@@ -82,6 +92,7 @@ class RefundTransactionMySqlIntegrationTest {
     @Autowired private SchedulerExecutionLifecycleService schedulerLifecycle;
     private Instant schedulerBucket;
     private Fixture fixture;
+    private Long enumWebhookId;
     private RefundApprovalTransactionService.CancellationCommand command;
 
     @BeforeEach
@@ -119,6 +130,10 @@ class RefundTransactionMySqlIntegrationTest {
 
     @AfterEach
     void 정리() {
+        // Enum 호환성 검증에서 생성한 단일 Webhook만 정리합니다.
+        if (enumWebhookId != null) {
+            jdbc.update("DELETE FROM payment_webhook_events WHERE id = ?", enumWebhookId);
+        }
         if (fixture == null) {
             return;
         }
@@ -188,6 +203,85 @@ class RefundTransactionMySqlIntegrationTest {
         assertThat(mine.getContent().getFirst().getStatus()).isEqualTo(status);
         assertThat(purchaseRepository.findByUserIdAndStatus(
                 fixture.adminId(), status, PageRequest.of(0, 20))).isEmpty();
+    }
+
+    /** 거래 Enum의 DB 문자열 호환성과 최근 취소 거래 조회·응답 계약을 검증합니다. */
+    @ParameterizedTest
+    @EnumSource(PaymentTransactionStatus.class)
+    void 거래는_문자열로_저장되고_승인과_취소를_구분하여_조회한다(PaymentTransactionStatus status) {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        Long cancellationId = new TransactionTemplate(transactionManager).execute(tx -> {
+            var purchase = em.find(Purchase.class, fixture.purchaseId());
+            var cancellation = PaymentTransaction.cancellationRequested(purchase, now);
+            if (status != PaymentTransactionStatus.REQUESTED) {
+                var processedAt = status == PaymentTransactionStatus.UNKNOWN ? null : now;
+                cancellation.applyCancellationResult(status, "cancel-" + fixture.refundId(), processedAt, "PG", now);
+            }
+            em.persist(cancellation);
+            // 더 최신 승인 거래가 있어도 취소 유형 조회에서는 제외되어야 합니다.
+            em.persist(PaymentTransaction.approved(purchase, "approval-" + fixture.purchaseId(),
+                    purchase.getPriceKrwSnapshot(), now, now.plusSeconds(1)));
+            em.flush();
+            return cancellation.getId();
+        });
+
+        assertThat(jdbc.queryForObject("SELECT transaction_type FROM payment_transactions WHERE id = ?",
+                String.class, cancellationId)).isEqualTo("CANCELLATION");
+        assertThat(jdbc.queryForObject("SELECT status FROM payment_transactions WHERE id = ?",
+                String.class, cancellationId)).isEqualTo(status.name());
+        var cancellation = transactionRepository.findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
+                fixture.purchaseId(), PaymentTransactionType.CANCELLATION).orElseThrow();
+        assertThat(cancellation.getId()).isEqualTo(cancellationId);
+        assertThat(cancellation.getStatus()).isEqualTo(status);
+        assertThat(refundQueries.getAdminRefund(fixture.refundId()).latestCancellation().status())
+                .isEqualTo(status.name());
+        assertThat(purchaseQueries.get(fixture.ownerId(), fixture.purchaseId()).transactions())
+                .anySatisfy(transaction -> {
+                    assertThat(transaction.transactionType()).isEqualTo("CANCELLATION");
+                    assertThat(transaction.status()).isEqualTo(status.name());
+                });
+
+        // 기존 문자열로 저장된 거래도 새 조회에서 Enum으로 읽힙니다.
+        jdbc.update("UPDATE payment_transactions SET status = 'UNKNOWN' WHERE id = ?", cancellationId);
+        assertThat(transactionRepository.findById(cancellationId).orElseThrow().getStatus())
+                .isEqualTo(PaymentTransactionStatus.UNKNOWN);
+    }
+
+    /** Webhook 상태 문자열·Enum 읽기와 JPQL 복구 조건의 일치를 실제 DB로 검증합니다. */
+    @ParameterizedTest
+    @EnumSource(WebhookProcessingStatus.class)
+    void Webhook상태는_기존문자열과_호환되고_복구대상조건을_유지한다(WebhookProcessingStatus status) {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        Instant startedAt = now.minusSeconds(600);
+        enumWebhookId = new TransactionTemplate(transactionManager).execute(tx -> {
+            var event = PaymentWebhookEvent.received("enum-62-" + UUID.randomUUID(), null, null,
+                    "Transaction.Paid", "a".repeat(64), "{}", startedAt);
+            switch (status) {
+                case PENDING -> { }
+                case FAILED -> event.fail("TEST_FAILURE", startedAt);
+                case PROCESSED -> event.complete(null, null, startedAt);
+                case IGNORED -> event.ignore(startedAt);
+            }
+            em.persist(event);
+            em.flush();
+            return event.getId();
+        });
+
+        assertThat(jdbc.queryForObject("SELECT processing_status FROM payment_webhook_events WHERE id = ?",
+                String.class, enumWebhookId)).isEqualTo(status.name());
+        assertThat(webhookRepository.findById(enumWebhookId).orElseThrow().getProcessingStatus()).isEqualTo(status);
+        var candidates = webhookRepository.findRecoverable(List.of("Transaction.Paid"),
+                now.minusSeconds(300), PageRequest.of(0, 1000));
+        if (status == WebhookProcessingStatus.PENDING || status == WebhookProcessingStatus.FAILED) {
+            assertThat(candidates).extracting(PaymentWebhookEvent::getId).contains(enumWebhookId);
+        } else {
+            assertThat(candidates).extracting(PaymentWebhookEvent::getId).doesNotContain(enumWebhookId);
+        }
+
+        // 기존 DB 문자열도 새 조회에서 동일한 Enum으로 읽혀야 합니다.
+        jdbc.update("UPDATE payment_webhook_events SET processing_status = 'IGNORED' WHERE id = ?", enumWebhookId);
+        assertThat(webhookRepository.findById(enumWebhookId).orElseThrow().getProcessingStatus())
+                .isEqualTo(WebhookProcessingStatus.IGNORED);
     }
 
     /** 모든 환불 상태의 문자열 저장·Enum 조회와 복구 대상 JPQL을 실제 MySQL로 검증합니다. */

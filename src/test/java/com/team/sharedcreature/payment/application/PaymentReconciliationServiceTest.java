@@ -9,6 +9,8 @@ import com.team.sharedcreature.avatar.domain.AvatarSlot;
 import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
 import com.team.sharedcreature.payment.api.PurchaseResponse;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
+import com.team.sharedcreature.payment.domain.PaymentTransactionStatus;
+import com.team.sharedcreature.payment.domain.PaymentTransactionType;
 import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
@@ -129,7 +131,7 @@ class PaymentReconciliationServiceTest {
         when(purchaseRepository.findByIdAndUserId(10L, 7L)).thenReturn(Optional.of(purchase));
         when(purchaseRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(purchase));
         when(transactionRepository.findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
-                10L, "APPROVAL"
+                10L, PaymentTransactionType.APPROVAL
         )).thenReturn(Optional.empty());
         when(transactionRepository.save(any(PaymentTransaction.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -140,7 +142,7 @@ class PaymentReconciliationServiceTest {
         assertThatThrownBy(() -> service.reconcileForUser(7L, 10L, PAYMENT_ID))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.errorCode()).isEqualTo(ErrorCode.PAYMENT_RESULT_UNKNOWN));
-        verify(transactionRepository).save(argThat(transaction -> "UNKNOWN".equals(transaction.getStatus())));
+        verify(transactionRepository).save(argThat(transaction -> transaction.getStatus() == PaymentTransactionStatus.UNKNOWN));
         verifyNoInteractions(ownedItemRepository);
     }
 
@@ -149,7 +151,7 @@ class PaymentReconciliationServiceTest {
         when(purchaseRepository.findByIdAndUserId(10L, 7L)).thenReturn(Optional.of(purchase));
         when(purchaseRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(purchase));
         when(transactionRepository.findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
-                10L, "APPROVAL"
+                10L, PaymentTransactionType.APPROVAL
         )).thenReturn(Optional.empty());
         when(transactionRepository.save(any(PaymentTransaction.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -164,8 +166,8 @@ class PaymentReconciliationServiceTest {
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.errorCode()).isEqualTo(ErrorCode.PAYMENT_RESULT_UNKNOWN));
         verify(transactionRepository).save(argThat(transaction ->
-                "UNKNOWN".equals(transaction.getStatus())
-                        && "APPROVAL".equals(transaction.getTransactionType())
+                transaction.getStatus() == PaymentTransactionStatus.UNKNOWN
+                        && transaction.getTransactionType() == PaymentTransactionType.APPROVAL
                         && transaction.getProcessedAt() == null
         ));
     }
@@ -176,7 +178,7 @@ class PaymentReconciliationServiceTest {
         when(purchaseRepository.findByIdAndUserId(10L, 7L)).thenReturn(Optional.of(purchase));
         when(purchaseRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(purchase));
         when(transactionRepository.findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
-                10L, "APPROVAL"
+                10L, PaymentTransactionType.APPROVAL
         )).thenReturn(Optional.of(unknown));
         when(paymentGateway.getPayment(PAYMENT_ID)).thenThrow(new PaymentGatewayException(
                 PaymentGatewayException.Kind.UNAVAILABLE,
