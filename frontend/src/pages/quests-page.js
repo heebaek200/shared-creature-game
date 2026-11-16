@@ -196,13 +196,15 @@ export function questPage({ navigate, currentUser }) {
       area.append(help);
     } else if (quest.verificationType === 'PHOTO_EXIF') {
       const inputId = `quest-photo-${assignmentId}`;
+      const attemptsRemaining = Number(quest.photoAttemptsRemaining ?? 0);
+      const attemptsExhausted = attemptsRemaining <= 0;
       area.innerHTML = `
         <label class="form-label fw-semibold" for="${inputId}">JPEG 사진 선택</label>
         <div class="input-group quest-photo-input">
-          <input id="${inputId}" class="form-control" type="file" accept="image/jpeg,.jpg,.jpeg" data-photo-input>
-          <button type="button" class="btn btn-primary" data-action="photo" data-assignment-id="${assignmentId}">사진 제출</button>
+          <input id="${inputId}" class="form-control" type="file" accept="image/jpeg,.jpg,.jpeg" data-photo-input ${attemptsExhausted ? 'disabled' : ''}>
+          <button type="button" class="btn btn-primary" data-action="photo" data-assignment-id="${assignmentId}" ${attemptsExhausted ? 'disabled' : ''}>사진 제출</button>
         </div>
-        <p class="small text-app-muted mt-2 mb-1">JPEG · 최대 10 MiB · HEIC/HEIF 미지원 · 남은 제출 ${quest.photoAttemptsRemaining ?? 0}회</p>
+        <p class="small ${attemptsExhausted ? 'text-danger' : 'text-app-muted'} mt-2 mb-1">${attemptsExhausted ? '사진 제출 가능 횟수를 모두 사용했습니다.' : `JPEG · 최대 10 MiB · HEIC/HEIF 미지원 · 남은 제출 ${attemptsRemaining}회`}</p>
         <p class="small text-app-muted mb-0">GPS와 촬영 시각만 확인하며 실외 활동이나 실제 이동 여부는 검증하지 않습니다.</p>
       `;
     }
@@ -315,7 +317,7 @@ export function questPage({ navigate, currentUser }) {
           itemFeedback.className = 'small mt-3 text-danger';
           itemFeedback.textContent = message;
         }
-        if (error?.status === 409 && error?.code !== 'PHOTO_ATTEMPT_LIMIT_EXCEEDED') {
+        if (error?.status === 409) {
           showPageFeedback(`${message} 최신 퀘스트 상태를 다시 확인했습니다.`, 'warning');
           await loadQuests();
         }
@@ -373,6 +375,7 @@ function formatDeadline(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '기간 정보 없음';
   return `${new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
     month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',
   }).format(date)}까지`;
 }
