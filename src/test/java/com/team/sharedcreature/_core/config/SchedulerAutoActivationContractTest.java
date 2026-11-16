@@ -32,25 +32,26 @@ class SchedulerAutoActivationContractTest {
 
     /**
      * local 프로필에서 서버만 실행하면 시즌·사진·결제 작업이 자동으로 활성화됩니다.
-     * 환불은 #22 업무 구현체가 아직 병합되지 않아 비활성화합니다.
+     * 환불도 #22 업무 구현체 연결과 검증 완료에 따라 활성화합니다.
      * 정기 실행 스레드 풀은 여러 5분 Cron이 겹칠 때의 병목을 줄입니다.
      */
     @Test
     void localEnablesReadyJobsWithoutManualFlags() throws IOException {
         PropertySource<?> local = yaml("application-local.yaml");
 
-        // 운영 작업 세 가지는 true, 연동 전 환불 작업만 false여야 합니다.
+        // 업무 연결이 완료된 기존 Scheduler를 기본 활성화합니다.
         assertEquals(Boolean.TRUE, local.getProperty("app.scheduler.enabled"));
         assertEquals(Boolean.TRUE, local.getProperty("app.scheduler.photo-retention-enabled"));
         assertEquals(Boolean.TRUE, local.getProperty("app.scheduler.payment-webhook-enabled"));
-        assertEquals(Boolean.FALSE, local.getProperty("app.scheduler.refund-reconciliation-enabled"));
+        // #22 업무 연동과 통합 검증 완료 후 환불 복구도 기본 활성화합니다.
+        assertEquals(Boolean.TRUE, local.getProperty("app.scheduler.refund-reconciliation-enabled"));
         assertEquals(6, ((Number) local.getProperty("spring.task.scheduling.pool.size")).intValue());
     }
 
     /**
      * dev 프로필도 local과 동일한 자동 실행 정책을 기본값으로 사용합니다.
      * 사용자가 별도 활성화 환경변수를 입력하지 않아도 동작해야 합니다.
-     * 환불은 아직 연결 전이므로 안전하게 꺼져 있어야 합니다.
+     * 환불 복구도 연결된 기존 Scheduler를 통해 자동 실행합니다.
      */
     @Test
     void devEnablesReadyJobsWithoutManualFlags() throws IOException {
@@ -60,7 +61,8 @@ class SchedulerAutoActivationContractTest {
         assertEquals(Boolean.TRUE, dev.getProperty("app.scheduler.enabled"));
         assertEquals(Boolean.TRUE, dev.getProperty("app.scheduler.photo-retention-enabled"));
         assertEquals(Boolean.TRUE, dev.getProperty("app.scheduler.payment-webhook-enabled"));
-        assertEquals(Boolean.FALSE, dev.getProperty("app.scheduler.refund-reconciliation-enabled"));
+        // dev도 별도 실행 옵션 없이 기존 환불 Scheduler를 사용합니다.
+        assertEquals(Boolean.TRUE, dev.getProperty("app.scheduler.refund-reconciliation-enabled"));
         assertEquals(6, ((Number) dev.getProperty("spring.task.scheduling.pool.size")).intValue());
     }
 
@@ -95,7 +97,7 @@ class SchedulerAutoActivationContractTest {
 
     /**
      * 사진·결제 Scheduler는 전역 활성화와 각 기능 플래그를 동시에 요구합니다.
-     * 환불은 #22 구현 이후 같은 조건을 활성화하는 별도 단계로 남깁니다.
+     * 환불은 #22 업무 연결 후에도 전체 및 환불 플래그를 함께 검사합니다.
      * 두 종류 이상 같은 5분 구간 작업을 독립적으로 등록할 수 있습니다.
      */
     @Test

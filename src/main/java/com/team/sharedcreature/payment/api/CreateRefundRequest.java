@@ -17,6 +17,9 @@ public class CreateRefundRequest {
     @Size(max = 500, message = "환불 요청 사유는 500자 이하여야 합니다.")
     private String reason;
 
+    /** 현재 요청에서 reason 키가 이미 전달됐는지 기록합니다. */
+    private boolean reasonReceived;
+
     /**
      * JSON 문자열인지 확인하고 앞뒤 공백을 제거합니다.
      *
@@ -25,6 +28,18 @@ public class CreateRefundRequest {
      */
     @JsonSetter("reason")
     public void setReason(JsonNode value) {
+
+        // 같은 JSON 키가 다시 전달되면 기존 값을 덮어쓰지 않고 거절합니다.
+        if (reasonReceived) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_REQUEST,
+                    "reason은 중복해서 입력할 수 없습니다."
+            );
+        }
+
+        // 첫 값이 null이어도 키를 전달받았다는 사실은 기록합니다.
+        this.reasonReceived = true;
+
         // 누락과 null은 @NotBlank 검증에서 거절합니다.
         if (value == null || value.isNull()) {
             this.reason = null;

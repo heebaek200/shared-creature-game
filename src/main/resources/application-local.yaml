@@ -49,5 +49,5 @@ app:
     enabled: true
     photo-retention-enabled: true
     payment-webhook-enabled: true
-    # #22 환불 업무 Bean이 병합된 뒤 실DB 검증까지 마치기 전에는 활성화하지 않는다.
-    refund-reconciliation-enabled: false
+    # #22 환불 복구 업무를 기존 Scheduler에 연결합니다.
+    refund-reconciliation-enabled: true

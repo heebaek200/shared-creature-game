@@ -46,5 +46,5 @@ app:
     enabled: true
     photo-retention-enabled: true
     payment-webhook-enabled: true
-    # #22 실제 환불 상태 복구 연동이 완료되면 별도 검증 후 true로 전환한다.
-    refund-reconciliation-enabled: false
+    # #22 환불 복구 업무를 기존 Scheduler에 연결합니다.
+    refund-reconciliation-enabled: true

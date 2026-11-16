@@ -16,7 +16,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.RepeatedTest;
-import org.junit.jupiter.api.Disabled;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -260,13 +259,19 @@ class RefundTransactionMySqlIntegrationTest {
     }
 
     @Test
-    @Disabled("#24 인계 문서 간 실패 회차 result_summary 저장 요구를 확인한 뒤 재개합니다.")
-    void 계약확인대기_실패회차의_집계JSON을_DB에_저장한다() {
+    void 실패회차는_오류정보를_기록하고_성공전용_집계JSON은_저장하지_않는다() {
         prepareStaleUnknownRefund();
         when(lookupGateway.getPayment(command.paymentId())).thenThrow(new PaymentGatewayException(
                 PaymentGatewayException.Kind.UNAVAILABLE, "조회 Timeout 대역", null));
-        normalizer().normalize();
-        assertThat(schedulerColumn("result_summary")).isNotNull().contains("errorCount");
+        var result = normalizer().normalize();
+        assertThat(result.summary().errorCount()).isEqualTo(1);
+        assertThat(schedulerColumn("status")).isEqualTo("FAILED");
+        assertThat(schedulerColumn("attempt_count")).isEqualTo("1");
+        assertThat(schedulerColumn("error_code")).isEqualTo("JOB_EXECUTION_FAILED");
+        assertThat(schedulerColumn("error_detail")).contains("IllegalStateException");
+        // #24 확인 정책: 집계 JSON은 성공 실행에서만 기록합니다.
+        assertThat(schedulerColumn("result_summary")).isNull();
+        verifyNoInteractions(gateway);
     }
 
     @RepeatedTest(3)

@@ -17,6 +17,9 @@ public class RefundDecisionRequest {
     @Size(max = 500, message = "관리자 판단 사유는 500자 이하여야 합니다.")
     private String decisionReason;
 
+    /** 현재 요청에서 decisionReason 키가 이미 전달됐는지 기록합니다. */
+    private boolean decisionReasonReceived;
+
     /**
      * JSON 문자열인지 확인하고 앞뒤 공백을 제거합니다.
      *
@@ -25,6 +28,18 @@ public class RefundDecisionRequest {
      */
     @JsonSetter("decisionReason")
     public void setDecisionReason(JsonNode value) {
+
+        // 같은 키를 다시 전달하면 기존 관리자 판단 사유를 덮어쓰지 않습니다.
+        if (decisionReasonReceived) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_REQUEST,
+                    "decisionReason은 중복해서 입력할 수 없습니다."
+            );
+        }
+
+        // 첫 값이 null이어도 키를 전달받은 사실을 기록합니다.
+        this.decisionReasonReceived = true;
+
         // 누락과 null은 @NotBlank 검증에서 거절합니다.
         if (value == null || value.isNull()) {
             this.decisionReason = null;

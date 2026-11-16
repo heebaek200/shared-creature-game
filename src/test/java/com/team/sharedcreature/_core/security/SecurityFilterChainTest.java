@@ -21,7 +21,6 @@ import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.test.context.web.WebAppConfiguration;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,7 +36,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -68,12 +67,6 @@ class SecurityFilterChainTest {
     private GroupMembershipRepository membershipRepository;
 
     private MockMvc mockMvc;
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private GroupMembershipRepository membershipRepository;
 
     @BeforeEach
     void setUp() {
@@ -185,19 +178,25 @@ class SecurityFilterChainTest {
 
     /** 실제 세션 인증 Filter가 복원할 수 있는 MEMBER 세션을 구성합니다. */
     private MockHttpSession memberSession() {
+        return authenticatedSession(1L, "MEMBER");
+    }
+
+    /** 실제 인증 필터가 사용자와 최신 그룹 역할을 확인할 수 있는 세션을 만듭니다. */
+    private MockHttpSession authenticatedSession(Long userId, String role) {
         User account = mock(User.class);
         GroupMembership membership = mock(GroupMembership.class);
-        when(account.getId()).thenReturn(1L);
+        when(account.getId()).thenReturn(userId);
         when(account.getStatus()).thenReturn("ACTIVE");
         when(account.getGlobalRole()).thenReturn("USER");
-        when(membership.getRole()).thenReturn("MEMBER");
-        when(userRepository.findById(1L)).thenReturn(Optional.of(account));
-        when(membershipRepository.findByUserIdAndStatus(1L, "ACTIVE"))
+        // 세션 역할과 저장소에서 조회하는 최신 역할을 같은 값으로 준비합니다.
+        when(membership.getRole()).thenReturn(role);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(account));
+        when(membershipRepository.findByUserIdAndStatus(userId, "ACTIVE"))
                 .thenReturn(Optional.of(membership));
         MockHttpSession session = new MockHttpSession();
         session.setAttribute(
                 SessionAuthenticationFilter.LOGIN_USER,
-                new LoginUser(1L, "member", Set.of("MEMBER"))
+                new LoginUser(userId, "member", Set.of(role))
         );
         return session;
     }
