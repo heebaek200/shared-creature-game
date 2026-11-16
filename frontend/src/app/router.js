@@ -2,7 +2,7 @@
 import { getCurrentUser } from '../features/auth/api.js';
 import { statusPage } from '../pages/status-page.js';
 
-/** @typedef {{ path: string, access: string, page: (context: {navigate: (path: string) => void}) => {element: HTMLElement, cleanup?: () => void} }} Route */
+/** @typedef {{ path: string, access: string, page: (context: {navigate: (path: string) => void, currentUser: object | null}) => {element: HTMLElement, cleanup?: () => void} }} Route */
 
 /**
  * History API 이동과 Page mount·cleanup을 관리합니다.
@@ -11,9 +11,11 @@ import { statusPage } from '../pages/status-page.js';
  */
 export function createRouter(root, routes) {
   let cleanup = () => {};
-
+  let renderVersion = 0;
 
   async function render() {
+    const currentRenderVersion = ++renderVersion;
+
     cleanup();
 
     const route = routes.find((candidate) => {
@@ -23,18 +25,20 @@ export function createRouter(root, routes) {
       return candidate.path === location.pathname;
     }) ?? routes.find((candidate) => candidate.path === '*');
 
-    // 사용자 정보는 필요한 경우 한 번만 조회합니다.
+    // 회원가입은 PUBLIC이어도 가입 대기 상태 확인이 필요.
+    const requiresUserInfo =
+        route.access !== 'PUBLIC' ||
+        route.path === '/signup';
 
     let me = null;
 
-    if (
-        route.access === 'HOME' ||
-        route.path === '/signup' ||
-        route.access !== 'PUBLIC'
-    ) {
-      try {
-        me = await getCurrentUser();
-      } catch (error) {
+    try {
+      me = await getCurrentUser();
+      if (currentRenderVersion !== renderVersion) return;
+    } catch (error) {
+      if (currentRenderVersion !== renderVersion) return;
+
+      if (requiresUserInfo) {
         console.error('사용자 정보 조회 실패:', error);
 
         const errorPage = statusPage(
@@ -47,6 +51,9 @@ export function createRouter(root, routes) {
         cleanup = mounted.cleanup ?? (() => {});
         return;
       }
+
+      // 공개 화면은 사용자 정보 조회에 실패해도 표시.
+      console.warn('공개 화면의 사용자 정보 조회 실패:', error);
     }
 
 
@@ -83,6 +90,17 @@ export function createRouter(root, routes) {
         return;
       }
 
+      if (route.access === 'GROUP_ADMIN') {
+        const roles = Array.isArray(me.roles) ? me.roles : [];
+        const canManageGroup =
+            roles.includes('PRIMARY') || roles.includes('DEPUTY');
+
+        if (!canManageGroup) {
+          replace('/403');
+          return;
+        }
+      }
+
       if (
           route.access === 'SUPER_ADMIN' &&
           !me.roles.includes('SUPER_ADMIN')
@@ -97,7 +115,10 @@ export function createRouter(root, routes) {
       }
     }
 
-    const mounted = route.page({ navigate });
+    const mounted = route.page({
+      navigate,
+      currentUser: me,
+    });
     root.replaceChildren(mounted.element);
     cleanup = mounted.cleanup ?? (() => {});
   }

@@ -91,13 +91,17 @@ export function renderCreatureGrowth({
         'COMPLETE',
     ].includes(targetGrowthStage);
 
+    const prefersReducedMotion = window.matchMedia(
+        '(prefers-reduced-motion: reduce)',
+    ).matches;
+
     const speciesName = shouldRevealSpeciesName && hasSpeciesName
         ? selectedSpecies.name
         : '???';
     if (creatureTitleName) {
         creatureTitleName.textContent = shouldRevealSpeciesName
-            ? `시즌 크리처 - ${speciesName}`
-            : '시즌 크리처 - ???';
+            ? `시즌 크리처 -\n ${speciesName}`
+            : '시즌 크리처 -\n ???';
     }
     if (speciesSubtitle) {
         speciesSubtitle.textContent = shouldRevealSpeciesName ? speciesName : '???';
@@ -143,7 +147,7 @@ export function renderCreatureGrowth({
             expBar.setAttribute('aria-valuenow', '0');
             expBar.setAttribute('aria-valuetext', `${targetExp.toLocaleString()} XP, 부화 대기 중`);
         }
-    } else if (isHatchedGrowthStage && !hasPlayedGrowthAnimation) {
+    } else if (isHatchedGrowthStage && !hasPlayedGrowthAnimation && !prefersReducedMotion ) {
         const stageOrder = ['HATCHLING', 'GROWING', 'MATURE', 'COMPLETE'];
         const targetStageIndex = Math.max(0, stageOrder.indexOf(targetGrowthStage));
         const stagesToVisit = stageOrder.slice(0, targetStageIndex + 1);
