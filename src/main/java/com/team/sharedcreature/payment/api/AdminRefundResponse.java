@@ -74,7 +74,8 @@ public record AdminRefundResponse(
                 // 취소 거래가 없다면 latestCancellation 키를 null로 유지합니다.
                 cancellation == null ? null : new CancellationInfo(
                         cancellation.getProviderTransactionId(),
-                        cancellation.getStatus(),
+                        // 취소 거래 상태 Enum을 기존 API 문자열로 변환합니다.
+                        cancellation.getStatus().name(),
                         cancellation.getProcessedAt()
                 )
         );

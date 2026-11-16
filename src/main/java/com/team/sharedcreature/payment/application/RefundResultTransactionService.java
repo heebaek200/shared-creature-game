@@ -368,11 +368,10 @@ public class RefundResultTransactionService {
 
         // 연결된 거래가 이미 다른 결과로 확정됐다면 임의로 덮어쓰지 않습니다.
         boolean transactionFinal =
-                PaymentTransactionStatus.SUCCESS.name().equals(transaction.getStatus())
-                        || PaymentTransactionStatus.DEFINITIVE_FAILURE.name()
-                        .equals(transaction.getStatus());
+                transaction.getStatus() == PaymentTransactionStatus.SUCCESS
+                        || transaction.getStatus() == PaymentTransactionStatus.DEFINITIVE_FAILURE;
 
-        if (transactionFinal && !nextStatus.name().equals(transaction.getStatus())) {
+        if (transactionFinal && nextStatus != transaction.getStatus()) {
             throw new IllegalStateException("취소 거래와 PG 결과가 일치하지 않습니다.");
         }
 
@@ -564,8 +563,7 @@ public class RefundResultTransactionService {
         }
 
         if (!Objects.equals(purchase.getId(), transaction.getPurchase().getId())
-                || !PaymentTransactionType.CANCELLATION.name()
-                .equals(transaction.getTransactionType())) {
+                || transaction.getTransactionType() != PaymentTransactionType.CANCELLATION) {
             throw new IllegalStateException(
                     "동일 구매의 취소 거래만 환불 결과에 연결할 수 있습니다."
             );

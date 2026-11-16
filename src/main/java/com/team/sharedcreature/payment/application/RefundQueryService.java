@@ -102,7 +102,7 @@ public class RefundQueryService {
         var cancellation = transactionRepository
                 .findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
                         purchaseId,
-                        PaymentTransactionType.CANCELLATION.name()
+                        PaymentTransactionType.CANCELLATION
                 )
                 .orElse(null);
 

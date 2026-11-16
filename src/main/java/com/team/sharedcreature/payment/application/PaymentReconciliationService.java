@@ -142,7 +142,7 @@ public class PaymentReconciliationService {
             PaymentTransaction transaction = transactionRepository
                     .findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
                             locked.getId(),
-                            PaymentTransactionType.APPROVAL.name()
+                            PaymentTransactionType.APPROVAL
                     )
                     .filter(candidate -> isFailureConsistent(locked, candidate))
                     .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN));
@@ -185,8 +185,8 @@ public class PaymentReconciliationService {
 
     private boolean isFailureConsistent(Purchase purchase, PaymentTransaction transaction) {
         return Objects.equals(transaction.getPurchase().getId(), purchase.getId())
-                && PaymentTransactionType.APPROVAL.name().equals(transaction.getTransactionType())
-                && PaymentTransactionStatus.DEFINITIVE_FAILURE.name().equals(transaction.getStatus())
+                && transaction.getTransactionType() == PaymentTransactionType.APPROVAL
+                && transaction.getStatus() == PaymentTransactionStatus.DEFINITIVE_FAILURE
                 && Objects.equals(transaction.getAmountKrw(), purchase.getPriceKrwSnapshot());
     }
 
@@ -200,9 +200,10 @@ public class PaymentReconciliationService {
             boolean alreadyUnknown = transactionRepository
                     .findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
                             purchaseId,
-                            PaymentTransactionType.APPROVAL.name()
+                            PaymentTransactionType.APPROVAL
                     )
-                    .filter(transaction -> PaymentTransactionStatus.UNKNOWN.name().equals(transaction.getStatus()))
+                    .filter(transaction ->
+                            transaction.getStatus() == PaymentTransactionStatus.UNKNOWN)
                     .isPresent();
             if (!alreadyUnknown) {
                 transactionRepository.save(PaymentTransaction.unknown(
@@ -222,8 +223,8 @@ public class PaymentReconciliationService {
     ) {
         return Objects.equals(transaction.getPurchase().getId(), purchase.getId())
                 && "PORTONE".equals(transaction.getProvider())
-                && PaymentTransactionType.APPROVAL.name().equals(transaction.getTransactionType())
-                && PaymentTransactionStatus.SUCCESS.name().equals(transaction.getStatus())
+                && transaction.getTransactionType() == PaymentTransactionType.APPROVAL
+                && transaction.getStatus() == PaymentTransactionStatus.SUCCESS
                 && Objects.equals(transaction.getAmountKrw(), actual.totalAmount());
     }
 

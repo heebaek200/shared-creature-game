@@ -1,6 +1,7 @@
 package com.team.sharedcreature.payment.infrastructure;
 
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
+import com.team.sharedcreature.payment.domain.PaymentTransactionType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -14,7 +15,7 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 
     Optional<PaymentTransaction> findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
             Long purchaseId,
-            String transactionType
+            PaymentTransactionType transactionType
     );
 
     Optional<PaymentTransaction> findByProviderAndProviderTransactionId(

@@ -251,8 +251,7 @@ public class PgApiAttempt {
             if (!Objects.equals(
                     purchase.getId(),
                     transaction.getPurchase().getId()
-            ) || !PaymentTransactionType.CANCELLATION.name()
-                    .equals(transaction.getTransactionType())) {
+            ) || transaction.getTransactionType() != PaymentTransactionType.CANCELLATION) {
                 throw new IllegalArgumentException(
                         "동일 구매의 취소 거래만 연결할 수 있습니다."
                 );

@@ -123,9 +123,10 @@ public class PurchaseQueryService {
                 transaction.getId(),
                 transaction.getProvider(),
                 transaction.getProviderTransactionId(),
-                transaction.getTransactionType(),
+                // 거래 유형과 상태는 기존 API 문자열로 반환합니다.
+                transaction.getTransactionType().name(),
                 transaction.getAmountKrw(),
-                transaction.getStatus(),
+                transaction.getStatus().name(),
                 transaction.getProcessedAt()
         );
     }
