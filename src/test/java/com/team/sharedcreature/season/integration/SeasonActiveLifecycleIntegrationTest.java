@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.integration;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.UserProfile;
@@ -424,7 +426,7 @@ class SeasonActiveLifecycleIntegrationTest {
      * 생성한 모든 ID는 테스트 종료 시 외래키 역순 삭제에 사용합니다.
      */
     private User newUser(String prefix) {
-        User user = userRepository.saveAndFlush(User.register("USER", OPEN));
+        User user = userRepository.saveAndFlush(User.register(GlobalRole.USER, OPEN));
         userIds.add(user.getId());
         String nickname = prefix + user.getId();
         profileRepository.saveAndFlush(UserProfile.create(user, nickname, nickname.toLowerCase(), OPEN));

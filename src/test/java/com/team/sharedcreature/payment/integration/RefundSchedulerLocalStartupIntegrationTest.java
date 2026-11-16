@@ -1,5 +1,7 @@
 package com.team.sharedcreature.payment.integration;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
 import com.team.sharedcreature.avatar.domain.ShopItem;
@@ -85,7 +87,7 @@ class RefundSchedulerLocalStartupIntegrationTest {
 
         fixture = new TransactionTemplate(transactionManager).execute(tx -> {
             Instant now = Instant.now();
-            var user = User.register("SUPER_ADMIN", now);
+            var user = User.register(GlobalRole.SUPER_ADMIN, now);
             em.persist(user);
             var shop = BeanUtils.instantiateClass(ShopItem.class);
             set(shop, "code", "startup-" + UUID.randomUUID());

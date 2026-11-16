@@ -5,6 +5,7 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.Hashing;
 import com.team.sharedcreature.auth.domain.User;
+import com.team.sharedcreature.auth.domain.UserStatus;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.api.InvitationManagementResponse;
 import com.team.sharedcreature.group.api.RotateInvitationResponse;
@@ -168,7 +169,7 @@ public class GroupInvitationManagementService {
 
         // 6. 사용자와 멤버십의 식별자 및 역할을 재검증합니다.
         if (!actorId.equals(actor.getId())
-                || !"ACTIVE".equals(actor.getStatus())
+                || actor.getStatus() != UserStatus.ACTIVE
                 || !actorId.equals(membership.getUser().getId())
                 || !groupId.equals(membership.getGroup().getId())) {
             throw new BusinessException(ErrorCode.ROLE_FORBIDDEN);
@@ -222,7 +223,7 @@ public class GroupInvitationManagementService {
         // 그룹·멤버십·사용자 상태를 검사합니다.
         if (!"ACTIVE".equals(group.getStatus())
                 || !"ACTIVE".equals(membership.getStatus())
-                || !"ACTIVE".equals(membership.getUser().getStatus())
+                || membership.getUser().getStatus() != UserStatus.ACTIVE
                 || !actorId.equals(membership.getUser().getId())
                 || !group.getId().equals(membership.getGroup().getId())
                 || !"PRIMARY".equals(membership.getRole())

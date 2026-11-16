@@ -1,5 +1,7 @@
 package com.team.sharedcreature.avatar.support;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
 import com.team.sharedcreature.avatar.domain.ShopItem;
@@ -27,7 +29,7 @@ public final class AvatarTestFixtures {
      * @return 테스트 사용자
      */
     public static User user(Long id) {
-        User user = User.register("USER", CREATED_AT);
+        User user = User.register(GlobalRole.USER, CREATED_AT);
         ReflectionTestUtils.setField(user, "id", id);
         return user;
     }

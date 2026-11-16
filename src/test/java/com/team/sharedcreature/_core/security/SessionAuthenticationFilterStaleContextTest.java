@@ -1,5 +1,9 @@
 package com.team.sharedcreature._core.security;
 
+import com.team.sharedcreature.auth.domain.UserStatus;
+
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.application.UserActivityService;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
@@ -79,7 +83,7 @@ class SessionAuthenticationFilterStaleContextTest {
         UserRepository users = mock(UserRepository.class);
         User suspended = mock(User.class);
         when(users.findById(1L)).thenReturn(Optional.of(suspended));
-        when(suspended.getStatus()).thenReturn("SUSPENDED");
+        when(suspended.getStatus()).thenReturn(UserStatus.SUSPENDED);
         MockHttpSession session = new MockHttpSession();
         session.setAttribute(SessionAuthenticationFilter.LOGIN_USER,
                 new LoginUser(1L, "관리자", Set.of("PRIMARY")));
@@ -112,8 +116,8 @@ class SessionAuthenticationFilterStaleContextTest {
         GroupMembership membership = mock(GroupMembership.class);
         when(users.findById(1L)).thenReturn(Optional.of(user));
         when(user.getId()).thenReturn(1L);
-        when(user.getStatus()).thenReturn("ACTIVE");
-        when(user.getGlobalRole()).thenReturn("USER");
+        when(user.getStatus()).thenReturn(UserStatus.ACTIVE);
+        when(user.getGlobalRole()).thenReturn(GlobalRole.USER);
         when(memberships.findByUserIdAndStatus(1L, "ACTIVE"))
                 .thenReturn(Optional.of(membership));
         when(membership.getRole()).thenReturn("MEMBER");

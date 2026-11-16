@@ -1,6 +1,8 @@
 package com.team.sharedcreature.auth.infrastructure;
 
 import org.springframework.boot.ApplicationArguments;
+import com.team.sharedcreature.auth.domain.GlobalRole;
+import com.team.sharedcreature.auth.domain.UserStatus;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -30,7 +32,10 @@ public class InitialSuperAdminValidator implements ApplicationRunner {
     /** 활성 전체 관리자가 없을 때 설정 누락·충돌을 실행 실패로 처리합니다. */
     @Override
     public void run(ApplicationArguments args) {
-        if (userRepository.existsByGlobalRoleAndStatus("SUPER_ADMIN", "ACTIVE")) {
+        if (userRepository.existsByGlobalRoleAndStatus(
+                GlobalRole.SUPER_ADMIN,
+                UserStatus.ACTIVE
+        )) {
             return;
         }
         if (!properties.isComplete()) {

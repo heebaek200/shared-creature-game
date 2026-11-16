@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.integration;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.domain.Group;
@@ -86,7 +88,7 @@ class SeasonGroupInitializationIntegrationTest {
      */
     @BeforeEach
     void setUp() {
-        User user = userRepository.saveAndFlush(User.register("USER", NOW));
+        User user = userRepository.saveAndFlush(User.register(GlobalRole.USER, NOW));
         userId = user.getId();
     }
 

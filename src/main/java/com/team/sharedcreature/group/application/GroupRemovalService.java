@@ -4,6 +4,7 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.realtime.GroupPresenceRevocationService;
 import com.team.sharedcreature.auth.domain.User;
+import com.team.sharedcreature.auth.domain.UserStatus;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.api.LeaveMyGroupResponse;
 import com.team.sharedcreature.group.domain.Group;
@@ -152,12 +153,12 @@ public class GroupRemovalService {
         validateMembership(actorMembership, actorId, groupId, ErrorCode.ROLE_FORBIDDEN);
         validateMembership(targetMembership, targetId, groupId, ErrorCode.RESOURCE_NOT_FOUND);
 
-        // 8. 실행자와 대상 계정이 활성 상태인자 확인
-        if (!"ACTIVE".equals(actor.getStatus())) {
+        // 8. 실행자와 대상 계정이 활성 상태인지 확인합니다.
+        if (actor.getStatus() != UserStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.ROLE_FORBIDDEN);
         }
 
-        if (!"ACTIVE".equals(target.getStatus())) {
+        if (target.getStatus() != UserStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 

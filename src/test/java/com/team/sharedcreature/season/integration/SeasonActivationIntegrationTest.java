@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.integration;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.domain.Group;
@@ -92,7 +94,7 @@ class SeasonActivationIntegrationTest {
     @BeforeEach
     void setUp() {
         int seasonNumber = ThreadLocalRandom.current().nextInt(910_000_000, 1_100_000_000);
-        User user = userRepository.saveAndFlush(User.register("USER", NOW));
+        User user = userRepository.saveAndFlush(User.register(GlobalRole.USER, NOW));
         userId = user.getId();
         seasonId = seasonRepository.saveAndFlush(Season.schedule(
                 seasonNumber, START, END, NOW)).getId();

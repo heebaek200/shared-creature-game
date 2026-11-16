@@ -1,5 +1,7 @@
 package com.team.sharedcreature.ranking.integration;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.UserProfile;
 import com.team.sharedcreature.group.domain.Group;
@@ -209,7 +211,7 @@ class RankingDatabaseIntegrationTest {
 
     /** 각 사용자는 고유 프로필과 함께 생성하여 실제 닉네임 일괄 조회를 실행합니다. */
     private User user() {
-        User user = User.register("USER", NOW);
+        User user = User.register(GlobalRole.USER, NOW);
         em.persist(user);
         String nickname = "랭킹" + UUID.randomUUID().toString().substring(0, 10);
         em.persist(UserProfile.create(user, nickname, nickname, NOW));

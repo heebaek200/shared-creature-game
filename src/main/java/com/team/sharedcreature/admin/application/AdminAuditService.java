@@ -3,6 +3,7 @@ package com.team.sharedcreature.admin.application;
 import com.team.sharedcreature.admin.domain.AdminAuditLog;
 import com.team.sharedcreature.admin.infrastructure.AdminAuditLogRepository;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
+import com.team.sharedcreature.auth.domain.GlobalRole;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +33,7 @@ public class AdminAuditService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordFailure(Long actorId, String actionType, String targetType, Long targetId, String code) {
         var actor = userRepository.findById(actorId).orElse(null);
-        if (actor == null || !"SUPER_ADMIN".equals(actor.getGlobalRole())) {
+        if (actor == null || actor.getGlobalRole() != GlobalRole.SUPER_ADMIN) {
             return;
         }
         auditLogRepository.save(AdminAuditLog.create(

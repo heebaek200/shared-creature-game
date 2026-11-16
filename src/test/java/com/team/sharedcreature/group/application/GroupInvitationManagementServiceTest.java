@@ -1,6 +1,8 @@
 
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.security.Hashing;
 import com.team.sharedcreature.auth.domain.User;
@@ -154,7 +156,7 @@ class GroupInvitationManagementServiceTest {
      */
     private Fixture fixture() {
         // 테스트 사용자와 그룹을 생성합니다.
-        User actor = User.register("USER", NOW);
+        User actor = User.register(GlobalRole.USER, NOW);
         ReflectionTestUtils.setField(actor, "id", 1L);
 
         Group group = Group.create("테스트", "테스트", "", actor, NOW);

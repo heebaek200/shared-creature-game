@@ -1,5 +1,7 @@
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
@@ -343,9 +345,9 @@ class GroupDepartureServiceTest {
      */
     private Fixture arrange(String role, int memberCount) {
         // 고정 사용자 ID로 Service의 조회 조건을 통과시킵니다.
-        User actor = User.register("USER", JOINED);
+        User actor = User.register(GlobalRole.USER, JOINED);
         ReflectionTestUtils.setField(actor, "id", USER_ID);
-        User primary = "PRIMARY".equals(role) ? actor : User.register("USER", JOINED);
+        User primary = "PRIMARY".equals(role) ? actor : User.register(GlobalRole.USER, JOINED);
         if (primary != actor) {
             ReflectionTestUtils.setField(primary, "id", 2L);
         }

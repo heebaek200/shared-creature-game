@@ -2,6 +2,8 @@ package com.team.sharedcreature._core.security;
 
 import com.team.sharedcreature.auth.application.UserActivityService;
 import com.team.sharedcreature.auth.domain.User;
+import com.team.sharedcreature.auth.domain.GlobalRole;
+import com.team.sharedcreature.auth.domain.UserStatus;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import jakarta.servlet.FilterChain;
@@ -81,7 +83,7 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
 
             User user = userRepository.findById(sessionUser.id()).orElse(null);
 
-            if (user == null || !"ACTIVE".equals(user.getStatus())) {
+            if (user == null || user.getStatus() != UserStatus.ACTIVE) {
                 request.getSession(false).removeAttribute(LOGIN_USER);
                 filterChain.doFilter(request, response);
                 return;
@@ -90,8 +92,8 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
             var currentRoles = new HashSet<String>();
 
             // 전역 관리자 권한을 유지합니다.
-            if ("SUPER_ADMIN".equals(user.getGlobalRole())) {
-                currentRoles.add("SUPER_ADMIN");
+            if (user.getGlobalRole() == GlobalRole.SUPER_ADMIN) {
+                currentRoles.add(GlobalRole.SUPER_ADMIN.name());
             }
 
             membershipRepository.findByUserIdAndStatus(user.getId(), "ACTIVE")

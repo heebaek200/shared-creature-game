@@ -1,5 +1,7 @@
 package com.team.sharedcreature.ranking.api;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
 import com.team.sharedcreature._core.exception.*;
 import com.team.sharedcreature._core.security.*;
@@ -247,7 +249,7 @@ class RankingHttpContractTest {
 
     /** 실제 인증 필터가 계정과 최신 멤버십 역할을 확인하도록 세션을 구성합니다. */
     private MockHttpSession session(String role) {
-        User user = User.register("USER", Instant.now());
+        User user = User.register(GlobalRole.USER, Instant.now());
         ReflectionTestUtils.setField(user, "id", 1L);
         when(users.findById(1L)).thenReturn(Optional.of(user));
         if (role == null) {

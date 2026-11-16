@@ -5,6 +5,8 @@ import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.admin.domain.AdminAuditLog;
 import com.team.sharedcreature.admin.infrastructure.AdminAuditLogRepository;
 import com.team.sharedcreature.auth.domain.User;
+import com.team.sharedcreature.auth.domain.GlobalRole;
+import com.team.sharedcreature.auth.domain.UserStatus;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.domain.GroupJoinRestriction;
@@ -94,7 +96,7 @@ public class AdminModerationCommandExecutor {
         GroupMembership membership = membershipRepository.findByIdForUpdate(membershipId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CONCURRENT_MODIFICATION));
         if (!"ACTIVE".equals(group.getStatus())
-                || !"ACTIVE".equals(target.getStatus())
+                || target.getStatus() != UserStatus.ACTIVE
                 || !"ACTIVE".equals(membership.getStatus())
                 || !groupId.equals(membership.getGroup().getId())
                 || "PRIMARY".equals(membership.getRole())) {
@@ -137,7 +139,8 @@ public class AdminModerationCommandExecutor {
     }
 
     private void validateSuperAdmin(User actor) {
-        if (!"ACTIVE".equals(actor.getStatus()) || !"SUPER_ADMIN".equals(actor.getGlobalRole())) {
+        if (actor.getStatus() != UserStatus.ACTIVE
+                || actor.getGlobalRole() != GlobalRole.SUPER_ADMIN) {
             throw new BusinessException(ErrorCode.ROLE_FORBIDDEN);
         }
     }

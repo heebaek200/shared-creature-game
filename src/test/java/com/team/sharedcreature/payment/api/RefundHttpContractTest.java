@@ -1,5 +1,7 @@
 package com.team.sharedcreature.payment.api;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
 import com.team.sharedcreature._core.exception.RefundApiExceptionHandler;
 import com.team.sharedcreature._core.exception.RestApiExceptionHandler;
@@ -72,7 +74,7 @@ class RefundHttpContractTest {
         reset(refunds, queries, reconciliation, users, memberships, activities);
         when(users.findById(anyLong())).thenAnswer(call -> {
             long id = call.getArgument(0);
-            var user = User.register(id == 9 ? "SUPER_ADMIN" : "USER", Instant.now());
+            var user = User.register(id == 9 ? GlobalRole.SUPER_ADMIN : GlobalRole.USER, Instant.now());
             ReflectionTestUtils.setField(user, "id", id);
             return Optional.of(user);
         });

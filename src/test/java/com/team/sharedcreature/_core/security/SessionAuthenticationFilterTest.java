@@ -1,5 +1,9 @@
 package com.team.sharedcreature._core.security;
 
+import com.team.sharedcreature.auth.domain.UserStatus;
+
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.application.UserActivityService;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
@@ -41,8 +45,8 @@ class SessionAuthenticationFilterTest {
         GroupMembership membership = mock(GroupMembership.class);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(user.getId()).thenReturn(1L);
-        when(user.getStatus()).thenReturn("ACTIVE");
-        when(user.getGlobalRole()).thenReturn("USER");
+        when(user.getStatus()).thenReturn(UserStatus.ACTIVE);
+        when(user.getGlobalRole()).thenReturn(GlobalRole.USER);
         when(membershipRepository.findByUserIdAndStatus(1L, "ACTIVE")).thenReturn(Optional.of(membership));
         when(membership.getRole()).thenReturn("PRIMARY");
 
@@ -75,8 +79,8 @@ class SessionAuthenticationFilterTest {
         GroupMembership membership = mock(GroupMembership.class);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(user.getId()).thenReturn(1L);
-        when(user.getStatus()).thenReturn("ACTIVE");
-        when(user.getGlobalRole()).thenReturn("SUPER_ADMIN");
+        when(user.getStatus()).thenReturn(UserStatus.ACTIVE);
+        when(user.getGlobalRole()).thenReturn(GlobalRole.SUPER_ADMIN);
         when(membershipRepository.findByUserIdAndStatus(1L, "ACTIVE")).thenReturn(Optional.of(membership));
         when(membership.getRole()).thenReturn("MEMBER");
 
@@ -104,7 +108,7 @@ class SessionAuthenticationFilterTest {
         GroupMembershipRepository membershipRepository = mock(GroupMembershipRepository.class);
         User user = mock(User.class);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
-        when(user.getStatus()).thenReturn("SUSPENDED");
+        when(user.getStatus()).thenReturn(UserStatus.SUSPENDED);
 
         MockHttpSession session = new MockHttpSession();
         // 비활성 회원에게 오래된 PRIMARY 인증이 남아 있는 상황을 재현합니다.
@@ -158,8 +162,8 @@ class SessionAuthenticationFilterTest {
         User user = mock(User.class);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(user.getId()).thenReturn(1L);
-        when(user.getStatus()).thenReturn("ACTIVE");
-        when(user.getGlobalRole()).thenReturn("USER");
+        when(user.getStatus()).thenReturn(UserStatus.ACTIVE);
+        when(user.getGlobalRole()).thenReturn(GlobalRole.USER);
 
         MockHttpSession session = new MockHttpSession();
         session.setAttribute(
@@ -252,8 +256,8 @@ class SessionAuthenticationFilterTest {
         User user = mock(User.class);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(user.getId()).thenReturn(1L);
-        when(user.getStatus()).thenReturn("ACTIVE");
-        when(user.getGlobalRole()).thenReturn("USER");
+        when(user.getStatus()).thenReturn(UserStatus.ACTIVE);
+        when(user.getGlobalRole()).thenReturn(GlobalRole.USER);
 
         MockHttpSession session = new MockHttpSession();
         session.setAttribute(

@@ -1,6 +1,8 @@
 
 package com.team.sharedcreature.auth.integration;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -64,7 +66,7 @@ class UserActivityUpdateIntegrationTest {
 
         // 실제 users 테이블에 테스트 사용자를 저장합니다.
         userId = userRepository.saveAndFlush(
-                User.register("USER", INITIAL_ACTIVITY)
+                User.register(GlobalRole.USER, INITIAL_ACTIVITY)
         ).getId();
     }
 

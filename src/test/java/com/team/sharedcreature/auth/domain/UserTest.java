@@ -20,7 +20,7 @@ class UserTest {
         Instant loginAt = Instant.parse("2026-11-04T03:00:00Z");
 
         // 가입 시각으로 회원을 생성합니다.
-        User user = User.register("USER", registeredAt);
+        User user = User.register(GlobalRole.USER, registeredAt);
 
         // 재로그인을 수행합니다.
         user.recordLogin(loginAt);

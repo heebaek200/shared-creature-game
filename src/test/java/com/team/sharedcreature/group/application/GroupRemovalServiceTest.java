@@ -1,6 +1,8 @@
 
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
@@ -185,8 +187,8 @@ class GroupRemovalServiceTest {
      * Repository의 사전 조회·쓰기 잠금 응답은 동일한 Entity를 반환합니다.
      */
     private Fixture fixture(Duration inactivity) {
-        User actor = User.register("USER", NOW);
-        User target = User.register("USER", NOW);
+        User actor = User.register(GlobalRole.USER, NOW);
+        User target = User.register(GlobalRole.USER, NOW);
 
         // DB가 없는 테스트이므로 엔티티 식별자를 직접 설정합니다.
         ReflectionTestUtils.setField(actor, "id", 1L);

@@ -1,5 +1,7 @@
 package com.team.sharedcreature.payment.integration;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
@@ -106,8 +108,8 @@ class RefundTransactionMySqlIntegrationTest {
         // 테스트 전체에 트랜잭션을 걸지 않아 Service의 실제 Commit을 확인합니다.
         fixture = new TransactionTemplate(transactionManager).execute(status -> {
             Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-            var owner = User.register("USER", now);
-            var admin = User.register("SUPER_ADMIN", now);
+            var owner = User.register(GlobalRole.USER, now);
+            var admin = User.register(GlobalRole.SUPER_ADMIN, now);
             em.persist(owner);
             em.persist(admin);
             var shop = BeanUtils.instantiateClass(ShopItem.class);

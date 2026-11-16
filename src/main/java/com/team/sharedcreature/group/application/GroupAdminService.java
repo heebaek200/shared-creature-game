@@ -3,6 +3,7 @@ package com.team.sharedcreature.group.application;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
+import com.team.sharedcreature.auth.domain.UserStatus;
 import com.team.sharedcreature.auth.infrastructure.UserProfileRepository;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.api.GroupMemberResponse;
@@ -136,7 +137,7 @@ public class GroupAdminService {
         validateMembership(targetMembership, targetId, groupId, ErrorCode.RESOURCE_NOT_FOUND);
         // 현재 DB(세션이 아닌)의 주 관리자 기준으로 검사함
         if (
-                !"ACTIVE".equals(actor.getStatus()) ||
+                actor.getStatus() != UserStatus.ACTIVE ||
                 !"PRIMARY".equals(actorMembership.getRole()) ||
                 group.getPrimaryAdminUser() == null ||
                 !actorId.equals(group.getPrimaryAdminUser().getId()))
@@ -144,7 +145,7 @@ public class GroupAdminService {
             throw new BusinessException(ErrorCode.ROLE_FORBIDDEN);
         }
 
-        if (!"ACTIVE".equals(target.getStatus())) {
+        if (target.getStatus() != UserStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 

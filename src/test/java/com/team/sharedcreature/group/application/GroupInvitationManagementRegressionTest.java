@@ -1,5 +1,7 @@
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.security.Hashing;
 import com.team.sharedcreature.auth.domain.User;
@@ -233,7 +235,7 @@ class GroupInvitationManagementRegressionTest {
      * MySQL 없이 엔티티 식별자를 부여하기 위해 Reflection을 사용합니다.
      */
     private Fixture fixture(String role) {
-        User actor = User.register("USER", NOW);
+        User actor = User.register(GlobalRole.USER, NOW);
         ReflectionTestUtils.setField(actor, "id", USER_ID);
 
         // 그룹과 기존 초대 링크는 동일한 PRIMARY 사용자로 시작합니다.

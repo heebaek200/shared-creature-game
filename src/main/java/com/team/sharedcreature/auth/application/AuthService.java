@@ -8,6 +8,8 @@ import com.team.sharedcreature._core.security.SessionAuthenticationFilter;
 import com.team.sharedcreature.auth.domain.OauthLoginAttempt;
 import com.team.sharedcreature.auth.domain.SocialAccount;
 import com.team.sharedcreature.auth.domain.User;
+import com.team.sharedcreature.auth.domain.GlobalRole;
+import com.team.sharedcreature.auth.domain.UserStatus;
 import com.team.sharedcreature.auth.domain.UserProfile;
 import com.team.sharedcreature.auth.infrastructure.*;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
@@ -175,7 +177,7 @@ public class AuthService {
             // 기존 회원 분기
             User user = account.get().getUser();
 
-            if (!"ACTIVE".equals(user.getStatus())) {
+            if (user.getStatus() != UserStatus.ACTIVE) {
                 throw new BusinessException(ErrorCode.ACCOUNT_NOT_ACTIVE);
             }
 
@@ -217,10 +219,15 @@ public class AuthService {
         if (userProfileRepository.existsByNormalizedNickname(normalizedNickname)) {
             throw conflict(ErrorCode.NICKNAME_ALREADY_USED, "이미 사용 중인 닉네임입니다.");
         }
-        String globalRole = initialSuperAdmin.matches(pending.provider(), pending.providerUserId())
-                && !userRepository.existsByGlobalRoleAndStatus("SUPER_ADMIN", "ACTIVE")
-                ? "SUPER_ADMIN"
-                : "USER";
+        GlobalRole globalRole = initialSuperAdmin.matches(
+                pending.provider(),
+                pending.providerUserId()
+        ) && !userRepository.existsByGlobalRoleAndStatus(
+                GlobalRole.SUPER_ADMIN,
+                UserStatus.ACTIVE
+        )
+                ? GlobalRole.SUPER_ADMIN
+                : GlobalRole.USER;
         User user = userRepository.save(User.register(globalRole, now));
         socialAccountRepository.save(SocialAccount.link(
                 user, pending.provider(), pending.providerUserId(), pending.email(), pending.emailVerified(), now));
@@ -281,8 +288,8 @@ public class AuthService {
 
     private Set<String> currentRoles(User user) {
         var roles = new java.util.HashSet<String>();
-        if ("SUPER_ADMIN".equals(user.getGlobalRole())) {
-            roles.add("SUPER_ADMIN");
+        if (user.getGlobalRole() == GlobalRole.SUPER_ADMIN) {
+            roles.add(GlobalRole.SUPER_ADMIN.name());
         }
         membershipRepository.findByUserIdAndStatus(user.getId(), "ACTIVE")
                 .ifPresent(membership -> roles.add(membership.getRole()));

@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.integration;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.domain.Group;
@@ -85,9 +87,9 @@ class GroupSeasonLockConcurrencyIntegrationTest {
         seasonId = season.getId();
 
         // 각 트랜잭션은 서로 다른 사용자·그룹·그룹 시즌을 잠글 예정입니다.
-        User ownerA = userRepository.saveAndFlush(User.register("USER", NOW));
+        User ownerA = userRepository.saveAndFlush(User.register(GlobalRole.USER, NOW));
         ownerAId = ownerA.getId();
-        User ownerB = userRepository.saveAndFlush(User.register("USER", NOW));
+        User ownerB = userRepository.saveAndFlush(User.register(GlobalRole.USER, NOW));
         ownerBId = ownerB.getId();
 
         Group groupA = groupRepository.saveAndFlush(Group.create(

@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.domain;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.domain.GroupMembership;
@@ -47,7 +49,7 @@ class SeasonMemberContributionStateTest {
     @Test
     void removedMemberIsMarkedRemoved() {
         Fixture f = fixture();
-        User actor = User.register("USER", START);
+        User actor = User.register(GlobalRole.USER, START);
         ReflectionTestUtils.setField(actor, "id", 99L);
         f.membership().removeForInactivity(actor, CHANGE);
 
@@ -85,7 +87,7 @@ class SeasonMemberContributionStateTest {
      * 데이터베이스를 사용하지 않고 도메인 메서드만 실행합니다.
      */
     private Fixture fixture() {
-        User user = User.register("USER", START);
+        User user = User.register(GlobalRole.USER, START);
         ReflectionTestUtils.setField(user, "id", 10L);
         Group group = Group.create("상태테스트", "상태테스트", "", user, START);
         ReflectionTestUtils.setField(group, "id", 20L);

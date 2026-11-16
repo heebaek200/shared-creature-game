@@ -1,5 +1,9 @@
 package com.team.sharedcreature._core.security;
 
+import com.team.sharedcreature.auth.domain.UserStatus;
+
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.application.UserActivityService;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
@@ -57,8 +61,8 @@ class SessionRoleRefreshRegressionTest {
         GroupMembership membership = mock(GroupMembership.class);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(user.getId()).thenReturn(1L);
-        when(user.getStatus()).thenReturn("ACTIVE");
-        when(user.getGlobalRole()).thenReturn("USER");
+        when(user.getStatus()).thenReturn(UserStatus.ACTIVE);
+        when(user.getGlobalRole()).thenReturn(GlobalRole.USER);
         when(membershipRepository.findByUserIdAndStatus(1L, "ACTIVE"))
                 .thenReturn(Optional.of(membership));
         when(membership.getRole()).thenReturn("PRIMARY");

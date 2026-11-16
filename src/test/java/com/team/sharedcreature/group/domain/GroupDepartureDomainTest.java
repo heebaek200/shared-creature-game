@@ -1,5 +1,7 @@
 package com.team.sharedcreature.group.domain;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.domain.User;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -128,7 +130,7 @@ class GroupDepartureDomainTest {
      */
     private User user(long id) {
         // ID 외 모든 값은 도메인 팩토리에서 초기화합니다.
-        User user = User.register("USER", CREATED);
+        User user = User.register(GlobalRole.USER, CREATED);
         ReflectionTestUtils.setField(user, "id", id);
         return user;
     }

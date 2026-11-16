@@ -5,6 +5,8 @@ import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.admin.domain.AdminAuditLog;
 import com.team.sharedcreature.admin.infrastructure.AdminAuditLogRepository;
 import com.team.sharedcreature.auth.domain.User;
+import com.team.sharedcreature.auth.domain.GlobalRole;
+import com.team.sharedcreature.auth.domain.UserStatus;
 import com.team.sharedcreature.auth.infrastructure.UserProfileRepository;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.api.GroupSummaryResponse;
@@ -80,7 +82,8 @@ public class AdminGroupRecoveryCommandExecutor {
         User actor = users.get(actorId);
         User previousPrimary = users.get(previousPrimaryId);
         User target = users.get(targetId);
-        if (!"ACTIVE".equals(actor.getStatus()) || !"SUPER_ADMIN".equals(actor.getGlobalRole())) {
+        if (actor.getStatus() != UserStatus.ACTIVE
+                || actor.getGlobalRole() != GlobalRole.SUPER_ADMIN) {
             throw new BusinessException(ErrorCode.ROLE_FORBIDDEN);
         }
 
@@ -89,7 +92,7 @@ public class AdminGroupRecoveryCommandExecutor {
         if (!"ACTIVE".equals(group.getStatus())
                 || group.getPrimaryAdminUser() == null
                 || !previousPrimaryId.equals(group.getPrimaryAdminUser().getId())
-                || !"ACTIVE".equals(target.getStatus())) {
+                || target.getStatus() != UserStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
         }
 

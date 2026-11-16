@@ -16,6 +16,8 @@ import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.payment.api.AdminRefundResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import com.team.sharedcreature.auth.domain.GlobalRole;
+import com.team.sharedcreature.auth.domain.UserStatus;
 import org.springframework.transaction.annotation.Transactional;
 import com.team.sharedcreature.payment.application.RefundApprovalTransactionService.CommandResponse;
 import org.springframework.transaction.annotation.Propagation;
@@ -260,8 +262,8 @@ public class RefundService {
                         new BusinessException(ErrorCode.ROLE_FORBIDDEN)
                 );
 
-        if (!"ACTIVE".equals(admin.getStatus())
-                || !"SUPER_ADMIN".equals(admin.getGlobalRole())) {
+        if (admin.getStatus() != UserStatus.ACTIVE
+                || admin.getGlobalRole() != GlobalRole.SUPER_ADMIN) {
             throw new BusinessException(
                     ErrorCode.ROLE_FORBIDDEN,
                     "전체 관리자만 환불을 처리할 수 있습니다."

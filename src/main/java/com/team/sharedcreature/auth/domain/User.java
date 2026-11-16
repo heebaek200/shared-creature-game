@@ -13,7 +13,7 @@ import java.time.Instant;
 @Getter
 @Entity
 @Table(name = "users", indexes =
-        @Index(name = "ix_users_status_last_active", columnList = "status, last_active_at"))
+@Index(name = "ix_users_status_last_active", columnList = "status, last_active_at"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User {
 
@@ -21,11 +21,19 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /**
+     * 활성·이용 정지·탈퇴 여부를 나타내는 계정 상태입니다.
+     */
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    private UserStatus status;
 
+    /**
+     * 그룹 역할과 구분되는 서비스 전체 범위의 역할입니다.
+     */
+    @Enumerated(EnumType.STRING)
     @Column(name = "global_role", length = 30, nullable = false)
-    private String globalRole;
+    private GlobalRole globalRole;
 
     @Column(name = "last_login_at", nullable = false)
     private Instant lastLoginAt;
@@ -46,8 +54,8 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    private User(String globalRole, Instant now) {
-        this.status = "ACTIVE";
+    private User(GlobalRole globalRole, Instant now) {
+        this.status = UserStatus.ACTIVE;
         this.globalRole = globalRole;
         this.lastLoginAt = now;
         this.lastActiveAt = now;
@@ -59,18 +67,18 @@ public class User {
      * 소셜 인증을 마친 신규 활성 회원을 생성합니다.
      *
      * @param globalRole 최초 전역 역할
-     * @param now 가입 UTC 시각
+     * @param now        가입 UTC 시각
      * @return 신규 회원
      */
-    public static User register(String globalRole, Instant now) {
+    public static User register(GlobalRole globalRole, Instant now) {
         return new User(globalRole, now);
     }
 
     /**
      * 기존 회원의 로그인 성공 시각과 마지막 인증 활동 시각을 갱신합니다.
      *
-     * OAuth 인증이 성공한 기존 회원에게 적용하며, 신규 회원은 register()에서 초기화합니다.
-     * 마지막 수정 시각도 함께 갱신하고 JPA Dirty Checking으로 DB에 반영합니다.
+     * OAuth 인증이 성공한 기존 회원에게 적용하며,
+     * 신규 회원은 register()에서 초기화합니다.
      *
      * @param now 로그인 성공 시각
      */

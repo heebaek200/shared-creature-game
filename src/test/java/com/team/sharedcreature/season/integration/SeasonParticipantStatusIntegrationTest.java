@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.integration;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.UserProfile;
@@ -143,8 +145,8 @@ class SeasonParticipantStatusIntegrationTest {
         season = seasonRepository.saveAndFlush(season);
         seasonId = season.getId();
 
-        User admin = userRepository.saveAndFlush(User.register("USER", NOW));
-        User member = userRepository.saveAndFlush(User.register("USER", NOW));
+        User admin = userRepository.saveAndFlush(User.register(GlobalRole.USER, NOW));
+        User member = userRepository.saveAndFlush(User.register(GlobalRole.USER, NOW));
         adminId = admin.getId();
         memberId = member.getId();
         profileRepository.saveAndFlush(UserProfile.create(admin, "admin" + adminId, "admin" + adminId, NOW));

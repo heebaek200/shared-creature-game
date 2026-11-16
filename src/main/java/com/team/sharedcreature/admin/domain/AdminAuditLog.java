@@ -73,7 +73,8 @@ public class AdminAuditLog {
     ) {
         AdminAuditLog log = new AdminAuditLog();
         log.actorUser = actor;
-        log.actorRoleSnapshot = actor.getGlobalRole();
+        // 명령 실행 당시의 역할 이름을 감사 이력에 보존합니다.
+        log.actorRoleSnapshot = actor.getGlobalRole().name();
         log.actionType = actionType;
         log.targetType = targetType;
         log.targetId = targetId;

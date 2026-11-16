@@ -1,5 +1,7 @@
 package com.team.sharedcreature.group.domain;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.domain.User;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -77,7 +79,7 @@ class GroupMembershipRemovalTest {
      */
     private User user(Long id) {
         // 테스트에서만 Reflection으로 식별자를 주입합니다.
-        User user = User.register("USER", NOW);
+        User user = User.register(GlobalRole.USER, NOW);
         ReflectionTestUtils.setField(user, "id", id);
         return user;
     }

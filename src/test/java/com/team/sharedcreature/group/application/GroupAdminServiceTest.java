@@ -1,5 +1,9 @@
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.auth.domain.UserStatus;
+
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.UserProfile;
@@ -227,7 +231,7 @@ class GroupAdminServiceTest {
     @Test
     void 비활성_사용자에게_PRIMARY를_이전할_수_없다() {
         Fixture fixture = arrange("PRIMARY", "MEMBER");
-        ReflectionTestUtils.setField(fixture.target(), "status", "SUSPENDED");
+        ReflectionTestUtils.setField(fixture.target(), "status", UserStatus.SUSPENDED);
 
         // 대상 사용자가 비활성이면 도메인 변경 전 거부합니다.
         assertThatThrownBy(() -> service.transferPrimaryAdmin(ACTOR_ID, TARGET_ID))
@@ -278,8 +282,8 @@ class GroupAdminServiceTest {
      * @return 검증 가능한 도메인 Fixture
      */
     private Fixture arrange(String actorRole, String targetRole) {
-        User actor = User.register("USER", NOW);
-        User target = User.register("USER", NOW);
+        User actor = User.register(GlobalRole.USER, NOW);
+        User target = User.register(GlobalRole.USER, NOW);
         ReflectionTestUtils.setField(actor, "id", ACTOR_ID);
         ReflectionTestUtils.setField(target, "id", TARGET_ID);
 

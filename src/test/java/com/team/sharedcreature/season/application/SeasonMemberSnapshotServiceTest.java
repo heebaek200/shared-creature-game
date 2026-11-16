@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.UserProfile;
 import com.team.sharedcreature.auth.infrastructure.UserProfileRepository;
@@ -335,7 +337,7 @@ class SeasonMemberSnapshotServiceTest {
      * 다른 스레드나 DB의 AUTO_INCREMENT에 의존하지 않습니다.
      */
     private User user(long userId) {
-        User user = User.register("USER", CREATED);
+        User user = User.register(GlobalRole.USER, CREATED);
         ReflectionTestUtils.setField(user, "id", userId);
         return user;
     }
