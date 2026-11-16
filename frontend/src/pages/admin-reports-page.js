@@ -280,7 +280,7 @@ export function adminReportsPage() {
             ['신고 대상', `${report.reportedUserNickname} (#${report.reportedUserId})`],
             ['분류', CATEGORY_LABELS[report.category] ?? report.category],
             ['신고 내용', report.content],
-            ['접수 시각', formatDateTime(report.createdAt)],
+            ['접수 시각', formatDateTime(report.createAt)],
             ['처리 시각', formatDateTime(report.handledAt)],
             ['처리자 ID', report.handledByUserId],
             ['처리 사유', report.resolution],
@@ -389,7 +389,8 @@ export function adminReportsPage() {
             // 화면 종료 또는 더 최신 조회가 있으면 결과를 버린다.
             if (disposed || version !== listVersion) return false;
 
-            const nextTotalPages = result.totalPages;
+            // 공통 API 응답의 페이지 메타데이터를 사용합니다.
+            const nextTotalPages = result.meta.totalPages;
 
             // 마지막 페이지가 사라졌다면 유효한 페이지를 재조회한다.
             if (nextTotalPages > 0 && requestedPage >= nextTotalPages) {
