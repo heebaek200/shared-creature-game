@@ -1,4 +1,3 @@
-
 // @ts-check
 import { createOAuthAttempt } from '../features/auth/api.js';
 import { createHeaderLayout } from '../components/app-shell.js';
@@ -89,10 +88,10 @@ export function loginPage({ currentUser, navigate }) {
 
   // 공급자별 버튼과 공통 오류 표시 요소를 찾습니다.
   const googleButton = /** @type {HTMLButtonElement | null} */ (
-    element.querySelector('#google-login-button')
+      element.querySelector('#google-login-button')
   );
   const naverButton = /** @type {HTMLButtonElement | null} */ (
-    element.querySelector('#naver-login-button')
+      element.querySelector('#naver-login-button')
   );
   const feedback = element.querySelector('.feedback');
   const loginError = element.querySelector('.login-error');
@@ -107,17 +106,19 @@ export function loginPage({ currentUser, navigate }) {
 
   const oauthErrorMessages = {
     OAUTH_ACCESS_DENIED:
-      '소셜 로그인이 취소되었습니다. 다시 로그인해 주세요.',
+        '소셜 로그인이 취소되었습니다. 다시 로그인해 주세요.',
     OAUTH_INVALID_STATE:
-      '로그인 요청을 확인할 수 없습니다. 다시 로그인해 주세요.',
+        '로그인 요청을 확인할 수 없습니다. 다시 로그인해 주세요.',
     OAUTH_SESSION_EXPIRED:
-      '로그인 세션이 만료되었습니다. 다시 로그인해 주세요.',
+        '로그인 세션이 만료되었습니다. 다시 로그인해 주세요.',
+    OAUTH_EMAIL_CONFLICT:
+        '이미 가입된 이메일입니다. 기존에 가입한 소셜 계정으로 로그인해 주세요.',
   };
 
   if (oauthError) {
     feedback.textContent =
-      oauthErrorMessages[oauthError] ||
-      '소셜 인증에 실패했습니다. 다시 로그인해 주세요.';
+        oauthErrorMessages[oauthError] ||
+        '소셜 인증에 실패했습니다. 다시 로그인해 주세요.';
 
     loginError.classList.remove('d-none');
   }
@@ -130,7 +131,7 @@ export function loginPage({ currentUser, navigate }) {
    */
   const onLoginClick = async (provider) => {
     const targetButton =
-      provider === 'NAVER' ? naverButton : googleButton;
+        provider === 'NAVER' ? naverButton : googleButton;
 
     // 로그인 연결 중 중복 요청을 방지합니다.
     googleButton.disabled = true;
@@ -144,18 +145,18 @@ export function loginPage({ currentUser, navigate }) {
       // 기존 초대 가입 문맥을 유지합니다.
       const loginParams = new URLSearchParams(location.search);
       const returnRoute =
-        loginParams.get('returnRoute') === 'INVITE'
-          ? 'INVITE'
-          : 'DEFAULT';
+          loginParams.get('returnRoute') === 'INVITE'
+              ? 'INVITE'
+              : 'DEFAULT';
 
       // 선택한 공급자의 인가 URL을 서버에서 발급받습니다.
       const result = await createOAuthAttempt(returnRoute, provider);
       location.assign(result.authorizationUrl);
     } catch (error) {
       feedback.textContent =
-        error instanceof Error
-          ? error.message
-          : '로그인 중 오류가 발생했습니다.';
+          error instanceof Error
+              ? error.message
+              : '로그인 중 오류가 발생했습니다.';
 
       loginError.classList.remove('d-none');
 
