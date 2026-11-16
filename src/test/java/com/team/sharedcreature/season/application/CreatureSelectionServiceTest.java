@@ -186,13 +186,39 @@ class CreatureSelectionServiceTest {
         return group;
     }
 
+
+    /**
+     * 테스트에 사용할 시즌 엔티티 Mock을 생성합니다.
+     * 지정한 시즌 상태와 종료 시각으로 유효성 결과를 계산합니다.
+     * 시작 경계는 최초 시즌 시작 시각으로 고정합니다.
+     *
+     * @param id 시즌 ID
+     * @param status 시즌 상태
+     * @param endAt 종료 시각
+     * @return 시즌 Mock
+     */
     private Season season(Long id, String status, Instant endAt) {
         Season season = org.mockito.Mockito.mock(Season.class);
+
+        Instant startAt = Instant.parse("2026-11-01T15:00:00Z");
+
+        // 기존 잠금 및 시즌 일치 검사에 필요한 값입니다.
         when(season.getId()).thenReturn(id);
-        when(season.getStatus()).thenReturn(status);
-        when(season.getEndAt()).thenReturn(endAt);
+        lenient().when(season.getEndAt()).thenReturn(endAt);
+
+        // 실제 도메인의 시작 포함·종료 제외 규칙을 모의합니다.
+        when(season.isActiveAt(org.mockito.ArgumentMatchers.any(Instant.class)))
+                .thenAnswer(invocation -> {
+                    Instant now = invocation.getArgument(0);
+
+                    return "ACTIVE".equals(status)
+                            && !now.isBefore(startAt)
+                            && now.isBefore(endAt);
+                });
+
         return season;
     }
+
 
     private GroupSeason groupSeason(Long id, Group group, Season season) {
         GroupSeason groupSeason = GroupSeason.start(group, season, Instant.parse("2026-11-03T00:00:00Z"));
@@ -235,4 +261,87 @@ class CreatureSelectionServiceTest {
             return instant;
         }
     }
+
+
+    /**
+     * 그룹 시즌 잠금 대기 중 시즌 종료 시각이 도달한 상황을 검증합니다.
+     * 그룹별 선택 기한은 남았지만 시즌 자체가 종료된 경우입니다.
+     * 종 선택은 CONCURRENT_MODIFICATION 오류로 거절되어야 합니다.
+     */
+    @Test
+    void 잠금_대기_중_시즌이_종료되면_종_선택을_거절한다() {
+        Instant endsAt = Instant.parse("2026-11-03T00:00:01Z");
+
+        Group group = group(10L);
+        Season season = season(1L, "ACTIVE", endsAt);
+        GroupSeason groupSeason = groupSeason(100L, group, season);
+        GroupMembership membership = membership("PRIMARY", group);
+
+        when(membershipRepository.findActiveWithGroupByUserId(1L))
+                .thenReturn(Optional.of(membership));
+        when(seasonQueryService.findCurrentSeasonForShare())
+                .thenReturn(season);
+
+        // 잠금을 획득하는 시점에 시즌이 종료됩니다.
+        when(groupSeasonRepository.findForUpdateByGroupIdAndSeasonId(10L, 1L))
+                .thenAnswer(invocation -> {
+                    clock.set(endsAt);
+                    return Optional.of(groupSeason);
+                });
+
+        assertThatThrownBy(() -> service.selectSpecies(1L, 1L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.code())
+                                .isEqualTo("CONCURRENT_MODIFICATION")
+                );
+
+        // 종 선택이나 변경 이벤트는 발생하지 않아야 합니다.
+        assertThat(groupSeason.getSelectedSpecies()).isNull();
+        verify(speciesRepository, never()).findByIdAndStatus(1L, "ACTIVE");
+        org.mockito.Mockito.verifyNoInteractions(eventPublisher);
+    }
+
+
+    /**
+     * 크리처 잠금 대기 중 시즌이 종료되면 부화를 중단합니다.
+     * 그룹별 부화 기한은 이미 지났으며 시즌 종료가 유일한 차단 사유입니다.
+     * 그룹 시즌과 크리처 상태는 모두 변경되지 않아야 합니다.
+     */
+    @Test
+    void 크리처_잠금_대기_중_시즌이_종료되면_부화하지_않는다() {
+        Instant endsAt = Instant.parse("2026-11-08T00:00:00Z");
+
+        Group group = group(10L);
+        Season season = season(1L, "ACTIVE", endsAt);
+        GroupSeason groupSeason = groupSeason(100L, group, season);
+        GroupCreature creature = GroupCreature.egg(
+                groupSeason,
+                Instant.parse("2026-11-03T00:00:00Z")
+        );
+
+        when(seasonQueryService.findCurrentSeasonForShareIfPresent())
+                .thenReturn(Optional.of(season));
+        when(groupSeasonRepository.findForUpdateById(100L))
+                .thenReturn(Optional.of(groupSeason));
+
+        // 부화 기한은 지났지만, 잠금 대기 중 시즌 종료 시각에 도달합니다.
+        when(groupCreatureRepository.findForUpdateByGroupSeasonId(100L))
+                .thenAnswer(invocation -> {
+                    clock.set(endsAt);
+                    return Optional.of(creature);
+                });
+
+        assertThat(service.hatchIfDue(100L)).isEmpty();
+
+        // 이전의 알 상태와 그룹 시즌 준비 상태를 그대로 유지합니다.
+        assertThat(groupSeason.getStatus()).isEqualTo("PREPARING");
+        assertThat(creature.getGrowthStage()).isEqualTo("EGG");
+
+        verify(speciesRepository, never())
+                .findAllByStatusOrderByDisplayOrderAscIdAsc("ACTIVE");
+        org.mockito.Mockito.verifyNoInteractions(eventPublisher);
+    }
+
+
 }

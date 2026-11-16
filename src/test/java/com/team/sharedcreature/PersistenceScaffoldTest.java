@@ -13,13 +13,15 @@ import org.junit.jupiter.api.Test;
 class PersistenceScaffoldTest {
 
     @Test
-    void 설계한_40개_업무테이블에_Entity와_Repository가_각각_존재한다() throws IOException {
+    void 설계한_41개_업무테이블에_Entity와_Repository가_각각_존재한다() throws IOException {
         Path source = Path.of("src/main/java");
         long entities;
         long repositories;
         try (var files = Files.walk(source)) {
             entities = files.filter(path -> path.toString().endsWith(".java"))
-                    .filter(path -> read(path).contains("@Entity"))
+                    // @EntityGraph를 제외하고 실제 엔티티 선언만 집계합니다.
+                    .filter(path -> java.util.regex.Pattern.compile("(?m)^\\s*@Entity(?:\\s|\\(|$)")
+                            .matcher(read(path)).find())
                     .count();
         }
         try (var files = Files.walk(source)) {
@@ -28,8 +30,8 @@ class PersistenceScaffoldTest {
                     .count();
         }
 
-        assertThat(entities).isEqualTo(40);
-        assertThat(repositories).isEqualTo(40);
+        assertThat(entities).isEqualTo(41);
+        assertThat(repositories).isEqualTo(41);
     }
 
     @Test

@@ -62,6 +62,7 @@ public class SecurityConfiguration {
                         .requestMatchers("/oauth2/callback/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/payments/webhooks/portone").permitAll()
                         .requestMatchers("/api/v1/invitations/**").permitAll()
+                        .requestMatchers("/ws", "/ws/**").authenticated()
                         .requestMatchers("/api/v1/admin/**").hasRole("SUPER_ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/v1/creature-species")
                         .hasAnyRole("PRIMARY", "DEPUTY", "MEMBER")
@@ -80,6 +81,7 @@ public class SecurityConfiguration {
                                 "/api/v1/quest-assignments/**",
                                 "/api/v1/check-ins/**",
                                 "/api/v1/photo-submissions/**",
+                                "/api/v1/reports/**",
                                 "/api/v1/rankings/members/**"
                         ).hasAnyRole("PRIMARY", "DEPUTY", "MEMBER")
                         .requestMatchers("/api/v1/**").authenticated()

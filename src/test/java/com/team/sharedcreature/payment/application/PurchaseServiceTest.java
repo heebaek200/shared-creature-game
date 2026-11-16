@@ -10,6 +10,9 @@ import com.team.sharedcreature.payment.api.CreatePurchaseResponse;
 import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.infrastructure.PortOneProperties;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
+import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
+import com.team.sharedcreature.group.domain.Group;
+import com.team.sharedcreature.group.domain.GroupMembership;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +35,7 @@ class PurchaseServiceTest {
     @Mock private PurchaseRepository purchaseRepository;
     @Mock private ShopItemRepository shopItemRepository;
     @Mock private UserRepository userRepository;
+    @Mock private GroupMembershipRepository membershipRepository;
     @Mock private ApiIdempotencyService idempotencyService;
 
     private PurchaseService service;
@@ -42,6 +46,7 @@ class PurchaseServiceTest {
                 purchaseRepository,
                 shopItemRepository,
                 userRepository,
+                membershipRepository,
                 idempotencyService,
                 new PortOneProperties("store-test", "channel-test", "secret", "webhook", "https://api.portone.io"),
                 Clock.fixed(Instant.parse("2026-11-09T08:00:00Z"), ZoneOffset.UTC)
@@ -52,6 +57,8 @@ class PurchaseServiceTest {
     void 서버_상품_가격으로_READY_주문과_공개_결제설정을_생성한다() {
         ShopItem item = mock(ShopItem.class);
         User user = mock(User.class);
+        Group group = mock(Group.class);
+        GroupMembership membership = mock(GroupMembership.class);
         when(item.getId()).thenReturn(101L);
         when(item.getCode()).thenReturn("HEAD-01");
         when(item.getName()).thenReturn("새싹 모자");
@@ -59,6 +66,9 @@ class PurchaseServiceTest {
         when(item.getPriceKrw()).thenReturn(1500L);
         when(shopItemRepository.findByIdAndStatus(101L, "ACTIVE")).thenReturn(Optional.of(item));
         when(userRepository.getReferenceById(7L)).thenReturn(user);
+        when(group.getStatus()).thenReturn("ACTIVE");
+        when(membership.getGroup()).thenReturn(group);
+        when(membershipRepository.findActiveWithGroupByUserId(7L)).thenReturn(Optional.of(membership));
         when(idempotencyService.claim(eq(7L), eq("CREATE_PURCHASE"), anyString(), eq("shopItemId=101"),
                 eq(CreatePurchaseResponse.class)))
                 .thenReturn(new ApiIdempotencyService.Claim<>(mock(ApiIdempotencyRecord.class), false, null));
@@ -72,6 +82,9 @@ class PurchaseServiceTest {
         assertThat(response.payment().channelKey()).isEqualTo("channel-test");
         assertThat(response.payment().easyPay().easyPayProvider()).isEqualTo("KAKAOPAY");
         assertThat(response.payment().paymentId()).isEqualTo(response.orderNumber());
+        var purchaseCaptor = org.mockito.ArgumentCaptor.forClass(Purchase.class);
+        verify(purchaseRepository).save(purchaseCaptor.capture());
+        assertThat(purchaseCaptor.getValue().getGroupSnapshot()).isSameAs(group);
         verify(idempotencyService).complete(any(), eq(201), eq("PURCHASE"), isNull(), eq(response));
     }
 
@@ -85,6 +98,6 @@ class PurchaseServiceTest {
         CreatePurchaseResponse response = service.create(7L, 101L, UUID.randomUUID().toString());
 
         assertThat(response).isSameAs(replay);
-        verifyNoInteractions(shopItemRepository, purchaseRepository, userRepository);
+        verifyNoInteractions(shopItemRepository, purchaseRepository, userRepository, membershipRepository);
     }
 }

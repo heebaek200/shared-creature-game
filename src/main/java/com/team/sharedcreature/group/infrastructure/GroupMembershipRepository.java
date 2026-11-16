@@ -19,6 +19,8 @@ public interface GroupMembershipRepository extends JpaRepository<GroupMembership
 
     Optional<GroupMembership> findByUserIdAndStatus(Long userId, String status);
 
+    long countByGroupIdAndStatus(Long groupId, String status);
+
     @Query("""
             SELECT membership
               FROM GroupMembership membership

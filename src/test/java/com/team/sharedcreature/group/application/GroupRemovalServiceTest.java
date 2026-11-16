@@ -12,6 +12,8 @@ import com.team.sharedcreature.group.infrastructure.GroupJoinRestrictionReposito
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
 import com.team.sharedcreature.group.infrastructure.ModerationActionRepository;
+import com.team.sharedcreature.season.application.SeasonContributionMembershipService;
+import com.team.sharedcreature.season.application.SeasonQueryService;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,6 +54,9 @@ class GroupRemovalServiceTest {
     @Mock GroupMembershipRepository membershipRepository;
     @Mock GroupJoinRestrictionRepository restrictionRepository;
     @Mock ModerationActionRepository moderationActionRepository;
+    @Mock SeasonQueryService seasonQueryService;
+    @Mock SeasonContributionMembershipService contributionMembershipService;
+    @Mock com.team.sharedcreature._core.realtime.GroupPresenceRevocationService presenceRevocationService;
 
     private GroupRemovalService service;
 
@@ -70,6 +75,9 @@ class GroupRemovalServiceTest {
                 membershipRepository,
                 restrictionRepository,
                 moderationActionRepository,
+                seasonQueryService,
+                contributionMembershipService,
+                presenceRevocationService,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }

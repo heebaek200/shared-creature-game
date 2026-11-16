@@ -99,4 +99,36 @@ public class SeasonMemberContribution {
         this.scoreReachedAt = now;
         this.updatedAt = now;
     }
+    
+    /**
+     * 멤버십의 ACTIVE·LEFT·REMOVED 상태를 기여도에 반영합니다.
+     * 실제 사용자와 그룹이 일치할 때만 변경하고 다른 그룹의 이력은 보존합니다.
+     * 재가입 시에는 새 멤버십 참조를 사용하되 점수와 점수 도달 시각은 변경하지 않습니다.
+     *
+     * @param membership 동기화할 최신 멤버십
+     * @param now 멤버십 상태 변경 시각
+     */
+    public void synchronizeMembership(GroupMembership membership, Instant now) {
+        java.util.Objects.requireNonNull(membership, "membership");
+        java.util.Objects.requireNonNull(now, "now");
+        String nextStatus = membership.getStatus();
+        // 참가 상태와 멤버십 상태를 동일하게 유지하며 외부 임의 값은 받지 않습니다.
+        if (nextStatus == null || !java.util.Set.of("ACTIVE", "LEFT", "REMOVED").contains(nextStatus)) {
+           throw new IllegalArgumentException("유효하지 않은 멤버십 상태: " + nextStatus);
+        }
+        if (!java.util.Objects.equals(user.getId(), membership.getUser().getId())
+           || !java.util.Objects.equals(groupSeason.getGroup().getId(), membership.getGroup().getId())) {
+           throw new IllegalArgumentException("기여도와 멤버십의 사용자·그룹이 다릅니다.");
+        }
+        if (java.util.Objects.equals(latestMembership.getId(), membership.getId())
+               && java.util.Objects.equals(participantStatus, nextStatus)) {
+           return;
+        }
+
+        // 이력 소유권만 교체하고 기여도 점수와 도달 시각을 수정하지 않습니다.
+        latestMembership = membership;
+        participantStatus = nextStatus;
+        updatedAt = now;
+   }
+
 }

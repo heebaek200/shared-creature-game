@@ -64,6 +64,7 @@ public class PaymentReconciliationService {
         try {
             actual = paymentGateway.getPayment(paymentId);
         } catch (PaymentGatewayException exception) {
+            recordUnknown(expected.getId());
             throw new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN);
         }
         reconcile(expected.getId(), expectedSnapshot(expected), actual);
@@ -74,7 +75,12 @@ public class PaymentReconciliationService {
     public ReconciliationResult reconcileByPaymentId(String paymentId) {
         Purchase expected = purchaseRepository.findByOrderNumber(paymentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        return reconcile(expected.getId(), expectedSnapshot(expected), paymentGateway.getPayment(paymentId));
+        try {
+            return reconcile(expected.getId(), expectedSnapshot(expected), paymentGateway.getPayment(paymentId));
+        } catch (PaymentGatewayException exception) {
+            recordUnknown(expected.getId());
+            throw exception;
+        }
     }
 
     private ExpectedPurchase expectedSnapshot(Purchase purchase) {
@@ -90,13 +96,21 @@ public class PaymentReconciliationService {
             ExpectedPurchase expected,
             PaymentSnapshot actual
     ) {
-        validate(expected, actual);
+        try {
+            validate(expected, actual);
+        } catch (BusinessException exception) {
+            if (exception.errorCode() == ErrorCode.PAYMENT_RESULT_UNKNOWN) {
+                recordUnknown(purchaseId);
+            }
+            throw exception;
+        }
         if (actual.status() == PaymentSnapshot.Status.READY || actual.status() == PaymentSnapshot.Status.PENDING) {
             throw new BusinessException(ErrorCode.PAYMENT_PENDING);
         }
         if (actual.status() == PaymentSnapshot.Status.UNKNOWN
                 || actual.status() == PaymentSnapshot.Status.CANCELLED
                 || actual.status() == PaymentSnapshot.Status.PARTIAL_CANCELLED) {
+            recordUnknown(purchaseId);
             throw new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN);
         }
 
@@ -126,7 +140,7 @@ public class PaymentReconciliationService {
         }
         if (PurchaseStatus.FAILED.name().equals(locked.getStatus())) {
             PaymentTransaction transaction = transactionRepository
-                    .findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDesc(
+                    .findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
                             locked.getId(),
                             PaymentTransactionType.APPROVAL.name()
                     )
@@ -174,6 +188,31 @@ public class PaymentReconciliationService {
                 && PaymentTransactionType.APPROVAL.name().equals(transaction.getTransactionType())
                 && PaymentTransactionStatus.DEFINITIVE_FAILURE.name().equals(transaction.getStatus())
                 && Objects.equals(transaction.getAmountKrw(), purchase.getPriceKrwSnapshot());
+    }
+
+    private void recordUnknown(Long purchaseId) {
+        transactionTemplate.execute(status -> {
+            Purchase locked = purchaseRepository.findByIdForUpdate(purchaseId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+            if (!PurchaseStatus.READY.name().equals(locked.getStatus())) {
+                return null;
+            }
+            boolean alreadyUnknown = transactionRepository
+                    .findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
+                            purchaseId,
+                            PaymentTransactionType.APPROVAL.name()
+                    )
+                    .filter(transaction -> PaymentTransactionStatus.UNKNOWN.name().equals(transaction.getStatus()))
+                    .isPresent();
+            if (!alreadyUnknown) {
+                transactionRepository.save(PaymentTransaction.unknown(
+                        locked,
+                        locked.getPriceKrwSnapshot(),
+                        clock.instant()
+                ));
+            }
+            return null;
+        });
     }
 
     private boolean isApprovalConsistent(

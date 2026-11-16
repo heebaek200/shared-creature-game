@@ -2,6 +2,7 @@ package com.team.sharedcreature.group.application;
 
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
+import com.team.sharedcreature._core.realtime.GroupPresenceRevocationService;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.api.LeaveMyGroupResponse;
@@ -13,6 +14,9 @@ import com.team.sharedcreature.group.infrastructure.GroupJoinRestrictionReposito
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
 import com.team.sharedcreature.group.infrastructure.ModerationActionRepository;
+import com.team.sharedcreature.season.application.SeasonContributionMembershipService;
+import com.team.sharedcreature.season.application.SeasonQueryService;
+import com.team.sharedcreature.season.domain.Season;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +26,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
@@ -41,6 +46,9 @@ public class GroupRemovalService {
     private final GroupMembershipRepository membershipRepository;
     private final GroupJoinRestrictionRepository restrictionRepository;
     private final ModerationActionRepository moderationActionRepository;
+    private final SeasonQueryService seasonQueryService;
+    private final SeasonContributionMembershipService contributionMembershipService;
+    private final GroupPresenceRevocationService presenceRevocationService;
     private final Clock clock;
 
     public GroupRemovalService(
@@ -49,6 +57,9 @@ public class GroupRemovalService {
             GroupMembershipRepository membershipRepository,
             GroupJoinRestrictionRepository restrictionRepository,
             ModerationActionRepository moderationActionRepository,
+            SeasonQueryService seasonQueryService,
+            SeasonContributionMembershipService contributionMembershipService,
+            GroupPresenceRevocationService presenceRevocationService,
             Clock clock
     ) {
         this.userRepository = userRepository;
@@ -56,6 +67,9 @@ public class GroupRemovalService {
         this.membershipRepository = membershipRepository;
         this.restrictionRepository = restrictionRepository;
         this.moderationActionRepository = moderationActionRepository;
+        this.seasonQueryService = seasonQueryService;
+        this.contributionMembershipService = contributionMembershipService;
+        this.presenceRevocationService = presenceRevocationService;
         this.clock = clock;
     }
 
@@ -79,6 +93,9 @@ public class GroupRemovalService {
         // 2. 잠금 전에는 요청자의 그룹 ID만 조회한다.
         Long groupId = membershipRepository.findActiveGroupIdByUserId(actorId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ROLE_FORBIDDEN));
+
+        // 사용자 잠금보다 먼저 시즌 공유 잠금을 확보해 종료 작업과 직렬화합니다.
+        Optional<Season> currentSeason = seasonQueryService.findCurrentSeasonForShareIfPresent();
 
         // 3. 두 사용자 행을 ID 오름차순으로 잠근다.
         Map<Long, User> users = new HashMap<>();
@@ -168,6 +185,13 @@ public class GroupRemovalService {
 
         // 11. 대상 멤버를 REMOVED 상태로 종료
         targetMembership.removeForInactivity(actor, now);
+
+        // Rollback된 강퇴가 Presence를 제거하지 않도록 Commit 이후 권한 회수를 예약합니다.
+        presenceRevocationService.revokeAfterCommit(targetId, now);
+
+        // 종료된 참가 상태를 같은 트랜잭션 안에서 기여도에 반영합니다.
+        contributionMembershipService.synchronizeIfPresent(currentSeason, targetMembership, now);
+
         group.decrementMemberCount(now);
 
         // 12. 사용자별 24시간 가입 제한 기록 생성 또는 갱신

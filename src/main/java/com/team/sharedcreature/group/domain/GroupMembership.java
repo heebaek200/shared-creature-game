@@ -193,4 +193,16 @@ public class GroupMembership {
         this.updatedAt = now;
     }
 
+    /** 전체 관리자의 신고 심사로 비주 관리자 활성 멤버십을 종료합니다. */
+    public void removeForReport(User actor, Instant now) {
+        if (!"ACTIVE".equals(status) || "PRIMARY".equals(role)) {
+            throw new IllegalStateException("신고 강퇴가 가능한 활성 멤버십이 아닙니다.");
+        }
+        status = "REMOVED";
+        endedAt = now;
+        endedByUser = actor;
+        exitReason = "REPORTED";
+        updatedAt = now;
+    }
+
 }

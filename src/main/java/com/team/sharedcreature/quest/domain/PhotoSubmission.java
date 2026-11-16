@@ -15,8 +15,17 @@ import java.util.Objects;
  */
 @Getter
 @Entity
-@Table(name = "photo_submissions", uniqueConstraints =
-        @UniqueConstraint(name = "uq_photo_submissions_user_assignment_attempt", columnNames = {"user_id", "quest_assignment_id", "attempt_number"}))
+@Table(
+        name = "photo_submissions",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uq_photo_submissions_user_assignment_attempt",
+                columnNames = {"user_id", "quest_assignment_id", "attempt_number"}
+        ),
+        indexes = @Index(
+                name = "ix_photo_submissions_cleanup",
+                columnList = "verification_status,file_deleted_at,cleanup_next_attempt_at,cleanup_claim_expires_at"
+        )
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PhotoSubmission {
 
@@ -62,6 +71,15 @@ public class PhotoSubmission {
 
     @Column(name = "file_deleted_at")
     private Instant fileDeletedAt;
+
+    @Column(name = "cleanup_next_attempt_at")
+    private Instant cleanupNextAttemptAt;
+
+    @Column(name = "cleanup_claim_token", length = 36)
+    private String cleanupClaimToken;
+
+    @Column(name = "cleanup_claim_expires_at")
+    private Instant cleanupClaimExpiresAt;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
@@ -181,6 +199,42 @@ public class PhotoSubmission {
                 null,
                 failedAt
         );
+        clearCleanupControl();
+    }
+
+    /**
+     * 파일 정리 전에 만료 가능한 단건 실행권을 기록합니다.
+     * 판정 시각인 updatedAt은 보존 정책 계산에 사용하므로 변경하지 않습니다.
+     */
+    public void claimCleanup(String claimToken, Instant expiresAt) {
+        Objects.requireNonNull(claimToken, "claimToken은 필수입니다.");
+        Objects.requireNonNull(expiresAt, "expiresAt은 필수입니다.");
+        if (claimToken.isBlank() || claimToken.length() > 36) {
+            throw new IllegalArgumentException("claimToken은 1~36자여야 합니다.");
+        }
+
+        this.cleanupClaimToken = claimToken;
+        this.cleanupClaimExpiresAt = expiresAt;
+    }
+
+    /**
+     * 실패한 정리를 지정 시각 이후에 다시 시도하도록 예약합니다.
+     * claim을 함께 해제해 다른 실행이 기한 도달 후 재선점할 수 있게 합니다.
+     */
+    public void deferCleanupUntil(Instant nextAttemptAt) {
+        this.cleanupNextAttemptAt = Objects.requireNonNull(nextAttemptAt, "nextAttemptAt은 필수입니다.");
+        this.cleanupClaimToken = null;
+        this.cleanupClaimExpiresAt = null;
+    }
+
+    /**
+     * 상태 전이 또는 정리 완료 시 재시도·claim 제어값을 초기화합니다.
+     * 업무 판정과 삭제 감사 이력에는 영향을 주지 않습니다.
+     */
+    public void clearCleanupControl() {
+        this.cleanupNextAttemptAt = null;
+        this.cleanupClaimToken = null;
+        this.cleanupClaimExpiresAt = null;
     }
 
     /**
@@ -210,6 +264,7 @@ public class PhotoSubmission {
         this.longitude = null;
         this.fileDeletedAt = deletedAt;
         this.updatedAt = deletedAt;
+        clearCleanupControl();
     }
 
     /** 문지기(Guard) 메서드 */

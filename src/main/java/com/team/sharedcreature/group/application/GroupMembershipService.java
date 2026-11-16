@@ -4,11 +4,14 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.Hashing;
 import com.team.sharedcreature._core.security.LoginUser;
+import com.team.sharedcreature._core.realtime.GroupPresenceRevocationService;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.api.*;
 import com.team.sharedcreature.group.domain.*;
 import com.team.sharedcreature.group.infrastructure.*;
+import com.team.sharedcreature.season.application.SeasonContributionMembershipService;
+import com.team.sharedcreature.season.application.SeasonQueryService;
 import com.team.sharedcreature.season.domain.GroupCreature;
 import com.team.sharedcreature.season.domain.GroupSeason;
 import com.team.sharedcreature.season.domain.Season;
@@ -16,10 +19,9 @@ import com.team.sharedcreature.season.domain.SeasonGroupScore;
 import com.team.sharedcreature.season.infrastructure.GroupCreatureRepository;
 import com.team.sharedcreature.season.infrastructure.GroupSeasonRepository;
 import com.team.sharedcreature.season.infrastructure.SeasonGroupScoreRepository;
-import com.team.sharedcreature.season.infrastructure.SeasonRepository;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,10 +46,13 @@ public class GroupMembershipService {
     private final GroupJoinRestrictionRepository restrictionRepository;
     private final GroupInviteLinkRepository inviteLinkRepository;
     private final GroupAdminChangeRepository adminChangeRepository;
-    private final SeasonRepository seasonRepository;
     private final GroupSeasonRepository groupSeasonRepository;
     private final GroupCreatureRepository groupCreatureRepository;
     private final SeasonGroupScoreRepository groupScoreRepository;
+    private final SeasonQueryService seasonQueryService;
+    private final SeasonContributionMembershipService contributionMembershipService;
+    private final GroupPresenceRevocationService presenceRevocationService;
+
     private final Clock clock;
     private final String appBaseUrl;
     private final SecureRandom secureRandom = new SecureRandom();
@@ -60,10 +65,12 @@ public class GroupMembershipService {
             GroupJoinRestrictionRepository restrictionRepository,
             GroupInviteLinkRepository inviteLinkRepository,
             GroupAdminChangeRepository adminChangeRepository,
-            SeasonRepository seasonRepository,
             GroupSeasonRepository groupSeasonRepository,
             GroupCreatureRepository groupCreatureRepository,
             SeasonGroupScoreRepository groupScoreRepository,
+            SeasonQueryService seasonQueryService,
+            SeasonContributionMembershipService contributionMembershipService,
+            GroupPresenceRevocationService presenceRevocationService,
             Clock clock,
             @Value("${APP_BASE_URL:http://localhost:5173}") String appBaseUrl
     ) {
@@ -73,10 +80,12 @@ public class GroupMembershipService {
         this.restrictionRepository = restrictionRepository;
         this.inviteLinkRepository = inviteLinkRepository;
         this.adminChangeRepository = adminChangeRepository;
-        this.seasonRepository = seasonRepository;
         this.groupSeasonRepository = groupSeasonRepository;
         this.groupCreatureRepository = groupCreatureRepository;
         this.groupScoreRepository = groupScoreRepository;
+        this.seasonQueryService = seasonQueryService;
+        this.contributionMembershipService = contributionMembershipService;
+        this.presenceRevocationService = presenceRevocationService;
         this.clock = clock;
         this.appBaseUrl = appBaseUrl;
     }
@@ -90,13 +99,16 @@ public class GroupMembershipService {
      */
     @Transactional
     public CreateGroupResponse createGroup(LoginUser loginUser, CreateGroupRequest request) {
-        Season season = seasonRepository.findForShareByStatus("ACTIVE", PageRequest.of(0, 1)).stream()
-                .findFirst()
-                .orElseThrow(() -> notFound("현재 시즌을 찾을 수 없습니다."));
+        // 시즌 공유 잠금을 획득하고 상태, 시간 경계를 검사한다.
+        Season season = seasonQueryService.findCurrentSeasonForShare();
+
+        // 조회 이후의 시간 경과를 감안하여 재검증.
         Instant now = Instant.now(clock);
-        if (!"ACTIVE".equals(season.getStatus()) || !now.isBefore(season.getEndAt())) {
-            throw notFound("현재 시즌을 찾을 수 없습니다.");
+        if (! season.isActiveAt(now)) {
+            throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION, "현재 시즌이 준비되지 않았습니다.");
         }
+
+        // User 조회 및 그룹 생성
         User creator = userRepository.findByIdForUpdate(loginUser.id())
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REQUIRED));
         String name = normalize(request.name());
@@ -220,6 +232,9 @@ public class GroupMembershipService {
     }
 
     private MembershipResponse joinGroup(Long userId, String nickname, Long groupId, Long invitationId) {
+        // 사용자·그룹 잠금 전에 현재 시즌을 공유 잠금으로 확인합니다.
+        Optional<Season> currentSeason = seasonQueryService.findCurrentSeasonForShareIfPresent();
+
         User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REQUIRED));
         Group group = groupRepository.findByIdForUpdate(groupId)
@@ -242,6 +257,10 @@ public class GroupMembershipService {
             throw conflict(ErrorCode.GROUP_FULL, "그룹 정원이 가득 찼습니다.");
         }
         GroupMembership membership = membershipRepository.save(GroupMembership.member(group, user, now));
+
+        // 같은 그룹의 기존 기여도만 ACTIVE로 복구하며 점수는 유지합니다.
+        contributionMembershipService.synchronizeIfPresent(currentSeason, membership, now);
+
         return new MembershipResponse(
                 membership.getId(),
                 group.getId(),
@@ -320,6 +339,9 @@ public class GroupMembershipService {
         Long groupId = membershipRepository.findActiveGroupIdByUserId(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ROLE_FORBIDDEN));
 
+        // 탈퇴 시에도 사용자·그룹 잠금보다 먼저 시즌 공유 잠금을 잡습니다.
+        Optional<Season> currentSeason = seasonQueryService.findCurrentSeasonForShareIfPresent();
+
         // 2. 사용자 행을 먼저 잠금
         User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REQUIRED));
@@ -377,6 +399,12 @@ public class GroupMembershipService {
         // 8. 멤버십을 LEFT로 종료. 기존 이력은 삭제하지 않음
         membership.leaveBySelf(user, now);
 
+        // Rollback된 탈퇴가 Presence를 제거하지 않도록 Commit 이후 권한 회수를 예약합니다.
+        presenceRevocationService.revokeAfterCommit(userId, now);
+
+        // 멤버십·기여도 상태가 같은 트랜잭션에서 Commit되게 합니다.
+        contributionMembershipService.synchronizeIfPresent(currentSeason, membership, now);
+
         if (isPrimary) {
             // 마지막 주 관리자(PRIMARY)의 탈퇴는 그룹 종료로 처리됨
             group.deactivateAfterLastMemberLeaves(now);
@@ -420,7 +448,7 @@ public class GroupMembershipService {
      */
     private void closeCurrentGroupSeason(Long groupId, Instant now) {
         // 종료되지 않은 그룹 시즌 참여만 처리
-        groupSeasonRepository.findOpenByGroupIdForUpdate(groupId)
+        groupSeasonRepository.findOpenByGroupIdForUpdate(groupId, now)
                 .ifPresent(groupSeason -> {
                     // 현재 시즌에 연결된 크리처도 쓰기 잠금으로 조회
                     GroupCreature creature = groupCreatureRepository

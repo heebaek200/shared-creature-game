@@ -46,6 +46,24 @@ SET @ddl_statement = (
             SELECT 1
               FROM information_schema.columns
              WHERE table_schema = DATABASE()
+               AND table_name = 'user_daily_activities'
+               AND column_name = 'activity_membership_key'
+               AND extra LIKE '%STORED GENERATED%'
+        )
+      , 'SELECT 1'
+      , 'ALTER TABLE user_daily_activities MODIFY COLUMN activity_membership_key BIGINT GENERATED ALWAYS AS (COALESCE(membership_id, 0)) STORED'
+    )
+);
+PREPARE ddl_command FROM @ddl_statement;
+EXECUTE ddl_command;
+DEALLOCATE PREPARE ddl_command;
+
+SET @ddl_statement = (
+    SELECT IF(
+        EXISTS (
+            SELECT 1
+              FROM information_schema.columns
+             WHERE table_schema = DATABASE()
                AND table_name = 'group_memberships'
                AND column_name = 'primary_group_id'
                AND extra LIKE '%STORED GENERATED%'

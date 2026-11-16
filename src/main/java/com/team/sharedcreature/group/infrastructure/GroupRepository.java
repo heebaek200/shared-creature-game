@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -47,4 +49,37 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
                AND current_member_count < capacity
             """, nativeQuery = true)
     int incrementMemberCountIfAvailable(@Param("groupId") Long groupId, @Param("now") java.time.Instant now);
+
+    /**
+     * 지정한 시즌에 초기화가 완료되지 않은 활성 그룹을 조회합니다.
+     * GroupSeason이 없거나 알·점수 중 하나라도 누락된 그룹을 대상으로 합니다.
+     * 그룹 행에 배타 잠금을 적용하고 ID 오름차순으로 조회합니다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT g
+              FROM Group g
+             WHERE g.status = 'ACTIVE'
+               AND NOT EXISTS (
+                   SELECT gs.id
+                     FROM GroupSeason gs
+                    WHERE gs.group.id = g.id
+                      AND gs.season.id = :seasonId
+                      AND EXISTS (
+                          SELECT gc.id
+                            FROM GroupCreature gc
+                           WHERE gc.groupSeason.id = gs.id
+                      )
+                      AND EXISTS (
+                          SELECT score.id
+                            FROM SeasonGroupScore score
+                           WHERE score.groupSeason.id = gs.id
+                      )
+               )
+             ORDER BY g.id ASC
+            """)
+    List<Group> findActiveGroupsNeedingSeasonInitializationForUpdate(
+            @Param("seasonId") Long seasonId,
+            Pageable pageable
+    );
 }

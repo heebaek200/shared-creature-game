@@ -791,6 +791,14 @@
 - 후속 구현: Issue #24 시즌·퀘스트 Scheduler에서 고정 `Clock` 기반 재기동·부분 실패·중복 트리거 테스트로 검증합니다.
 - 대체한 결정: 2026-11-02 그룹별 72시간 부화 결정 중 장기 중단 후 복구되거나 초기화가 지연된 기존 그룹의 `시즌 시작 시각+72시간` 기준. 이 경우 실제 최초 그룹 시즌 참여 생성 시각+72시간을 사용하며, 시즌 중 새 그룹의 실제 참여 생성 시각 기준과 시즌 종료가 먼저면 알 상태로 종료하는 정책은 유지합니다.
 
+## 2026-11-10 관리자 일별 활동 원본 추가
+
+- 결정: 성공한 인증 API 활동을 KST 날짜와 당시 멤버십별로 보존하는 `user_daily_activities`를 추가하여 업무 테이블을 41개로 조정합니다. `users.last_active_at`의 강퇴 판단과 10분 갱신 정책은 유지합니다.
+- 상태: confirmed
+- 대체한 결정: 일별 관리자 활동 통계를 최종 `last_active_at`만으로 계산하고 업무 테이블을 40개로 유지한 구성
+- 근거: 기간 전체와 날짜별 고유 활동 사용자 및 활동 당시 그룹 집계를 과거 시점 기준으로 재현하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, api-design.md, database-design.md, screen-design.md, class-diagram.md, decision-log.md
+
 ## 2026-11-10 PHOTO_EXIF 보상 실패 이력 정책 간소화
 
 - 결정: 확정된 업무 조건 실패는 사진 제출을 `INVALID`로 기록합니다. 기간 종료에는 기존 `QUEST_PERIOD_ENDED`, 그 밖의 확정된 업무 오류에는 `QUEST_COMPLETION_FAILED`를 사용합니다.

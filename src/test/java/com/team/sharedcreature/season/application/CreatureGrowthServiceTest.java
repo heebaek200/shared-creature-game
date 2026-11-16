@@ -4,6 +4,7 @@ import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.quest.domain.QuestCompletion;
 import com.team.sharedcreature.season.domain.GroupCreature;
 import com.team.sharedcreature.season.domain.GroupSeason;
+import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.CreatureExperienceLedgerRepository;
 import org.junit.jupiter.api.Test;
 
@@ -28,6 +29,9 @@ class CreatureGrowthServiceTest {
         when(group.getId()).thenReturn(10L);
         GroupSeason groupSeason = mock(GroupSeason.class);
         when(groupSeason.getGroup()).thenReturn(group);
+        Season season = mock(Season.class);
+        when(season.getId()).thenReturn(20L);
+        when(groupSeason.getSeason()).thenReturn(season);
         GroupCreature creature = GroupCreature.egg(groupSeason, Instant.parse("2026-11-03T00:00:00Z"));
         QuestCompletion completion = mock(QuestCompletion.class);
         when(completion.getId()).thenReturn(100L);

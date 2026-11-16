@@ -82,4 +82,26 @@ public class ModerationAction {
 
         return action;
     }
+
+    /** 신고 심사에 따른 전체 관리자 강퇴 이력을 생성합니다. */
+    public static ModerationAction reportedRemoval(
+            UserReport report,
+            GroupMembership membership,
+            User target,
+            User actor,
+            String reason,
+            Instant now
+    ) {
+        ModerationAction action = new ModerationAction();
+        action.report = report;
+        action.group = membership.getGroup();
+        action.membership = membership;
+        action.targetUser = target;
+        action.actorUser = actor;
+        action.actionType = "REMOVE_REPORTED";
+        action.reason = reason;
+        action.executedAt = now;
+        action.createdAt = now;
+        return action;
+    }
 }

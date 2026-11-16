@@ -125,27 +125,68 @@ class PaymentReconciliationServiceTest {
     @Test
     void 카카오페이가_아니거나_실채널이면_결과_불명으로_거절한다() {
         when(purchaseRepository.findByIdAndUserId(10L, 7L)).thenReturn(Optional.of(purchase));
+        when(purchaseRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(purchase));
+        when(transactionRepository.findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
+                10L, "APPROVAL"
+        )).thenReturn(Optional.empty());
+        when(transactionRepository.save(any(PaymentTransaction.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(paymentGateway.getPayment(PAYMENT_ID))
                 .thenReturn(paidSnapshot(1000L, "EASY_PAY", "NAVERPAY", "LIVE"));
+        executeTransactionsImmediately();
 
         assertThatThrownBy(() -> service.reconcileForUser(7L, 10L, PAYMENT_ID))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.errorCode()).isEqualTo(ErrorCode.PAYMENT_RESULT_UNKNOWN));
-        verifyNoInteractions(transactionTemplate, ownedItemRepository);
+        verify(transactionRepository).save(argThat(transaction -> "UNKNOWN".equals(transaction.getStatus())));
+        verifyNoInteractions(ownedItemRepository);
     }
 
     @Test
     void PortOne_통신_결과를_모르면_브라우저_API에는_PAYMENT_RESULT_UNKNOWN을_반환한다() {
         when(purchaseRepository.findByIdAndUserId(10L, 7L)).thenReturn(Optional.of(purchase));
+        when(purchaseRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(purchase));
+        when(transactionRepository.findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
+                10L, "APPROVAL"
+        )).thenReturn(Optional.empty());
+        when(transactionRepository.save(any(PaymentTransaction.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(paymentGateway.getPayment(PAYMENT_ID)).thenThrow(new PaymentGatewayException(
                 PaymentGatewayException.Kind.UNAVAILABLE,
                 "timeout",
                 null
         ));
+        executeTransactionsImmediately();
 
         assertThatThrownBy(() -> service.reconcileForUser(7L, 10L, PAYMENT_ID))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.errorCode()).isEqualTo(ErrorCode.PAYMENT_RESULT_UNKNOWN));
+        verify(transactionRepository).save(argThat(transaction ->
+                "UNKNOWN".equals(transaction.getStatus())
+                        && "APPROVAL".equals(transaction.getTransactionType())
+                        && transaction.getProcessedAt() == null
+        ));
+    }
+
+    @Test
+    void 최신_승인거래가_UNKNOWN이면_중복_미확정_이력을_만들지_않는다() {
+        PaymentTransaction unknown = PaymentTransaction.unknown(purchase, 1000L, NOW.minusSeconds(10));
+        when(purchaseRepository.findByIdAndUserId(10L, 7L)).thenReturn(Optional.of(purchase));
+        when(purchaseRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(purchase));
+        when(transactionRepository.findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
+                10L, "APPROVAL"
+        )).thenReturn(Optional.of(unknown));
+        when(paymentGateway.getPayment(PAYMENT_ID)).thenThrow(new PaymentGatewayException(
+                PaymentGatewayException.Kind.UNAVAILABLE,
+                "timeout",
+                null
+        ));
+        executeTransactionsImmediately();
+
+        assertThatThrownBy(() -> service.reconcileForUser(7L, 10L, PAYMENT_ID))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.PAYMENT_RESULT_UNKNOWN));
+        verify(transactionRepository, never()).save(any());
     }
 
     @Test

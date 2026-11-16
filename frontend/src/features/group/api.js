@@ -11,6 +11,15 @@ export function createGroup(input) {
         : apiRequest('/api/v1/groups', {method: 'POST', body: input});
 }
 
+/**
+ * 현재 로그인한 사용자의 그룹 정보를 조회합니다.
+ * GET /api/v1/groups/me
+ */
+export function getMyGroup() {
+    return useMock
+        ? mockApi.getMyGroup()
+        : apiRequest('/api/v1/groups/me');
+}
 
 /**
  * 공개 그룹 목록을 검색하고 페이지 정보를 함께 반환합니다.

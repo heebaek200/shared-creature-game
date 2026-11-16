@@ -16,10 +16,10 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.test.context.web.WebAppConfiguration;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -38,12 +38,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringJUnitConfig(SecurityFilterChainTest.TestConfiguration.class)
 @WebAppConfiguration
@@ -60,13 +56,13 @@ class SecurityFilterChainTest {
     @Qualifier("sessionAuthenticationFilterRegistration")
     private FilterRegistrationBean<SessionAuthenticationFilter> sessionAuthenticationFilterRegistration;
 
+    private MockMvc mockMvc;
+
     @Autowired
     private UserRepository userRepository;
 
     @Autowired
     private GroupMembershipRepository membershipRepository;
-
-    private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
@@ -82,6 +78,13 @@ class SecurityFilterChainTest {
                 .andExpect(header().string("X-Request-Id", "auth-required"))
                 .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"))
                 .andExpect(jsonPath("$.traceId").value("auth-required"));
+    }
+
+    @Test
+    void WebSocket_Handshake는_인증_세션이_필요하다() throws Exception {
+        mockMvc.perform(get("/ws").header("X-Request-Id", "websocket-auth-required"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
     }
 
     @Test
@@ -133,7 +136,7 @@ class SecurityFilterChainTest {
     @Test
     void 역할이_부족하면_403_ROLE_FORBIDDEN으로_응답한다() throws Exception {
         mockMvc.perform(get("/api/v1/admin/test")
-                        .session(authenticatedSession(2L, "MEMBER"))
+                        .session(memberSession())
                         .header("X-Request-Id", "role-forbidden"))
                 .andExpect(status().isForbidden())
                 .andExpect(header().string("X-Request-Id", "role-forbidden"))
@@ -168,7 +171,7 @@ class SecurityFilterChainTest {
     @Test
     void 인증된_사용자의_미등록_API는_404_RESOURCE_NOT_FOUND로_응답한다() throws Exception {
         mockMvc.perform(get("/api/v1/not-found")
-                        .session(authenticatedSession(6L, "MEMBER"))
+                        .session(memberSession())
                         .header("X-Request-Id", "not-found"))
                 .andExpect(status().isNotFound())
                 .andExpect(header().string("X-Request-Id", "not-found"))
@@ -176,20 +179,26 @@ class SecurityFilterChainTest {
                 .andExpect(jsonPath("$.traceId").value("not-found"));
     }
 
+    /** 실제 세션 인증 Filter가 복원할 수 있는 MEMBER 세션을 구성합니다. */
+    private MockHttpSession memberSession() {
+        return authenticatedSession(1L, "MEMBER");
+    }
+
+    /** 실제 세션 인증 Filter가 지정 역할로 복원할 수 있는 세션을 구성합니다. */
     private MockHttpSession authenticatedSession(Long userId, String role) {
-        User user = mock(User.class);
-        when(user.getId()).thenReturn(userId);
-        when(user.getStatus()).thenReturn("ACTIVE");
-        when(user.getGlobalRole()).thenReturn("USER");
+        User account = mock(User.class);
         GroupMembership membership = mock(GroupMembership.class);
+        when(account.getId()).thenReturn(userId);
+        when(account.getStatus()).thenReturn("ACTIVE");
+        when(account.getGlobalRole()).thenReturn("USER");
         when(membership.getRole()).thenReturn(role);
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(account));
         when(membershipRepository.findByUserIdAndStatus(userId, "ACTIVE"))
                 .thenReturn(Optional.of(membership));
         MockHttpSession session = new MockHttpSession();
         session.setAttribute(
                 SessionAuthenticationFilter.LOGIN_USER,
-                new LoginUser(userId, "테스트 사용자", Set.of(role))
+                new LoginUser(userId, "member", Set.of(role))
         );
         return session;
     }

@@ -8,6 +8,8 @@ import com.team.sharedcreature.quest.domain.QuestAssignment;
 import com.team.sharedcreature.quest.domain.QuestCompletion;
 import com.team.sharedcreature.quest.domain.QuestRewardLedger;
 import com.team.sharedcreature.quest.infrastructure.*;
+import com.team.sharedcreature.quest.application.ContributionUpdateEventPublisher;
+import com.team.sharedcreature.quest.application.ContributionUpdatedEvent;
 import com.team.sharedcreature.season.application.SeasonQueryService;
 import com.team.sharedcreature.season.application.CreatureUpdateEventPublisher;
 import com.team.sharedcreature.season.application.CreatureUpdatedEvent;
@@ -94,6 +96,9 @@ public class QuestCompletionService {
 
     /** 보상 확정 후 크리처 변경 이벤트를 커밋 이후 발행합니다. */
     private final CreatureUpdateEventPublisher creatureUpdateEventPublisher;
+
+    /** 보상 확정 후 기여도 변경 이벤트를 Commit 이후 발행합니다. */
+    private final ContributionUpdateEventPublisher contributionUpdateEventPublisher;
 
     /**
      * 현재 진행 중인 일일·주간 퀘스트 기간을 조회합니다.
@@ -1047,11 +1052,14 @@ public class QuestCompletionService {
                 creature.getGrowthStage(),
                 groupScore.getScore()
         );
-        creatureUpdateEventPublisher.publishAfterCommit(new CreatureUpdatedEvent(
+        creatureUpdateEventPublisher.publishAfterCommit(CreatureUpdatedEvent.from(creature, now));
+        contributionUpdateEventPublisher.publishAfterCommit(new ContributionUpdatedEvent(
                 creature.getGroupSeason().getGroup().getId(),
-                creature.getId(),
-                creature.getGrowthStage(),
-                creature.getTotalExperience(),
+                userId,
+                contributionAmount,
+                contribution.getContributionScore(),
+                experience,
+                groupScore.getScore(),
                 now
         ));
         return new QuestCompletionResponse(

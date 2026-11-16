@@ -98,7 +98,7 @@
 | 결제 거래 | `REQUESTED`, `SUCCESS`, `DEFINITIVE_FAILURE`, `UNKNOWN` |
 | 환불 | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED |
 | 신고 | `RECEIVED`, `RESOLVED`, `REJECTED` |
-| 신고 분류 [보완안] | `HARASSMENT`, `SPAM`, `INAPPROPRIATE_CONTENT`, `OTHER` |
+| 신고 분류 | `HARASSMENT`, `SPAM`, `INAPPROPRIATE_CONTENT`, `OTHER` |
 | 사진 판정 | `PENDING`, `VALID`, `INVALID` |
 
 ### 1.5. 오류 코드 사전
@@ -1069,7 +1069,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.recentContributions[].occurredAt | string(date-time) | Y | N | UTC ISO 8601 | 발생 시각 |
 | data.snapshotAt | string(date-time) | Y | N | UTC ISO 8601 | Snapshot 생성 시각 |
 | data.streamInstanceId | string(uuid) | Y | N | 서버 실행 인스턴스별 UUID | Stream 인스턴스 식별자 |
-| data.sequence | integer(int64) | Y | N | 0 이상; Stream 내 단조 증가 | Snapshot 반영 완료 이벤트 순번 |
+| data.sequence | integer(int64) | Y | N | 0 이상; Stream 내 단조 증가 | Snapshot 완료 시 서버가 관측한 그룹 Stream 순번; DB 조회와 원자적 경계 아님 |
 
 **오류 응답**
 
@@ -1703,7 +1703,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 ### createPurchase — `POST /api/v1/purchases`
 
 - **Operation ID:** `createPurchase` · **요구사항:** `REQ-PAY-001` · **인증·권한:** `AUTHENTICATED` · **성공 HTTP:** `201`
-- **엔드포인트 조건:** 장바구니 없이 주문당 상품 1개. 서버 가격을 기준으로 PortOne V2 결제 설정 반환.
+- **엔드포인트 조건:** 장바구니 없이 주문당 상품 1개. 서버 가격과 구매 당시 활성 그룹 Snapshot을 저장하고 PortOne V2 결제 설정 반환.
 
 **요청 필드**
 
@@ -2299,6 +2299,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 ### createUserReport — `POST /api/v1/reports`
 
 - **Operation ID:** `createUserReport` · **요구사항:** `REQ-GRP-006` · **인증·권한:** `GROUP_MEMBER` · **성공 HTTP:** `201`
+- **엔드포인트 조건:** 신고자와 대상은 같은 그룹의 활성 회원. 반복 신고 허용.
 
 **요청 필드**
 
@@ -2471,6 +2472,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 ### removeReportedMember — `POST /api/v1/admin/reports/{reportId}/removals`
 
 - **Operation ID:** `removeReportedMember` · **요구사항:** `REQ-GRP-006, REQ-ADM-002` · **인증·권한:** `SUPER_ADMIN` · **성공 HTTP:** `200`
+- **엔드포인트 조건:** 처리 시점의 같은 그룹 활성 멤버십을 재검사하며 `PRIMARY` 대상은 거부.
 
 **요청 필드**
 
@@ -2567,10 +2569,27 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | 404 | `RESOURCE_NOT_FOUND` | 없거나 요청자에게 노출하지 않는 리소스 |
 | 409 | `CONCURRENT_MODIFICATION` | 동시 처리 또는 이미 변경된 리소스 |
 
+### 관리자 운영 경고 공통 매핑
+
+| 원본 상태 | type | severity | resourceType | resourceId | detectedAt |
+|---|---|---|---|---|---|
+| Scheduler `FAILED` | `SCHEDULER_FAILED` | `WARNING` | `SCHEDULER_EXECUTION` | 실행 ID | 완료/수정 시각 |
+| Scheduler Lease 만료 | `SCHEDULER_FAILED` | `CRITICAL` | `SCHEDULER_EXECUTION` | 실행 ID | Lease 만료 시각 |
+| 만료 `ACTIVE`·잔여 `CLOSING` 시즌 | `SEASON_STATE_INVALID` | `CRITICAL` | `SEASON` | 시즌 ID | 시즌 종료 시각 |
+| 현재 기간 시즌 누락 | `SEASON_STATE_INVALID` | `CRITICAL` | `SEASON` | null | 예정 시작 시각 |
+| 템플릿 부족 기간 실패 | `TEMPLATE_SHORTAGE` | `WARNING` | `QUEST_PERIOD` | 기간 ID | 수정 시각 |
+| 그 외 기간 실패 | `QUEST_PERIOD_FAILED` | `WARNING` | `QUEST_PERIOD` | 기간 ID | 수정 시각 |
+| 결제 결과 불명 | `PAYMENT_UNCERTAIN` | `CRITICAL` | `PURCHASE` | 구매 ID | 원본 수정 시각 |
+| 환불 결과 불명 | `REFUND_UNCERTAIN` | `CRITICAL` | `REFUND_REQUEST` | 환불 요청 ID | 원본 수정 시각 |
+| 그룹 인원 불일치 | `MEMBER_COUNT_MISMATCH` | `WARNING` | `GROUP` | 그룹 ID | 관련 원본 최종 수정 시각 |
+| 사진 삭제 실패 | `PHOTO_DELETION_FAILED` | `WARNING` | `PHOTO_SUBMISSION` | 제출 ID | 삭제 기한 |
+
+`warningKey=type:resourceType:resourceId`이며 시즌 누락은 `SEASON_STATE_INVALID:SEASON:CURRENT_PERIOD:{KST 시작일}`입니다. 원본이 정상화되면 경고에서 제외합니다.
+
 ### getAdminDashboard — `GET /api/v1/admin/dashboard`
 
 - **Operation ID:** `getAdminDashboard` · **요구사항:** `REQ-ADM-001` · **인증·권한:** `SUPER_ADMIN` · **성공 HTTP:** `200`
-- **엔드포인트 조건:** Google Charts 입력이 가능한 서버 집계. 그룹 필터는 이번 명세 보완안.
+- **엔드포인트 조건:** 기간은 KST `[시작, aggregatedAt)`. 활동은 일별 원본의 사용자 중복 제거, 그룹은 활동 당시 Snapshot으로 집계. 퀘스트 완료율은 선택 기간·`ACTIVE/CLOSED` 기간·멤버십 기간이 겹치고 선택 기간 시작 전에 미완료인 `(membershipId,assignmentId)` 기회 대비 기간 내 완료이며 분모 0은 0. 성장 단계·상위 그룹·정원은 현재 Snapshot. 결제·환불은 `SUCCESS` 승인·취소 거래의 `processed_at`과 구매 당시 그룹 Snapshot을 공통으로 사용. 운영 경고는 `groupId`와 무관한 전역 현황이다.
 
 **요청 필드**
 
@@ -2589,13 +2608,16 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.groupId | integer(int64) | Y | Y | 전체 집계 null | 그룹 ID |
 | data.aggregatedAt | string(date-time) | Y | N | UTC ISO 8601 | 통계 집계 시각 |
 | data.summary | object | Y | N | 필수 | 요약 통계 객체 |
-| data.summary.activeUsers | integer(int64) | Y | N | 0 이상 | 활동 사용자 수 |
-| data.summary.activeGroups | integer(int64) | Y | N | 0 이상 | 활성 그룹 수 |
+| data.summary.activeUsers | integer(int64) | Y | N | 0 이상 | 기간 전체 고유 활동 사용자 수 |
+| data.summary.activeGroups | integer(int64) | Y | N | 0 이상 | 기간 내 활동이 있는 고유 그룹 수 |
 | data.summary.questCompletionRate | number | Y | N | 0~100, % | 퀘스트 완료 비율 |
+| data.summary.paidAmountKrw | integer(int64) | Y | N | 0 이상 | 기간 내 성공 결제 금액 합계 |
+| data.summary.refundedAmountKrw | integer(int64) | Y | N | 0 이상 | 기간 내 성공 환불 금액 합계 |
+| data.summary.capacityUsageRate | number | Y | N | 0~100, 소수 둘째 자리 반올림; 분모 0은 0 | 현재 정원 사용률(%) |
 | data.summary.operationalWarningCount | integer(int64) | Y | N | 0 이상 | 운영 경고 수 |
 | data.activitySeries | array<object> | Y | N | 날짜 오름차순, 없으면 [] | 기간별 활동 통계 |
 | data.activitySeries[].date | string(date) | Y | N | YYYY-MM-DD, KST | 날짜 |
-| data.activitySeries[].activeUsers | integer | Y | N | 0 이상 | 활동 사용자 수 |
+| data.activitySeries[].activeUsers | integer | Y | N | 0 이상 | 해당 KST 날짜의 고유 활동 사용자 수 |
 | data.activitySeries[].questCompletions | integer | Y | N | 0 이상 | 퀘스트 완료 건수 |
 | data.growthStages | array<object> | Y | N | 없으면 [] | 성장 단계별 분포 |
 | data.growthStages[].stage | string(enum) | Y | N | EGG \| HATCHLING \| GROWING \| MATURE \| COMPLETE | 성장 단계 |
@@ -2616,10 +2638,10 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.queues.pendingRefunds | integer | Y | N | 0 이상 | 대기 중인 환불 요청 목록 |
 | data.queues.operationalWarnings | array<object> | Y | N | 최근 10건 이하 | 운영 경고 목록 |
 | data.queues.operationalWarnings[].warningKey | string | Y | N | 1~255자; 유형+원본 식별자 결합, 동일 상태에서 안정적 | 경고 키 |
-| data.queues.operationalWarnings[].type | string(enum) | Y | N | SCHEDULER_FAILED \| TEMPLATE_SHORTAGE \| MEMBER_COUNT_MISMATCH \| PAYMENT_UNCERTAIN \| REFUND_UNCERTAIN \| PHOTO_DELETION_FAILED | 운영 경고 목록 유형 |
+| data.queues.operationalWarnings[].type | string(enum) | Y | N | SCHEDULER_FAILED \| SEASON_STATE_INVALID \| TEMPLATE_SHORTAGE \| QUEST_PERIOD_FAILED \| MEMBER_COUNT_MISMATCH \| PAYMENT_UNCERTAIN \| REFUND_UNCERTAIN \| PHOTO_DELETION_FAILED | 운영 경고 목록 유형 |
 | data.queues.operationalWarnings[].severity | string(enum) | Y | N | WARNING \| CRITICAL | 심각도 |
-| data.queues.operationalWarnings[].resourceType | string | Y | N | SEASON \| QUEST_PERIOD \| GROUP \| PURCHASE \| REFUND_REQUEST \| PHOTO_SUBMISSION | 경고 관련 자원 유형 |
-| data.queues.operationalWarnings[].resourceId | integer(int64) | Y | N | 1 이상 | 경고 관련 자원 ID |
+| data.queues.operationalWarnings[].resourceType | string | Y | N | SCHEDULER_EXECUTION \| SEASON \| QUEST_PERIOD \| GROUP \| PURCHASE \| REFUND_REQUEST \| PHOTO_SUBMISSION | 경고 관련 자원 유형 |
+| data.queues.operationalWarnings[].resourceId | integer(int64) | Y | Y | 1 이상; 현재 기간 시즌 누락은 null | 경고 관련 자원 ID |
 | data.queues.operationalWarnings[].message | string | Y | N | 1~1000자 | 메시지 |
 | data.queues.operationalWarnings[].detectedAt | string(date-time) | Y | N | UTC ISO 8601 | 운영 경고 감지 시각 |
 
@@ -2632,11 +2654,12 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | 403 | `ROLE_FORBIDDEN` | 요청자 권한 부족 |
 | 400 | `INVALID_FIELD_VALUE` | 필드 타입·길이·값·형식 검증 실패 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
+| 409 | `CONCURRENT_MODIFICATION` | `CURRENT_SEASON` 조회 시 현재 정상 시즌 없음 |
 
 ### listOperationalWarnings — `GET /api/v1/admin/operations/warnings`
 
 - **Operation ID:** `listOperationalWarnings` · **요구사항:** `REQ-ADM-004` · **인증·권한:** `SUPER_ADMIN` · **성공 HTTP:** `200`
-- **엔드포인트 조건:** 현재 원본에서 집계한 미해결 경고만 반환. 별도 읽음/해결 상태 없음.
+- **엔드포인트 조건:** 위 공통 매핑에 따라 현재 미해결 원본만 반환. 별도 읽음/해결 상태 없음.
 
 **요청 필드**
 
@@ -2645,7 +2668,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | Header | Cookie | string | Y | N | Spring Session 세션 쿠키; HttpOnly / SameSite=Lax |
 | Query | page | integer | N | N | 0 이상, 미지정 0; 0-based page |
 | Query | size | integer | N | N | 1~50, 미지정 20; 페이지 크기 |
-| Query | type | string(enum) | N | N | SCHEDULER_FAILED \| TEMPLATE_SHORTAGE \| MEMBER_COUNT_MISMATCH \| PAYMENT_UNCERTAIN \| REFUND_UNCERTAIN \| PHOTO_DELETION_FAILED; 미지정 전체 |
+| Query | type | string(enum) | N | N | SCHEDULER_FAILED \| SEASON_STATE_INVALID \| TEMPLATE_SHORTAGE \| QUEST_PERIOD_FAILED \| MEMBER_COUNT_MISMATCH \| PAYMENT_UNCERTAIN \| REFUND_UNCERTAIN \| PHOTO_DELETION_FAILED; 미지정 전체 |
 
 **성공 응답 필드**
 
@@ -2653,10 +2676,10 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 |---|---|---|---|---|---|
 | data | array<object> | Y | N | 0건이면 [] | 목록 |
 | data[].warningKey | string | Y | N | 1~255자; 유형+원본 식별자 결합, 동일 상태에서 안정적 | 경고 키 |
-| data[].type | string(enum) | Y | N | SCHEDULER_FAILED \| TEMPLATE_SHORTAGE \| MEMBER_COUNT_MISMATCH \| PAYMENT_UNCERTAIN \| REFUND_UNCERTAIN \| PHOTO_DELETION_FAILED | 성공 데이터 유형 |
+| data[].type | string(enum) | Y | N | SCHEDULER_FAILED \| SEASON_STATE_INVALID \| TEMPLATE_SHORTAGE \| QUEST_PERIOD_FAILED \| MEMBER_COUNT_MISMATCH \| PAYMENT_UNCERTAIN \| REFUND_UNCERTAIN \| PHOTO_DELETION_FAILED | 성공 데이터 유형 |
 | data[].severity | string(enum) | Y | N | WARNING \| CRITICAL | 심각도 |
-| data[].resourceType | string | Y | N | SEASON \| QUEST_PERIOD \| GROUP \| PURCHASE \| REFUND_REQUEST \| PHOTO_SUBMISSION | 경고 관련 자원 유형 |
-| data[].resourceId | integer(int64) | Y | N | 1 이상 | 경고 관련 자원 ID |
+| data[].resourceType | string | Y | N | SCHEDULER_EXECUTION \| SEASON \| QUEST_PERIOD \| GROUP \| PURCHASE \| REFUND_REQUEST \| PHOTO_SUBMISSION | 경고 관련 자원 유형 |
+| data[].resourceId | integer(int64) | Y | Y | 1 이상; 현재 기간 시즌 누락은 null | 경고 관련 자원 ID |
 | data[].message | string | Y | N | 1~1000자 | 메시지 |
 | data[].detectedAt | string(date-time) | Y | N | UTC ISO 8601 | 운영 경고 감지 시각 |
 | meta | object | Y | N | — | 목록 부가 정보 |
@@ -2681,28 +2704,37 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 
 | 항목 | 계약 |
 |---|---|
-| 연결 | `/ws` STOMP WebSocket, Spring Session 쿠키 인증 / Origin·CSRF 검사 |
-| 수신 목적지 | `/topic/groups/{groupId}/live` — 현재 활성 그룹 ID만 SUBSCRIBE 가능 |
-| 권한 | `GROUP_MEMBER`; 다른 그룹 구독은 STOMP ERROR 후 거부 |
-| 허용 프레임 | 클라이언트 CONNECT·자기 그룹 SUBSCRIBE·자기 구독 UNSUBSCRIBE·DISCONNECT |
-| 금지 프레임 | 클라이언트 SEND/MESSAGE 명령 전부 거부; 상태 변경은 REST만 가능 |
-| 재연결 | 항상 `GET /api/v1/groups/me/creature-home` Snapshot 재조회 |
-| 이벤트 전파 | Commit 완료 후에만 발행; Event 중복은 eventId로 무시 |
-| Presence | 단일 백엔드 인스턴스 메모리; 실시간 좌표/채팅 데이터 없음 |
+| 연결 | `/ws` Native WebSocket 기반 STOMP; SockJS 미지원 |
+| CONNECT 인증 | Spring Session 쿠키, 허용 Origin, Native Header `X-CSRF-TOKEN` 검증 |
+| 수신 목적지 | `/topic/groups/{groupId}/live` |
+| 구독 권한 | 현재 활성 그룹과 `groupId`가 같은 `GROUP_MEMBER` |
+| 구독 수 | WebSocket 연결당 현재 그룹 구독 하나; 두 번째 그룹 구독 거부 |
+| 허용 프레임 | CONNECT·정상 그룹 SUBSCRIBE·자기 구독 UNSUBSCRIBE·DISCONNECT |
+| 금지 프레임 | 클라이언트 SEND/MESSAGE와 허용되지 않은 명령·목적지 |
+| 초기화 | 그룹 구독 후 `GET /api/v1/groups/me/creature-home` Snapshot 조회 |
+| 재연결 | 그룹 재구독 후 Snapshot 재조회 |
+| 장애 대체 | 연결 장애 중 30초 REST Polling; 연결 복구 후 Snapshot 재조회 및 Polling 중단 |
+| 이벤트 전파 | DB Commit 성공 후에만 발행 |
+| Presence | 사용자별 활성 WebSocket session ID를 관리하고 첫 session에서 접속, 마지막 session 제거에서 즉시 퇴장 |
+| 상태 변경 | REST API로만 수행 |
+
+초기 Snapshot 조회 중 이벤트를 수신하면 Snapshot 완료 후 한 번 더 조회합니다. Snapshot 완료 후 아직 처리하지 않은 이벤트가 Snapshot의 sequence 이하로 도착해도 지연 도착으로 보고 Payload를 적용하지 않고 Snapshot을 한 번 다시 조회합니다. SUBSCRIBE RECEIPT, 이벤트 Payload Buffer와 시간 기반 재정렬은 요구하지 않습니다.
+
+로그아웃·탈퇴·강퇴 시 해당 사용자의 구독과 Presence를 즉시 제거합니다. 자연 만료는 Spring Session이 만료를 감지해 Session 삭제 이벤트를 발행할 때 제거합니다. Presence와 Stream Cursor는 단일 백엔드 인스턴스 메모리에만 보관합니다.
 
 **모든 서버 → 클라이언트 이벤트 Envelope**
 
 | 필드 | 타입 | 필수 | null | 제약 |
 |---|---|---|---|---|
-| eventId | string(uuid) | Y | N | UUID 36자, 이벤트 중복 제거 식별자 [보완안] |
+| eventId | string(uuid) | Y | N | UUID 36자, 이벤트 중복 제거 식별자 |
 | streamInstanceId | string(uuid) | Y | N | 서버 실행 인스턴스별 UUID |
 | sequence | integer(int64) | Y | N | 1 이상; Stream 내 단조 증가 |
-| eventType | string(enum) | Y | N | 아래 4종 [보완안] |
+| eventType | string(enum) | Y | N | 아래 5종 |
 | groupId | integer(int64) | Y | N | 1 이상, 구독 그룹과 일치 |
 | occurredAt | string(date-time) | Y | N | UTC ISO 8601 |
 | payload | object | Y | N | 이벤트별 Payload 스키마 |
 
-**메시지 순서·스트림 식별:** `getCreatureHome` Snapshot과 실시간 이벤트는 `streamInstanceId`, `sequence`를 공유합니다. 클라이언트는 인스턴스 변경 또는 순번 누락 시 Snapshot을 다시 조회합니다.
+`getCreatureHome` Snapshot과 WebSocket 이벤트는 `streamInstanceId`, `sequence`를 공유합니다. 같은 `eventId`와 이미 적용한 sequence 이하는 무시합니다. 단, Snapshot 완료 후 아직 처리하지 않은 이벤트가 Snapshot의 sequence 이하로 도착하면 지연 도착으로 보고 Payload를 적용하지 않고 Snapshot을 한 번 다시 조회합니다. `streamInstanceId` 변경 또는 sequence 누락 시에도 Snapshot을 다시 조회합니다.
 
 ### 10.2. `PRESENCE_JOINED`
 
@@ -2714,13 +2746,13 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | payload.contributionScore | integer(int64) | Y | 0 이상 |
 | payload.equipments | object | Y | AvatarSlots: HEAD/FACE/BODY/ACCESSORY 각각 객체 또는 null |
 
-### 10.2. `PRESENCE_LEFT`
+### 10.3. `PRESENCE_LEFT`
 
 | payload 경로 | 타입 | 필수 | 제약/nullable |
 |---|---|---|---|
 | payload.userId | integer(int64) | Y | 1 이상 |
 
-### 10.2. `AVATAR_EQUIPMENT_CHANGED`
+### 10.4. `AVATAR_EQUIPMENT_CHANGED`
 
 | payload 경로 | 타입 | 필수 | 제약/nullable |
 |---|---|---|---|
@@ -2732,7 +2764,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | payload.equippedItem.name | string | C | 1~100자 |
 | payload.equippedItem.assetKey | string | C | 1~255자 |
 
-### 10.2. `CREATURE_UPDATED`
+### 10.5. `CREATURE_UPDATED`
 
 | payload 경로 | 타입 | 필수 | 제약/nullable |
 |---|---|---|---|
@@ -2743,23 +2775,34 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | payload.creatureSpeciesId | integer(int64) | Y | 알 상태에서 미선택이면 null, 선택 후에는 선택 종 ID; 부화 후에는 확정 종 ID |
 | payload.lastUpdatedAt | string(date-time) | Y | UTC ISO 8601 |
 
-**WebSocket 필드명/이벤트 종류는 기존 문서에 상세 정의가 없어 이번 재작성에서 확정 형식으로 제안한 부분입니다.** 전체 Snapshot을 실시간으로 중복 송신하지 않으며, 소켓 이벤트는 상태 갱신 힌트로 취급하고 복구는 REST Snapshot으로 수행합니다.
+### 10.6. `CONTRIBUTION_UPDATED`
+
+| payload 경로 | 타입 | 필수 | 제약/nullable |
+|---|---|---|---|
+| payload.userId | integer(int64) | Y | 1 이상 |
+| payload.nickname | string | Y | 2~20자 |
+| payload.contributionDelta | integer(int64) | Y | 1 이상; 이번 개인 기여도 획득량 |
+| payload.contributionScore | integer(int64) | Y | 0 이상; 변경 후 개인 기여도 |
+| payload.creatureExperienceDelta | integer(int64) | Y | 1 이상; 이번 크리처 경험치 획득량 |
+| payload.groupScore | integer(int64) | Y | 0 이상; 변경 후 그룹 시즌 점수 |
+
+기여도 변경으로 다른 구성원의 순위도 바뀔 수 있으므로 순위 불일치는 REST Snapshot으로 교정합니다. 이벤트 Payload의 Delta는 표시 정보이며 누적값 계산에 사용하지 않습니다.
 
 ```json
 {
   "eventId": "550e8400-e29b-41d4-a716-446655440000",
   "streamInstanceId": "74eddf9c-5e53-47e2-853d-274dc09b74e4",
   "sequence": 42,
-  "eventType": "CREATURE_UPDATED",
+  "eventType": "CONTRIBUTION_UPDATED",
   "groupId": 501,
   "occurredAt": "2026-11-03T06:00:00Z",
   "payload": {
-    "seasonId": 1,
-    "groupCreatureId": 701,
-    "totalExperience": 46000,
-    "growthStage": "GROWING",
-    "creatureSpeciesId": 3,
-    "lastUpdatedAt": "2026-11-03T06:00:00Z"
+    "userId": 101,
+    "nickname": "새싹",
+    "contributionDelta": 10,
+    "contributionScore": 120,
+    "creatureExperienceDelta": 30,
+    "groupScore": 450
   }
 }
 ```

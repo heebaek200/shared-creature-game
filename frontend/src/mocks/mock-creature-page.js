@@ -10,8 +10,8 @@ export const mockCreatureHomeData = {
         seasonId: 1,
         seasonNumber: 1,
         status: "ACTIVE",
-        startAt: "2026-11-04T23:59:59Z",
-        endAt: "2026-12-06T23:59:59Z",
+        startAt: "2026-11-15T23:59:59Z",
+        endAt: "2026-12-07T19:59:59Z",
         seasonName: "시즌 1",
         labName: "새싹 연구소"
     },
@@ -25,7 +25,7 @@ export const mockCreatureHomeData = {
         totalExperience: 200000,
         nextStageAtExperience: null,
         progress: 4.76,
-        selectionDeadlineAt: "2026-11-07T00:00:00Z",
+        selectionDeadlineAt: "2026-11-18T00:00:00Z",
         selectionSource: "ADMIN_SELECTED"
     },
     onlineMembers: [

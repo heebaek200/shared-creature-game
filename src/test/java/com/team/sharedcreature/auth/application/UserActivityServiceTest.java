@@ -1,11 +1,14 @@
 package com.team.sharedcreature.auth.application;
 
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
+import com.team.sharedcreature.auth.infrastructure.UserDailyActivityRepository;
+import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -25,7 +28,11 @@ class UserActivityServiceTest {
 
         // 고정 시각을 사용하도록 Service를 생성합니다.
         UserRepository repository = mock(UserRepository.class);
-        UserActivityService service = new UserActivityService(repository, clock);
+        UserDailyActivityRepository dailyActivityRepository = mock(UserDailyActivityRepository.class);
+        GroupMembershipRepository membershipRepository = mock(GroupMembershipRepository.class);
+        UserActivityService service = new UserActivityService(
+                repository, dailyActivityRepository, membershipRepository, clock
+        );
 
         when(repository.updateLastActiveAtIfDue(
                 1L,
@@ -42,6 +49,13 @@ class UserActivityServiceTest {
                 1L,
                 now,
                 now.minusSeconds(600)
+        );
+        verify(dailyActivityRepository).upsert(
+                1L,
+                null,
+                null,
+                LocalDate.of(2026, 11, 4),
+                now
         );
     }
 }
