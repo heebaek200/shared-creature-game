@@ -21,9 +21,10 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 
 /**
- * Google OAuth와 가입 대기·현재 사용자·로그아웃 REST 흐름을 제공합니다.
+ * 소셜 OAuth와 가입 대기·현재 사용자·로그아웃 REST 흐름을 제공합니다.
  */
 @RestController
 @RequestMapping
@@ -35,7 +36,8 @@ public class AuthController {
         OAUTH_ACCESS_DENIED,
         OAUTH_INVALID_STATE,
         OAUTH_SESSION_EXPIRED,
-        OAUTH_AUTHENTICATION_FAILED
+        OAUTH_AUTHENTICATION_FAILED,
+        OAUTH_EMAIL_CONFLICT
     }
 
     /** 인증 업무 Service를 주입받습니다. */
@@ -43,7 +45,7 @@ public class AuthController {
         this.authService = authService;
     }
 
-    /** Google Authorization URL을 생성합니다. */
+    /** 소셜 Authorization URL을 생성합니다. */
     @PostMapping("/api/v1/auth/oauth-attempts")
     public ResponseEntity<ApiResponse<OAuthAttemptResponse>> createOAuthAttempt(
             @Valid @RequestBody OAuthAttemptRequest request,
@@ -55,7 +57,7 @@ public class AuthController {
                 new OAuthAttemptResponse(result.authorizationUrl(), result.expiresAt())));
     }
 
-    /** Google Callback을 검증하고 인가 코드가 없는 CSR 경로로 이동시킵니다. */
+    /** 소셜 Callback을 검증하고 인가 코드가 없는 CSR 경로로 이동시킵니다. */
     @GetMapping("/oauth2/callback/{provider}")
     public ResponseEntity<Void> handleOAuthCallback(
             @PathVariable String provider,
@@ -64,7 +66,7 @@ public class AuthController {
             @RequestParam(required = false) String error,
             HttpServletRequest request
     ) {
-        if (!"google".equalsIgnoreCase(provider)) {
+        if (!List.of("google", "naver").contains(provider.toLowerCase(Locale.ROOT))) {
             return redirect("/login", OAuthCallbackError.OAUTH_INVALID_STATE.name());
         }
         // 공급자 오류와 인가 코드는 상호 배타적이므로 함께 전달되면 계약 위반입니다.
@@ -179,10 +181,14 @@ public class AuthController {
     /** 내부 업무 오류를 프론트엔드와 합의한 OAuth Callback 오류로 제한합니다. */
     private OAuthCallbackError callbackError(ErrorCode errorCode) {
         return switch (errorCode) {
-            case OAUTH_STATE_INVALID -> OAuthCallbackError.OAUTH_INVALID_STATE;
+            case OAUTH_STATE_INVALID ->
+                    OAuthCallbackError.OAUTH_INVALID_STATE;
             case SESSION_EXPIRED, OAUTH_SESSION_EXPIRED, OAUTH_SESSION_MISMATCH ->
                     OAuthCallbackError.OAUTH_SESSION_EXPIRED;
-            default -> OAuthCallbackError.OAUTH_AUTHENTICATION_FAILED;
+            case SOCIAL_EMAIL_PROVIDER_CONFLICT ->
+                    OAuthCallbackError.OAUTH_EMAIL_CONFLICT;
+            default ->
+                    OAuthCallbackError.OAUTH_AUTHENTICATION_FAILED;
         };
     }
 
@@ -194,7 +200,7 @@ public class AuthController {
 
     /** OAuth 로그인 시작 요청입니다. */
     public record OAuthAttemptRequest(
-            @NotBlank @Pattern(regexp = "GOOGLE") String provider,
+            @NotBlank @Pattern(regexp = "GOOGLE|NAVER") String provider,
             @Pattern(regexp = "DEFAULT|INVITE") String returnRoute
     ) {
     }
