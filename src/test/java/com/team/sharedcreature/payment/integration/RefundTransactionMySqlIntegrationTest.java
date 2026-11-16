@@ -13,6 +13,11 @@ import com.team.sharedcreature.admin.application.SchedulerExecutionLifecycleServ
 import com.team.sharedcreature.payment.application.*;
 import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.domain.RefundRequest;
+import com.team.sharedcreature.payment.domain.RefundStatus;
+import com.team.sharedcreature.payment.infrastructure.RefundRequestRepository;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.springframework.data.domain.PageRequest;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,6 +63,8 @@ import static org.mockito.Mockito.*;
 @ContextConfiguration(initializers = RefundTransactionMySqlIntegrationTest.TestDatabaseOnly.class)
 class RefundTransactionMySqlIntegrationTest {
     @Autowired private EntityManager em;
+    @Autowired private RefundRequestRepository refundRepository;
+    @Autowired private RefundQueryService refundQueries;
     @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private RefundApprovalTransactionService approval;
@@ -147,6 +154,47 @@ class RefundTransactionMySqlIntegrationTest {
             assertThat(shop.getStatus()).isEqualTo(ShopItemStatus.INACTIVE);
             assertThat(purchase.getSlotCodeSnapshot()).isEqualTo(AvatarSlot.HEAD);
         });
+    }
+
+    /** 모든 환불 상태의 문자열 저장·Enum 조회와 복구 대상 JPQL을 실제 MySQL로 검증합니다. */
+    @ParameterizedTest
+    @EnumSource(RefundStatus.class)
+    void 환불상태는_문자열로_저장하고_목록과_복구쿼리에_Enum으로_적용한다(RefundStatus status) {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        Instant claimedAt = now.minusSeconds(600);
+        new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
+            var refund = em.find(RefundRequest.class, fixture.refundId());
+            var admin = em.find(User.class, fixture.adminId());
+            if (status == RefundStatus.REJECTED) {
+                refund.reject(admin, "거절", claimedAt);
+            } else if (status != RefundStatus.REQUESTED) {
+                refund.claimCancellation(admin, "승인", claimedAt);
+                switch (status) {
+                    case CANCEL_UNKNOWN -> refund.markCancellationUnknown(claimedAt);
+                    case COMPLETED -> refund.completeCancellation(claimedAt, claimedAt);
+                    case FAILED -> refund.failCancellation(claimedAt);
+                    default -> { }
+                }
+            }
+        });
+
+        assertThat(jdbc.queryForObject("SELECT status FROM refund_requests WHERE id = ?",
+                String.class, fixture.refundId())).isEqualTo(status.name());
+        var mine = refundQueries.listMyRefunds(fixture.ownerId(), 0, 20, status.name());
+        assertThat(mine.getTotalElements()).isEqualTo(1);
+        assertThat(mine.getContent().getFirst().status()).isEqualTo(status.name());
+        assertThat(refundQueries.listMyRefunds(fixture.adminId(), 0, 20, status.name())).isEmpty();
+
+        // 목록과 전체 건수 계산에 같은 Enum 상태 조건이 적용되는지 확인합니다.
+        var all = refundRepository.findAdminRefunds(status, PageRequest.of(0, 100));
+        assertThat(all.getContent()).allSatisfy(refund -> assertThat(refund.getStatus()).isEqualTo(status));
+        assertThat(all.getTotalElements()).isGreaterThanOrEqualTo(1);
+        var stale = refundRepository.findStaleCancellationIds(now.minusSeconds(300), PageRequest.of(0, 100));
+        if (status == RefundStatus.CANCEL_PENDING || status == RefundStatus.CANCEL_UNKNOWN) {
+            assertThat(stale).contains(fixture.refundId());
+        } else {
+            assertThat(stale).doesNotContain(fixture.refundId());
+        }
     }
 
     @Test

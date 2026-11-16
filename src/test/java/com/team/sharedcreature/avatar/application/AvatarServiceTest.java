@@ -11,6 +11,7 @@ import com.team.sharedcreature.avatar.infrastructure.AvatarEquipmentRepository;
 import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.payment.domain.RefundRequest;
+import com.team.sharedcreature.payment.domain.RefundStatus;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
 import com.team.sharedcreature.payment.infrastructure.RefundRequestRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -119,8 +120,8 @@ class AvatarServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"REQUESTED", "CANCEL_PENDING", "CANCEL_UNKNOWN"})
-    void 환불_진행_중에는_사용_확정과_장착을_거부한다(String status) {
+    @EnumSource(value = RefundStatus.class, names = {"REQUESTED", "CANCEL_PENDING", "CANCEL_UNKNOWN"})
+    void 환불_진행_중에는_사용_확정과_장착을_거부한다(RefundStatus status) {
         OwnedItem item = unusedItem(10L, 1L, "HEAD");
         RefundRequest refund = mock(RefundRequest.class);
         when(refund.getStatus()).thenReturn(status);

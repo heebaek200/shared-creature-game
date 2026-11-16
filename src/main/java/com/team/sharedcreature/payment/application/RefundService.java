@@ -7,6 +7,7 @@ import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
 import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.payment.api.RefundResponse;
 import com.team.sharedcreature.payment.domain.RefundRequest;
+import com.team.sharedcreature.payment.domain.RefundStatus;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
 import com.team.sharedcreature.payment.infrastructure.RefundRequestRepository;
 import com.team.sharedcreature.auth.domain.User;
@@ -31,10 +32,11 @@ public class RefundService {
 
     private static final String CREATE_OPERATION = "createRefundRequest";
 
-    private static final Set<String> ACTIVE_REFUND_STATUSES = Set.of(
-            "REQUESTED",
-            "CANCEL_PENDING",
-            "CANCEL_UNKNOWN"
+    /** 중복 환불 요청을 차단해야 하는 진행 중 상태입니다. */
+    private static final Set<RefundStatus> ACTIVE_REFUND_STATUSES = Set.of(
+            RefundStatus.REQUESTED,
+            RefundStatus.CANCEL_PENDING,
+            RefundStatus.CANCEL_UNKNOWN
     );
 
     private final PurchaseRepository purchaseRepository;

@@ -36,7 +36,8 @@ public record RefundResponse(
                 refund.getRequestedByUser().getId(),
                 refund.getRequestReason(),
                 refund.getDecisionReason(),
-                refund.getStatus(),
+                // 환불 상태 Enum을 기존 API 문자열로 변환합니다.
+                refund.getStatus().name(),
                 refund.getRequestedAt(),
                 refund.getReviewedAt(),
                 refund.getCompletedAt()

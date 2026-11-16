@@ -72,7 +72,7 @@ class RefundResultTransactionServiceTest {
         when(idempotency.findForUpdateByIdAndRefundRequestId(4L, 1L)).thenReturn(Optional.of(record));
         when(transactions.save(any(PaymentTransaction.class))).thenAnswer(call -> call.getArgument(0));
         when(queries.getAdminRefund(1L)).thenAnswer(call -> new AdminRefundResponse(
-                1L, 2L, 7L, "요청", "승인", refund.getStatus(), NOW.minusSeconds(600),
+                1L, 2L, 7L, "요청", "승인", refund.getStatus().name(), NOW.minusSeconds(600),
                 NOW.minusSeconds(300), refund.getCompletedAt(), 7L,
                 new AdminRefundResponse.PurchaseInfo("payment", "아이템", 1000L, purchase.getStatus()),
                 new AdminRefundResponse.OwnedItemInfo(8L, item.getStatus().name(), item.getUsedAt()), null));
@@ -88,7 +88,7 @@ class RefundResultTransactionServiceTest {
             case PENDING -> "CANCEL_PENDING";
             case UNKNOWN -> "CANCEL_UNKNOWN";
         };
-        assertThat(refund.getStatus()).isEqualTo(expected);
+        assertThat(refund.getStatus().name()).isEqualTo(expected);
         assertThat(purchase.getStatus()).isEqualTo(outcome == RefundGateway.Outcome.SUCCESS ? "CANCELLED" : "PAID");
         assertThat(item.getStatus()).isEqualTo(outcome == RefundGateway.Outcome.SUCCESS
                 ? OwnedItemStatus.REVOKED

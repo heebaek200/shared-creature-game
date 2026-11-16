@@ -14,6 +14,7 @@ import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.domain.RefundRequest;
+import com.team.sharedcreature.payment.domain.RefundStatus;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
 import com.team.sharedcreature.payment.infrastructure.RefundRequestRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
@@ -51,13 +52,13 @@ public class AvatarService {
     /**
      * 아바타 조회·변경과 변경 이벤트 예약에 필요한 의존성을 주입받습니다.
      *
-     * @param ownedItemRepository 보유 아이템 Repository
-     * @param avatarEquipmentRepository 아바타 장착 정보 Repository
-     * @param userRepository 사용자 Repository
-     * @param purchaseRepository 구매 Repository
-     * @param refundRequestRepository 환불 요청 Repository
-     * @param clock 서버 현재 시각의 기준
-     * @param groupMembershipRepository 현재 소속 그룹 조회 Repository
+     * @param ownedItemRepository           보유 아이템 Repository
+     * @param avatarEquipmentRepository     아바타 장착 정보 Repository
+     * @param userRepository                사용자 Repository
+     * @param purchaseRepository            구매 Repository
+     * @param refundRequestRepository       환불 요청 Repository
+     * @param clock                         서버 현재 시각의 기준
+     * @param groupMembershipRepository     현재 소속 그룹 조회 Repository
      * @param avatarEquipmentEventPublisher Commit 이후 이벤트 발행기
      */
     public AvatarService(
@@ -84,9 +85,9 @@ public class AvatarService {
      * 로그인한 사용자의 보유 아이템 목록을 조회합니다.
      *
      * @param userId 로그인한 사용자 ID
-     * @param page 검증된 페이지 번호, 0 이상
-     * @param size 검증된 페이지 크기, 1~50
-     * @param slot 검증된 슬롯 코드, null이면 전체
+     * @param page   검증된 페이지 번호, 0 이상
+     * @param size   검증된 페이지 크기, 1~50
+     * @param slot   검증된 슬롯 코드, null이면 전체
      * @param status 검증된 보유 상태, null이면 전체
      * @return 현재 장착 여부를 포함한 보유 아이템 페이지
      */
@@ -172,16 +173,16 @@ public class AvatarService {
 
     /**
      * 본인의 보유 아이템을 지정한 아바타 슬롯에 장착합니다.
-     *
+     * <p>
      * 사용 확정과 슬롯 변경은 하나의 트랜잭션으로 처리합니다.
      *
-     * @param userId 로그인한 사용자 ID
-     * @param slot 장착할 슬롯
-     * @param ownedItemId 장착할 보유 아이템 ID
+     * @param userId          로그인한 사용자 ID
+     * @param slot            장착할 슬롯
+     * @param ownedItemId     장착할 보유 아이템 ID
      * @param confirmFirstUse 최초 사용 동의 여부
      * @return 변경된 아바타의 전체 슬롯 정보
      * @throws BusinessException 잘못된 슬롯, 소유권·상태 위반,
-     *                          환불 진행 또는 최초 사용 동의 누락인 경우
+     *                           환불 진행 또는 최초 사용 동의 누락인 경우
      */
     @Transactional
     public AvatarResponse equipAvatarItem(
@@ -246,7 +247,11 @@ public class AvatarService {
 
         boolean refundInProgress = refunds.stream()
                 .anyMatch(refund ->
-                        Set.of("REQUESTED", "CANCEL_PENDING", "CANCEL_UNKNOWN")
+                        Set.of(
+                                        RefundStatus.REQUESTED,
+                                        RefundStatus.CANCEL_PENDING,
+                                        RefundStatus.CANCEL_UNKNOWN
+                                )
                                 .contains(refund.getStatus())
                 );
 
@@ -315,11 +320,11 @@ public class AvatarService {
 
     /**
      * 지정한 아바타 슬롯의 아이템을 해제합니다.
-     *
+     * <p>
      * 보유 아이템의 사용 상태와 최초 사용 시각은 변경하지 않습니다.
      *
      * @param userId 로그인한 사용자 ID
-     * @param slot 해제할 슬롯
+     * @param slot   해제할 슬롯
      * @return 변경된 아바타의 전체 슬롯 정보
      * @throws BusinessException 허용되지 않은 슬롯이거나 사용자가 없는 경우
      */
@@ -358,13 +363,13 @@ public class AvatarService {
 
     /**
      * 현재 소속 그룹에 전달할 아바타 변경 이벤트를 예약합니다.
-     *
+     * <p>
      * 호출자는 사용자 잠금을 확보한 쓰기 트랜잭션 안에서 호출해야 합니다.
      *
-     * @param userId 아바타를 변경한 사용자 ID
-     * @param slot 변경한 슬롯
+     * @param userId       아바타를 변경한 사용자 ID
+     * @param slot         변경한 슬롯
      * @param equippedItem 변경 후 장착 아이템, 해제하면 null
-     * @param occurredAt 변경 시각
+     * @param occurredAt   변경 시각
      */
     private void scheduleEquipmentChangedEvent(
             Long userId,

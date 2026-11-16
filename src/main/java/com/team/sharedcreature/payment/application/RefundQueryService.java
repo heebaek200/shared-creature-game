@@ -6,6 +6,7 @@ import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
 import com.team.sharedcreature.payment.api.AdminRefundResponse;
 import com.team.sharedcreature.payment.api.RefundResponse;
 import com.team.sharedcreature.payment.domain.PaymentTransactionType;
+import com.team.sharedcreature.payment.domain.RefundStatus;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
 import com.team.sharedcreature.payment.infrastructure.RefundRequestRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,8 +14,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.Set;
 
 /**
  * 사용자·관리자의 환불 목록과 관리자 상세 조회를 담당합니다.
@@ -24,15 +23,6 @@ import java.util.Set;
 @Service
 @Transactional(readOnly = true)
 public class RefundQueryService {
-
-    private static final Set<String> REFUND_STATUSES = Set.of(
-            "REQUESTED",
-            "REJECTED",
-            "CANCEL_PENDING",
-            "CANCEL_UNKNOWN",
-            "COMPLETED",
-            "FAILED"
-    );
 
     private final RefundRequestRepository refundRequestRepository;
     private final OwnedItemRepository ownedItemRepository;
@@ -54,11 +44,11 @@ public class RefundQueryService {
             String status
     ) {
         PageRequest pageable = pageRequest(page, size);
-        validateStatus(status);
+        RefundStatus refundStatus = parseStatus(status);
 
         // 조회자 ID를 조건에 포함하여 다른 사용자의 요청을 제외합니다.
         return refundRequestRepository
-                .findMyRefunds(userId, status, pageable)
+                .findMyRefunds(userId, refundStatus, pageable)
                 .map(RefundResponse::from);
     }
 
@@ -76,10 +66,10 @@ public class RefundQueryService {
             String status
     ) {
         PageRequest pageable = pageRequest(page, size);
-        validateStatus(status);
+        RefundStatus refundStatus = parseStatus(status);
 
         return refundRequestRepository
-                .findAdminRefunds(status, pageable)
+                .findAdminRefunds(refundStatus, pageable)
                 .map(RefundResponse::from);
     }
 
@@ -134,10 +124,21 @@ public class RefundQueryService {
     }
 
     /**
-     * 상태 생략은 허용하고 명세에 없는 상태는 거절합니다.
+     * 선택적인 환불 상태 필터를 도메인 타입으로 변환합니다.
+     *
+     * @param status 요청 환불 상태, 미지정이면 null
+     * @return 환불 상태, 미지정이면 null
+     * @throws BusinessException 허용되지 않은 환불 상태인 경우
      */
-    private void validateStatus(String status) {
-        if (status != null && !REFUND_STATUSES.contains(status)) {
+    private RefundStatus parseStatus(String status) {
+        if (status == null) {
+            return null;
+        }
+
+        try {
+            // 대소문자와 공백을 보정하지 않고 기존 허용값을 유지합니다.
+            return RefundStatus.valueOf(status);
+        } catch (IllegalArgumentException exception) {
             throw new BusinessException(
                     ErrorCode.INVALID_FIELD_VALUE,
                     "지원하지 않는 환불 상태입니다."

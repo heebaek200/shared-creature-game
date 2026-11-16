@@ -95,7 +95,7 @@ public class PgApiAttempt {
             );
         }
 
-        if (!"CANCEL_PENDING".equals(refund.getStatus())) {
+        if (refund.getStatus() != RefundStatus.CANCEL_PENDING) {
             throw new IllegalStateException(
                     "취소 처리권을 선점한 환불만 PG 호출을 준비할 수 있습니다."
             );
@@ -162,8 +162,8 @@ public class PgApiAttempt {
             );
         }
 
-        if (!"CANCEL_PENDING".equals(refund.getStatus())
-                && !"CANCEL_UNKNOWN".equals(refund.getStatus())) {
+        if (refund.getStatus() != RefundStatus.CANCEL_PENDING
+                && refund.getStatus() != RefundStatus.CANCEL_UNKNOWN) {
             throw new IllegalStateException(
                     "취소 결과가 미확정인 환불만 조회를 준비할 수 있습니다."
             );

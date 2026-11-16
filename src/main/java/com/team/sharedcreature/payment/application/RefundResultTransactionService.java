@@ -8,6 +8,7 @@ import com.team.sharedcreature.payment.domain.PaymentTransactionStatus;
 import com.team.sharedcreature.payment.domain.PaymentTransactionType;
 import com.team.sharedcreature.payment.domain.PgApiAttempt;
 import com.team.sharedcreature.payment.domain.Purchase;
+import com.team.sharedcreature.payment.domain.RefundStatus;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
 import com.team.sharedcreature.payment.infrastructure.PgApiAttemptRepository;
 import lombok.RequiredArgsConstructor;
@@ -112,8 +113,8 @@ public class RefundResultTransactionService {
 
         // 동일 호출의 결과와 이미 확정한 환불을 다시 변경하지 않습니다.
         if (attempt.getCompletedAt() != null
-                || "COMPLETED".equals(refund.getStatus())
-                || "FAILED".equals(refund.getStatus())) {
+                || refund.getStatus() == RefundStatus.COMPLETED
+                || refund.getStatus() == RefundStatus.FAILED) {
             // 이미 처리된 결과도 최초 HTTP 응답으로 저장하여 반환합니다.
             return completeResponse(
                     idempotencyRecord,
@@ -122,8 +123,8 @@ public class RefundResultTransactionService {
             );
         }
 
-        if (!"CANCEL_PENDING".equals(refund.getStatus())
-                && !"CANCEL_UNKNOWN".equals(refund.getStatus())) {
+        if (refund.getStatus() != RefundStatus.CANCEL_PENDING
+                && refund.getStatus() != RefundStatus.CANCEL_UNKNOWN) {
             throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
         }
 
@@ -211,8 +212,8 @@ public class RefundResultTransactionService {
         }
 
         // 이미 확정됐거나 같은 조회 결과를 처리했다면 다시 반영하지 않습니다.
-        if (!"CANCEL_PENDING".equals(refund.getStatus())
-                && !"CANCEL_UNKNOWN".equals(refund.getStatus())) {
+        if (refund.getStatus() != RefundStatus.CANCEL_PENDING
+                && refund.getStatus() != RefundStatus.CANCEL_UNKNOWN) {
             return Optional.empty();
         }
 
@@ -432,7 +433,7 @@ public class RefundResultTransactionService {
 
         CommandResponse response;
 
-        if ("CANCEL_UNKNOWN".equals(data.status())) {
+        if (RefundStatus.CANCEL_UNKNOWN.name().equals(data.status())) {
             // 결과 불명은 상태를 저장한 뒤 HTTP 409로 전달합니다.
             var error = errorResponseFactory.create(
                     ErrorCode.PG_CANCEL_RESULT_UNKNOWN,

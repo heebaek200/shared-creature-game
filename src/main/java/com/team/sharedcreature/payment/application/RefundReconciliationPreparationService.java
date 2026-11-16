@@ -10,6 +10,7 @@ import com.team.sharedcreature.payment.application
 import com.team.sharedcreature.payment.application
         .RefundRecoveryPreparationService.RecoveryCommand;
 import com.team.sharedcreature.payment.infrastructure.RefundIdempotencyRepository;
+import com.team.sharedcreature.payment.domain.RefundStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -109,7 +110,7 @@ public class RefundReconciliationPreparationService {
 
             CommandResponse response;
 
-            if ("CANCEL_UNKNOWN".equals(data.status())) {
+            if (RefundStatus.CANCEL_UNKNOWN.name().equals(data.status())) {
                 response = new CommandResponse(
                         409,
                         null,

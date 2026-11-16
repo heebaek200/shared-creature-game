@@ -62,7 +62,7 @@ public class PurchaseQueryService {
                 .orElse(null);
         String latestRefundStatus = refundRequestRepository
                 .findFirstByPurchaseIdOrderByRequestedAtDesc(purchase.getId())
-                .map(RefundRequest::getStatus)
+                .map(refund -> refund.getStatus().name())
                 .orElse(null);
         return new PurchaseSummaryResponse(
                 purchase.getId(),
@@ -82,7 +82,10 @@ public class PurchaseQueryService {
                 .map(item -> item.getStatus().name())
                 .orElse(null);
         var refunds = refundRequestRepository.findByPurchaseIdOrderByRequestedAtAsc(purchase.getId());
-        String latestRefundStatus = refunds.isEmpty() ? null : refunds.get(refunds.size() - 1).getStatus();
+        // 환불 요청이 없으면 기존처럼 null을 반환합니다.
+        String latestRefundStatus = refunds.isEmpty()
+                ? null
+                : refunds.get(refunds.size() - 1).getStatus().name();
         var transactions = includeDetails
                 ? transactionRepository.findByPurchaseIdOrderByCreatedAtAsc(purchase.getId()).stream()
                         .map(this::transaction)
@@ -126,7 +129,8 @@ public class PurchaseQueryService {
                 refund.getRequestedByUser().getId(),
                 refund.getRequestReason(),
                 refund.getDecisionReason(),
-                refund.getStatus(),
+                // 환불 상태 Enum을 기존 API 문자열로 변환합니다.
+                refund.getStatus().name(),
                 refund.getRequestedAt(),
                 refund.getReviewedAt(),
                 refund.getCompletedAt()
