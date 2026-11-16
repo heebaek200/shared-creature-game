@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.Objects;
 
 /**
  * payment_transactions 테이블의 상태와 이력을 보존하는 JPA 엔티티입니다.
@@ -114,5 +115,134 @@ public class PaymentTransaction {
                 null,
                 now
         );
+    }
+
+    /**
+     * 환불을 위한 전체 취소 거래를 미확정 상태로 생성합니다.
+     * PG 취소 성공을 의미하지 않으며 결과 확인 후 별도로 갱신합니다.
+     *
+     * @param purchase 환불 대상 구매
+     * @param now 거래 이력 생성 시각
+     * @return CANCELLATION 유형의 REQUESTED 거래
+     */
+    public static PaymentTransaction cancellationRequested(
+            Purchase purchase,
+            Instant now
+    ) {
+        Objects.requireNonNull(purchase, "purchase");
+        Objects.requireNonNull(now, "now");
+
+        Long amount = purchase.getPriceKrwSnapshot();
+
+        if (amount == null || amount < 1) {
+            throw new IllegalArgumentException(
+                    "전체 취소 거래에는 유효한 구매 금액이 필요합니다."
+            );
+        }
+
+        PaymentTransaction transaction = new PaymentTransaction();
+        transaction.purchase = purchase;
+        transaction.provider = "PORTONE";
+        transaction.transactionType = PaymentTransactionType.CANCELLATION.name();
+        transaction.amountKrw = amount;
+        transaction.status = PaymentTransactionStatus.REQUESTED.name();
+        transaction.createdAt = now;
+        transaction.updatedAt = now;
+
+        // PG 취소 거래 ID와 처리 시각은 확인 전까지 null로 유지합니다.
+        return transaction;
+    }
+
+    /**
+     * 미확정 취소 거래에 검증된 PG 결과를 반영합니다.
+     * 호출자는 DB 잠금과 결제 ID·전체 취소 금액 검증을 완료해야 합니다.
+     *
+     * @param nextStatus 반영할 취소 거래 상태
+     * @param providerTransactionId PG 취소 거래 ID, 미확정이면 null
+     * @param processedAt PG 처리 시각, 미확정이면 null
+     * @param providerResultCode PG 결과 코드, 없으면 null
+     * @param now 결과를 반영하는 서버 시각
+     * @return 실제 변경되었으면 true
+     */
+    public boolean applyCancellationResult(
+            PaymentTransactionStatus nextStatus,
+            String providerTransactionId,
+            Instant processedAt,
+            String providerResultCode,
+            Instant now
+    ) {
+        Objects.requireNonNull(nextStatus, "nextStatus");
+        Objects.requireNonNull(now, "now");
+
+        // 기존 승인 거래를 취소 결과로 변경하지 않습니다.
+        if (!PaymentTransactionType.CANCELLATION.name().equals(transactionType)) {
+            throw new IllegalStateException(
+                    "취소 거래에만 취소 결과를 반영할 수 있습니다."
+            );
+        }
+
+        // 늦게 도착한 응답으로 확정 결과를 변경하지 않습니다.
+        if (PaymentTransactionStatus.SUCCESS.name().equals(status)
+                || PaymentTransactionStatus.DEFINITIVE_FAILURE.name().equals(status)) {
+            return false;
+        }
+
+        if (!PaymentTransactionStatus.REQUESTED.name().equals(status)
+                && !PaymentTransactionStatus.UNKNOWN.name().equals(status)) {
+            throw new IllegalStateException("유효하지 않은 취소 거래 상태입니다.");
+        }
+
+        if (providerTransactionId != null
+                && (providerTransactionId.isBlank()
+                || providerTransactionId.length() > 255)) {
+            throw new IllegalArgumentException("유효하지 않은 PG 취소 거래 ID입니다.");
+        }
+
+        // 한 번 연결된 거래를 다른 PG 취소 거래로 바꾸지 않습니다.
+        if (this.providerTransactionId != null
+                && providerTransactionId != null
+                && !this.providerTransactionId.equals(providerTransactionId)) {
+            throw new IllegalStateException("PG 취소 거래 ID가 일치하지 않습니다.");
+        }
+
+        String resolvedTransactionId = providerTransactionId == null
+                ? this.providerTransactionId
+                : providerTransactionId;
+
+        if (nextStatus == PaymentTransactionStatus.SUCCESS
+                && (resolvedTransactionId == null || processedAt == null)) {
+            throw new IllegalArgumentException(
+                    "취소 성공에는 PG 취소 거래 ID와 처리 시각이 필요합니다."
+            );
+        }
+
+        boolean unresolved = nextStatus == PaymentTransactionStatus.REQUESTED
+                || nextStatus == PaymentTransactionStatus.UNKNOWN;
+
+        if (unresolved && processedAt != null) {
+            throw new IllegalArgumentException(
+                    "미확정 취소 거래에는 처리 완료 시각을 기록할 수 없습니다."
+            );
+        }
+
+        if (providerResultCode != null && providerResultCode.length() > 100) {
+            throw new IllegalArgumentException("PG 결과 코드는 100자 이하여야 합니다.");
+        }
+
+        // 동일한 결과를 반복 반영해도 변경 시각을 유지합니다.
+        if (nextStatus.name().equals(this.status)
+                && Objects.equals(this.providerTransactionId, resolvedTransactionId)
+                && Objects.equals(this.processedAt, processedAt)
+                && Objects.equals(this.providerResultCode, providerResultCode)) {
+            return false;
+        }
+
+        this.status = nextStatus.name();
+        this.providerTransactionId = resolvedTransactionId;
+        this.processedAt = processedAt;
+        this.providerResultCode = providerResultCode;
+        this.updatedAt = now;
+
+        return true;
     }
 }

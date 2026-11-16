@@ -132,6 +132,8 @@ class AvatarHttpDatabaseIntegrationTest {
         deleteByIds("owned_items", "purchase_id", purchaseIds);
         deleteByIds("purchases", "id", purchaseIds);
         deleteByIds("shop_items", "id", shopIds);
+        // 인증된 HTTP 요청으로 생성된 활동 기록을 사용자보다 먼저 정리합니다.
+        deleteByIds("user_daily_activities", "user_id", userIds);
         deleteByIds("users", "id", userIds);
     }
 

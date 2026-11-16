@@ -19,7 +19,9 @@ class PersistenceScaffoldTest {
         long repositories;
         try (var files = Files.walk(source)) {
             entities = files.filter(path -> path.toString().endsWith(".java"))
-                    .filter(path -> read(path).contains("@Entity"))
+                    // @EntityGraph를 제외하고 실제 엔티티 선언만 집계합니다.
+                    .filter(path -> java.util.regex.Pattern.compile("(?m)^\\s*@Entity(?:\\s|\\(|$)")
+                            .matcher(read(path)).find())
                     .count();
         }
         try (var files = Files.walk(source)) {

@@ -10,6 +10,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.Objects;
 
 /**
  * owned_items 테이블의 상태와 이력을 보존하는 JPA 엔티티입니다.
@@ -115,5 +116,52 @@ public class OwnedItem {
         this.status = "OWNED_USED";
         this.usedAt = now;
         this.updatedAt = now;
+    }
+
+    /**
+     * PG 취소 성공이 확정된 미사용 아이템을 회수합니다.
+     * 환불 완료·구매 취소와 동일한 트랜잭션 안에서 호출해야 합니다.
+     *
+     * @param now 회수를 반영하는 서버 시각
+     * @return 처음 회수되었으면 true, 이미 정상 회수되었으면 false
+     * @throws BusinessException 사용한 아이템이거나 상태와 이력이 불일치한 경우
+     */
+    public boolean revokeAfterRefund(Instant now) {
+        Objects.requireNonNull(now, "now");
+
+        // 상태뿐 아니라 최초 사용 이력도 검사합니다.
+        if (usedAt != null || "OWNED_USED".equals(status)) {
+            throw new BusinessException(
+                    ErrorCode.REFUND_NOT_ALLOWED_USED_ITEM,
+                    "사용한 아이템은 미사용 환불로 회수할 수 없습니다."
+            );
+        }
+
+        if ("REVOKED".equals(status)) {
+            // 회수 상태인데 시각이 없다면 정상적인 중복 처리로 간주하지 않습니다.
+            if (revokedAt == null) {
+                throw new BusinessException(
+                        ErrorCode.CONCURRENT_MODIFICATION,
+                        "아이템 회수 상태와 회수 이력이 일치하지 않습니다."
+                );
+            }
+
+            // 반복 반영에서도 최초 회수 시각과 변경 시각을 보존합니다.
+            return false;
+        }
+
+        if (!"OWNED_UNUSED".equals(status) || revokedAt != null) {
+            throw new BusinessException(
+                    ErrorCode.CONCURRENT_MODIFICATION,
+                    "아이템 보유 상태와 회수 이력이 일치하지 않습니다."
+            );
+        }
+
+        this.status = "REVOKED";
+        this.revokedAt = now;
+        this.updatedAt = now;
+
+        // usedAt은 수정하지 않습니다.
+        return true;
     }
 }
