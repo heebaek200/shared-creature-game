@@ -21,15 +21,14 @@ import jakarta.servlet.http.HttpSession;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.session.FindByIndexNameSessionRepository;
+import org.springframework.session.Session;
 
 import java.security.SecureRandom;
 import java.text.Normalizer;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.Locale;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 /**
  * OAuth 시도, 가입 대기, 내부 회원 연결과 로그인 세션 흐름을 처리합니다.
@@ -49,10 +48,17 @@ public class AuthService {
     private final GroupInviteLinkRepository inviteLinkRepository;
     private final GroupJoinRestrictionRepository restrictionRepository;
     private final GroupMembershipService groupMembershipService;
-    private final SocialLoginClient socialLoginClient;
+    private final List<SocialLoginClient> socialLoginClients;
     private final InitialSuperAdminProperties initialSuperAdmin;
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
+
+    private final FindByIndexNameSessionRepository<? extends Session> sessionRepository;
+    private static final Object[] SESSION_LIMIT_LOCKS = new Object[64];
+    static {
+        Arrays.setAll(SESSION_LIMIT_LOCKS, index -> new Object());
+    }
+
     private final SecureRandom secureRandom = new SecureRandom();
 
     /** 인증 흐름에 필요한 저장소와 공급자 Port를 주입받습니다. */
@@ -65,10 +71,10 @@ public class AuthService {
             GroupInviteLinkRepository inviteLinkRepository,
             GroupJoinRestrictionRepository restrictionRepository,
             GroupMembershipService groupMembershipService,
-            SocialLoginClient socialLoginClient,
+            List<SocialLoginClient> socialLoginClients,
             InitialSuperAdminProperties initialSuperAdmin,
             TransactionTemplate transactionTemplate,
-            Clock clock
+            Clock clock, FindByIndexNameSessionRepository<? extends Session> sessionRepository
     ) {
         this.attemptRepository = attemptRepository;
         this.socialAccountRepository = socialAccountRepository;
@@ -78,18 +84,17 @@ public class AuthService {
         this.inviteLinkRepository = inviteLinkRepository;
         this.restrictionRepository = restrictionRepository;
         this.groupMembershipService = groupMembershipService;
-        this.socialLoginClient = socialLoginClient;
+        this.socialLoginClients = socialLoginClients;
         this.initialSuperAdmin = initialSuperAdmin;
         this.transactionTemplate = transactionTemplate;
         this.clock = clock;
+        this.sessionRepository = sessionRepository;
     }
 
-    /** Google OAuth 시도를 저장하고 공급자 Authorization URL을 반환합니다. */
+    /** 소셜 OAuth 시도를 저장하고 공급자 Authorization URL을 반환합니다. */
     @Transactional
     public OAuthAttemptResult createOAuthAttempt(String provider, String returnRoute, HttpSession session) {
-        if (!"GOOGLE".equals(provider)) {
-            throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE, "현재 Google 로그인만 지원합니다.");
-        }
+        SocialLoginClient client = findSocialLoginClient(provider);
         Instant now = Instant.now(clock);
         String state = token();
         String nonce = token();
@@ -115,7 +120,17 @@ public class AuthService {
                 now
         ));
         session.setAttribute(OAUTH_NONCE, nonce);
-        return new OAuthAttemptResult(socialLoginClient.authorizationUrl(state, nonce), now.plusSeconds(600));
+        return new OAuthAttemptResult(client.authorizationUrl(state, nonce), now.plusSeconds(600));
+    }
+
+    private SocialLoginClient findSocialLoginClient(String provider) {
+        return socialLoginClients.stream()
+                .filter(client -> provider.equals(client.provider()))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.INVALID_FIELD_VALUE,
+                        "지원하지 않는 소셜 로그인 공급자입니다."
+                ));
     }
 
     /** Callback의 state·시작 세션을 검증한 뒤 기존 로그인 또는 가입 대기로 전환합니다. */
@@ -123,19 +138,28 @@ public class AuthService {
         Instant now = Instant.now(clock);
         String stateHash = Hashing.sha256(state);
         String sessionHash = Hashing.sha256(session.getId());
-        transactionTemplate.executeWithoutResult(status -> validateAttempt(stateHash, sessionHash, now));
+
+        // OAuth를 시작한 요청을 찾아 state와 세션을 검증하고 공급자를 확인합니다.
+        String provider = transactionTemplate.execute(status -> {
+            OauthLoginAttempt attempt = attemptRepository.findByStateHash(stateHash)
+                    .orElseThrow(() -> conflict(
+                            ErrorCode.OAUTH_STATE_INVALID,
+                            "유효하지 않은 로그인 요청입니다."
+                    ));
+
+            validateAttempt(attempt, sessionHash, now);
+            return attempt.getProvider();
+        });
+
         String nonce = (String) session.getAttribute(OAUTH_NONCE);
 
-        // 외부 Google 호출은 DB Connection과 Transaction을 점유하지 않습니다.
-        SocialLoginClient.SocialProfile profile = socialLoginClient.exchange(code, nonce);
+        SocialLoginClient client = findSocialLoginClient(provider);
 
-        return transactionTemplate.execute(status -> completeCallback(stateHash, sessionHash, profile, session, now));
-    }
+        SocialLoginClient.SocialProfile profile = client.exchange(code, nonce, state);
 
-    private void validateAttempt(String stateHash, String sessionHash, Instant now) {
-        OauthLoginAttempt attempt = attemptRepository.findByStateHash(stateHash)
-                .orElseThrow(() -> conflict(ErrorCode.OAUTH_STATE_INVALID, "유효하지 않은 로그인 요청입니다."));
-        validateAttempt(attempt, sessionHash, now);
+        return transactionTemplate.execute(status ->
+                completeCallback(stateHash, sessionHash, profile, session, now)
+        );
     }
 
     private void validateAttempt(OauthLoginAttempt attempt, String sessionHash, Instant now) {
@@ -170,7 +194,11 @@ public class AuthService {
             session.removeAttribute(ONBOARDING_REASON);
         }
 
-        var account = socialAccountRepository.findByProviderAndProviderUserId("GOOGLE", profile.providerUserId());
+        String provider = attempt.getProvider();
+        var account = socialAccountRepository.findByProviderAndProviderUserId(
+                provider,
+                profile.providerUserId()
+        );
         if (account.isPresent()) {
             // 기존 회원 분기
             User user = account.get().getUser();
@@ -187,6 +215,7 @@ public class AuthService {
             joinExistingInvitation(invitationId, user, nickname, session);
             Set<String> roles = currentRoles(user);
             session.setAttribute(SessionAuthenticationFilter.LOGIN_USER, new LoginUser(user.getId(), nickname, roles));
+            enforceSessionLimit(user.getId(), session);
             session.removeAttribute(OAUTH_NONCE);
             return "/";
         }
@@ -196,7 +225,10 @@ public class AuthService {
             throw conflict(ErrorCode.SOCIAL_EMAIL_PROVIDER_CONFLICT, "이미 다른 소셜 공급자로 가입한 이메일입니다.");
         }
         session.setAttribute(PENDING_SIGNUP, new PendingSignup(
-                "GOOGLE", profile.providerUserId(), profile.email(), profile.emailVerified(),
+                provider,
+                profile.providerUserId(),
+                profile.email(),
+                profile.emailVerified(),
                 profile.suggestedNickname(),
                 invitationId,
                 now.plusSeconds(1800)));
@@ -236,6 +268,7 @@ public class AuthService {
         }
         LoginUser loginUser = new LoginUser(user.getId(), nickname.strip(), currentRoles(user));
         session.setAttribute(SessionAuthenticationFilter.LOGIN_USER, loginUser);
+        enforceSessionLimit(user.getId(), session);
         session.removeAttribute(PENDING_SIGNUP);
         session.removeAttribute(InvitationSessionContext.SESSION_KEY);
         return loginUser;
@@ -348,4 +381,25 @@ public class AuthService {
             Instant joinedAt
     ) {
     }
+
+    private void enforceSessionLimit(Long userId, HttpSession currentSession) {
+        String principalName = userId.toString();
+        currentSession.setAttribute(FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME, principalName);
+        Object lock = SESSION_LIMIT_LOCKS[Math.floorMod(userId.hashCode(), SESSION_LIMIT_LOCKS.length)];
+
+        synchronized (lock) {
+            Map<String, ? extends Session> sessions = sessionRepository.findByPrincipalName(principalName);
+
+            List<Map.Entry<String, ? extends Session>> previousSessions = new ArrayList<>(sessions.entrySet());
+            previousSessions.removeIf(entry -> entry.getKey().equals(currentSession.getId()));
+            previousSessions.sort(Comparator.comparing(entry -> entry.getValue().getCreationTime()));
+
+            while (previousSessions.size() > 2) {
+                Map.Entry<String, ? extends Session> oldest = previousSessions.remove(0);
+                sessionRepository.deleteById(oldest.getKey());
+            }
+        }
+    }
+
+
 }

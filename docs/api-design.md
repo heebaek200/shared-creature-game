@@ -235,6 +235,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | `OAUTH_INVALID_STATE` | 미등록·재사용 State 또는 잘못된 Callback 입력 |
 | `OAUTH_SESSION_EXPIRED` | OAuth 시도 만료 또는 시작 세션 불일치·소실 |
 | `OAUTH_AUTHENTICATION_FAILED` | Token·Nonce·계정 검증 실패 또는 공급자 장애 |
+| `OAUTH_EMAIL_CONFLICT` | 동일 이메일이 다른 소셜 공급자 계정에 이미 등록되어 신규 가입이 차단된 경우 |
 
 ### getSignupContext — `GET /api/v1/auth/signup-context`
 

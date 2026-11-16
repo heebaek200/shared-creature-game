@@ -34,6 +34,11 @@ oauth:
     client-secret: ${GOOGLE_CLIENT_SECRET:}
     redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:5173/oauth2/callback/google}
 
+  naver:
+    client-id: ${NAVER_CLIENT_ID:}
+    client-secret: ${NAVER_CLIENT_SECRET:}
+    redirect-uri: ${NAVER_REDIRECT_URI:http://localhost:5173/oauth2/callback/naver}
+
 auth:
   initial-super-admin:
     provider: ${INITIAL_SUPER_ADMIN_PROVIDER:}
