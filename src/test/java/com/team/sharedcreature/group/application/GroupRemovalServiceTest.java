@@ -56,6 +56,7 @@ class GroupRemovalServiceTest {
     @Mock ModerationActionRepository moderationActionRepository;
     @Mock SeasonQueryService seasonQueryService;
     @Mock SeasonContributionMembershipService contributionMembershipService;
+    @Mock com.team.sharedcreature._core.realtime.GroupPresenceRevocationService presenceRevocationService;
 
     private GroupRemovalService service;
 
@@ -76,6 +77,7 @@ class GroupRemovalServiceTest {
                 moderationActionRepository,
                 seasonQueryService,
                 contributionMembershipService,
+                presenceRevocationService,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }

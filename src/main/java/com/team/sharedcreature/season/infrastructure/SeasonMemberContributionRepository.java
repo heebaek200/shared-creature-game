@@ -25,6 +25,17 @@ public interface SeasonMemberContributionRepository extends JpaRepository<Season
             Long userId
     );
 
+    /** 현재 그룹 시즌의 기여도와 사용자를 실시간 순위 계산용으로 조회합니다. */
+    @Query("""
+            SELECT contribution
+              FROM SeasonMemberContribution contribution
+              JOIN FETCH contribution.user
+             WHERE contribution.groupSeason.id = :groupSeasonId
+            """)
+    List<SeasonMemberContribution> findAllByGroupSeasonIdWithUser(
+            @Param("groupSeasonId") Long groupSeasonId
+    );
+
     /**
      * 종료 시즌에 속한 모든 개인 기여도를 조회합니다.
      * 그룹 시즌·그룹·사용자를 함께 로딩하여 정합성 검증과 순위 계산에 사용합니다.

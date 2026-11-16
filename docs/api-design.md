@@ -1068,7 +1068,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.recentContributions[].occurredAt | string(date-time) | Y | N | UTC ISO 8601 | 발생 시각 |
 | data.snapshotAt | string(date-time) | Y | N | UTC ISO 8601 | Snapshot 생성 시각 |
 | data.streamInstanceId | string(uuid) | Y | N | 서버 실행 인스턴스별 UUID | Stream 인스턴스 식별자 |
-| data.sequence | integer(int64) | Y | N | 0 이상; Stream 내 단조 증가 | Snapshot 반영 완료 이벤트 순번 |
+| data.sequence | integer(int64) | Y | N | 0 이상; Stream 내 단조 증가 | Snapshot 완료 시 서버가 관측한 그룹 Stream 순번; DB 조회와 원자적 경계 아님 |
 
 **오류 응답**
 
@@ -2717,9 +2717,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | Presence | 사용자별 활성 WebSocket session ID를 관리하고 첫 session에서 접속, 마지막 session 제거에서 즉시 퇴장 |
 | 상태 변경 | REST API로만 수행 |
 
-초기 Snapshot 조회 중 이벤트를 수신하면 Snapshot 완료 후 한 번 더 조회합니다. SUBSCRIBE RECEIPT, 이벤트 Payload Buffer와 시간 기반 재정렬은 요구하지 않습니다.
+초기 Snapshot 조회 중 이벤트를 수신하면 Snapshot 완료 후 한 번 더 조회합니다. Snapshot 완료 후 아직 처리하지 않은 이벤트가 Snapshot의 sequence 이하로 도착해도 지연 도착으로 보고 Payload를 적용하지 않고 Snapshot을 한 번 다시 조회합니다. SUBSCRIBE RECEIPT, 이벤트 Payload Buffer와 시간 기반 재정렬은 요구하지 않습니다.
 
-로그아웃·세션 만료·탈퇴·강퇴 시 해당 사용자의 구독과 Presence를 즉시 제거합니다. Presence와 Stream Cursor는 단일 백엔드 인스턴스 메모리에만 보관합니다.
+로그아웃·탈퇴·강퇴 시 해당 사용자의 구독과 Presence를 즉시 제거합니다. 자연 만료는 Spring Session이 만료를 감지해 Session 삭제 이벤트를 발행할 때 제거합니다. Presence와 Stream Cursor는 단일 백엔드 인스턴스 메모리에만 보관합니다.
 
 **모든 서버 → 클라이언트 이벤트 Envelope**
 
@@ -2733,7 +2733,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | occurredAt | string(date-time) | Y | N | UTC ISO 8601 |
 | payload | object | Y | N | 이벤트별 Payload 스키마 |
 
-`getCreatureHome` Snapshot과 WebSocket 이벤트는 `streamInstanceId`, `sequence`를 공유합니다. 같은 `eventId`는 무시하고, 이전에 적용한 sequence 이하는 적용하지 않습니다. `streamInstanceId` 변경 또는 sequence 누락 시 Snapshot을 다시 조회합니다.
+`getCreatureHome` Snapshot과 WebSocket 이벤트는 `streamInstanceId`, `sequence`를 공유합니다. 같은 `eventId`와 이미 적용한 sequence 이하는 무시합니다. 단, Snapshot 완료 후 아직 처리하지 않은 이벤트가 Snapshot의 sequence 이하로 도착하면 지연 도착으로 보고 Payload를 적용하지 않고 Snapshot을 한 번 다시 조회합니다. `streamInstanceId` 변경 또는 sequence 누락 시에도 Snapshot을 다시 조회합니다.
 
 ### 10.2. `PRESENCE_JOINED`
 
