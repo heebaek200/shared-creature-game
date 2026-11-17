@@ -912,8 +912,11 @@ export function adminOperationsPage() {
 
                 // 기존 운영 경고 갱신 동작은 그대로 유지합니다.
                 await loadWarnings();
+            } else {
+                // 409 이외의 오류는 Modal을 유지하고 사유를 표시합니다.
+                // 관리자가 내용을 확인한 뒤 재시도하거나 취소할 수 있습니다.
+                confirmError.textContent = getErrorMessage(error);
             }
-
         } finally {
             processing = false;
             if (!disposed) updateControls();
