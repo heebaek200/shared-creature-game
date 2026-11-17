@@ -7,8 +7,8 @@ import { notFoundPage } from '../pages/not-found-page.js';
 import { statusPage } from '../pages/status-page.js';
 import { creaturePage } from '../pages/creature-page.js';
 import { invitePage } from '../pages/invite-page.js';
-import { adminPage as questsPage } from '../pages/quests-page.js';
-import { adminPage as rankingsPage } from '../pages/rankings-page.js';
+import { questPage } from '../pages/quests-page.js';
+import { rankingsPage } from '../pages/rankings-page.js';
 import { adminPage as groupPage } from '../pages/group-page.js';
 import { adminPage as shopPage } from '../pages/shop-page.js';
 import { adminPage as avatarPage } from '../pages/avatar-page.js';
@@ -39,7 +39,7 @@ export function startApplication(root) {
     { path: '/invite/:token', access: 'PUBLIC', page: invitePage },
     { path: '/groups/select', access: 'AUTHENTICATED', page: groupSelectPage },
     { path: '/creature', access: 'GROUP_MEMBER', page: creaturePage },
-    { path: '/quests', access: 'GROUP_MEMBER', page: questsPage },
+    { path: '/quests', access: 'GROUP_MEMBER', page: questPage },
     { path: '/rankings', access: 'GROUP_MEMBER', page: rankingsPage },
     { path: '/group', access: 'GROUP_MEMBER', page: groupPage },
     { path: '/shop', access: 'AUTHENTICATED', page: shopPage },

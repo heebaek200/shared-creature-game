@@ -4,6 +4,7 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
+import com.team.sharedcreature.quest.domain.PhotoSubmission;
 import com.team.sharedcreature.quest.domain.QuestAssignment;
 import com.team.sharedcreature.quest.domain.QuestCompletion;
 import com.team.sharedcreature.quest.domain.QuestRewardLedger;
@@ -28,13 +29,16 @@ import com.team.sharedcreature.season.domain.SeasonMemberContribution;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.time.LocalDate;
 import java.util.Optional;
 
 /**
@@ -43,6 +47,8 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class QuestCompletionService {
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     /**
      * 사용자의 현재 시즌 기여도 행을 조회하고 갱신합니다.
@@ -88,7 +94,6 @@ public class QuestCompletionService {
      * 사용자의 체크인 기록을 조회합니다.
      */
     private final ServiceCheckInRepository serviceCheckInRepository;
-
     /**
      * 현재 활성 시즌을 조회합니다.
      */
@@ -114,6 +119,9 @@ public class QuestCompletionService {
      * 사용자별 퀘스트 완료 기록을 조회합니다.
      */
     private final QuestCompletionRepository completionRepository;
+
+    /** 사용자별 사진 제출 횟수를 조회합니다. */
+    private final PhotoSubmissionRepository photoSubmissionRepository;
 
     /**
      * 현재 시각을 제공해 기간 경계 판정을 일정하게 처리합니다.
@@ -155,15 +163,11 @@ public class QuestCompletionService {
 
     /**
      * 현재 활성 시즌에서 진행 중인 일일 또는 주간 퀘스트 배정을 조회합니다.
+     * 조회 하고자 하는 일일,주간 유형을 받고, 그에 맞는 퀘스트 목록을 리스트로 반환
+     * 방어 코드 DAILY나 WEEKLY가 아닐경우 400 Bad Request 던짐
      *
      * @param periodType 조회할 기간 유형 (일일, 주간)
      * @return 슬롯 순서로 정렬된 현재 퀘스트 배정 목록
-     */
-
-    /**조회 하고자 하는 일일,주간 유형을 받고, 그에 맞는 퀘스트 목록을 리스트로 반환*/
-
-    /**
-     * 방어 코드 DAILY나 WEEKLY가 아닐경우 400 Bad Request 던짐
      */
     public List<QuestAssignment> findCurrentAssignments(String periodType) {
         if (periodType != null
@@ -175,14 +179,14 @@ public class QuestCompletionService {
             );
         }
 
-        /**null이 들어오면 DAILY WEEKLY 둘다 조회할 리스트로 생성*/
+        // null이 들어오면 DAILY WEEKLY 둘다 조회할 리스트로 생성
         Instant now = Instant.now(clock);
         Long seasonId = seasonQueryService.findCurrentSeason().getId();
         List<String> periodTypes = periodType == null
                 ? List.of("DAILY", "WEEKLY")
                 : List.of(periodType);
 
-        /**반복문으로 퀘스트 수집*/
+        // 반복문으로 퀘스트 수집
         List<QuestAssignment> assignments = new ArrayList<>();
 
         for (String type : periodTypes) {
@@ -211,23 +215,23 @@ public class QuestCompletionService {
             Long userId,
             List<QuestAssignment> assignments
     ) {
-        /**방어 코드 불필요한 assignments.isEmpty()일때, 데이터베이스 조회 쿼리를 날리지 않고 곧바로 빈 맵을 반환*/
+        // 방어 코드 불필요한 assignments.isEmpty()일때, 데이터베이스 조회 쿼리를 날리지 않고 곧바로 빈 맵을 반환
         Map<Long, QuestCompletion> completionsByAssignmentId = new HashMap<>();
         if (assignments.isEmpty()) {
             return completionsByAssignmentId;
         }
 
-        /**할당 ID 추출*/
+        // 할당 ID 추출
         List<Long> assignmentIds = new ArrayList<>();
         for (QuestAssignment assignment : assignments) {
             assignmentIds.add(assignment.getId());
         }
 
-        /**사용자가 가진 완료 이력 중 해당 assignmentIds에 포함되는 데이터들을 단 한 번의 쿼리로 일괄 조회*/
+        // 사용자가 가진 완료 이력 중 해당 assignmentIds에 포함되는 데이터들을 단 한 번의 쿼리로 일괄 조회
         List<QuestCompletion> completions =
                 completionRepository.findAllByUserIdAndQuestAssignmentIdIn(userId, assignmentIds);
 
-        /**조회된 리스트 형태의 완료 이력을 순회하며, 각 완료 데이터가 어떤 퀘스트에 속하는지 키값으로 매핑*/
+        // 조회된 리스트 형태의 완료 이력을 순회하며, 각 완료 데이터가 어떤 퀘스트에 속하는지 키값으로 매핑
         for (QuestCompletion completion : completions) {
             Long assignmentId = completion.getQuestAssignment().getId();
             completionsByAssignmentId.put(assignmentId, completion);
@@ -270,17 +274,16 @@ public class QuestCompletionService {
                         "현재 그룹의 시즌 참여 정보를 찾을 수 없습니다."
                 ));
 
-        /**퀘스트 할당과 완료 이력 조회*/
+        // 퀘스트 할당과 완료 이력 조회
         List<QuestAssignment> assignments = findCurrentAssignments(periodType);
         Map<Long, QuestCompletion> completionsByAssignmentId =
                 findCompletionsByAssignmentId(userId, assignments);
 
 
-        /**
-         * 퀘스트 하나씩 조회해서 할당 만들어둔MAP에서 퀘스트 완료 확인
-         * 완료 여부에따라 완료시간 완료이력ID를 동적으로 설정
-         * CurrentQuestResponse에 감싸서 최종 응답리스트에 추가
-         * */
+
+        // 퀘스트 하나씩 조회해서 할당 만들어둔MAP에서 퀘스트 완료 확인
+        // 완료 여부에따라 완료시간 완료이력ID를 동적으로 설정
+        // CurrentQuestResponse에 감싸서 최종 응답리스트에 추가
         List<CurrentQuestResponse> responses = new ArrayList<>();
 
         // 기본 초기화 및 완료 여부 파악
@@ -293,7 +296,18 @@ public class QuestCompletionService {
             int currentProgress = completed ? 1 : 0;
 
             // 아침 체크인 연동 일일 퀘스트 ("D-M-01")
-            if ("D-M-01".equals(templateCode) && !completed) {
+            if ("W-X-01".equals(templateCode)) {
+                progressTarget = readTargetFromSnapshot(assignment);
+
+                if (completed) {
+                    currentProgress = progressTarget;
+                } else {
+                    currentProgress = Math.min(
+                            countValidPhotoDates(userId, assignment, membership),
+                            progressTarget
+                    );
+                }
+            } else if ("D-M-01".equals(templateCode) && !completed) {
                 boolean checkedInThisMorning =
                         serviceCheckInRepository.existsByUserIdAndCheckInDateAndIsMorningTrue(
                                 userId,
@@ -394,6 +408,17 @@ public class QuestCompletionService {
                             progressTarget
                     );
 
+            // PHOTO_EXIF 퀘스트에 한해 사용자별 남은 제출 횟수를 계산합니다.
+            // 성공·실패·처리 중인 제출 기록 모두 최대 5회 제한에 포함합니다.
+            Integer photoAttemptsRemaining = null;
+
+            if ("PHOTO_EXIF".equals(assignment.getVerificationTypeSnapshot())) {
+                long attemptCount = photoSubmissionRepository
+                        .countByUser_IdAndQuestAssignment_Id(userId, assignment.getId());
+
+                photoAttemptsRemaining = (int) Math.max(0L, 5L - attemptCount);
+            }
+
             responses.add(new CurrentQuestResponse(
                     assignment.getId(),
                     assignment.getQuestPeriod().getId(),
@@ -412,7 +437,7 @@ public class QuestCompletionService {
                     completed ? completion.getCompletedAt() : null,
                     completed ? completion.getId() : null,
                     progress,
-                    null
+                    photoAttemptsRemaining
             ));
         }
 
@@ -426,13 +451,11 @@ public class QuestCompletionService {
      * 현재 시각이 퀘스트 기간 안에 있는지도 검사합니다. 직접 완료는
      * SELF_CHECK 유형에만 허용합니다.
      *
+     * 403	ROLE_FORBIDDEN	요청자 권한 부족
+     *
      * @param userId 완료를 요청한 사용자 ID
      * @param assignmentId 완료 요청 대상 퀘스트 배정 ID
      * @return 검증을 통과한 퀘스트 배정
-     */
-
-    /**
-     * 403	ROLE_FORBIDDEN	요청자 권한 부족
      */
     @Transactional(readOnly = true)
     public QuestAssignment findCompletableAssignment(Long userId,
@@ -445,7 +468,7 @@ public class QuestCompletionService {
                         "요청 권한이 없습니다."
                 ));
 
-        /**404	RESOURCE_NOT_FOUND	없거나 요청자에게 노출하지 않는 리소스*/
+        // 404	RESOURCE_NOT_FOUND	없거나 요청자에게 노출하지 않는 리소스
         QuestAssignment assignment = assignmentRepository.findWithSnapshotById(assignmentId)
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.RESOURCE_NOT_FOUND,
@@ -455,16 +478,16 @@ public class QuestCompletionService {
         Instant now = Instant.now(clock);
         Long currentSeasonId = seasonQueryService.findCurrentSeason().getId();
 
-        /**시즌 일치 여부*/
+        // 시즌 일치 여부
         boolean currentSeason = assignment.getQuestPeriod().getSeason().getId()
                 .equals(currentSeasonId);
 
-        /**활성 기간 확인*/
+        // 활성 기간 확인
         boolean activePeriod = "ACTIVE".equals(assignment.getQuestPeriod().getStatus())
                 && !now.isBefore(assignment.getQuestPeriod().getStartAt())
                 && now.isBefore(assignment.getQuestPeriod().getEndAt());
 
-        /**409	QUEST_PERIOD_ENDED	퀘스트 유효 기간 밖*/
+        // 409	QUEST_PERIOD_ENDED	퀘스트 유효 기간 밖
         if (!currentSeason || !activePeriod) {
             throw new BusinessException(
                     ErrorCode.QUEST_PERIOD_ENDED,
@@ -472,7 +495,7 @@ public class QuestCompletionService {
             );
         }
 
-        /**409  QUEST_COMPLETION_NOT_ALLOWED  해당 판정 유형 직접 완료 불가*/
+        // 409  QUEST_COMPLETION_NOT_ALLOWED  해당 판정 유형 직접 완료 불가
         if (!verificationType.equals(assignment.getVerificationTypeSnapshot())) {
             throw new BusinessException(
                     ErrorCode.QUEST_COMPLETION_NOT_ALLOWED,
@@ -500,7 +523,7 @@ public class QuestCompletionService {
             GroupMembership membership,
             Instant now
     ) {
-        /**기존 기여도 조회*/
+        // 기존 기여도 조회
         SeasonMemberContribution contribution =
                 memberContributionRepository.findByGroupSeasonIdAndUserId(
                         groupSeason.getId(),
@@ -511,7 +534,7 @@ public class QuestCompletionService {
             return contribution;
         }
 
-        /**신규 기여도 객체 생성및 초기화*/
+        // 신규 기여도 객체 생성및 초기화
         SeasonMemberContribution newContribution =
                 SeasonMemberContribution.zero(groupSeason, user, membership, now);
 
@@ -597,13 +620,11 @@ public class QuestCompletionService {
      * 현재 시즌과 그룹 시즌을 확인한 뒤, 기존 완료 기록이 있으면 재사용합니다.
      * 새 완료라면 완료 기록, 보상 원장, 점수와 크리처 경험치를 한 트랜잭션에서 저장합니다.
      *
+     * 동시성 락
+     *
      * @param userId 완료를 요청한 사용자 ID
      * @param assignmentId 완료할 퀘스트 배정 ID
      * @return 완료 및 보상 반영 결과
-     */
-
-    /**
-     * 동시성 락
      */
     @Transactional
     public QuestCompletionResponse completeQuestAssignment(Long userId, Long assignmentId) {
@@ -618,12 +639,12 @@ public class QuestCompletionService {
         // 활성 시즌이 있으면 이후 사용자 잠금보다 먼저 공유 잠금을 얻습니다.
         seasonQueryService.findCurrentSeasonForShareIfPresent();
 
-        /**401	AUTH_REQUIRED	세션 인증 없음*/
+        // 401	AUTH_REQUIRED	세션 인증 없음
         var user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.AUTH_REQUIRED, "로그인이 필요합니다."));
 
-        /**403	ROLE_FORBIDDEN	요청자 권한 부족*/
+        // 403	ROLE_FORBIDDEN	요청자 권한 부족
         var membership = membershipRepository.findActiveWithGroupByUserId(userId)
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.ROLE_FORBIDDEN, "요청 권한이 없습니다."));
@@ -656,14 +677,14 @@ public class QuestCompletionService {
 
         QuestAssignment assignment = findCompletableAssignment(userId, assignmentId, "SELF_CHECK");
 
-        /**404	RESOURCE_NOT_FOUND	없거나 요청자에게 노출하지 않는 리소스*/
+        // 404	RESOURCE_NOT_FOUND	없거나 요청자에게 노출하지 않는 리소스
         var groupSeason = groupSeasonRepository.findForUpdateByGroupIdAndSeasonId(
                         membership.getGroup().getId(),
                         assignment.getQuestPeriod().getSeason().getId())
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.RESOURCE_NOT_FOUND, "그룹 시즌을 찾을 수 없습니다."));
 
-        /**409	QUEST_PERIOD_ENDED	퀘스트 유효 기간 밖*/
+        // 409	QUEST_PERIOD_ENDED	퀘스트 유효 기간 밖
         if (!"ACTIVE".equals(groupSeason.getStatus())) {
             throw new BusinessException(
                     ErrorCode.QUEST_PERIOD_ENDED, "그룹 시즌이 활성 상태가 아닙니다.");
@@ -752,19 +773,28 @@ public class QuestCompletionService {
     }
 
     /**
-     * EXIF 검증을 통과한 PHOTO_EXIF 퀘스트를 공통 완료·보상 로직으로 처리합니다.
+     * EXIF 검증을 통과한 사진 이력과 PHOTO_EXIF 완료·보상을 함께 확정합니다.
      *
      * 현재 시즌 잠금, 사용자 멤버십, 배정 유형, 퀘스트 기간과 그룹 시즌 상태를 확인합니다.
-     * 이미 완료된 배정이면 기존 완료·보상 결과를 반환해 중복 보상을 방지합니다.
+     * W-X-01은 현재 멤버십 이후 서로 다른 KST 촬영 날짜가 목표에 도달한 경우에만
+     * 완료·보상을 확정합니다. 사진 VALID 전이와 보상은 같은 트랜잭션에서 처리합니다.
      *
      * @param userId 사진을 제출한 사용자 ID
      * @param assignmentId 완료할 퀘스트 배정 ID
-     * @return 기존 또는 새로 생성된 완료·보상 결과
+     * @param photoSubmissionId 확정할 사진 제출 ID
+     * @param capturedAt EXIF 촬영 시각
+     * @param latitude EXIF 위도
+     * @param longitude EXIF 경도
+     * @return 완료된 경우 기존 또는 신규 완료·보상 결과, 목표 미달이면 빈 Optional
      */
     @Transactional
-    public QuestCompletionResponse completePhotoExifAssignment(
+    public Optional<QuestCompletionResponse> completePhotoExifAssignment(
             Long userId,
-            Long assignmentId
+            Long assignmentId,
+            Long photoSubmissionId,
+            Instant capturedAt,
+            BigDecimal latitude,
+            BigDecimal longitude
     ) {
         // 시즌 종료 처리와 경합하지 않도록 시즌 공유 잠금을 먼저 획득합니다.
         seasonQueryService.findCurrentSeasonForShare();
@@ -801,7 +831,22 @@ public class QuestCompletionService {
             );
         }
 
-        // 재호출 시 기존 완료를 반환해 보상을 중복 지급하지 않습니다.
+        PhotoSubmission submission = photoSubmissionRepository
+                .findForVerificationUpdate(photoSubmissionId)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.RESOURCE_NOT_FOUND,
+                        "사진 제출 이력을 찾을 수 없습니다."
+                ));
+
+        if (!userId.equals(submission.getUser().getId())
+                || !assignmentId.equals(submission.getQuestAssignment().getId())) {
+            throw new BusinessException(
+                    ErrorCode.RESOURCE_NOT_FOUND,
+                    "사진 제출 이력을 찾을 수 없습니다."
+            );
+        }
+
+        // 이미 완료된 배정은 기존 완료를 반환하는 정책을 유지하면서 사진만 VALID로 확정합니다.
         QuestCompletion existing = findCompletionsByAssignmentId(
                 userId,
                 List.of(requestedAssignment)
@@ -817,10 +862,17 @@ public class QuestCompletionService {
                         "요청 권한이 없습니다."
                 );
             }
-            return buildExistingCompletionResponse(existing);
+
+            submission.markValid(
+                    capturedAt,
+                    latitude,
+                    longitude,
+                    Instant.now(clock)
+            );
+            return Optional.of(buildExistingCompletionResponse(existing));
         }
 
-        // 촬영·접수 이후 보상 시점에도 배정 기간과 현재 시즌을 재검증합니다.
+        // 촬영·접수 이후 판정 확정 시점에도 배정 기간과 현재 시즌을 재검증합니다.
         QuestAssignment assignment =
                 findCompletableAssignment(userId, assignmentId, "PHOTO_EXIF");
 
@@ -842,8 +894,56 @@ public class QuestCompletionService {
             );
         }
 
+        submission.markValid(
+                capturedAt,
+                latitude,
+                longitude,
+                Instant.now(clock)
+        );
+
+        int target = readTargetFromSnapshot(assignment);
+        if (target > 1) {
+            int current = countValidPhotoDates(userId, assignment, membership);
+
+            if (current < target) {
+                return Optional.empty();
+            }
+        }
+
         // 공통 완료 처리에서 완료 기록과 보상을 한 트랜잭션으로 반영합니다.
-        return completeAndReward(user, membership, groupSeason, assignment);
+        return Optional.of(completeAndReward(user, membership, groupSeason, assignment));
+    }
+
+    /** 현재 멤버십 이후 VALID 사진의 서로 다른 KST 촬영 날짜 수를 계산합니다. */
+    private int countValidPhotoDates(
+            Long userId,
+            QuestAssignment assignment,
+            GroupMembership membership
+    ) {
+        List<Instant> capturedAtValues = photoSubmissionRepository
+                .findValidCapturedAtForCurrentMembership(
+                        userId,
+                        assignment.getId(),
+                        membership.getJoinedAt(),
+                        assignment.getQuestPeriod().getStartAt(),
+                        assignment.getQuestPeriod().getEndAt()
+                );
+
+        return countDistinctKstDates(capturedAtValues);
+    }
+
+    /**
+     * 촬영 시각 목록을 KST 날짜로 변환해 서로 다른 날짜 수를 반환합니다.
+     *
+     * @param capturedAtValues VALID 사진 촬영 시각 목록
+     * @return 서로 다른 KST 촬영 날짜 수
+     */
+    static int countDistinctKstDates(List<Instant> capturedAtValues) {
+        HashSet<LocalDate> capturedDates = new HashSet<>();
+        for (Instant capturedAt : capturedAtValues) {
+            capturedDates.add(capturedAt.atZone(KST).toLocalDate());
+        }
+        return capturedDates.size();
     }
 
     /**

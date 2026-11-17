@@ -4,6 +4,7 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
+import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.quest.api.PhotoSubmissionResponse;
 import com.team.sharedcreature.quest.api.QuestCompletionResponse;
@@ -28,6 +29,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 
@@ -190,13 +192,19 @@ public class PhotoVerificationService {
                 );
             }
 
-            // 9. 촬영 시각도 제출된 배정 기간 안인지 확인합니다.
-            if (capturedAt.isBefore(pending.assignmentStartAt())
-                    || !capturedAt.isBefore(pending.assignmentEndAt())) {
+            // 9. 서버 접수·현재 멤버십·배정 기간을 기준으로 촬영 시각을 검증합니다.
+            String capturedAtFailureReason = capturedAtFailureReason(
+                    capturedAt,
+                    pending.uploadedAt(),
+                    pending.membershipJoinedAt(),
+                    pending.assignmentStartAt(),
+                    pending.assignmentEndAt()
+            );
+            if (capturedAtFailureReason != null) {
                 return markInvalidAndRespond(
                         pending,
                         assignmentId,
-                        "PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD",
+                        capturedAtFailureReason,
                         capturedAt,
                         latitude,
                         longitude
@@ -204,11 +212,15 @@ public class PhotoVerificationService {
             }
 
             // 10. 공통 퀘스트 완료·보상 로직에서 기간과 멤버십을 다시 확인합니다.
-            QuestCompletionResponse completion;
+            Optional<QuestCompletionResponse> completion;
             try {
                 completion = questCompletionService.completePhotoExifAssignment(
                         userId,
-                        assignmentId
+                        assignmentId,
+                        pending.photoSubmissionId(),
+                        capturedAt,
+                        latitude,
+                        longitude
                 );
             } catch (BusinessException exception) {
                 if (exception.errorCode() == ErrorCode.QUEST_PERIOD_ENDED) {
@@ -239,14 +251,16 @@ public class PhotoVerificationService {
                 throw exception;
             }
 
-            // 11. 보상 완료 후에만 제출 이력을 VALID로 확정합니다.
-            return markValidAndRespond(
-                    pending,
+            // 11. VALID 이력과 목표 달성 시의 보상은 앞선 트랜잭션에서 함께 확정됩니다.
+            return new PhotoSubmissionResponse(
+                    pending.photoSubmissionId(),
                     assignmentId,
+                    pending.attemptNumber(),
+                    PhotoSubmission.STATUS_VALID,
+                    null,
+                    pending.uploadedAt(),
                     capturedAt,
-                    latitude,
-                    longitude,
-                    completion.getCompletionId()
+                    completion.map(QuestCompletionResponse::getCompletionId).orElse(null)
             );
         }
     }
@@ -295,7 +309,8 @@ public class PhotoVerificationService {
                     ));
 
             // 사진 접수 시점의 활성 멤버십을 확인합니다.
-            membershipRepository.findActiveWithGroupByUserId(userId)
+            GroupMembership membership = membershipRepository
+                    .findActiveWithGroupByUserId(userId)
                     .orElseThrow(() -> new BusinessException(
                             ErrorCode.ROLE_FORBIDDEN,
                             "요청 권한이 없습니다."
@@ -376,6 +391,7 @@ public class PhotoVerificationService {
                     assignmentId,
                     attemptNumber,
                     uploadedAt,
+                    membership.getJoinedAt(),
                     assignment.getQuestPeriod().getStartAt(),
                     assignment.getQuestPeriod().getEndAt()
             );
@@ -406,6 +422,32 @@ public class PhotoVerificationService {
         } catch (DateTimeException exception) {
             return null;
         }
+    }
+
+    /**
+     * 촬영 시각이 서버 접수 시각, 현재 멤버십 가입 시각과 배정 기간을 만족하는지 확인합니다.
+     * 서버 접수 이후 또는 현재 멤버십 가입 이전 촬영분은 진행도와 일치하도록 거절합니다.
+     *
+     * @return 실패 사유, 모든 조건을 만족하면 {@code null}
+     */
+    static String capturedAtFailureReason(
+            Instant capturedAt,
+            Instant uploadedAt,
+            Instant membershipJoinedAt,
+            Instant assignmentStartAt,
+            Instant assignmentEndAt
+    ) {
+        if (capturedAt.isAfter(uploadedAt)) {
+            return "PHOTO_CAPTURED_AFTER_UPLOAD";
+        }
+        if (capturedAt.isBefore(membershipJoinedAt)) {
+            return "PHOTO_CAPTURED_BEFORE_MEMBERSHIP";
+        }
+        if (capturedAt.isBefore(assignmentStartAt)
+                || !capturedAt.isBefore(assignmentEndAt)) {
+            return "PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD";
+        }
+        return null;
     }
 
     /**
@@ -456,39 +498,6 @@ public class PhotoVerificationService {
     }
 
     /**
-     * 검증과 보상에 성공한 이력을 저장하고 응답 DTO를 만듭니다.
-     */
-    private PhotoSubmissionResponse markValidAndRespond(
-            PendingPhoto pending,
-            Long assignmentId,
-            Instant capturedAt,
-            BigDecimal latitude, // 정밀한 연산이 필요함 BigDecimal 사용
-            BigDecimal longitude,
-            Long completionId
-    ) {
-        TransactionTemplate transactionTemplate =
-                new TransactionTemplate(transactionManager);
-
-        return transactionTemplate.execute(transactionStatus -> {
-            PhotoSubmission submission = photoSubmissionRepository
-                    .findById(pending.photoSubmissionId())
-                    .orElseThrow(() -> new BusinessException(
-                            ErrorCode.RESOURCE_NOT_FOUND,
-                            "사진 제출 이력을 찾을 수 없습니다."
-                    ));
-
-            submission.markValid(
-                    capturedAt,
-                    latitude,
-                    longitude,
-                    Instant.now(clock)
-            );
-
-            return toResponse(submission, assignmentId, completionId);
-        });
-    }
-
-    /**
      * 엔티티를 API 응답 DTO로 변환합니다.
      */
     private PhotoSubmissionResponse toResponse(
@@ -516,6 +525,7 @@ public class PhotoVerificationService {
             Long assignmentId,
             int attemptNumber,
             Instant uploadedAt,
+            Instant membershipJoinedAt,
             Instant assignmentStartAt,
             Instant assignmentEndAt
     ) {

@@ -8,11 +8,7 @@ import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.quest.domain.QuestAssignment;
 import com.team.sharedcreature.quest.domain.QuestCompletion;
 import com.team.sharedcreature.quest.domain.QuestPeriod;
-import com.team.sharedcreature.quest.infrastructure.QuestAssignmentRepository;
-import com.team.sharedcreature.quest.infrastructure.QuestCompletionRepository;
-import com.team.sharedcreature.quest.infrastructure.QuestPeriodRepository;
-import com.team.sharedcreature.quest.infrastructure.QuestRewardLedgerRepository;
-import com.team.sharedcreature.quest.infrastructure.ServiceCheckInRepository;
+import com.team.sharedcreature.quest.infrastructure.*;
 import com.team.sharedcreature.season.application.SeasonQueryService;
 import com.team.sharedcreature.season.application.CreatureUpdateEventPublisher;
 import com.team.sharedcreature.season.domain.CreatureExperienceLedger;
@@ -66,6 +62,7 @@ class QuestCompletionServiceTest {
     @Mock private QuestPeriodRepository periodRepository;
     @Mock private QuestAssignmentRepository assignmentRepository;
     @Mock private QuestCompletionRepository completionRepository;
+    @Mock private PhotoSubmissionRepository photoSubmissionRepository;
 
     private QuestCompletionService service;
     private User user;
@@ -98,6 +95,7 @@ class QuestCompletionServiceTest {
                 periodRepository,
                 assignmentRepository,
                 completionRepository,
+                photoSubmissionRepository,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 mock(ObjectMapper.class)
         );

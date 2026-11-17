@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -33,6 +34,24 @@ public class SeasonQueryService {
     @Transactional(readOnly = true)
     public SeasonResponse getCurrentSeason() {
         return SeasonResponse.from(findCurrentSeason());
+    }
+
+    /**
+     * 랭킹에서 조회할 수 있는 현재·종료 시즌을 최신 순으로 반환합니다.
+     * Scheduler 상태 전환이 지연된 만료 ACTIVE 시즌은 선택 목록에서 제외합니다.
+     *
+     * @return 현재 시각에 유효한 ACTIVE 시즌과 종료된 시즌 목록
+     */
+    @Transactional(readOnly = true)
+    public List<SeasonResponse> listRankableSeasons() {
+        Instant now = Instant.now(clock);
+
+        return seasonRepository
+                .findAllRankableOrderBySeasonNumberDesc()
+                .stream()
+                .filter(season -> "ENDED".equals(season.getStatus()) || season.isActiveAt(now))
+                .map(SeasonResponse::from)
+                .toList();
     }
 
     /**

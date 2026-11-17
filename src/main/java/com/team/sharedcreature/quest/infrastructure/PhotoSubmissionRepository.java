@@ -35,6 +35,40 @@ public interface PhotoSubmissionRepository extends JpaRepository<PhotoSubmission
             Long userId, Instant from, Instant to);
 
     /**
+     * 현재 멤버십과 배정 기간에 속하는 VALID 사진의 촬영 시각을 반환합니다.
+     * 호출부는 촬영 시각을 KST 날짜로 변환해 서로 다른 수행 일수를 계산합니다.
+     */
+    @Query("""
+            SELECT submission.capturedAt
+              FROM PhotoSubmission submission
+             WHERE submission.user.id = :userId
+               AND submission.questAssignment.id = :questAssignmentId
+               AND submission.verificationStatus = 'VALID'
+               AND submission.capturedAt >= :membershipJoinedAt
+               AND submission.capturedAt >= :periodStartAt
+               AND submission.capturedAt < :periodEndAt
+             ORDER BY submission.capturedAt
+            """)
+    List<Instant> findValidCapturedAtForCurrentMembership(
+            @Param("userId") Long userId,
+            @Param("questAssignmentId") Long questAssignmentId,
+            @Param("membershipJoinedAt") Instant membershipJoinedAt,
+            @Param("periodStartAt") Instant periodStartAt,
+            @Param("periodEndAt") Instant periodEndAt
+    );
+
+    /**
+     * EXIF 판정 결과를 확정할 사진 이력을 배타 잠금으로 조회합니다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT submission
+              FROM PhotoSubmission submission
+             WHERE submission.id = :id
+            """)
+    Optional<PhotoSubmission> findForVerificationUpdate(@Param("id") Long id);
+
+    /**
      * 기존 사진 정리 코드와 호환되는 PENDING 조회입니다.
      * Lock을 사용하므로 호출자는 반드시 쓰기 트랜잭션을 보유해야 합니다.
      * 신규 #24 Scheduler는 이 쿼리 대신 ID 조회를 사용합니다.

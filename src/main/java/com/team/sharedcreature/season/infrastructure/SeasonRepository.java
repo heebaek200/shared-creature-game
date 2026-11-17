@@ -19,6 +19,21 @@ public interface SeasonRepository extends JpaRepository<Season, Long> {
     Optional<Season> findFirstByStatusOrderByStartAtDesc(String status);
 
     /**
+     * 랭킹에서 선택할 수 있는 현재·종료 시즌을 최신 시즌부터 조회합니다.
+     * 준비 중이거나 종료 처리 중인 시즌은 확정 랭킹을 제공할 수 없어 제외합니다.
+     *
+     * @return 시즌 번호 내림차순 시즌 목록
+     */
+    @Query("""
+            SELECT season
+              FROM Season season
+             WHERE season.status = 'ACTIVE'
+                OR (season.status = 'ENDED' AND season.closingFromStatus = 'ACTIVE')
+             ORDER BY season.seasonNumber DESC
+            """)
+    List<Season> findAllRankableOrderBySeasonNumberDesc();
+
+    /**
      * 최초 시즌 달력의 기준 시각을 읽습니다.
      * 퀘스트 누적 회전 인덱스 검증에 사용하며 시즌 생성용 배타 잠금은 잡지 않습니다.
      * 정시 실행·기동 정상화 모두 첫 시즌의 영구 기준을 공유합니다.
