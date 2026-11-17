@@ -252,7 +252,7 @@ Android 스마트폰의 Chrome 브라우저를 실행한 뒤 ngrok HTTPS 주소�
 
 `src/main/resources/db/testdata_photo_exif.sql`
 
-이 SQL은 현재 활성 시즌을 기준으로 **`사진 EXIF 테스트`라는 일일 퀘스트 배정**을 생성하거나 기존 배정을 재사용합니다.
+이 SQL은 별도 테스트 퀘스트나 추가 슬롯을 만들지 않고, 현재 활성 기간의 공식 사진 퀘스트(`D-X-01` 또는 `W-X-01`)를 재사용합니다.
 
 먼저 Backend 실행으로 필요한 DB 테이블이 준비된 상태인지 확인합니다.
 
@@ -265,22 +265,19 @@ mysql -u shared_creature -p shared_creature_game
 프로젝트 루트에서 MySQL 클라이언트를 실행했다면 다음 명령으로 테스트 SQL을 적용할 수 있습니다.
 
 ```sql
+SET @photo_exif_period_type = 'DAILY';
+SET @photo_exif_allow_replacement = 0;
+SET @photo_exif_test_user_id = 123;
 SOURCE src/main/resources/db/testdata_photo_exif.sql;
 ```
 
-실행 마지막에 반환되는 `assignment_id`와 배정 기간을 확인합니다.
+`@photo_exif_period_type`은 기본 `DAILY`이며 `WEEKLY`도 선택할 수 있습니다. 사용자 ID는 선택 사항입니다. 공식 사진 퀘스트가 이미 배정되어 있으면 `REUSED`, 없으면 `SKIPPED`를 반환합니다. 로컬 DB를 백업한 뒤 안전한 MEDIUM 배정 교체가 필요할 때만 `@photo_exif_allow_replacement = 1`로 실행하며, 이 경우에도 완료·사진 제출 이력이 없는 배정 하나만 `REPLACED` 처리합니다.
 
-해당 SQL은 다음 조건을 만족해야 테스트 배정을 생성할 수 있습니다.
-
-- 현재 시각에 유효한 `ACTIVE` 시즌 존재
-- 현재 일일 퀘스트 기간이 활성 시즌 범위 안에 있음
-- 테스트용 일일 퀘스트 배정 생성 가능
-
-결과가 비어 있다면 시즌 및 퀘스트 기간 상태를 먼저 확인합니다. 테스트를 위해 기존 시즌이나 다른 사용자의 업무 데이터를 임의로 변경하지 않습니다.
+실행 결과의 `assignment_id`, 기간, 완료·제출 이력, `test_ready`, 안내 메시지를 확인합니다. 기간이 없거나 배정 구성이 Scheduler 규칙과 다르면 데이터를 만들거나 고치지 않으므로 Scheduler를 먼저 정상 실행합니다.
 
 > 이 SQL은 로컬 개발 DB에서만 실행합니다. 사진 인증에 성공하면 테스트 계정에도 실제 퀘스트 보상이 반영될 수 있습니다.
 
-SQL 적용 후 Android의 `/quests` 화면을 새로고침하여 `사진 EXIF 테스트` 퀘스트가 표시되는지 확인합니다.
+SQL 적용 후 Android의 `/quests` 화면을 새로고침하여 공식 사진 퀘스트가 표시되는지 확인합니다.
 
 #### 7.7. Android에서 사진 촬영 및 제출
 
@@ -292,7 +289,7 @@ SQL 적용 후 Android의 `/quests` 화면을 새로고침하여 `사진 EXIF �
 
 1. 사진 퀘스트의 유효 기간 안에 새로운 사진을 촬영합니다.
 2. 사진이 JPEG 형식으로 저장되었는지 확인합니다.
-3. Android Chrome의 `/quests` 화면에서 `사진 EXIF 테스트` 퀘스트를 찾습니다.
+3. Android Chrome의 `/quests` 화면에서 공식 사진 퀘스트(`D-X-01` 또는 `W-X-01`)를 찾습니다.
 4. `JPEG 사진 선택`에서 방금 촬영한 원본 사진을 선택합니다.
 5. `사진 제출` 버튼을 누릅니다.
 6. 화면에 표시되는 인증 결과와 퀘스트 완료 상태를 확인합니다.
