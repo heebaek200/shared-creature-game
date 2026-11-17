@@ -438,7 +438,7 @@ export function adminReportsPage() {
 
             // 마지막 페이지가 사라진 경우 동일한 필터로 다시 조회한다.
             if (nextTotalPages > 0 && requestedPage >= nextTotalPages) {
-                return await loadRports(nextTotalPages - 1, requestedStatus)
+                return await loadReports(nextTotalPages - 1, requestedStatus)
             }
 
             // 조회가 성공했을 때만 목록, 페이지, 필터를 함께 확정한다.
@@ -653,7 +653,7 @@ export function adminReportsPage() {
         if (processing || loading) return;
 
         // 요청에 사용할 필터만 준비하고 확정은 하지 않습니다.
-        const requestedStatus = statusInput.value || undefined;
+        const requestedStatus = statusInput.value;
 
         void loadReports(0, requestedStatus).then(success => {
             if (success && !disposed) {

@@ -927,7 +927,7 @@ export function adminOperationsPage() {
         if (processing || loading) return;
 
         // 이번 조회에 사용할 조건만 전달합니다.
-        const requestedType = typeInput.value || undefined;
+        const requestedType = typeInput.value;
 
         void loadWarnings(0, requestedType);
     }
