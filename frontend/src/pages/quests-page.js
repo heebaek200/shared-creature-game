@@ -296,7 +296,12 @@ export function questPage({ navigate, currentUser }) {
         const file = input instanceof HTMLInputElement ? input.files?.[0] : null;
         const result = await submitQuestPhoto(assignmentId, validateQuestPhoto(file));
         if (result.verificationStatus === 'VALID') {
-          showPageFeedback('사진 인증이 완료되어 퀘스트 보상이 반영되었습니다.', 'success');
+          showPageFeedback(
+              result.completionId == null
+                ? '사진 인증이 완료되어 퀘스트 진행도에 반영되었습니다.'
+                : '사진 인증이 완료되어 퀘스트 보상이 반영되었습니다.',
+              'success',
+          );
         } else {
           showPageFeedback(
               PHOTO_FAILURE_MESSAGES[result.failureReason] ?? '사진 인증 조건을 충족하지 못했습니다.',

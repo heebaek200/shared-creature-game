@@ -28,6 +28,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 
@@ -204,11 +205,15 @@ public class PhotoVerificationService {
             }
 
             // 10. 공통 퀘스트 완료·보상 로직에서 기간과 멤버십을 다시 확인합니다.
-            QuestCompletionResponse completion;
+            Optional<QuestCompletionResponse> completion;
             try {
                 completion = questCompletionService.completePhotoExifAssignment(
                         userId,
-                        assignmentId
+                        assignmentId,
+                        pending.photoSubmissionId(),
+                        capturedAt,
+                        latitude,
+                        longitude
                 );
             } catch (BusinessException exception) {
                 if (exception.errorCode() == ErrorCode.QUEST_PERIOD_ENDED) {
@@ -239,14 +244,16 @@ public class PhotoVerificationService {
                 throw exception;
             }
 
-            // 11. 보상 완료 후에만 제출 이력을 VALID로 확정합니다.
-            return markValidAndRespond(
-                    pending,
+            // 11. VALID 이력과 목표 달성 시의 보상은 앞선 트랜잭션에서 함께 확정됩니다.
+            return new PhotoSubmissionResponse(
+                    pending.photoSubmissionId(),
                     assignmentId,
+                    pending.attemptNumber(),
+                    PhotoSubmission.STATUS_VALID,
+                    null,
+                    pending.uploadedAt(),
                     capturedAt,
-                    latitude,
-                    longitude,
-                    completion.getCompletionId()
+                    completion.map(QuestCompletionResponse::getCompletionId).orElse(null)
             );
         }
     }
@@ -452,39 +459,6 @@ public class PhotoVerificationService {
             );
 
             return toResponse(submission, assignmentId, null);
-        });
-    }
-
-    /**
-     * 검증과 보상에 성공한 이력을 저장하고 응답 DTO를 만듭니다.
-     */
-    private PhotoSubmissionResponse markValidAndRespond(
-            PendingPhoto pending,
-            Long assignmentId,
-            Instant capturedAt,
-            BigDecimal latitude, // 정밀한 연산이 필요함 BigDecimal 사용
-            BigDecimal longitude,
-            Long completionId
-    ) {
-        TransactionTemplate transactionTemplate =
-                new TransactionTemplate(transactionManager);
-
-        return transactionTemplate.execute(transactionStatus -> {
-            PhotoSubmission submission = photoSubmissionRepository
-                    .findById(pending.photoSubmissionId())
-                    .orElseThrow(() -> new BusinessException(
-                            ErrorCode.RESOURCE_NOT_FOUND,
-                            "사진 제출 이력을 찾을 수 없습니다."
-                    ));
-
-            submission.markValid(
-                    capturedAt,
-                    latitude,
-                    longitude,
-                    Instant.now(clock)
-            );
-
-            return toResponse(submission, assignmentId, completionId);
         });
     }
 
