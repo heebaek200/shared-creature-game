@@ -12,6 +12,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfException;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -49,6 +50,8 @@ public class SecurityConfiguration {
                 .cors(cors -> { })
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfRepository)
+                        // REST Header와 STOMP Native Header가 같은 Session 원본 Token을 사용합니다.
+                        .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
                         .ignoringRequestMatchers(
                                 "/oauth2/callback/**",
                                 "/api/v1/payments/webhooks/portone"

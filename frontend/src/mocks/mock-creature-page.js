@@ -1,252 +1,101 @@
 // @ts-check
 
+const equipmentCatalog = {
+    HEAD: { shopItemId: 1, name: '갈색 단발', assetKey: 'brown-lob' },
+    BODY: { shopItemId: 2, name: '파란 셔츠', assetKey: 'blue-shirt' },
+    ACCESSORY: { shopItemId: 3, name: '리본 헤어밴드', assetKey: 'ribbon-hairband' },
+    FACE: { shopItemId: 4, name: '노란 미소', assetKey: 'yellow-smile' },
+};
+
+const equipmentSlots = ['HEAD', 'FACE', 'BODY', 'ACCESSORY'];
+
+const mockNicknames = [
+    '본인', '푸른잎', '별빛', '햇살', '산들',
+    '이슬', '구름', '단풍', '새봄', '초롱',
+    '라일락', '민들레', '여울', '노을', '솔바람',
+    '달빛', '은하', '보름', '수풀', '아침',
+];
+
 /**
- * 크리처 홈 화면 Mock 데이터 (DB 스키마 및 비즈니스 규칙 반영)
+ * 비트 조합으로 장착 슬롯을 구성해 Mock 아바타마다 다른 복장을 만듭니다.
+ *
+ * @param {number} mask 장착할 네 슬롯을 나타내는 1~15 비트 마스크
+ * @param {number} memberIndex Mock 구성원 인덱스
+ * @returns {Record<string, Record<string, any>|null>}
+ */
+function createEquipments(mask, memberIndex) {
+    return Object.fromEntries(equipmentSlots.map((slot, slotIndex) => {
+        if ((mask & (1 << slotIndex)) === 0) return [slot, null];
+
+        const item = equipmentCatalog[slot];
+        return [slot, {
+            ownedItemId: (memberIndex + 1) * 10 + slotIndex,
+            ...item,
+        }];
+    }));
+}
+
+/**
+ * 실제 Snapshot 형태에 Mock 전용 색상 변형만 덧붙인 온라인 구성원을 생성합니다.
+ * 운영 API에는 mockItemHue가 없으므로 실제 화면에서는 원본 아이템 색상이 유지됩니다.
+ *
+ * @param {number} index 0부터 시작하는 구성원 인덱스
+ * @returns {Record<string, any>}
+ */
+function createMockMember(index) {
+    const equipmentMask = (index % 15) + 1;
+
+    return {
+        userId: 101 + index,
+        nickname: mockNicknames[index],
+        rank: index + 1,
+        contributionScore: 2450 - index * 85,
+        zoneId: (index % 10) + 1,
+        avatar: {
+            equipments: createEquipments(equipmentMask, index),
+            mockItemHue: (index * 47) % 360,
+        },
+    };
+}
+
+/**
+ * 크리처 홈 화면 Mock 데이터입니다.
+ * 20명의 복장·색상을 구분해 이동 애니메이션을 한 화면에서 점검할 수 있습니다.
  */
 export const mockCreatureHomeData = {
     groupId: 5031,
-    groupName: "새싹 연구소",
+    groupName: '새싹 연구소',
     season: {
         seasonId: 1,
         seasonNumber: 1,
-        status: "ACTIVE",
-        startAt: "2026-11-15T23:59:59Z",
-        endAt: "2026-12-07T19:59:59Z",
-        seasonName: "시즌 1",
-        labName: "새싹 연구소"
+        status: 'ACTIVE',
+        startAt: '2026-11-15T23:59:59Z',
+        endAt: '2026-12-07T19:59:59Z',
+        seasonName: '시즌 1',
+        labName: '새싹 연구소',
     },
     creature: {
         groupCreatureId: 701,
-        creatureSpeciesId: 1, // null / 1 / 2
-        speciesName: "이끼 낀 바위 골렘", // 공허 속 우주 해파리 /
-        assetKey: "moss-golem", // abyss-jellyfish /
-        growthStage: "COMPLETE", // EGG / HATCHLING / GROWING / MATURE / COMPLETE
+        creatureSpeciesId: 1,
+        speciesName: '이끼 낀 바위 골렘',
+        assetKey: 'moss-golem',
+        growthStage: 'COMPLETE',
         level: null,
         totalExperience: 200000,
         nextStageAtExperience: null,
         progress: 4.76,
-        selectionDeadlineAt: "2026-11-18T00:00:00Z",
-        selectionSource: "ADMIN_SELECTED"
+        selectionDeadlineAt: '2026-11-18T00:00:00Z',
+        selectionSource: 'ADMIN_SELECTED',
     },
-    onlineMembers: [
-        {
-            userId: 1,
-            nickname: "본인",
-            rank: 2,
-            contributionScore: 2100,
-            zoneId: 2,
-            avatar: {
-                equipments: {
-                    HEAD: { ownedItemId: 10, shopItemId: 10, name: "모험가 모자", assetKey: "head_adventurer" },
-                    FACE: null,
-                    BODY: { ownedItemId: 2, shopItemId: 2, name: "기본 외형", assetKey: "body_default" },
-                    ACCESSORY: null
-                }
-            }
-        },
-        {
-            userId: 102,
-            nickname: "푸른잎",
-            rank: 3,
-            contributionScore: 1820,
-            zoneId: 1,
-            avatar: {
-                equipments: {
-                    HEAD: { ownedItemId: 1, shopItemId: 1, name: "새싹 모자", assetKey: "head_sprout" },
-                    FACE: null,
-                    BODY: { ownedItemId: 2, shopItemId: 2, name: "기본 외형", assetKey: "body_default" },
-                    ACCESSORY: { ownedItemId: 3, shopItemId: 3, name: "별 장식", assetKey: "acc_star" }
-                }
-            }
-        },
-        {
-            userId: 103,
-            nickname: "별빛요정",
-            rank: 1,
-            contributionScore: 2450,
-            zoneId: 3,
-            avatar: {
-                equipments: {
-                    HEAD: null,
-                    FACE: { ownedItemId: 4, shopItemId: 4, name: "나뭇잎 안경", assetKey: "face_leaf_glasses" },
-                    BODY: { ownedItemId: 2, shopItemId: 2, name: "기본 외형", assetKey: "body_default" },
-                    ACCESSORY: null
-                }
-            }
-        },
-        {
-            userId: 104,
-            nickname: "별빛요정4",
-            rank: 4,
-            contributionScore: 1600,
-            zoneId: 4,
-            avatar: {
-                equipments: {
-                    HEAD: null,
-                    FACE: { ownedItemId: 4, shopItemId: 4, name: "나뭇잎 안경", assetKey: "face_leaf_glasses" },
-                    BODY: { ownedItemId: 2, shopItemId: 2, name: "기본 외형", assetKey: "body_default" },
-                    ACCESSORY: null
-                }
-            }
-        },
-        {
-            userId: 105,
-            nickname: "별빛요정5",
-            rank: 5,
-            contributionScore: 155,
-            zoneId: 5,
-            avatar: {
-                equipments: {
-                    HEAD: null,
-                    FACE: { ownedItemId: 4, shopItemId: 4, name: "나뭇잎 안경", assetKey: "face_leaf_glasses" },
-                    BODY: { ownedItemId: 2, shopItemId: 2, name: "기본 외형", assetKey: "body_default" },
-                    ACCESSORY: null
-                }
-            }
-        },
-
-        {
-            userId: 106,
-            nickname: "별빛요정6",
-            rank: 6,
-            contributionScore: 1400,
-            zoneId: 6,
-            avatar: {
-                equipments: {
-                    HEAD: null,
-                    FACE: { ownedItemId: 4, shopItemId: 4, name: "나뭇잎 안경", assetKey: "face_leaf_glasses" },
-                    BODY: { ownedItemId: 2, shopItemId: 2, name: "기본 외형", assetKey: "body_default" },
-                    ACCESSORY: null
-                }
-            }
-        },
-        {
-            userId: 107,
-            nickname: "별빛요정7",
-            rank: 7,
-            contributionScore: 1300,
-            zoneId: 7,
-            avatar: {
-                equipments: {
-                    HEAD: null,
-                    FACE: { ownedItemId: 4, shopItemId: 4, name: "나뭇잎 안경", assetKey: "face_leaf_glasses" },
-                    BODY: { ownedItemId: 2, shopItemId: 2, name: "기본 외형", assetKey: "body_default" },
-                    ACCESSORY: null
-                }
-            }
-        },
-        {
-            userId: 108,
-            nickname: "별빛요정8",
-            rank: 8,
-            contributionScore: 1200,
-            zoneId: 8,
-            avatar: {
-                equipments: {
-                    HEAD: null,
-                    FACE: { ownedItemId: 4, shopItemId: 4, name: "나뭇잎 안경", assetKey: "face_leaf_glasses" },
-                    BODY: { ownedItemId: 2, shopItemId: 2, name: "기본 외형", assetKey: "body_default" },
-                    ACCESSORY: null
-                }
-            }
-        },
-        {
-            userId: 109,
-            nickname: "별빛요정9",
-            rank: 9,
-            contributionScore: 1100,
-            zoneId: 9,
-            avatar: {
-                equipments: {
-                    HEAD: null,
-                    FACE: { ownedItemId: 4, shopItemId: 4, name: "나뭇잎 안경", assetKey: "face_leaf_glasses" },
-                    BODY: { ownedItemId: 2, shopItemId: 2, name: "기본 외형", assetKey: "body_default" },
-                    ACCESSORY: null
-                }
-            }
-        },
-        {
-            userId: 110,
-            nickname: "별빛요정10",
-            rank: 10,
-            contributionScore: 1000,
-            zoneId: 10,
-            avatar: {
-                equipments: {
-                    HEAD: null,
-                    FACE: { ownedItemId: 4, shopItemId: 4, name: "나뭇잎 안경", assetKey: "face_leaf_glasses" },
-                    BODY: { ownedItemId: 2, shopItemId: 2, name: "기본 외형", assetKey: "body_default" },
-                    ACCESSORY: null
-                }
-            }
-        },
-        {
-            userId: 111,
-            nickname: "별빛요정11",
-            rank: 11,
-            contributionScore: 900,
-            zoneId: 11,
-            avatar: {
-                equipments: {
-                    HEAD: null,
-                    FACE: { ownedItemId: 4, shopItemId: 4, name: "나뭇잎 안경", assetKey: "face_leaf_glasses" },
-                    BODY: { ownedItemId: 2, shopItemId: 2, name: "기본 외형", assetKey: "body_default" },
-                    ACCESSORY: null
-                }
-            }
-        },
-        {
-            userId: 112,
-            nickname: "별빛요정12",
-            rank: 12,
-            contributionScore: 800,
-            zoneId: 12,
-            avatar: {
-                equipments: {
-                    HEAD: null,
-                    FACE: { ownedItemId: 4, shopItemId: 4, name: "나뭇잎 안경", assetKey: "face_leaf_glasses" },
-                    BODY: { ownedItemId: 2, shopItemId: 2, name: "기본 외형", assetKey: "body_default" },
-                    ACCESSORY: null
-                }
-            }
-        },
-        {
-            userId: 113,
-            nickname: "별빛요정13",
-            rank: 13,
-            contributionScore: 700,
-            zoneId: 13,
-            avatar: {
-                equipments: {
-                    HEAD: null,
-                    FACE: { ownedItemId: 4, shopItemId: 4, name: "나뭇잎 안경", assetKey: "face_leaf_glasses" },
-                    BODY: { ownedItemId: 2, shopItemId: 2, name: "기본 외형", assetKey: "body_default" },
-                    ACCESSORY: null
-                }
-            }
-        },
-        {
-            userId: 114,
-            nickname: "별빛요정14",
-            rank: 14,
-            contributionScore: 600,
-            zoneId: 14,
-            avatar: {
-                equipments: {
-                    HEAD: null,
-                    FACE: { ownedItemId: 4, shopItemId: 4, name: "나뭇잎 안경", assetKey: "face_leaf_glasses" },
-                    BODY: { ownedItemId: 2, shopItemId: 2, name: "기본 외형", assetKey: "body_default" },
-                    ACCESSORY: null
-                }
-            }
-        },
-    ],
+    onlineMembers: Array.from({ length: 20 }, (_, index) => createMockMember(index)),
     todayExperience: 2400,
     recentContributions: [
-        { userId: 1, nickname: "본인", amount: 200, occurredAt: "2026-11-04T05:30:00Z" },
-        { userId: 102, nickname: "푸른잎", amount: 100, occurredAt: "2026-11-04T04:00:00Z" },
-        { userId: 103, nickname: "별빛요정", amount: 300, occurredAt: "2026-11-04T05:00:00Z" },
-        { userId: 1, nickname: "본인", amount: 400, occurredAt: "2026-11-04T05:00:00Z" }
+        { userId: 101, nickname: '본인', amount: 200, occurredAt: '2026-11-04T05:30:00Z' },
+        { userId: 102, nickname: '푸른잎', amount: 100, occurredAt: '2026-11-04T04:00:00Z' },
+        { userId: 103, nickname: '별빛', amount: 300, occurredAt: '2026-11-04T05:00:00Z' },
+        { userId: 101, nickname: '본인', amount: 400, occurredAt: '2026-11-04T05:00:00Z' },
     ],
-    snapshotAt: "2026-11-04T06:00:00Z"
+    snapshotAt: '2026-11-04T06:00:00Z',
+    streamInstanceId: '11111111-1111-4111-8111-111111111111',
+    sequence: 20,
 };

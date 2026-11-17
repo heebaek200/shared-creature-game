@@ -561,6 +561,29 @@ export const mockApi = {
     await delay(150);
     return mockCreatureHomeData.season;
   },
+
+  /** 판매 중인 Mock 상품 상세를 반환합니다. */
+  async getShopItem(shopItemId) {
+    await delay(100);
+    const items = {
+      1: { shopItemId: 1, name: '갈색 단발', slot: 'HEAD', assetKey: 'brown-lob', status: 'ACTIVE' },
+      2: { shopItemId: 2, name: '파란 셔츠', slot: 'BODY', assetKey: 'blue-shirt', status: 'ACTIVE' },
+      3: { shopItemId: 3, name: '리본 헤어밴드', slot: 'ACCESSORY', assetKey: 'ribbon-hairband', status: 'ACTIVE' },
+      4: { shopItemId: 4, name: '노란 미소', slot: 'FACE', assetKey: 'yellow-smile', status: 'ACTIVE' },
+    };
+    const item = items[Number(shopItemId)];
+
+    if (!item) {
+      throw new ApiError(404, {
+        code: 'RESOURCE_NOT_FOUND',
+        message: '판매 중인 상품을 찾을 수 없습니다.',
+        fieldErrors: [],
+        traceId: 'mock-shop-item-not-found',
+      });
+    }
+
+    return item;
+  },
 };
 
 function saveMockState() {
