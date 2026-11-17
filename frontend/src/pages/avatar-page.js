@@ -1,179 +1,95 @@
 import {createAppShell} from '../components/app-shell.js';
 import defaultAvatarUrl from '../../assets/avatar/stop-left-default-1.png';
-import {getAvatar, listOwnedItems, unequipAvatarItem} from '../features/avatar/api.js';
-
-const itemImageUrls = import.meta.glob(
-    '../../assets/item/stop-left-*.png',
-    {
-        eager: true,
-        query: '?url',
-        import: 'default',
-    }
-);
-
-function getItemImageUrl(item) {
-    const part = item.slot.toLowerCase();
-
-    const path =
-        `../../assets/item/stop-left-${part}-${item.assetKey}-1.png`;
-
-    return itemImageUrls[path] ?? null;
-}
-
-// 같은 이미지는 한 번만 가공합니다.
-const itemThumbnailCache = new Map();
-
-function createItemThumbnail(sourceUrl) {
-    if (itemThumbnailCache.has(sourceUrl)) {
-        return itemThumbnailCache.get(sourceUrl);
-    }
-
-    const promise = new Promise((resolve, reject) => {
-        const image = new Image();
-
-        image.onload = () => {
-            try {
-                const sourceCanvas = document.createElement('canvas');
-                sourceCanvas.width = image.naturalWidth;
-                sourceCanvas.height = image.naturalHeight;
-
-                const context = sourceCanvas.getContext('2d', {
-                    willReadFrequently: true,
-                });
-
-                if (!context) {
-                    throw new Error('이미지를 처리할 수 없습니다.');
-                }
-
-                context.drawImage(image, 0, 0);
-
-                const { width, height } = sourceCanvas;
-                const pixels = context.getImageData(
-                    0, 0, width, height
-                ).data;
-
-                let left = width;
-                let top = height;
-                let right = -1;
-                let bottom = -1;
-
-                for (let y = 0; y < height; y += 1) {
-                    for (let x = 0; x < width; x += 1) {
-                        const alpha = pixels[(y * width + x) * 4 + 3];
-
-                        if (alpha === 0) continue;
-
-                        left = Math.min(left, x);
-                        top = Math.min(top, y);
-                        right = Math.max(right, x);
-                        bottom = Math.max(bottom, y);
-                    }
-                }
-
-                // 그림이 없는 완전 투명 이미지이면 원본을 사용합니다.
-                if (right < left || bottom < top) {
-                    resolve(sourceUrl);
-                    return;
-                }
-
-                const croppedWidth = right - left + 1;
-                const croppedHeight = bottom - top + 1;
-
-                const thumbnail = document.createElement('canvas');
-                thumbnail.width = croppedWidth;
-                thumbnail.height = croppedHeight;
-
-                const thumbnailContext = thumbnail.getContext('2d');
-
-                if (!thumbnailContext) {
-                    throw new Error('썸네일을 생성할 수 없습니다.');
-                }
-
-                thumbnailContext.drawImage(
-                    image,
-                    left,
-                    top,
-                    croppedWidth,
-                    croppedHeight,
-                    0,
-                    0,
-                    croppedWidth,
-                    croppedHeight
-                );
-
-                resolve(thumbnail.toDataURL('image/png'));
-            } catch (error) {
-                reject(error);
-            }
-        };
-
-        image.onerror = () => {
-            reject(new Error('아이템 이미지를 불러오지 못했습니다.'));
-        };
-
-        image.src = sourceUrl;
-    });
-
-    itemThumbnailCache.set(sourceUrl, promise);
-
-    // 실패한 이미지는 다음 조회에서 다시 시도할 수 있도록 합니다.
-    promise.catch(() => {
-        if (itemThumbnailCache.get(sourceUrl) === promise) {
-            itemThumbnailCache.delete(sourceUrl);
-        }
-    });
-
-    return promise;
-}
-
-function applyItemThumbnails(container) {
-    const images = container.querySelectorAll(
-        'img[data-item-thumbnail]'
-    );
-
-    for (const image of images) {
-        const sourceUrl = image.getAttribute('src');
-
-        if (!sourceUrl) continue;
-
-        createItemThumbnail(sourceUrl)
-            .then((thumbnailUrl) => {
-                // 목록이 갱신되어 제거된 이미지는 변경하지 않습니다.
-                if (!container.contains(image)) return;
-
-                image.src = thumbnailUrl;
-            })
-            .catch(() => {
-                // 가공 실패 시 원본 이미지를 그대로 표시합니다.
-            });
-    }
-}
+import {getAvatar, listOwnedItems, equipAvatarItem, unequipAvatarItem} from '../features/avatar/api.js';
+import { Modal } from 'bootstrap';
+import {
+    applyItemThumbnails,
+    renderAvatarEquipment,
+    renderOwnedItem,
+    renderSlot,
+} from '../features/avatar/render.js';
 
 export function avatarPage({navigate, currentUser}) {
     const content = document.createElement('div');
     content.className = 'avatar-page';
 
     content.innerHTML = `
-        <h1 class="h4 fw-bold mb-4">내 아바타</h1>
+        <div class="avatar-page-heading d-flex align-items-center gap-3 mb-4">
+            <h1 class="h4 fw-bold mb-0">내 아바타</h1>
+            <div id="avatar-resync-area" hidden>
+                <button id="avatar-resync-button" type="button" class="btn avatar-action btn-sm">
+                    새로고침
+                </button>
+            </div>
+        </div>
         
-        <p
-            id="avatar-feedback"
-            class="avatar-muted small mb-3"
-            role="status"
-            aria-live="polite"
-        ></p>
+        <div
+            class="modal fade"
+            id="avatar-result-modal"
+            tabindex="-1"
+            aria-labelledby="avatar-result-title"
+            aria-hidden="true"
+        >
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content avatar-result-modal">
+                    <div class="modal-header">
+                        <h2 id="avatar-result-title" class="modal-title fs-5">
+                            알림
+                        </h2>
+                    </div>
+        
+                    <div class="modal-body">
+                        <p id="avatar-result-message" class="mb-0"></p>
+                    </div>
+        
+                    <div class="modal-footer">
+                        <button type="button" class="btn avatar-action" data-bs-dismiss="modal">
+                            확인
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>        
+        
+        <div class="modal fade" id="avatar-first-use-modal" tabindex="-1"
+            aria-labelledby="avatar-first-use-title" aria-describedby="avatar-first-use-message" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content avatar-result-modal">
+                    <div class="modal-header">
+                        <h2 id="avatar-first-use-title" class="modal-title fs-5">
+                            최초 장착 안내
+                        </h2>
+                    </div>
+        
+                    <div class="modal-body">
+                        <p id="avatar-first-use-message"></p>
+                        <p class="mb-0">
+                            이후 장착을 해제해도 환불할 수 없습니다.<br>
+                            장착하시겠습니까?
+                        </p>
+                    </div>
+        
+                    <div class="modal-footer">
+                        <button type="button" class="btn avatar-action" id="avatar-first-use-confirm">
+                            확인
+                        </button>
 
-        <div class="row g-3 align-items-stretch">
+                        <button type="button" class="btn avatar-action" data-bs-dismiss="modal">
+                            취소
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <p id="avatar-feedback" class="avatar-muted small mb-3" role="status" aria-live="polite"></p>
+        
+
+        <div class="row g-3 align-items-stretch avatar-layout">
             <!-- 장착 슬롯 -->
-            <section
-                class="col-12 col-xl-4"
-                aria-labelledby="avatar-slots-title"
-            >
+            <section class="col-6 col-xl-4" aria-labelledby="avatar-slots-title">
                 <div class="avatar-panel border rounded-4 p-3 p-md-4 h-100">
-                    <h2
-                        id="avatar-slots-title"
-                        class="h6 fw-bold mb-4"
-                    >
+                    <h2 id="avatar-slots-title" class="h6 fw-bold mb-4">
                         ITEM SLOT
                     </h2>
 
@@ -183,121 +99,93 @@ export function avatarPage({navigate, currentUser}) {
             </section>
 
             <!-- 아바타 -->
-            <section
-                class="col-12 col-xl-4"
-                aria-labelledby="avatar-preview-title"
-            >
-                <div class="avatar-panel border rounded-4 p-3 p-md-4 h-100
-                            d-flex flex-column">
-                    <h2
-                        id="avatar-preview-title"
-                        class="h6 fw-bold mb-4"
-                    >
-                        아바타
+            <section class="col-6 col-xl-4" aria-labelledby="avatar-preview-title">
+                <div class="avatar-panel border rounded-4 p-3 p-md-4 h-100 d-flex flex-column">
+                    <h2 id="avatar-preview-title" class="h6 fw-bold mb-4">
+                        AVATAR
                     </h2>
 
                     <div class="avatar-preview rounded-4 flex-grow-1
                                 d-flex flex-column align-items-center
-                                justify-content-center gap-4 p-4">
-                        <div class="avatar-preview__stage">
-                            <img
-                                src="${defaultAvatarUrl}"
-                                class="avatar-preview__image"
-                                alt="기본 아바타"
-                                width="60"
-                                height="60"
-                            >
+                                justify-content-center gap-4 py-4 px-2">
+                        <div id="avatar-preview-stage" class="avatar-preview__stage"
+                            role="img" aria-label="기본 아바타">
+                            <img src="${defaultAvatarUrl}" class="avatar-preview__image" alt="" width="320" height="320">
+                            <div id="avatar-equipment-layers" aria-hidden="true"></div>
                         </div>
 
                         <p class="avatar-muted small text-center mb-0">
-                            아이템을 장착하면 외형이 변경됩니다.
+                            <span>아이템을 장착하면</span>
+                            <span>외형이 변경됩니다.</span>
                         </p>
+                        <p id="avatar-image-feedback" class="avatar-muted small text-center mb-0"
+                           role="status" aria-live="polite" hidden></p>
                     </div>
                 </div>
             </section>
 
             <!-- 보유 아이템 -->
-            <section
-                class="col-12 col-xl-4"
-                aria-labelledby="avatar-items-title"
-            >
-                <div class="avatar-panel border rounded-4 p-3 p-md-4 h-100">
-                    <h2
-                        id="avatar-items-title"
-                        class="h6 fw-bold mb-4"
-                    >
-                        보유 아이템
+            <section class="col-12 col-xl-4" aria-labelledby="avatar-items-title">
+                <div class="avatar-panel avatar-inventory-panel border rounded-4 p-3 p-md-4 h-100 d-flex flex-column">
+                    <h2 id="avatar-items-title" class="h6 fw-bold mb-4">
+                        ITEM INVENTORY
                     </h2>
 
-                    <div class="mb-4">
-                        <label
-                            for="avatar-status-filter"
-                            class="form-label small"
-                        >
-                            사용 상태
-                        </label>
+                    <div id="avatar-status-filter" class="d-flex flex-wrap gap-2 mb-4"
+                        role="group" aria-label="아이템 사용 상태">
+                        <button type="button" class="btn btn-sm avatar-status-button"
+                            data-status="" aria-pressed="true">
+                            전체
+                        </button>
                     
-                        <select
-                            id="avatar-status-filter"
-                            class="form-select avatar-filter"
-                        >
-                            <option value="">전체</option>
-                            <option value="OWNED_UNUSED">미사용</option>
-                            <option value="OWNED_USED">사용함</option>
-                            <option value="REVOKED">회수됨</option>
-                        </select>
-                    </div>
+                        <button type="button" class="btn btn-sm avatar-status-button"
+                            data-status="OWNED_UNUSED" aria-pressed="false">
+                            미사용
+                        </button>
                     
-                    <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
-                        <p
-                            id="avatar-slot-filter-label"
-                            class="avatar-muted small mb-0"
-                        >
-                            전체 부위
-                        </p>
+                        <button type="button" class="btn btn-sm avatar-status-button"
+                            data-status="OWNED_USED" aria-pressed="false">
+                            사용
+                        </button>
                     
-                        <button
-                            id="avatar-show-all"
-                            type="button"
-                            class="btn avatar-action btn-sm"
-                        >
-                            전체 보기
+                        <button type="button" class="btn btn-sm avatar-status-button"
+                            data-status="REVOKED" aria-pressed="false">
+                            회수
                         </button>
                     </div>
                     
-                    <p
-                        id="avatar-items-feedback"
-                        class="avatar-muted small"
-                        role="status"
-                        aria-live="polite"
-                    ></p>
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <label for="avatar-slot-filter" class="visually-hidden">
+                            아이템 부위
+                        </label>
                     
-                    <ul
-                        id="avatar-owned-list"
-                        class="list-unstyled d-flex flex-column gap-3 mb-0"
-                    ></ul>
-                    
-                    <div class="d-flex align-items-center justify-content-between gap-2 mt-3">
-                        <button
-                            id="avatar-prev-page"
-                            type="button"
-                            class="btn avatar-action btn-sm"
-                            disabled
+                        <select id="avatar-slot-filter"
+                            class="form-select form-select-sm avatar-filter flex-grow-1"
                         >
+                            <option value="">ALL</option>
+                            <option value="HEAD">HEAD</option>
+                            <option value="FACE">FACE</option>
+                            <option value="BODY">BODY</option>
+                            <option value="ACCESSORY">ACCESSORY</option>
+                        </select>
+                    
+                        <button id="avatar-show-all" type="button" class="btn avatar-action btn-sm flex-shrink-0">
+                            초기화
+                        </button>
+                    </div>
+                    
+                    <p id="avatar-items-feedback" class="avatar-muted small" role="status" aria-live="polite"></p>
+                    
+                    <ul id="avatar-owned-list" class="list-unstyled d-flex flex-column gap-3 mb-0"></ul>
+                    
+                    <div class="d-flex align-items-center justify-content-between gap-2 mt-auto pt-3">
+                        <button id="avatar-prev-page" type="button" class="btn avatar-action btn-sm" disabled>
                             이전
                         </button>
                     
-                        <span
-                            id="avatar-page-label"
-                            class="avatar-muted small"
-                        ></span>
+                        <span id="avatar-page-label" class="avatar-muted small"></span>
                     
-                        <button
-                            id="avatar-next-page"
-                            type="button"
-                            class="btn avatar-action btn-sm"
-                            disabled
-                        >
+                        <button id="avatar-next-page" type="button" class="btn avatar-action btn-sm" disabled>
                             다음
                         </button>
                     </div>
@@ -310,12 +198,17 @@ export function avatarPage({navigate, currentUser}) {
     const ownedList = content.querySelector('#avatar-owned-list');
     const feedback = content.querySelector('#avatar-feedback');
     const itemsFeedback = content.querySelector('#avatar-items-feedback');
-    const filterLabel = content.querySelector('#avatar-slot-filter-label');
+    const slotFilter = content.querySelector('#avatar-slot-filter');
     const statusFilter = content.querySelector('#avatar-status-filter');
     const showAllButton = content.querySelector('#avatar-show-all');
     const previousButton = content.querySelector('#avatar-prev-page');
     const nextButton = content.querySelector('#avatar-next-page');
     const pageLabel = content.querySelector('#avatar-page-label');
+    const avatarPreviewStage = content.querySelector('#avatar-preview-stage');
+    const avatarEquipmentLayers = content.querySelector('#avatar-equipment-layers');
+    const avatarImageFeedback = content.querySelector('#avatar-image-feedback');
+    const resyncArea = content.querySelector('#avatar-resync-area');
+    const resyncButton = content.querySelector('#avatar-resync-button');
 
     const slots = ['HEAD', 'FACE', 'BODY', 'ACCESSORY'];
 
@@ -333,21 +226,39 @@ export function avatarPage({navigate, currentUser}) {
     let itemsLoading = false;
     let avatarLoaded = false;
     let changingEquipment = false;
+    let needsResync = false;
+    let avatarRequestId = 0;
+    let currentOwnedItems = [];
     let disposed = false;
 
     // 이전 조회 응답이 새로운 필터 결과를 덮어쓰지 않도록 합니다.
     let itemsRequestId = 0;
+
+    function canChangeEquipment() {
+        return avatarLoaded &&
+            !changingEquipment &&
+            !needsResync;
+    }
 
     function renderSlots() {
         slotList.innerHTML = slots.map((slot) =>
             renderSlot(
                 slot,
                 equipments[slot],
-                avatarLoaded && !changingEquipment
+                canChangeEquipment()
             )
         ).join('');
 
         applyItemThumbnails(slotList);
+
+        renderAvatarEquipment({
+            stage: avatarPreviewStage,
+            layers: avatarEquipmentLayers,
+            equipments,
+            feedback: avatarImageFeedback,
+        });
+
+        updateEquipmentControls();
     }
 
     function updatePagination() {
@@ -360,147 +271,470 @@ export function avatarPage({navigate, currentUser}) {
             : `${page + 1} / ${totalPages}`;
     }
 
-    async function loadOwnedItems() {
+    async function loadOwnedItems({ throwOnError = false } = {}) {
         const requestId = ++itemsRequestId;
 
         itemsLoading = true;
+        currentOwnedItems = [];
         ownedList.replaceChildren();
-        itemsFeedback.textContent = '보유 아이템을 불러오는 중입니다.';
-        filterLabel.textContent = selectedSlot
-            ? `${selectedSlot} 부위`
-            : '전체 부위';
 
-        updatePagination();
+        itemsFeedback.textContent = '보유 아이템을 불러오는 중입니다.';
+        slotFilter.value = selectedSlot ?? '';
+
+        updateEquipmentControls();
 
         try {
             const result = await listOwnedItems({
                 page,
-                size: 20,
-                ...(selectedSlot ? {slot: selectedSlot} : {}),
-                ...(selectedStatus ? {status: selectedStatus} : {}),
+                size: 4,
+                ...(selectedSlot ? { slot: selectedSlot } : {}),
+                ...(selectedStatus ? { status: selectedStatus } : {}),
             });
 
-            if (disposed || requestId !== itemsRequestId) return;
+            if (disposed || requestId !== itemsRequestId) {
+                return false;
+            }
+
+            // 사용 상태 변경으로 마지막 페이지가 사라진 경우 보정합니다.
+            if (page > 0 && page >= result.meta.totalPages) {
+                page = Math.max(0, result.meta.totalPages - 1);
+
+                return await loadOwnedItems({ throwOnError });
+            }
 
             totalPages = result.meta.totalPages;
+            currentOwnedItems = result.data;
 
-            ownedList.innerHTML = result.data
+            ownedList.innerHTML = currentOwnedItems
                 .map(renderOwnedItem)
                 .join('');
 
             applyItemThumbnails(ownedList);
+            updateOwnedActionButtons();
 
-            itemsFeedback.textContent = result.data.length === 0
+            itemsFeedback.textContent = currentOwnedItems.length === 0
                 ? '조건에 맞는 보유 아이템이 없습니다.'
                 : '';
-        } catch {
-            if (disposed || requestId !== itemsRequestId) return;
+
+            return true;
+        } catch (error) {
+            if (disposed) return false;
+
+            if (requestId !== itemsRequestId) {
+                // 페이지 보정 조회에서 전달된 오류를 호출자에게 유지합니다.
+                if (throwOnError) throw error;
+
+                if (isAuthenticationError(error)) {
+                    handleAuthenticationError();
+                }
+
+                return false;
+            }
 
             totalPages = 0;
             itemsFeedback.textContent =
-                '보유 아이템을 불러오지 못했습니다. 필터나 전체 보기를 눌러 다시 시도해주세요.';
+                '보유 아이템을 불러오지 못했습니다. 다시 시도해주세요.';
+
+            if (throwOnError) throw error;
+
+            if (isAuthenticationError(error)) {
+                handleAuthenticationError();
+            }
+
+            return false;
         } finally {
             if (!disposed && requestId === itemsRequestId) {
                 itemsLoading = false;
-                updatePagination();
+                updateEquipmentControls();
             }
         }
     }
 
     async function loadAvatar() {
+        const requestId = ++avatarRequestId;
         const avatar = await getAvatar();
 
-        if (disposed) return;
+        if (disposed || requestId !== avatarRequestId) {
+            return false;
+        }
 
         equipments = avatar.equipments;
         avatarLoaded = true;
+
         renderSlots();
+
+        return true;
+    }
+
+    function isAuthenticationError(error) {
+        return error?.status === 401 ||
+            error?.code === 'AUTH_REQUIRED' ||
+            error?.code === 'SESSION_EXPIRED';
+    }
+
+    function handleAuthenticationError() {
+        needsResync = true;
+        avatarLoaded = false;
+        updateEquipmentControls();
+
+        navigate('/login');
+    }
+
+    function invalidatePreviousReads() {
+        avatarRequestId += 1;
+        itemsRequestId += 1;
+
+        // 무효화한 목록 조회의 finally에서는 상태를 갱신하지 않습니다.
+        itemsLoading = false;
+    }
+
+    async function resyncAvatarState() {
+        const results = await Promise.allSettled([
+            loadAvatar(),
+            loadOwnedItems({ throwOnError: true }),
+        ]);
+
+        if (disposed) return false;
+
+        const authenticationFailure = results.find(
+            (result) =>
+                result.status === 'rejected' &&
+                isAuthenticationError(result.reason)
+        );
+
+        if (authenticationFailure) {
+            handleAuthenticationError();
+            return false;
+        }
+
+        const succeeded = results.every(
+            (result) =>
+                result.status === 'fulfilled' &&
+                result.value === true
+        );
+
+        needsResync = !succeeded;
+        updateEquipmentControls();
+
+        return succeeded;
+    }
+
+    async function changeAvatarEquipment({ action, slot, item }) {
+        if (
+            disposed ||
+            !canChangeEquipment() ||
+            !slots.includes(slot)
+        ) {
+            return;
+        }
+
+        if (action === 'equip') {
+            if (
+                !item ||
+                item.slot !== slot ||
+                item.status === 'REVOKED'
+            ) {
+                return;
+            }
+        } else if (action === 'unequip') {
+            if (!equipments[slot]) return;
+        } else {
+            return;
+        }
+
+        const itemName = action === 'equip'
+            ? item.name
+            : equipments[slot].name;
+
+        const actionLabel = action === 'equip' ? '장착' : '해제';
+
+        // 모달을 기다리기 전부터 추가 변경을 차단합니다.
+        changingEquipment = true;
+        updateEquipmentControls();
+
+        try {
+            let confirmFirstUse = false;
+
+            if (action === 'equip' && item.status === 'OWNED_UNUSED') {
+                confirmFirstUse = await confirmFirstUseWithModal(
+                    `${slot} - ${itemName}`
+                );
+
+                if (!confirmFirstUse || disposed) return;
+            }
+
+            invalidatePreviousReads();
+
+            let avatar;
+
+            // 변경 API의 실패와 성공 후 목록 조회 실패를 구분합니다.
+            try {
+                avatar = action === 'equip'
+                    ? await equipAvatarItem(slot, {
+                        ownedItemId: item.ownedItemId,
+                        confirmFirstUse,
+                    })
+                    : await unequipAvatarItem(slot);
+            } catch (error) {
+                if (disposed) return;
+
+                if (isAuthenticationError(error)) {
+                    handleAuthenticationError();
+                    return;
+                }
+
+                const message = error?.message ||
+                    `${actionLabel} 요청 결과를 확인하지 못했습니다.`;
+
+                needsResync = true;
+
+                const recovered = await resyncAvatarState();
+
+                if (disposed) return;
+
+                feedback.textContent = '';
+
+                showResult(
+                    recovered
+                        ? `${message}\n최신 상태를 반영했습니다.`
+                        : `${message}\n최신 상태를 확인하지 못했습니다.\n` +
+                        '새로고침을 눌러주세요.'
+                );
+
+                return;
+            }
+
+            if (disposed) return;
+
+            // 변경 API가 성공했으므로 외형은 즉시 반영합니다.
+            equipments = avatar.equipments;
+            avatarLoaded = true;
+            renderSlots();
+
+            let listUpdated = false;
+
+            try {
+                listUpdated = await loadOwnedItems({
+                    throwOnError: true,
+                });
+            } catch (error) {
+                if (disposed) return;
+
+                if (isAuthenticationError(error)) {
+                    handleAuthenticationError();
+                    return;
+                }
+            }
+
+            if (disposed) return;
+
+            needsResync = !listUpdated;
+            feedback.textContent = '';
+
+            if (!listUpdated) {
+                showResult(
+                    `아이템을 ${actionLabel}하는 과정에서 인벤토리 갱신에 실패했습니다.\n` +
+                    '새로고침을 눌러주세요.'
+                );
+            } else if (action === 'equip' && confirmFirstUse) {
+                showResult(`${slot} - ${itemName}을(를) 장착했습니다.`);
+            }
+        } finally {
+            if (!disposed) {
+                changingEquipment = false;
+                updateEquipmentControls();
+            }
+        }
+    }
+
+    async function handleResyncClick() {
+        if (disposed || changingEquipment) return;
+
+        changingEquipment = true;
+        needsResync = true;
+
+        invalidatePreviousReads();
+        updateEquipmentControls();
+
+        try {
+            const recovered = await resyncAvatarState();
+
+            if (disposed) return;
+
+            feedback.textContent = '';
+
+            if (!recovered) {
+                showResult('최신 상태를 불러오지 못했습니다.\n새로고침을 눌러주세요.');
+            }
+        } finally {
+            if (!disposed) {
+                changingEquipment = false;
+                updateEquipmentControls();
+            }
+        }
     }
 
     async function handleSlotClick(event) {
         const button = event.target.closest('button[data-action]');
 
-        if (!button || !slotList.contains(button)) return;
-
-        const {action, slot} = button.dataset;
-
-        if (action === 'select') {
-            selectedSlot = slot;
-            page = 0;
-
-            // 선택한 부위의 모든 사용 상태를 표시합니다.
-            selectedStatus = undefined;
-            statusFilter.value = '';
-
-            await loadOwnedItems();
-            return;
-        }
-
         if (
-            action !== 'unequip' ||
-            changingEquipment ||
-            !avatarLoaded ||
-            !equipments[slot]
+            !button ||
+            !slotList.contains(button) ||
+            changingEquipment
         ) {
             return;
         }
 
-        changingEquipment = true;
-        feedback.textContent = `${slot} 아이템을 해제하는 중입니다.`;
-        renderSlots();
+        const { action, slot } = button.dataset;
 
-        try {
-            const avatar = await unequipAvatarItem(slot);
+        if (action === 'select') {
+            selectedSlot = slot;
+            selectedStatus = undefined;
+            page = 0;
 
-            if (disposed) return;
-
-            // 성공 응답의 전체 장착 상태를 반영합니다.
-            equipments = avatar.equipments;
-            feedback.textContent = `${slot} 아이템을 해제했습니다.`;
-
+            updateStatusButtons();
             await loadOwnedItems();
-        } catch {
+
             if (disposed) return;
 
-            feedback.textContent =
-                '해제 요청을 완료하지 못했습니다. 최신 장착 상태를 확인합니다.';
-
-            try {
-                await loadAvatar();
-
-                if (disposed) return;
-
-                feedback.textContent =
-                    '해제 요청을 완료하지 못해 최신 장착 상태를 반영했습니다.';
-
-                await loadOwnedItems();
-            } catch {
-                if (disposed) return;
-
-                // 상태를 확인하지 못했다면 추가 해제를 막습니다.
-                avatarLoaded = false;
-                feedback.textContent =
-                    '최신 장착 상태를 확인하지 못했습니다. 새로고침 후 다시 시도해주세요.';
+            if (window.matchMedia('(max-width: 1032px)').matches) {
+                content.querySelector(
+                    '[aria-labelledby="avatar-items-title"]'
+                ).scrollIntoView({
+                    behavior: window.matchMedia(
+                        '(prefers-reduced-motion: reduce)'
+                    ).matches ? 'instant' : 'smooth',
+                    block: 'start',
+                });
             }
-        } finally {
-            if (!disposed) {
-                changingEquipment = false;
-                renderSlots();
-            }
+
+            return;
+        }
+
+        if (action === 'unequip') {
+            await changeAvatarEquipment({
+                action: 'unequip',
+                slot,
+            });
         }
     }
 
-    function handleStatusChange() {
-        selectedStatus = statusFilter.value || undefined;
+    function updateOwnedActionButtons() {
+        ownedList.querySelectorAll('button[data-action]')
+            .forEach((button) => {
+                const item = currentOwnedItems.find(
+                    (candidate) =>
+                        candidate.ownedItemId ===
+                        Number(button.dataset.ownedItemId)
+                );
+
+                button.disabled =
+                    !canChangeEquipment() ||
+                    !item ||
+                    item.status === 'REVOKED';
+            });
+    }
+
+    function updateEquipmentControls() {
+        slotList.querySelectorAll('button[data-action="unequip"]')
+            .forEach((button) => {
+                button.disabled =
+                    !canChangeEquipment() ||
+                    !equipments[button.dataset.slot];
+            });
+
+        updateOwnedActionButtons();
+
+        // 재조회 중 조건 변경으로 복구용 목록 조회가 무효화되는 것을 막습니다.
+        slotList.querySelectorAll('button[data-action="select"]')
+            .forEach((button) => {
+                button.disabled = changingEquipment;
+            });
+
+        statusFilter.querySelectorAll('button')
+            .forEach((button) => {
+                button.disabled = changingEquipment;
+            });
+
+        slotFilter.disabled = changingEquipment;
+        showAllButton.disabled = changingEquipment;
+
+        updatePagination();
+
+        if (changingEquipment) {
+            previousButton.disabled = true;
+            nextButton.disabled = true;
+        }
+
+        resyncArea.hidden = !needsResync || changingEquipment;
+        resyncButton.disabled = changingEquipment;
+    }
+
+    async function handleOwnedItemClick(event) {
+        const button = event.target.closest('button[data-action]');
+
+        if (
+            !button ||
+            !ownedList.contains(button) ||
+            !canChangeEquipment()
+        ) {
+            return;
+        }
+
+        const item = currentOwnedItems.find(
+            (candidate) =>
+                candidate.ownedItemId ===
+                Number(button.dataset.ownedItemId)
+        );
+
+        if (!item || item.status === 'REVOKED') return;
+
+        await changeAvatarEquipment({
+            action: button.dataset.action,
+            slot: item.slot,
+            item,
+        });
+    }
+
+    function updateStatusButtons() {
+        const currentStatus = selectedStatus ?? '';
+
+        statusFilter.querySelectorAll('button[data-status]')
+            .forEach((button) => {
+                button.setAttribute(
+                    'aria-pressed',
+                    String(button.dataset.status === currentStatus)
+                );
+            });
+    }
+
+    function handleStatusChange(event) {
+        const button = event.target.closest('button[data-status]');
+
+        if (!button || !statusFilter.contains(button)) return;
+
+        selectedStatus = button.dataset.status || undefined;
         page = 0;
+
+        updateStatusButtons();
+        void loadOwnedItems();
+    }
+
+    function handleSlotFilterChange() {
+        selectedSlot = slotFilter.value || undefined;
+        page = 0;
+
         void loadOwnedItems();
     }
 
     function handleShowAll() {
         selectedSlot = undefined;
         selectedStatus = undefined;
-        statusFilter.value = '';
         page = 0;
+
+        slotFilter.value = '';
+        updateStatusButtons();
+
         void loadOwnedItems();
     }
 
@@ -519,21 +753,22 @@ export function avatarPage({navigate, currentUser}) {
     }
 
     slotList.addEventListener('click', handleSlotClick);
-    statusFilter.addEventListener('change', handleStatusChange);
+    statusFilter.addEventListener('click', handleStatusChange);
     showAllButton.addEventListener('click', handleShowAll);
     previousButton.addEventListener('click', handlePreviousPage);
     nextButton.addEventListener('click', handleNextPage);
+    slotFilter.addEventListener('change', handleSlotFilterChange);
+    ownedList.addEventListener('click', handleOwnedItemClick);
+    resyncButton.addEventListener('click', handleResyncClick);
 
     renderSlots();
 
-    void loadAvatar().catch(() => {
-        if (disposed) return;
-
-        feedback.textContent =
-            '장착 상태를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.';
+    // 모달과 이벤트 초기화가 끝난 뒤 초기 조회를 시작합니다.
+    queueMicrotask(() => {
+        if (!disposed) {
+            void handleResyncClick();
+        }
     });
-
-    void loadOwnedItems();
 
 
     const element = createAppShell({
@@ -543,173 +778,315 @@ export function avatarPage({navigate, currentUser}) {
         navigate,
     });
 
+    const resultModalElement = content.querySelector('#avatar-result-modal');
+    const resultMessage = resultModalElement.querySelector(
+        '#avatar-result-message'
+    );
+
+    // 페이지의 높이 계산에 영향을 주지 않도록 이동합니다.
+    element.append(resultModalElement);
+
+    const resultModal = new Modal(resultModalElement, {
+        backdrop: 'static',
+        keyboard: false,
+    });
+
+    // Bootstrap의 전환 중에는 hide()가 무시되므로 완료 이벤트를 기다립니다.
+    function manageModalLifecycle(modalElement, modal, disposeModal) {
+        let phase = 'hidden';
+        let closing = false;
+        let released = false;
+
+        const onShow = () => { phase = 'showing'; };
+        const onShown = () => {
+            phase = 'shown';
+            if (closing) modal.hide();
+        };
+        const onHide = () => { phase = 'hiding'; };
+        const onHidden = () => {
+            phase = 'hidden';
+            if (closing) release();
+        };
+
+        function release() {
+            if (released) return;
+            released = true;
+            modalElement.removeEventListener('show.bs.modal', onShow);
+            modalElement.removeEventListener('shown.bs.modal', onShown);
+            modalElement.removeEventListener('hide.bs.modal', onHide);
+            modalElement.removeEventListener('hidden.bs.modal', onHidden);
+            disposeModal();
+        }
+
+        modalElement.addEventListener('show.bs.modal', onShow);
+        modalElement.addEventListener('shown.bs.modal', onShown);
+        modalElement.addEventListener('hide.bs.modal', onHide);
+        modalElement.addEventListener('hidden.bs.modal', onHidden);
+
+        return () => {
+            if (closing) return;
+            closing = true;
+
+            if (phase === 'hidden') {
+                release();
+            } else {
+                // 라우터가 이전 화면을 제거해도 전환 대상은 완료까지 유지합니다.
+                document.body.append(modalElement);
+                if (phase === 'shown') modal.hide();
+            }
+        };
+    }
+
+    const closeResultModal = manageModalLifecycle(
+        resultModalElement, resultModal, disposeResultModal
+    );
+
+    let resultTrigger = null;
+
+    function handleModalTab(event) {
+        if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey) {
+            return;
+        }
+
+        const modal = event.currentTarget;
+        const focusable = Array.from(modal.querySelectorAll(
+            'button, a[href], input, select, textarea, [tabindex]'
+        )).filter((element) =>
+            !element.matches(':disabled, [aria-disabled="true"]') &&
+            element.tabIndex >= 0 &&
+            element.getClientRects().length > 0 &&
+            getComputedStyle(element).visibility !== 'hidden'
+        );
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (!first) {
+            event.preventDefault();
+            modal.focus({ preventScroll: true });
+            return;
+        }
+
+        const active = document.activeElement;
+        if (!focusable.includes(active) ||
+            (event.shiftKey && active === first) ||
+            (!event.shiftKey && active === last)) {
+            event.preventDefault();
+            (event.shiftKey ? last : first).focus({ preventScroll: true });
+        }
+    }
+
+    function handleModalHide(event) {
+        // aria-hidden 적용 전에 숨겨질 모달 내부의 포커스를 해제합니다.
+        const active = document.activeElement;
+        if (active instanceof HTMLElement && event.currentTarget.contains(active)) {
+            active.blur();
+        }
+    }
+
+    resultModalElement.addEventListener('keydown', handleModalTab);
+    resultModalElement.addEventListener('hide.bs.modal', handleModalHide);
+
+    function showResult(message) {
+        resultTrigger = document.activeElement;
+        resultMessage.textContent = message;
+        resultModal.show();
+    }
+
+    function handleResultShown() {
+        if (disposed) return;
+        resultModalElement.querySelector(
+            '[data-bs-dismiss="modal"]'
+        ).focus();
+    }
+
+    function restorePageFocus(trigger) {
+        // 취소 후 잠금 해제와 장착 후 DOM 갱신이 끝난 다음 복귀합니다.
+        requestAnimationFrame(() => {
+            if (disposed) return;
+
+            const title = content.querySelector('h1');
+            title.setAttribute('tabindex', '-1');
+
+            const slot = trigger instanceof HTMLElement
+                ? trigger.dataset.slot
+                : null;
+            const slotButton = slots.includes(slot)
+                ? slotList.querySelector(
+                    `button[data-action="select"][data-slot="${slot}"]`
+                )
+                : null;
+
+            const candidates = [trigger, slotButton, title];
+            for (const candidate of candidates) {
+                if (!(candidate instanceof HTMLElement) ||
+                    !content.contains(candidate) ||
+                    candidate.matches(':disabled, [aria-disabled="true"]') ||
+                    candidate.getClientRects().length === 0) continue;
+
+                candidate.focus({ preventScroll: true });
+                if (document.activeElement === candidate) break;
+            }
+        });
+    }
+
+    function handleResultHidden() {
+        restorePageFocus(resultTrigger);
+    }
+
+    resultModalElement.addEventListener('shown.bs.modal', handleResultShown);
+    resultModalElement.addEventListener('hidden.bs.modal', handleResultHidden);
+
+    function disposeResultModal() {
+        resultModalElement.removeEventListener('keydown', handleModalTab);
+        resultModalElement.removeEventListener('hide.bs.modal', handleModalHide);
+        resultModalElement.removeEventListener(
+            'shown.bs.modal',
+            handleResultShown
+        );
+        resultModalElement.removeEventListener(
+            'hidden.bs.modal',
+            handleResultHidden
+        );
+
+        resultModal.dispose();
+        resultModalElement.remove();
+    }
+
+    const firstUseModalElement = content.querySelector(
+        '#avatar-first-use-modal'
+    );
+    const firstUseMessage = firstUseModalElement.querySelector(
+        '#avatar-first-use-message'
+    );
+    const firstUseConfirmButton = firstUseModalElement.querySelector(
+        '#avatar-first-use-confirm'
+    );
+
+    element.append(firstUseModalElement);
+    firstUseModalElement.addEventListener('keydown', handleModalTab);
+    firstUseModalElement.addEventListener('hide.bs.modal', handleModalHide);
+
+    const firstUseModal = new Modal(firstUseModalElement, {
+        backdrop: 'static',
+        keyboard: true,
+    });
+
+    const closeFirstUseModal = manageModalLifecycle(
+        firstUseModalElement, firstUseModal, disposeFirstUseModal
+    );
+
+    let pendingFirstUse = null;
+    let firstUseAccepted = false;
+    let firstUseTrigger = null;
+    let firstUseDisposed = false;
+
+    function confirmFirstUseWithModal(itemName) {
+        // 확인창이 열려 있는 동안 추가 요청은 진행하지 않습니다.
+        if (pendingFirstUse || disposed) {
+            return Promise.resolve(false);
+        }
+
+        firstUseTrigger = document.activeElement;
+        firstUseAccepted = false;
+
+        firstUseMessage.textContent =
+            `${itemName}을(를) 처음 장착하면 사용 처리됩니다.`;
+
+        return new Promise((resolve) => {
+            pendingFirstUse = resolve;
+            firstUseModal.show();
+        });
+    }
+
+    function handleFirstUseConfirm() {
+        firstUseAccepted = true;
+        firstUseModal.hide();
+    }
+
+    function handleFirstUseShown() {
+        if (disposed) return;
+
+        // 실수로 동의하지 않도록 취소 버튼에 먼저 포커스합니다.
+        firstUseModalElement.querySelector(
+            '[data-bs-dismiss="modal"]'
+        ).focus();
+    }
+
+    function handleFirstUseHidden() {
+        const resolve = pendingFirstUse;
+        const accepted = firstUseAccepted && !disposed;
+
+        pendingFirstUse = null;
+        firstUseAccepted = false;
+
+        // 모달이 완전히 닫힌 다음 장착 요청을 진행합니다.
+        resolve?.(accepted);
+        restorePageFocus(firstUseTrigger);
+
+    }
+
+    function disposeFirstUseModal() {
+        if (firstUseDisposed) return;
+        firstUseDisposed = true;
+        firstUseModalElement.removeEventListener('keydown', handleModalTab);
+        firstUseModalElement.removeEventListener('hide.bs.modal', handleModalHide);
+
+        pendingFirstUse?.(false);
+        pendingFirstUse = null;
+
+        firstUseConfirmButton.removeEventListener(
+            'click',
+            handleFirstUseConfirm
+        );
+        firstUseModalElement.removeEventListener(
+            'shown.bs.modal',
+            handleFirstUseShown
+        );
+        firstUseModalElement.removeEventListener(
+            'hidden.bs.modal',
+            handleFirstUseHidden
+        );
+
+        firstUseModal.dispose();
+        firstUseModalElement.remove();
+    }
+
+    firstUseConfirmButton.addEventListener(
+        'click',
+        handleFirstUseConfirm
+    );
+    firstUseModalElement.addEventListener(
+        'shown.bs.modal',
+        handleFirstUseShown
+    );
+    firstUseModalElement.addEventListener(
+        'hidden.bs.modal',
+        handleFirstUseHidden
+    );
+
     return {
         element,
         cleanup: () => {
             disposed = true;
+            // 대기 중인 최초 사용 확인은 취소합니다.
+            pendingFirstUse?.(false);
+            pendingFirstUse = null;
+
+            closeFirstUseModal();
             itemsRequestId += 1;
+            avatarRequestId += 1;
 
             slotList.removeEventListener('click', handleSlotClick);
-            statusFilter.removeEventListener('change', handleStatusChange);
+            statusFilter.removeEventListener('click', handleStatusChange);
             showAllButton.removeEventListener('click', handleShowAll);
             previousButton.removeEventListener('click', handlePreviousPage);
             nextButton.removeEventListener('click', handleNextPage);
+            slotFilter.removeEventListener('change', handleSlotFilterChange);
+            ownedList.removeEventListener('click', handleOwnedItemClick);
+            resyncButton.removeEventListener('click', handleResyncClick);
+
+            closeResultModal();
         },
     };
-}
-
-function renderSlot(slot, equipment, canUnequip) {
-    const unequipDisabled = !equipment || !canUnequip;
-
-    // 장착 정보에는 slot이 없으므로 현재 슬롯을 함께 전달합니다.
-    const imageUrl = equipment
-        ? getItemImageUrl({
-            slot,
-            assetKey: equipment.assetKey,
-        })
-        : null;
-
-    return `
-        <li class="avatar-slot border rounded-3 p-3">
-            <div class="d-flex align-items-start
-                        justify-content-between gap-3 mb-3">
-                <div class="avatar-owned-item__info">
-                    <h3 class="h6 fw-semibold mb-2">
-                        ${slot}
-                    </h3>
-
-                    <p class="avatar-muted small mb-0">
-                        ${equipment
-        ? escapeHtml(equipment.name)
-        : '기본 외형'}
-                    </p>
-                </div>
-
-                <div class="avatar-owned-item__thumbnail rounded-3">
-                    ${imageUrl ? `
-                        <img
-                            src="${escapeHtml(imageUrl)}"
-                            alt="${escapeHtml(equipment.name)}"
-                            class="avatar-owned-item__image"
-                            data-item-thumbnail
-                            width="60"
-                            height="60"
-                        >
-                    ` : `
-                        <span class="avatar-muted small text-center">
-                            ${equipment ? '이미지 오류' : '없음'}
-                        </span>
-                    `}
-                </div>
-            </div>
-
-            <div class="d-flex gap-2">
-                <button
-                    type="button"
-                    class="btn avatar-action btn-sm flex-fill"
-                    data-action="select"
-                    data-slot="${slot}"
-                    aria-label="${slot} 아이템 선택"
-                >
-                    선택
-                </button>
-
-                <button
-                    type="button"
-                    class="btn avatar-action btn-sm flex-fill"
-                    data-action="unequip"
-                    data-slot="${slot}"
-                    aria-label="${slot} 아이템 해제"
-                    ${unequipDisabled ? 'disabled' : ''}
-                >
-                    해제
-                </button>
-            </div>
-        </li>
-    `;
-}
-
-function renderOwnedItem(item) {
-    const statusLabels = {
-        OWNED_UNUSED: '미사용',
-        OWNED_USED: '사용',
-        REVOKED: '회수',
-    };
-
-    const imageUrl = getItemImageUrl(item);
-    const isRevoked = item.status === 'REVOKED';
-    const action = item.equipped ? 'unequip' : 'equip';
-    const buttonLabel = item.equipped ? '해제' : '장착';
-
-    const equipmentLabel = item.equipped
-        ? `현재 장착 중 - ${item.slot}`
-        : `미장착 - ${item.slot}`;
-
-    return `
-        <li class="avatar-owned-item border rounded-3 p-3">
-            <div class="d-flex align-items-start
-                        justify-content-between gap-3">
-                <div class="avatar-owned-item__info">
-                    <div class="d-flex align-items-center
-                                flex-wrap gap-2">
-                        <h3 class="h6 mb-0">
-                            ${escapeHtml(item.name)}
-                        </h3>
-
-                        <span class="avatar-item-status badge rounded-pill">
-                            ${escapeHtml(
-        statusLabels[item.status] ?? item.status
-    )}
-                        </span>
-                    </div>
-                </div>
-
-                <div class="avatar-owned-item__thumbnail rounded-3">
-                    ${imageUrl ? `
-                        <img
-                            src="${escapeHtml(imageUrl)}"
-                            alt="${escapeHtml(item.name)}"
-                            class="avatar-owned-item__image"
-                            data-item-thumbnail
-                            width="60"
-                            height="60"
-                        >
-                    ` : `
-                        <span class="avatar-muted small text-center">
-                            이미지 없음
-                        </span>
-                    `}
-                </div>
-            </div>
-
-            <div class="d-flex align-items-center
-                        justify-content-between gap-3 mt-3">
-                <p class="avatar-muted small mb-0">
-                    ${escapeHtml(equipmentLabel)}
-                </p>
-
-                <button
-                    type="button"
-                    class="btn avatar-action btn-sm flex-shrink-0"
-                    data-action="${action}"
-                    data-slot="${escapeHtml(item.slot)}"
-                    data-owned-item-id="${item.ownedItemId}"
-                    aria-label="${escapeHtml(item.name)} ${buttonLabel}"
-                    ${isRevoked ? 'disabled' : ''}
-                >
-                    ${buttonLabel}
-                </button>
-            </div>
-        </li>
-    `;
-}
-
-function escapeHtml(value) {
-    return String(value).replace(/[&<>"']/g, (character) => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;',
-    })[character]);
 }

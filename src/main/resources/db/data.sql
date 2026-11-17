@@ -62,3 +62,90 @@ ON DUPLICATE KEY UPDATE
   , slot_code = VALUES(slot_code)
   , asset_key = VALUES(asset_key)
   , status = VALUES(status);
+
+-- 아바타 이미지 연동 테스트용 상품
+INSERT INTO shop_items (
+    code,
+    name,
+    description,
+    price_krw,
+    slot_code,
+    asset_key,
+    status,
+    created_at,
+    updated_at
+)
+VALUES
+    -- ACCESSORY
+    (
+        'RIBBON_HAIRBAND', '리본 머리띠', '리본 머리띠',
+        1000, 'ACCESSORY', 'ribbon-hairband', 'ACTIVE',
+        UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
+    ),
+    (
+        'BLACK_CAP', '검정색 모자', '검정색 모자',
+        1000, 'ACCESSORY', 'black-cap', 'ACTIVE',
+        UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
+    ),
+    (
+        'YELLOW_CLIP', '노란색 머리핀', '노란색 머리핀',
+        1000, 'ACCESSORY', 'yellow-clip', 'ACTIVE',
+        UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
+    ),
+
+    -- HEAD
+    (
+        'BROWN_LOB', '갈색 단발머리', '갈색 단발머리',
+        1000, 'HEAD', 'brown-lob', 'ACTIVE',
+        UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
+    ),
+    (
+        'BLACK_LONG', '검정색 긴머리', '검정색 긴머리',
+        1000, 'HEAD', 'black-long', 'ACTIVE',
+        UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
+    ),
+    (
+        'BLUE_SHORT', '파란색 짧은 머리', '파란색 짧은 머리',
+        1000, 'HEAD', 'blue-short', 'ACTIVE',
+        UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
+    ),
+
+    -- FACE
+    (
+        'BLUE_SMILE', '웃는 얼굴(파랑)', '웃는 얼굴(파랑)',
+        1000, 'FACE', 'blue-smile', 'ACTIVE',
+        UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
+    ),
+    (
+        'YELLOW_SMILE', '웃는 얼굴(노랑)', '웃는 얼굴(노랑)',
+        1000, 'FACE', 'yellow-smile', 'ACTIVE',
+        UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
+    ),
+    (
+        'PINK_SAD', '우는 얼굴(분홍)', '우는 얼굴(분홍)',
+        1000, 'FACE', 'pink-sad', 'ACTIVE',
+        UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
+    ),
+
+    -- BODY
+    (
+        'BLUE_SHIRT', '티셔츠 세트(파랑)', '티셔츠 세트(파랑)',
+        1000, 'BODY', 'blue-shirt', 'ACTIVE',
+        UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
+    ),
+    (
+        'WHITE_OVERALLS', '멜빵 세트(하양)', '멜빵 세트(하양)',
+        1000, 'BODY', 'white-overalls', 'ACTIVE',
+        UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
+    ),
+    (
+        'GREEN_DRESS', '원피스 세트(초록)', '원피스 세트(초록)',
+        1000, 'BODY', 'green-dress', 'ACTIVE',
+        UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
+    )
+    ON DUPLICATE KEY UPDATE
+                         name = VALUES(name),
+                         description = VALUES(description),
+                         slot_code = VALUES(slot_code),
+                         asset_key = VALUES(asset_key),
+                         updated_at = UTC_TIMESTAMP(6);

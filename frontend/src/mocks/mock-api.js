@@ -123,6 +123,7 @@ function createAvatarMockState() {
     ['HEAD', '단발(갈색)', 'brown-lob'],
     ['FACE', '웃는 얼굴(노랑)', 'yellow-smile'],
     ['BODY', '티셔츠 세트(파랑)', 'blue-shirt'],
+    ['BODY', '멜빵 세트(하양)', 'white-overalls'],
     ['ACCESSORY', '리본 머리띠', 'ribbon-hairband'],
   ];
 
