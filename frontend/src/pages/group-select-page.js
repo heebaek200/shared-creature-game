@@ -4,7 +4,8 @@ import {
     listPublicGroups,
     joinGroup,
 } from '../features/group/api.js';
-import { createAppShell } from '../components/app-shell.js';
+import {createAppShell} from '../components/app-shell.js';
+import {proofreadGroupDescription} from '../ai/api.js';
 
 /**
  * 공개 그룹 검색·가입 및 그룹 생성 Page를 생성합니다.
@@ -64,8 +65,29 @@ export function groupSelectPage({navigate, currentUser}) {
                             <label class="form-label" for="group-description">그룹 소개</label>
                             <textarea class="form-control" id="group-description" name="description" maxlength="500" rows="4" placeholder="그룹 소개 (선택 · 최대 500자)"></textarea>
                             <div class="invalid-feedback" id="group-description-error"></div>
+                            
+                             <div class="d-flex justify-content-end mt-2">
+                                <button type="button" class="btn btn-outline-primary btn-sm ai-proofread-button">AI 맞춤형 교정</button>
+                             </div>
                         </div>
-                                                       
+                        
+                        <div class="ai-proofread-result d-none border rounded-3 p-3 mb-3">
+                            <h4 class="h6 fw-bold">AI 교정 제안</h4>
+                                                
+                            <div class="mb-3">
+                                <div class="small text-secondary mb-1">원문</div>
+                                <p class="ai-original-text mb-0"></p>
+                            </div>
+                        
+                            <div class="mb-3">
+                                <div class="small text-secondary mb-1">교정 제안</div>
+                                <p class="ai-suggested-text mb-0"></p>                          
+                            </div>                                              
+                            <button type="button" class="btn btn-success btn-sm ai-apply-button">교정 결과 적용</button>                       
+                        </div>
+                        
+                        <div class="alert d-none ai-proofread-alert mt-2" role="status" aria-live="polite"></div>
+                                               
                         <button class="btn btn-success create-submit" type="submit">그룹 생성</button>
                         <div class="alert d-none create-alert mt-3 mb-0" role="status" aria-live="polite"></div>
                         
@@ -122,6 +144,16 @@ export function groupSelectPage({navigate, currentUser}) {
     const groupDescriptionInput = element.querySelector('#group-description');
     const groupDescriptionError = element.querySelector('#group-description-error');
 
+    const aiProofreadButton = element.querySelector('.ai-proofread-button');
+    const aiProofreadResult = element.querySelector('.ai-proofread-result');
+    const aiOriginalText = element.querySelector('.ai-original-text');
+    const aiSuggestedText = element.querySelector('.ai-suggested-text');
+    const aiApplyButton = element.querySelector('.ai-apply-button');
+    const aiProofreadAlert = element.querySelector('.ai-proofread-alert');
+
+    let suggestedDescription = null;
+    let proofreading = false;
+
     const showGroupNameError = (message) => {
         groupNameInput.classList.add('is-invalid');
         groupNameError.textContent = message;
@@ -145,6 +177,14 @@ export function groupSelectPage({navigate, currentUser}) {
     const clearGroupDescriptionError = () => {
         groupDescriptionInput.classList.remove('is-invalid');
         groupDescriptionError.textContent = '';
+    };
+
+    const onGroupDescriptionInput = () => {
+        clearGroupDescriptionError();
+
+        suggestedDescription = null;
+        aiProofreadResult.classList.add('d-none');
+        hideAlert(aiProofreadAlert);
     };
 
     const listAlert = element.querySelector('.list-alert')
@@ -191,6 +231,78 @@ export function groupSelectPage({navigate, currentUser}) {
         target.classList.add('d-none');
         target.textContent = '';
     };
+
+    const onAiProofread = async () => {
+        if (proofreading) return;
+
+        const originalText = groupDescriptionInput.value;
+
+        if (!originalText.trim()) {
+            showAlert(aiProofreadAlert, 'AI 교정을 위해 그룹 소개를 먼저 입력해 주세요.', 'warning');
+            return;
+        }
+
+        hideAlert(aiProofreadAlert);
+        aiProofreadResult.classList.add('d-none');
+        suggestedDescription = null;
+
+        proofreading = true;
+        aiProofreadButton.disabled = true;
+        aiProofreadButton.textContent = '교정 중...';
+
+        try {
+            const result = await proofreadGroupDescription(originalText);
+            if (groupDescriptionInput.value !== originalText) {
+                return;
+            }
+            if (typeof result?.suggestedText !== 'string') {
+                throw new Error('AI 교정 결과를 확인할 수 없습니다.');
+            }
+
+            suggestedDescription = result.suggestedText;
+
+            aiOriginalText.textContent = result.originalText ?? originalText;
+            aiSuggestedText.textContent = suggestedDescription;
+            aiProofreadResult.classList.remove('d-none');
+
+            if (result.changed === false) {
+                showAlert(
+                    aiProofreadAlert,
+                    '교정할 내용이 없습니다. 원문을 그대로 사용할 수 있습니다.',
+                    'info'
+                );
+            }
+        } catch (error) {
+            let message = 'AI 교정 중 오류가 발생했습니다.';
+
+            if (error?.code === 'RATE_LIMIT_EXCEEDED') {
+                message = 'AI 교정 요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요';
+            } else if (error?.code === 'AI_PROVIDER_UNAVAILABLE') {
+                message = 'AI 교정 서비스를 일시적으로 사용할 수 없습니다. 원문을 그대로 사용해 주세요.';
+            } else if (error?.message) {
+                message = error.message;
+            }
+
+            showAlert(aiProofreadAlert, message, 'danger');
+        } finally {
+            proofreading = false;
+            aiProofreadButton.disabled = false;
+            aiProofreadButton.textContent = 'AI 맞춤형 교정';
+        }
+    };
+
+    const onAiApply = () => {
+        if (suggestedDescription === null) return;
+
+        groupDescriptionInput.value = suggestedDescription;
+        clearGroupDescriptionError();
+
+        aiProofreadResult.classList.add('d-none');
+        hideAlert(aiProofreadAlert);
+
+        suggestedDescription = null;
+    };
+
 
     const escapeHtml = (value) => {
         return String(value ?? '').replace(/[&<>"']/g, (char) => {
@@ -558,8 +670,7 @@ export function groupSelectPage({navigate, currentUser}) {
                     error.message || '그룹 생성에 실패했습니다.'
                 );
             }
-        }
-        finally {
+        } finally {
             createSubmit.disabled = creationSucceeded;
         }
     };
@@ -639,8 +750,10 @@ export function groupSelectPage({navigate, currentUser}) {
     searchForm.addEventListener('submit', onSearch);
     createToggle.addEventListener('click', onCreateToggle);
     createForm.addEventListener('submit', onCreate);
+    aiProofreadButton.addEventListener('click', onAiProofread);
+    aiApplyButton.addEventListener('click', onAiApply);
     groupNameInput.addEventListener('input', clearGroupNameError);
-    groupDescriptionInput.addEventListener('input', clearGroupDescriptionError);
+    groupDescriptionInput.addEventListener('input', onGroupDescriptionInput);
     groupList.addEventListener('click', onGroupListClick);
     pagination.addEventListener('click', onPagination);
 
@@ -652,8 +765,10 @@ export function groupSelectPage({navigate, currentUser}) {
             searchForm.removeEventListener('submit', onSearch);
             createToggle.removeEventListener('click', onCreateToggle);
             createForm.removeEventListener('submit', onCreate);
+            aiProofreadButton.removeEventListener('click', onAiProofread);
+            aiApplyButton.removeEventListener('click', onAiApply);
             groupNameInput.removeEventListener('input', clearGroupNameError);
-            groupDescriptionInput.removeEventListener('input', clearGroupDescriptionError);
+            groupDescriptionInput.removeEventListener('input', onGroupDescriptionInput);
             groupList.removeEventListener('click', onGroupListClick);
             pagination.removeEventListener('click', onPagination);
         },

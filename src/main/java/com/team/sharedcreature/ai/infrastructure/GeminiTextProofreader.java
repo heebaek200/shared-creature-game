@@ -3,18 +3,21 @@ package com.team.sharedcreature.ai.infrastructure;
 import com.team.sharedcreature.ai.application.TextProofreader;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
 @Component
 public class GeminiTextProofreader implements TextProofreader {
 
-    private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent";
+    private static final String GEMINI_API_URL =  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent";;
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
@@ -24,8 +27,12 @@ public class GeminiTextProofreader implements TextProofreader {
             RestClient.Builder restClientBuilder,
             ObjectMapper objectMapper, @Value("${gemini.api-key:}") String apiKey
     ) {
+        HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
 
-        this.restClient = restClientBuilder.build();
+        requestFactory.setReadTimeout(Duration.ofSeconds(10));
+
+        this.restClient = restClientBuilder.requestFactory(requestFactory).build();
         this.objectMapper = objectMapper;
         this.apiKey = apiKey;
     }
@@ -95,14 +102,29 @@ public class GeminiTextProofreader implements TextProofreader {
 
         try {
             JsonNode correctedResponse = objectMapper.readTree(result);
-            String correctedText = correctedResponse.path("correctedText").asText(null);
+            JsonNode correctedTextNode = correctedResponse.path("correctedText");
 
-            if (correctedText == null || correctedText.isBlank()) {
-                throw new IllegalStateException("교정 결과 형식이 올바르지 않습니다");
+            if (!correctedTextNode.isTextual()) {
+                throw new IllegalStateException("교정 결과 형식이 올바르지 않습니다.");
             }
-
+            String correctedText = correctedTextNode.asText();
+            if (correctedText.isBlank()) {
+                throw new IllegalStateException("교정 결과가 비어있습니다");
+            }
+            if (correctedText.length() > 500) {
+                throw new IllegalStateException("교정 결과는 500자 이하여야 합니다.");
+            }
+            if (correctedText.codePoints().anyMatch(codePoint ->
+                    Character.isISOControl(codePoint)
+                            && codePoint != '\n'
+                            && codePoint != '\r'
+                            && codePoint != '\t')) {
+                throw new IllegalStateException("교정 결과에 허용되지 않는 문자가 포함되어 있습니다");
+            }
             return correctedText;
 
+        } catch (IllegalStateException e) {
+            throw e;
         } catch (Exception e) {
             throw new IllegalStateException("Gemini 교정 결과를 처리하지 못했습니다.", e);
         }
