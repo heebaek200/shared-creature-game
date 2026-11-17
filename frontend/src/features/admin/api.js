@@ -148,4 +148,40 @@ export function transferPrimaryAdminAsSuperAdmin(groupId, targetUserId, reason) 
     });
 }
 
+/**
+ * 전체 관리자가 활성 그룹을 이름으로 검색하는 API
+ * 공개, 비공개 그룹을 모두 대상으로 하며 페이지 정보를 반환한다.
+ * 검색어가 비어 있으면 첫 페이지의 전체 활성 그룹을 조회한다.
+ *
+ * @param {{q?: string, page?: number, size?: number}} filters 검색 조건
+ * @returns {Promise<any>} 그룹 목록 data와 meta
+ */
+export function searchAdminGroups({
+    q = '', page = 0, size = 50
+} = {}) {
+    const query = buildQuery({q, page, size});
+
+    return apiRequestWithMeta(`${ADMIN_API}/groups${query}`);
+}
+
+/**
+ * 전체 관리자가 지정한 그룹의 활성 회원을 조회한다.
+ * 닉네임과 역할, 사용자ID를 함께 반환한다.
+ * 주 관리자 변경 가능 여부의 최종 검증은 기존 POST API가 담당한다.
+ *
+ * @param {number} groupId 조회 대상 그룹 ID
+ * @param {{page?: number, size?: number}} filters 페이징 조건
+ * @returns {Promise<any>} 활성 회원 목록 data와 meta
+ */
+export function listAdminGroupMembers(
+    groupId,
+    {page = 0, size = 50} = {}
+) {
+    const query = buildQuery({page, size});
+
+    return apiRequestWithMeta(
+        `${ADMIN_API}/groups/${groupId}/members${query}`
+    );
+}
+
 

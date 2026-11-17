@@ -2,6 +2,8 @@
 import {
     listOperationalWarnings,
     transferPrimaryAdminAsSuperAdmin,
+    searchAdminGroups,
+    listAdminGroupMembers
 } from '../features/admin/api.js';
 import {ApiError} from '../api/client.js';
 
@@ -179,20 +181,65 @@ export function adminOperationsPage() {
         </p>
 
         <form data-transfer-form class="row g-3">
-          <div class="col-12 col-md-6">
-            <label for="transfer-group-id" class="form-label">그룹 ID</label>
-            <input id="transfer-group-id" class="form-control"
-                   type="number" min="1" step="1" required
-                   data-group-id>
+          
+          <div class="col-12">
+            <label for="transfer-group-search" class="form-label">
+                그룹 이름 검색
+            </label>
+        
+            <div class="input-group">
+                <input id="transfer-group-search"
+                       type="text"
+                       maxlength="30"
+                       class="form-control"
+                       placeholder="그룹 이름 입력"
+                       data-transfer-group-search>
+        
+                <!-- 실제 주 관리자 변경 Form을 제출하지 않습니다. -->
+                <button type="button"
+                        class="btn btn-outline-secondary"
+                        data-transfer-group-search-button>
+                    그룹 검색
+                </button>
+            </div>
+        
+            <div class="form-text" role="status" aria-live="polite"
+                 data-transfer-group-message>
+                이름으로 그룹을 검색해 주세요.
+            </div>
+        </div>
+        
+        <div class="col-12 col-md-6">
+            <label for="transfer-group-id" class="form-label">
+                대상 그룹
+            </label>
+        
+            <select id="transfer-group-id"
+                    class="form-select"
+                    data-group-select
+                    required>
+                <option value="">그룹을 선택해 주세요.</option>
+            </select>
           </div>
-
+        
           <div class="col-12 col-md-6">
             <label for="transfer-user-id" class="form-label">
-              새 주 관리자 사용자 ID
+                새 주 관리자
             </label>
-            <input id="transfer-user-id" class="form-control"
-                   type="number" min="1" step="1" required
-                   data-target-user-id>
+        
+            <!-- 실제 그룹을 선택하기 전에는 회원 선택을 제한합니다. -->
+            <select id="transfer-user-id"
+                    class="form-select"
+                    data-target-user-select
+                    required
+                    disabled>
+                <option value="">그룹을 먼저 선택해 주세요.</option>
+            </select>
+        
+            <div class="form-text" role="status" aria-live="polite"
+                 data-transfer-member-message>
+                그룹 선택 후 활성 회원을 조회합니다.
+            </div>
           </div>
 
           <div class="col-12">
@@ -250,8 +297,25 @@ export function adminOperationsPage() {
     const nextButton = /** @type {HTMLButtonElement} */ (find('[data-next]'));
 
     const transferForm = /** @type {HTMLFormElement} */ (find('[data-transfer-form]'));
-    const groupInput = /** @type {HTMLInputElement} */ (find('[data-group-id]'));
-    const targetInput = /** @type {HTMLInputElement} */ (find('[data-target-user-id]'));
+    const groupSearchInput = /** @type {HTMLInputElement} */ (
+        find('[data-transfer-group-search]')
+    );
+    const groupSearchButton = /** @type {HTMLButtonElement} */ (
+        find('[data-transfer-group-search-button]')
+    );
+    const groupSearchMessage = /** @type {HTMLElement} */ (
+        find('[data-transfer-group-message]')
+    );
+
+    const groupSelect = /** @type {HTMLSelectElement} */ (
+        find('[data-group-select]')
+    );
+    const targetSelect = /** @type {HTMLSelectElement} */ (
+        find('[data-target-user-select]')
+    );
+    const memberMessage = /** @type {HTMLElement} */ (
+        find('[data-transfer-member-message]')
+    );
     const reasonInput = /** @type {HTMLTextAreaElement} */ (find('[data-reason]'));
     const transferButton = /** @type {HTMLButtonElement} */ (find('[data-transfer-open]'));
     const transferNotice = /** @type {HTMLElement} */ (find('[data-transfer-notice]'));
@@ -269,6 +333,12 @@ export function adminOperationsPage() {
     let page = 0;
     let totalPages = 0;
     let requestVersion = 0;
+    // 검색 및 회원 조회의 중복 실행과 오래된 응답 반영을 방지합니다.
+    let groupSearchVersion = 0;
+    let memberSearchVersion = 0;
+    let groupLookupBusy = false;
+    let memberLookupBusy = false;
+    let membersLoaded = false;
 
     // 사용자가 마지막으로 조회 버튼을 눌러 확정한 경고 유형입니다.
     // 셀렉트박스의 미적용 변경값은 자동 갱신과 페이징에 반영하지 않습니다.
@@ -292,17 +362,34 @@ export function adminOperationsPage() {
     }
 
     /**
-     * 비동기 작업 상태에 맞게 버튼 활성 여부를 조정합니다.
-     * POST 중에는 필터 변경과 중복 제출을 방지합니다.
+     * 운영 경고와 주 관리자 재지정의 버튼 상태를 갱신합니다.
+     * 그룹·회원 조회가 끝나지 않은 상태에서는 변경 확인을 제한합니다.
+     * 실제 POST 처리 중에는 검색과 선택 변경도 막습니다.
+     *
      * @returns {void}
      */
     function updateControls() {
+        // 기존 운영 경고 관리 버튼 상태를 유지합니다.
         typeInput.disabled = processing;
         refreshButton.disabled = loading || processing;
         prevButton.disabled = loading || processing || page <= 0;
         nextButton.disabled =
             loading || processing || totalPages === 0 || page >= totalPages - 1;
-        transferButton.disabled = processing;
+
+        // 그룹 검색과 회원 조회의 진행 상태를 적용합니다.
+        groupSearchInput.disabled = processing || groupLookupBusy;
+        groupSearchButton.disabled = processing || groupLookupBusy;
+        groupSelect.disabled = processing || groupLookupBusy;
+
+        targetSelect.disabled =
+            processing || memberLookupBusy || !membersLoaded ||
+            !groupSelect.value;
+
+        // 그룹과 대상 회원이 모두 선택된 경우에만 변경할 수 있습니다.
+        transferButton.disabled =
+            processing || groupLookupBusy || memberLookupBusy ||
+            !groupSelect.value || !targetSelect.value;
+
         confirmButton.disabled = processing;
         cancelButton.disabled = processing;
     }
@@ -451,20 +538,224 @@ export function adminOperationsPage() {
         }
     }
 
+
     /**
-     * 변경 폼의 ID와 사유를 검증한 뒤 확인 Modal을 엽니다.
-     * 이 시점에는 서버로 상태 변경 요청을 전송하지 않습니다.
-     * @param {SubmitEvent} event 폼 제출 이벤트
+     * 선택 가능한 회원 목록을 초기 상태로 되돌립니다.
+     * 그룹이 변경될 때 이전 그룹의 사용자 선택을 제거합니다.
+     * 조회 성공 전까지 주 관리자 변경을 허용하지 않습니다.
+     *
+     * @param {string} [message] 회원 선택 안내 문구
+     * @returns {void}
+     */
+    function resetMemberSelection(
+        message = '그룹을 먼저 선택해 주세요.'
+    ) {
+        membersLoaded = false;
+
+        // 다른 그룹에서 선택했던 사용자 ID를 완전히 제거합니다.
+        targetSelect.replaceChildren(new Option(message, ''));
+        memberMessage.textContent = message;
+
+        updateControls();
+    }
+
+    /**
+     * 관리자용 그룹 이름 검색 결과를 선택 목록으로 표시합니다.
+     * 새로운 검색을 시작할 때 이전 그룹과 회원 선택을 초기화합니다.
+     * 검색 API의 페이지 메타데이터를 확인해 결과 제한도 안내합니다.
+     *
+     * @returns {Promise<void>} 그룹 검색 완료
+     */
+    async function searchTransferGroups() {
+        if (processing || groupLookupBusy) return;
+
+        const query = groupSearchInput.value.trim();
+
+        if (query.length > 30) {
+            groupSearchMessage.textContent = '검색어는 30자 이하로 입력해 주세요.';
+            return;
+        }
+
+        const version = ++groupSearchVersion;
+
+        // 이전 그룹 및 회원 조회의 뒤늦은 응답을 무효화합니다.
+        memberSearchVersion += 1;
+        memberLookupBusy = false;
+        groupSelect.replaceChildren(
+            new Option('그룹을 선택해 주세요.', '')
+        );
+        resetMemberSelection();
+
+        groupLookupBusy = true;
+        groupSearchMessage.textContent = '그룹을 검색하고 있습니다.';
+        updateControls();
+
+        try {
+            const result = await searchAdminGroups({
+                q: query,
+                page: 0,
+                size: 50
+            });
+
+            if (disposed || version !== groupSearchVersion) return;
+
+            const fragment = document.createDocumentFragment();
+            fragment.append(new Option('그룹을 선택해 주세요.', ''));
+
+            // 그룹 식별을 돕기 위해 이름과 현재 인원을 함께 표시합니다.
+            for (const group of result.data) {
+                const visibility = group.visibility === 'PRIVATE'
+                    ? '비공개'
+                    : '공개';
+
+                const label =
+                    `${group.name} (#${group.groupId}) · ` +
+                    `${group.currentMemberCount}/${group.capacity}명 · ` +
+                    visibility;
+
+                fragment.append(
+                    new Option(label, String(group.groupId))
+                );
+            }
+
+            groupSelect.replaceChildren(fragment);
+
+            const total = result.meta.totalElements;
+            groupSearchMessage.textContent = total > 50
+                ? `총 ${total}개 중 50개를 표시합니다. 검색어를 좁혀 주세요.`
+                : `${total}개 그룹을 찾았습니다. 그룹을 선택해 주세요.`;
+        } catch (error) {
+            if (disposed || version !== groupSearchVersion) return;
+
+            groupSearchMessage.textContent =
+                `그룹 검색 실패: ${getErrorMessage(error)}`;
+        } finally {
+            if (!disposed && version === groupSearchVersion) {
+                groupLookupBusy = false;
+                updateControls();
+            }
+        }
+    }
+
+    /**
+     * 선택된 그룹의 활성 회원을 조회합니다.
+     * MEMBER와 DEPUTY 역할만 새 주 관리자 선택 목록에 표시합니다.
+     * 마지막 요청의 응답만 반영해 다른 그룹의 회원이 섞이지 않게 합니다.
+     *
+     * @returns {Promise<void>} 회원 조회 완료
+     */
+    async function loadTransferMembers() {
+        const version = ++memberSearchVersion;
+
+        // 이전 그룹의 진행 중인 요청을 무효화하고 선택 상태를 초기화합니다.
+        memberLookupBusy = false;
+        resetMemberSelection();
+
+        const groupId = Number(groupSelect.value);
+
+        if (!Number.isSafeInteger(groupId) || groupId <= 0) {
+            return;
+        }
+
+        memberLookupBusy = true;
+        memberMessage.textContent = '활성 회원을 조회하고 있습니다.';
+        updateControls();
+
+        try {
+            // 현재 그룹의 최대 정원이 20명이므로 50건이면 전체 조회가 가능합니다.
+            const result = await listAdminGroupMembers(groupId, {
+                page: 0,
+                size: 50
+            });
+
+            if (disposed || version !== memberSearchVersion) return;
+
+            // 회원 수가 늘어 API 페이징이 필요한 상황에는 불완전한 목록을 사용하지 않습니다.
+            if (result.meta.totalPages > 1) {
+                throw new Error('회원 조회 결과가 50명을 초과했습니다.');
+            }
+
+            const fragment = document.createDocumentFragment();
+            fragment.append(new Option('새 주 관리자를 선택해 주세요.', ''));
+
+            // 기존 PRIMARY와 종료된 멤버십은 선택 대상에서 제외합니다.
+            const candidates = result.data.filter(member =>
+                member.status === 'ACTIVE' &&
+                (member.role === 'MEMBER' || member.role === 'DEPUTY')
+            );
+
+            for (const member of candidates) {
+                const role = member.role === 'DEPUTY'
+                    ? '부 관리자'
+                    : '일반 회원';
+
+                fragment.append(
+                    new Option(
+                        `${member.nickname} (#${member.userId}) · ${role}`,
+                        String(member.userId)
+                    )
+                );
+            }
+
+            targetSelect.replaceChildren(fragment);
+            membersLoaded = true;
+
+            memberMessage.textContent = candidates.length > 0
+                ? `${candidates.length}명의 변경 가능 회원을 찾았습니다.`
+                : '주 관리자로 지정할 수 있는 회원이 없습니다.';
+        } catch (error) {
+            if (disposed || version !== memberSearchVersion) return;
+
+            // 조회 실패 시 변경 버튼이 활성화되지 않도록 유지합니다.
+            membersLoaded = false;
+            memberMessage.textContent =
+                `회원 조회 실패: ${getErrorMessage(error)}`;
+        } finally {
+            if (!disposed && version === memberSearchVersion) {
+                memberLookupBusy = false;
+                updateControls();
+            }
+        }
+    }
+
+    /**
+     * 그룹 검색 입력창의 Enter 키를 그룹 검색으로 처리합니다.
+     * 주 관리자 변경 Form의 submit이 실행되지 않도록 차단합니다.
+     * 검색 버튼과 키보드 조작의 결과를 동일하게 유지합니다.
+     *
+     * @param {KeyboardEvent} event 키보드 이벤트
+     * @returns {void}
+     */
+    function onTransferGroupSearchKeydown(event) {
+        if (event.key !== 'Enter') return;
+
+        event.preventDefault();
+        void searchTransferGroups();
+    }
+
+    /**
+     * 선택한 그룹과 새 주 관리자, 변경 사유를 검증합니다.
+     * PK는 화면의 셀렉트박스에서 읽고 확인 Modal에는 이름도 표시합니다.
+     * 실제 변경 요청은 확인 Modal의 별도 제출 시점에만 전송합니다.
+     *
+     * @param {SubmitEvent} event Form 제출 이벤트
      * @returns {void}
      */
     function onTransferSubmit(event) {
         event.preventDefault();
-        if (processing || !transferForm.reportValidity()) return;
+
+        // 조회 중이거나 변경 처리 중에는 새 명령을 시작하지 않습니다.
+        if (processing || groupLookupBusy || memberLookupBusy || !membersLoaded) {
+            return;
+        }
+
+        if (!transferForm.reportValidity()) return;
 
         try {
-            const groupId = parsePositiveId(groupInput.value, '그룹 ID');
+            // 선택 옵션의 내부 값은 기존 POST 계약에 맞는 PK입니다.
+            const groupId = parsePositiveId(groupSelect.value, '그룹 ID');
             const targetUserId = parsePositiveId(
-                targetInput.value,
+                targetSelect.value,
                 '대상 사용자 ID'
             );
             const reason = reasonInput.value.trim();
@@ -473,17 +764,26 @@ export function adminOperationsPage() {
                 throw new Error('변경 사유를 1~500자로 입력해 주세요.');
             }
 
-            // 확인 시점의 입력값을 고정해 이후 입력 변화의 영향을 받지 않습니다.
+            // 기존과 동일하게 확인 시점의 입력값을 고정합니다.
             pendingTransfer = {groupId, targetUserId, reason};
 
+            // 관리자가 PK뿐 아니라 선택한 이름을 확인하도록 표시합니다.
+            const groupName = groupSelect.selectedOptions[0]?.textContent;
+            const userName = targetSelect.selectedOptions[0]?.textContent;
+
             confirmMessage.textContent =
-                `그룹 #${groupId}의 주 관리자를 사용자 #${targetUserId}로 ` +
+                `${groupName}의 주 관리자를 ${userName}(으)로 ` +
                 '재지정하시겠습니까? 기존 주 관리자는 일반 회원으로 변경되며 ' +
                 '변경 사유와 감사 이력이 기록됩니다.';
+
             confirmError.textContent = '';
             dialog.showModal();
         } catch (error) {
-            showNotice(transferNotice, getErrorMessage(error), 'danger');
+            showNotice(
+                transferNotice,
+                getErrorMessage(error),
+                'danger'
+            );
         }
     }
 
@@ -514,6 +814,15 @@ export function adminOperationsPage() {
             dialog.close();
             pendingTransfer = null;
             transferForm.reset();
+
+            // 변경 완료 후 이전 그룹·회원 선택을 제거합니다.
+            groupSelect.replaceChildren(
+                new Option('그룹을 선택해 주세요.', '')
+            );
+            memberSearchVersion += 1;
+            resetMemberSelection();
+
+            groupSearchMessage.textContent = '이름으로 그룹을 검색해 주세요.';
 
             const primary = result.primaryAdmin;
             const displayName = primary?.nickname
@@ -605,6 +914,19 @@ export function adminOperationsPage() {
         }
     };
 
+    // 그룹 검색 버튼 및 검색창 Enter 키를 연결합니다.
+    const onTransferGroupSearchClick = () => {
+        void searchTransferGroups();
+    };
+
+    const onTransferGroupChange = () => {
+        void loadTransferMembers();
+    };
+
+    const onTransferMemberChange = () => {
+        updateControls();
+    };
+
     // 경고 유형 변경 대신 Form 제출 시에만 조회합니다.
     warningFilterForm.addEventListener('submit', onWarningFilterSubmit);
     refreshButton.addEventListener('click', onRefresh);
@@ -615,6 +937,13 @@ export function adminOperationsPage() {
     cancelButton.addEventListener('click', onCancel);
     dialog.addEventListener('cancel', onDialogCancel);
     dialog.addEventListener('close', onDialogClose);
+    groupSearchButton.addEventListener('click', onTransferGroupSearchClick);
+    groupSearchInput.addEventListener(
+        'keydown',
+        onTransferGroupSearchKeydown
+    );
+    groupSelect.addEventListener('change', onTransferGroupChange);
+    targetSelect.addEventListener('change', onTransferMemberChange);
     document.addEventListener('visibilitychange', onVisibilityChange);
 
     const intervalId = setInterval(() => {
@@ -645,6 +974,18 @@ export function adminOperationsPage() {
             cancelButton.removeEventListener('click', onCancel);
             dialog.removeEventListener('cancel', onDialogCancel);
             dialog.removeEventListener('close', onDialogClose);
+            // 페이지 종료 후 이전 검색 응답을 무효화합니다.
+            groupSearchVersion += 1;
+            memberSearchVersion += 1;
+
+            // 추가한 선택 UI 이벤트도 정리합니다.
+            groupSearchButton.removeEventListener('click', onTransferGroupSearchClick);
+            groupSearchInput.removeEventListener(
+                'keydown',
+                onTransferGroupSearchKeydown
+            );
+            groupSelect.removeEventListener('change', onTransferGroupChange);
+            targetSelect.removeEventListener('change', onTransferMemberChange);
             document.removeEventListener('visibilitychange', onVisibilityChange);
         },
     };

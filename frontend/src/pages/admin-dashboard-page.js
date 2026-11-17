@@ -1,5 +1,5 @@
 // @ts-check
-import {getAdminDashboard} from "../features/admin/api.js";
+import {getAdminDashboard, searchAdminGroups} from "../features/admin/api.js";
 import {ApiError} from '../api/client.js';
 import {renderDashboardCharts} from "../features/admin/chart-renderer.js";
 
@@ -81,11 +81,45 @@ export function adminDashboardPage() {
           <option value="CURRENT_SEASON">현재 시즌</option>
         </select>
       </div>
-      <div class="col-12 col-sm-4 col-lg-3">
-        <label class="form-label" for="admin-group">그룹 ID (비우면 전체)</label>
-        <input id="admin-group" class="form-control" data-group-id
-               type="number" min="1" step="1" placeholder="전체 그룹" />
+      
+      <div class="col-12 col-lg-5">
+        <label class="form-label" for="admin-group-search">
+            그룹 이름 검색
+        </label>
+    
+        <div class="input-group mb-2">
+            <input id="admin-group-search"
+                   type="text"
+                   maxlength="30"
+                   class="form-control"
+                   placeholder="그룹 이름 입력"
+                   data-group-search>
+    
+            <!-- 검색 버튼은 대시보드 Form을 제출하지 않습니다. -->
+            <button type="button"
+                    class="btn btn-outline-secondary"
+                    data-group-search-button>
+                그룹 검색
+            </button>
+        </div>
+    
+        <label class="visually-hidden" for="admin-group">
+            조회 대상 그룹
+        </label>
+    
+        <!-- 그룹을 선택해도 조건 조회 전에는 통계가 바뀌지 않습니다. -->
+        <select id="admin-group"
+                class="form-select"
+                data-group-select>
+            <option value="">전체 그룹</option>
+        </select>
+    
+        <div class="form-text" role="status" aria-live="polite"
+             data-group-search-message>
+            특정 그룹을 조회하려면 이름으로 검색 후 선택하세요.
+        </div>
       </div>
+
       <div class="col-12 col-sm-4 col-lg-auto d-flex gap-2">
         <button type="submit" class="btn btn-primary">조건 조회</button>
         <button type="button" class="btn btn-outline-secondary" data-refresh>새로고침</button>
@@ -153,7 +187,18 @@ export function adminDashboardPage() {
 
     const filterForm = element.querySelector('[data-dashboard-filters]');
     const rangeInput = /** @type {HTMLSelectElement} */ (element.querySelector('[data-range]'));
-    const groupInput = /** @type {HTMLInputElement} */ (element.querySelector('[data-group-id]'));
+    const groupSearchInput = /** @type {HTMLInputElement} */ (
+        element.querySelector('[data-group-search]')
+    );
+    const groupSearchButton = /** @type {HTMLButtonElement} */ (
+        element.querySelector('[data-group-search-button]')
+    );
+    const groupSelect = /** @type {HTMLSelectElement} */ (
+        element.querySelector('[data-group-select]')
+    );
+    const groupSearchMessage = /** @type {HTMLElement} */ (
+        element.querySelector('[data-group-search-message]')
+    );
     const refreshButton = /** @type {HTMLButtonElement} */ (element.querySelector('[data-refresh]'));
     const status = element.querySelector('[data-status]');
     const chartStatus = element.querySelector('[data-chart-status]');
@@ -161,6 +206,9 @@ export function adminDashboardPage() {
     let disposed = false;
     let requestVersion = 0;
     let disposeChart = () => {};
+    // 검색 결과가 늦게 도착하거나 화면을 벗어났을 때 무시합니다.
+    let groupSearchVersion = 0;
+    let groupSearchBusy = false;
 
     // 자동 갱신에는 마지막으로 확정한 조회 조건을 사용합니다.
     // 화면에 입력 중인 값은 submit 전까지 API 요청에 반영하지 않습니다.
@@ -180,20 +228,114 @@ export function adminDashboardPage() {
         status.textContent = message;
     }
 
+
     /**
-     * 화면에 표시할 그룹 ID를 검증하고 숫자로 변환한다.
-     * 빈 값은 전체 그룹 조회를 뜻하므로 undefined를 반환한다.
-     * @returns {number|undefined} 그룹ID 또는 전체 그룹
+     * 관리자가 선택한 그룹의 ID를 반환합니다.
+     * 전체 그룹 선택 시 undefined를 반환해 기존 API 계약을 유지합니다.
+     * 선택 옵션에 저장된 값도 안전한 양의 정수인지 확인합니다.
+     *
+     * @returns {number|undefined} 선택한 그룹 ID 또는 전체 그룹
      */
     function readGroupId() {
-        const value = groupInput.value.trim();
+        const value = groupSelect.value;
+
+        // 빈 값은 전체 그룹 조회를 의미합니다.
         if (value === '') return undefined;
-        const parsed = Number(value);
-        if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(parsed)) {
-            throw new Error('그룹 ID는 1 이상의 정수여야 합니다.');
+
+        const groupId = Number(value);
+
+        if (!Number.isSafeInteger(groupId) || groupId <= 0) {
+            throw new Error('조회할 그룹을 다시 선택해 주세요.');
         }
-        return parsed;
+
+        return groupId;
     }
+
+    /**
+     * 입력한 그룹 이름으로 관리자 그룹 검색 API를 호출합니다.
+     * 검색 결과를 안전한 option 요소로 생성해 셀렉트박스에 표시합니다.
+     * 이전 검색 응답과 화면 종료 후 응답은 무시합니다.
+     *
+     * @returns {Promise<void>} 그룹 검색 완료
+     */
+    async function onGroupSearch() {
+        const query = groupSearchInput.value.trim();
+
+        // 백엔드의 검색어 최대 길이 계약을 지킵니다.
+        if (query.length > 30) {
+            groupSearchMessage.textContent = '그룹 이름은 30자 이하로 입력해 주세요.';
+            return;
+        }
+
+        const version = ++groupSearchVersion;
+        groupSearchBusy = true;
+        groupSearchButton.disabled = true;
+        groupSearchMessage.textContent = '그룹을 검색하고 있습니다.';
+
+        try {
+            const result = await searchAdminGroups({
+                q: query,
+                page: 0,
+                size: 50
+            });
+
+            if (disposed || version !== groupSearchVersion) return;
+
+            const fragment = document.createDocumentFragment();
+
+            // 검색 결과와 관계없이 전체 그룹 선택을 제공합니다.
+            fragment.append(new Option('전체 그룹', ''));
+
+            for (const group of result.data) {
+                const label =
+                    `${group.name} (#${group.groupId}) · ` +
+                    `${group.currentMemberCount}/${group.capacity}명`;
+
+                fragment.append(
+                    new Option(label, String(group.groupId))
+                );
+            }
+
+            // 기존 검색 결과를 새 결과로 교체합니다.
+            groupSelect.replaceChildren(fragment);
+
+            const total = result.meta.totalElements;
+            groupSearchMessage.textContent = total > 50
+                ? `총 ${total}개 그룹 중 50개를 표시합니다. 검색어를 좁혀 주세요.`
+                : `검색된 그룹 ${total}개. 조회할 그룹을 선택하세요.`;
+        } catch (error) {
+            if (disposed || version !== groupSearchVersion) return;
+
+            groupSearchMessage.textContent =
+                error instanceof Error
+                    ? `그룹 검색 실패: ${error.message}`
+                    : '그룹 검색에 실패했습니다.';
+        } finally {
+            if (!disposed && version === groupSearchVersion) {
+                groupSearchBusy = false;
+                groupSearchButton.disabled = false;
+            }
+        }
+    }
+
+    /**
+     * 그룹 검색 입력창에서 Enter 키를 처리합니다.
+     * 상위 대시보드 Form의 조건 조회가 실행되지 않도록 차단합니다.
+     * Enter 키는 그룹 검색 버튼을 누른 것과 같은 동작을 수행합니다.
+     *
+     * @param {KeyboardEvent} event 키보드 이벤트
+     * @returns {void}
+     */
+    function onGroupSearchKeydown(event) {
+        if (event.key !== 'Enter') return;
+
+        event.preventDefault();
+
+        if (!groupSearchBusy) {
+            void onGroupSearch();
+        }
+    }
+
 
     /**
      * 서버 요약 통계와 관리 대기 건수를 카드와 문구로 표시한다.
@@ -427,7 +569,12 @@ export function adminDashboardPage() {
     function onSubmit(event) {
         event.preventDefault();
 
-        // submit일 때만 현재 입력값을 조회 조건에 반영합니다.
+        // 그룹 검색이 완료되기 전에는 조건을 확정하지 않습니다.
+        if (groupSearchBusy) {
+            showStatus('그룹 검색이 끝난 뒤 조건 조회를 진행해 주세요.');
+            return;
+        }
+
         void loadDashboard(true);
     }
 
@@ -442,6 +589,8 @@ export function adminDashboardPage() {
 
     filterForm.addEventListener('submit', onSubmit);
     refreshButton.addEventListener('click', onRefresh);
+    groupSearchButton.addEventListener('click', onGroupSearch);
+    groupSearchInput.addEventListener('keydown', onGroupSearchKeydown);
     document.addEventListener('visibilitychange', onVisibilityChange);
 
     // 숨겨진 탭에서는 서버 조회를 생략하고 다시 보일 때 갱신한다.
@@ -460,6 +609,10 @@ export function adminDashboardPage() {
             disposeChart();
             filterForm.removeEventListener('submit', onSubmit);
             refreshButton.removeEventListener('click', onRefresh);
+            // 화면 종료 후 검색 응답과 이벤트가 남지 않도록 정리합니다.
+            groupSearchVersion += 1;
+            groupSearchButton.removeEventListener('click', onGroupSearch);
+            groupSearchInput.removeEventListener('keydown', onGroupSearchKeydown);
             document.removeEventListener('visibilitychange', onVisibilityChange);
         }
     };
