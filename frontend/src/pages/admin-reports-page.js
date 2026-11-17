@@ -129,10 +129,15 @@ export function adminReportsPage() {
         </div>
       </section>
 
-      <section class="col-12 col-xl-5">
+      <!-- 상세 카드로 이동할 때 고정 Header 높이만큼 여백을 확보합니다. -->
+      <section class="col-12 col-xl-5"
+             data-detail-section
+             style="scroll-margin-top: calc(var(--app-header-height) + 12px)">
         <div class="card h-100">
           <div class="card-body">
-            <h2 class="h5">선택 신고 상세</h2>
+            <h2 class="h5" data-detail-heading tabindex="-1">
+              선택 신고 상세
+            </h2>
             <p class="text-body-secondary" data-detail-status>
               목록에서 신고를 선택해 주세요.
             </p>
@@ -181,6 +186,9 @@ export function adminReportsPage() {
     const pageInfo = /** @type {HTMLElement} */ (element.querySelector('[data-page-info]'));
     const prevButton = /** @type {HTMLButtonElement} */ (element.querySelector('[data-prev]'));
     const nextButton = /** @type {HTMLButtonElement} */ (element.querySelector('[data-next]'));
+    // 신고 상세 영역과 접근성 포커스 대상입니다.
+    const detailSection = /** @type {HTMLElement} */ (element.querySelector('[data-detail-section]'));
+    const detailHeading = /** @type {HTMLElement} */ (element.querySelector('[data-detail-heading]'));
     const detailStatus = /** @type {HTMLElement} */ (element.querySelector('[data-detail-status]'));
     const detailFields = /** @type {HTMLElement} */ (element.querySelector('[data-detail-fields]'));
     const actions = /** @type {HTMLElement} */ (element.querySelector('[data-action-buttons]'));
@@ -280,7 +288,7 @@ export function adminReportsPage() {
             ['신고 대상', `${report.reportedUserNickname} (#${report.reportedUserId})`],
             ['분류', CATEGORY_LABELS[report.category] ?? report.category],
             ['신고 내용', report.content],
-            ['접수 시각', formatDateTime(report.createAt)],
+            ['접수 시각', formatDateTime(report.createdAt)],
             ['처리 시각', formatDateTime(report.handledAt)],
             ['처리자 ID', report.handledByUserId],
             ['처리 사유', report.resolution],
@@ -300,6 +308,34 @@ export function adminReportsPage() {
 
         actions.classList.toggle('d-none', report.status !== 'RECEIVED');
         updateControls();
+    }
+
+    /**
+     * 모바일·태블릿에서 선택한 신고의 상세 카드로 이동합니다.
+     * Bootstrap xl 미만에서만 스크롤하고 데스크톱 배치는 유지합니다.
+     * 고정 Header의 높이와 사용자의 움직임 감소 설정을 고려합니다.
+     *
+     * @returns {void}
+     */
+    function moveToDetailCard() {
+        // col-xl-*이 세로 배치로 변경되는 화면에서만 이동합니다.
+        if (!window.matchMedia('(max-width: 1199.98px)').matches) {
+            return;
+        }
+
+        // 접근성 설정에 따라 스크롤 애니메이션을 선택합니다.
+        const reducedMotion = window.matchMedia(
+            '(prefers-reduced-motion: reduce)'
+        ).matches;
+
+        // 포커스만 먼저 이동시키되 브라우저의 자동 스크롤은 방지합니다.
+        detailHeading.focus({preventScroll: true});
+
+        // 실제 이동은 고정 Header 여백을 적용한 카드 기준으로 수행합니다.
+        detailSection.scrollIntoView({
+            behavior: reducedMotion ? 'auto' : 'smooth',
+            block: 'start'
+        });
     }
 
     /**
@@ -431,14 +467,20 @@ export function adminReportsPage() {
         }
     }
 
+
     /**
      * 신고 ID에 해당하는 최신 상세 데이터를 조회합니다.
-     * 연속 선택 시 마지막으로 선택한 신고의 결과만 표시합니다.
-     * @param {number} reportId 신고 ID
+     * 연속 선택 시 마지막 요청의 결과만 화면에 반영합니다.
+     * 사용자가 상세 버튼을 클릭했다면 모바일에서 상세 카드로 이동합니다.
+     *
+     * @param {number} reportId 조회할 신고 ID
+     * @param {boolean} [moveToDetail=false] 상세 카드로 이동할지 여부
      * @returns {Promise<void>} 상세 조회 완료
      */
-    async function loadDetail(reportId) {
+    async function loadDetail(reportId, moveToDetail = false) {
         const version = ++detailVersion;
+
+        // 새로운 상세 조회가 시작되면 이전 선택 상태를 초기화합니다.
         selectedReport = null;
         actions.classList.add('d-none');
         detailFields.replaceChildren();
@@ -447,11 +489,22 @@ export function adminReportsPage() {
 
         try {
             const report = await getAdminReport(reportId);
+
+            // 화면 종료 또는 다른 신고 선택 시 이전 응답을 무시합니다.
             if (disposed || version !== detailVersion) return;
+
             renderDetail(report);
         } catch (error) {
             if (disposed || version !== detailVersion) return;
+
+            // 조회에 실패한 경우에도 상세 영역에 오류를 표시합니다.
             detailStatus.textContent = getErrorMessage(error);
+        } finally {
+            // 최신 요청이고 사용자가 직접 상세를 선택했다면 이동합니다.
+            // 오류 발생 시에도 상세 카드의 오류 메시지를 확인할 수 있습니다.
+            if (moveToDetail && !disposed && version === detailVersion) {
+                moveToDetailCard();
+            }
         }
     }
 
@@ -563,7 +616,8 @@ export function adminReportsPage() {
 
         const reportId = Number(button.dataset.reportId);
         if (Number.isSafeInteger(reportId) && reportId > 0) {
-            void loadDetail(reportId);
+            // 사용자 클릭으로 발생한 상세 조회에만 자동 스크롤을 허용합니다.
+            void loadDetail(reportId, true);
         }
     }
 
