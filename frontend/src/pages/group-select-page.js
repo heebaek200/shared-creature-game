@@ -258,17 +258,19 @@ export function groupSelectPage({navigate, currentUser}) {
         target.textContent = message;
     };
 
-    // 가입 제한은 서버의 restrictionUntil 안내 영역에서 지속적으로 표시합니다.
-    // 다른 가입 실패 사유만 기존 일회성 메시지로 안내합니다.
-    if (reason && reason !== 'JOIN_COOLDOWN_ACTIVE') {
-        showAlert(listAlert, reasonMessages[reason], 'warning');
+    // 최초 진입 안내를 계속 유지할지 여부입니다.
+    let preserveInitialAlert = Boolean(reason && reason !== 'JOIN_COOLDOWN_ACTIVE');
 
-        // 현재 URL에서 사용한 reason 파라미터만 제거합니다.
+    // 가입 제한은 별도의 제한 안내 패널에서 표시합니다.
+    if (preserveInitialAlert) {
+        showAlert(listAlert, reasonMessages[reason], 'warning');
+    }
+
+    // 표시 여부와 관계없이 유효한 reason은 URL에서 소비합니다.
+    if (reason) {
         const url = new URL(window.location.href);
         url.searchParams.delete('reason');
 
-        // 새 히스토리를 추가하거나 Router를 다시 실행하지 않습니다.
-        // 다른 Query Parameter와 Hash는 그대로 유지합니다.
         window.history.replaceState(
             window.history.state,
             '',
@@ -390,6 +392,11 @@ export function groupSelectPage({navigate, currentUser}) {
                     ? formatRestrictionRemaining(remainingSeconds)
                     : '제한 종료 확인 중';
         }
+
+        // 제한 중이거나 확인 중이면 현재 표시된 가입 버튼도 잠급니다.
+        content.querySelectorAll('.join-button').forEach((button) => {
+            button.disabled = locked || joining;
+        });
 
         restrictionRetry.disabled = restrictionStatus === 'VERIFYING';
     }
@@ -609,9 +616,11 @@ export function groupSelectPage({navigate, currentUser}) {
         loading = true;
         searchButton.disabled = true;
 
-        if (!reason) {
+        // 최초 안내는 첫 조회까지 유지하고, 이후 재조회에서는 지웁니다.
+        if (!preserveInitialAlert) {
             hideAlert(listAlert);
         }
+        preserveInitialAlert = false;
 
         groupList.innerHTML = `<tr>
         <td colspan="4" class="text-center py-4">
@@ -625,6 +634,8 @@ export function groupSelectPage({navigate, currentUser}) {
                 page: currentPage,
                 size: PAGE_SIZE
             });
+
+            if (!pageMounted) return;
 
             const groups = Array.isArray(result?.data)
                 ? result.data
@@ -859,7 +870,10 @@ export function groupSelectPage({navigate, currentUser}) {
     const onJoin = async (event) => {
         const button = event.target.closest('.join-button');
 
-        // UI 버튼 비활성화와 별개로 제출 시점에도 제한 상태를 확인합니다.
+        // 그룹 가입 요청은 화면 전체에서 한 번에 하나만 수행합니다.
+        if (!button || joining) return;
+
+        // 제한 상태도 제출 시점에 다시 확인합니다.
         if (isRestrictionLocked()) {
             showAlert(
                 listAlert,
