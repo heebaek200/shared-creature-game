@@ -130,3 +130,42 @@ test('이벤트 적용 결과가 순위 교정을 요청하면 Snapshot을 재�
     assert.equal(snapshotLoads, 2);
     sync.dispose();
 });
+
+test('WebSocket 복구 중 재단절되면 Polling과 polling 상태를 유지한다', async () => {
+    let resolveSnapshot;
+    const statuses = [];
+    const pendingSnapshot = new Promise((resolve) => {
+        resolveSnapshot = resolve;
+    });
+    const sync = createSnapshotSync({
+        loadSnapshot: () => pendingSnapshot,
+        applySnapshot: () => {},
+        applyEvent: () => {},
+        onStatusChange: (status) => statuses.push(status),
+        pollIntervalMs: 1000,
+    });
+
+    const recovery = sync.recoverRealtime();
+    sync.startPolling();
+    resolveSnapshot(snapshot(10));
+    await recovery;
+
+    assert.equal(statuses.at(-1), 'polling');
+    assert.equal(statuses.includes('live'), false);
+    sync.dispose();
+});
+
+test('재단절 없이 WebSocket 복구가 완료되면 live 상태로 전환한다', async () => {
+    const statuses = [];
+    const sync = createSnapshotSync({
+        loadSnapshot: async () => snapshot(10),
+        applySnapshot: () => {},
+        applyEvent: () => {},
+        onStatusChange: (status) => statuses.push(status),
+    });
+
+    await sync.recoverRealtime();
+
+    assert.equal(statuses.at(-1), 'live');
+    sync.dispose();
+});

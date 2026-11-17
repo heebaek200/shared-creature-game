@@ -5,6 +5,7 @@ import { getCurrentSeason } from '../features/season/api.js';
 import { ApiError } from '../api/client.js';
 import { getShopItem } from '../features/shop/api.js';
 import { createAvatarField } from '../features/creature/avatar-field.js';
+import { creatureAccessErrorRoute } from '../features/creature/access-error-policy.js';
 import { createGroupLiveClient } from '../realtime/group-live-client.js';
 import { createSnapshotSync } from '../realtime/snapshot-sync.js';
 
@@ -630,6 +631,20 @@ export function creaturePage(context) {
     let snapshotSync = null;
     let liveClient = null;
 
+    function stopForAccessError(error) {
+        const route = creatureAccessErrorRoute(error);
+        if (!route) return false;
+
+        snapshotSync?.dispose();
+        void liveClient?.disconnect();
+        context.navigate(route);
+        return true;
+    }
+
+    function handleSnapshotError(error) {
+        if (!stopForAccessError(error)) showLoadError(error);
+    }
+
     function setLiveStatus(status) {
         if (!liveStatus) return;
         const labels = {
@@ -772,7 +787,7 @@ export function creaturePage(context) {
             applySnapshot,
             applyEvent: applyLiveEvent,
             onStatusChange: setLiveStatus,
-            onError: showLoadError,
+            onError: handleSnapshotError,
         });
 
         liveClient = createGroupLiveClient({
@@ -781,17 +796,7 @@ export function creaturePage(context) {
             onSubscribed: () => snapshotSync?.recoverRealtime(),
             onDisconnected: () => snapshotSync?.startPolling(),
             onError: (code, error) => {
-                if (['AUTH_REQUIRED', 'SESSION_EXPIRED'].includes(code)) {
-                    context.navigate('/login');
-                    return;
-                }
-                if (code === 'ROLE_FORBIDDEN') {
-                    showLoadError(new ApiError(403, {
-                        code,
-                        message: '현재 그룹의 실시간 정보를 구독할 권한이 없습니다.',
-                    }));
-                    return;
-                }
+                if (stopForAccessError({ code })) return;
                 if (['CSRF_INVALID', 'INVALID_REQUEST'].includes(code)) {
                     showLoadError(new ApiError(403, {
                         code,

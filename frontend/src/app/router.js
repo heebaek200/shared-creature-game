@@ -1,6 +1,7 @@
 // @ts-check
 import { getCurrentUser } from '../features/auth/api.js';
 import { statusPage } from '../pages/status-page.js';
+import { linkNavigationTarget } from './link-navigation.js';
 
 /** @typedef {{ path: string, access: string, page: (context: {navigate: (path: string) => void, currentUser: object | null}) => {element: HTMLElement, cleanup?: () => void} }} Route */
 
@@ -138,7 +139,7 @@ export function createRouter(root, routes) {
     const target = event.target instanceof Element ? event.target.closest('[data-link]') : null;
     if (!(target instanceof HTMLAnchorElement)) return;
     event.preventDefault();
-    navigate(target.pathname);
+    navigate(linkNavigationTarget(target));
   }
 
   return {

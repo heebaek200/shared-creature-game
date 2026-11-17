@@ -3,7 +3,10 @@ import {
     createAvatarVisual,
     updateAvatarVisual,
 } from '../avatar/render.js';
-import { calculateIdleWaitScale } from './avatar-movement-policy.js';
+import {
+    calculateIdleWaitScale,
+    calculateRenderedPosition,
+} from './avatar-movement-policy.js';
 
 const movementAreas = [
     { minX: 8, maxX: 28, minY: 5, maxY: 20 },
@@ -142,6 +145,21 @@ export function createAvatarField(options) {
 
     function stopActor(actor) {
         clearActorTimer(actor);
+        if (actor.moving) {
+            const computedStyle = globalThis.getComputedStyle(actor.button);
+            const renderedPosition = calculateRenderedPosition({
+                left: computedStyle.left,
+                top: computedStyle.top,
+                fieldWidth: fieldLayer.clientWidth,
+                fieldHeight: fieldLayer.clientHeight,
+                fallbackX: actor.x,
+                fallbackY: actor.y,
+            });
+            actor.x = renderedPosition.x;
+            actor.y = renderedPosition.y;
+            actor.button.style.left = `${actor.x}%`;
+            actor.button.style.top = `${actor.y}%`;
+        }
         actor.moving = false;
         actor.button.style.transitionDuration = '0ms';
         updateActorVisual(actor, 'stop');
