@@ -82,4 +82,41 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
             @Param("seasonId") Long seasonId,
             Pageable pageable
     );
+
+    /**
+     * 전체 관리자용 활성 그룹 검색 결과를 페이지 단위로 조회합니다.
+     *
+     * 공개 여부와 무관하게 ACTIVE 그룹을 모두 검색합니다.
+     * 정규화된 이름을 사용하고 그룹 이름·PK 순으로 정렬을 고정합니다.
+     *
+     * @param query LIKE 특수문자를 이스케이프한 정규화 검색어
+     * @param pageable 페이지 번호와 크기
+     * @return 검색 조건에 맞는 활성 그룹 페이지
+     */
+    @Query(
+            value = """
+                SELECT g
+                  FROM Group g
+                 WHERE g.status = 'ACTIVE'
+                   AND (
+                       :query = ''
+                       OR g.normalizedName LIKE CONCAT('%', :query, '%') ESCAPE '\\'
+                   )
+                 ORDER BY g.normalizedName ASC, g.id ASC
+                """,
+            countQuery = """
+                SELECT COUNT(g.id)
+                  FROM Group g
+                 WHERE g.status = 'ACTIVE'
+                   AND (
+                       :query = ''
+                       OR g.normalizedName LIKE CONCAT('%', :query, '%') ESCAPE '\\'
+                   )
+                """
+    )
+    Page<Group> findAdminActiveGroups(
+            @Param("query") String query,
+            Pageable pageable
+    );
+
 }
