@@ -190,82 +190,195 @@ body {
   border-color: var(--app-border) !important;
 }
 
+/* 크리처 필드: CSS 레이어만으로 파스텔 하늘·언덕·초지를 표현합니다. */
+.creature-avatar-container {
+  --field-sky-top: #dff4ff;
+  --field-sky-bottom: #f7fbdf;
+  --field-sun: #fff1ae;
+  --field-hill-far: #c9e7bd;
+  --field-hill-near: #a9d8ad;
+  --field-grass: #d8edbd;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at 84% 15%,
+      color-mix(in srgb, var(--field-sun) 82%, transparent) 0 5%,
+      transparent 5.5%
+    ),
+    linear-gradient(
+      180deg,
+      var(--field-sky-top) 0%,
+      var(--field-sky-bottom) 64%,
+      var(--field-grass) 100%
+    );
+}
+
+.creature-avatar-container::before,
+.creature-avatar-container::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 0;
+  content: '';
+  pointer-events: none;
+}
+
+.creature-avatar-container::before {
+  height: 48%;
+  background:
+    radial-gradient(
+      70% 95% at 8% 100%,
+      var(--field-hill-near) 0 50%,
+      transparent 51%
+    ),
+    radial-gradient(
+      72% 105% at 52% 108%,
+      var(--field-hill-far) 0 55%,
+      transparent 56%
+    ),
+    radial-gradient(
+      65% 95% at 98% 100%,
+      var(--field-hill-near) 0 52%,
+      transparent 53%
+    );
+  opacity: 0.86;
+}
+
+.creature-avatar-container::after {
+  height: 18%;
+  background:
+    radial-gradient(circle at 8% 76%, #f6c6d8 0 3px, transparent 4px),
+    radial-gradient(circle at 25% 38%, #fff2a8 0 3px, transparent 4px),
+    radial-gradient(circle at 74% 66%, #d8c9f4 0 3px, transparent 4px),
+    radial-gradient(circle at 92% 30%, #f7c8b4 0 3px, transparent 4px),
+    linear-gradient(180deg, transparent, color-mix(in srgb, #8fc99b 28%, transparent));
+  opacity: 0.8;
+}
+
+[data-bs-theme='dark'] .creature-avatar-container {
+  --field-sky-top: #29465a;
+  --field-sky-bottom: #46665f;
+  --field-sun: #e5cf8f;
+  --field-hill-far: #54765c;
+  --field-hill-near: #3f664f;
+  --field-grass: #486b4f;
+}
+
 .avatar-zone {
-  border-color: var(--app-primary);
-  background-color: color-mix(in srgb, var(--app-primary) 8%, transparent);
   width: 32%;
   height: 23%;
   box-sizing: border-box;
   z-index: 1;
-  border: 2px dashed var(--app-primary);
-  border-radius: 0.75rem;
   pointer-events: none;
-  gap: 0.5rem;
-  overflow: hidden;
+  overflow: visible;
 }
 
-.avatar-zone-label {
-  color: var(--app-primary);
-  background-color: var(--app-surface);
+.avatar-zone--field {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 .avatar-spot {
-  --bs-btn-hover-color: var(--app-text);
-  --bs-btn-hover-bg: var(--app-background);
-  --bs-btn-hover-border-color: var(--app-primary);
-  color: var(--app-text);
-  background-color: var(--app-surface);
-  border-color: var(--app-border) !important;
-  position: relative;
+  position: absolute;
   z-index: 2;
-  flex: 0 1 auto;
-  width: fit-content;
-  max-width: calc(50% - 0.25rem);
+  display: grid;
+  width: 84px;
   min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
+  padding: 0;
+  border: 0;
+  color: var(--app-text);
+  background: transparent;
   font: inherit;
-  line-height: inherit;
-  text-align: left;
   appearance: none;
   cursor: pointer;
   pointer-events: auto;
-}
-.avatar-spot:focus-visible {
-  font-weight: 800;
+  transform: translateX(-50%);
+  transition-property: left, top;
+  transition-timing-function: linear;
 }
 
-.avatar-zone-members {
-  flex-wrap: nowrap;
-  width: 100%;
-  min-width: 0;
-  overflow: hidden;
+.avatar-spot:focus-visible {
+  border-radius: 0.75rem;
 }
 
 .avatar-spot__name {
-  flex: 0 1 auto;
+  display: block;
   min-width: 0;
+  max-width: 84px;
+  padding: 0.1rem 0.3rem;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
   overflow: hidden;
+  color: var(--app-text);
+  background-color: color-mix(in srgb, var(--app-surface) 88%, transparent);
+  font-size: 0.7rem;
+  line-height: 1.2;
+  text-align: center;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.avatar-spot.is-current-user {
-  --bs-btn-hover-color: var(--app-on-primary);
-  --bs-btn-hover-bg: var(--app-primary);
-  --bs-btn-hover-border-color: var(--app-primary);
+.avatar-spot.is-current-user,
+.avatar-spot.is-current-user.is-moving {
+  z-index: 5;
+}
+
+.avatar-spot.is-moving {
+  z-index: 4;
+}
+
+.avatar-spot.is-current-user .avatar-spot__name {
   color: var(--app-on-primary);
   background-color: var(--app-primary);
+  border-color: var(--app-primary);
 }
 
-
-.avatar-spot__dot {
-  background-color: var(--app-primary);
-  width: 8px;
-  height: 8px;
+.group-avatar-visual {
+  position: relative;
+  display: block;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto;
+  image-rendering: pixelated;
 }
 
-.avatar-spot.is-current-user .avatar-spot__dot {
-  background-color: var(--app-on-primary);
+.group-avatar-visual__layer {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  pointer-events: none;
+  user-select: none;
+}
+
+.group-avatar-visual__layer[hidden] {
+  display: none;
+}
+
+.group-avatar-visual__item {
+  /* Mock 복장 색상 변형은 아이템에만 적용해 기본 아바타 피부색을 유지한다. */
+  filter: hue-rotate(var(--avatar-item-hue, 0deg)) saturate(1.08);
+}
+
+#creature-display {
+  z-index: 3;
+  pointer-events: none;
+}
+
+#live-status[data-live-status='live'] {
+  color: var(--bs-success-text-emphasis);
+}
+
+#live-status[data-live-status='polling'],
+#live-status[data-live-status='error'] {
+  color: var(--bs-warning-text-emphasis);
 }
 
 .text-app-muted {

@@ -4,6 +4,7 @@ import com.team.sharedcreature._core.api.ErrorResponseFactory;
 import com.team.sharedcreature._core.exception.RestApiExceptionHandler;
 import com.team.sharedcreature._core.web.RequestIdFilter;
 import com.team.sharedcreature.auth.application.UserActivityService;
+import com.team.sharedcreature.auth.api.CsrfController;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.domain.GroupMembership;
@@ -18,6 +19,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.test.context.web.WebAppConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
@@ -63,6 +65,9 @@ class SecurityFilterChainTest {
 
     @Autowired
     private GroupMembershipRepository membershipRepository;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
@@ -117,6 +122,24 @@ class SecurityFilterChainTest {
                 .andExpect(header().string("X-Request-Id", "csrf-invalid"))
                 .andExpect(jsonPath("$.code").value("CSRF_INVALID"))
                 .andExpect(jsonPath("$.traceId").value("csrf-invalid"));
+    }
+
+    @Test
+    void CSRF_조회는_WebSocket이_검증할_세션_원본_토큰을_반환한다() throws Exception {
+        MockHttpSession session = authenticatedSession(2L, "MEMBER");
+        var response = mockMvc.perform(get("/api/v1/auth/csrf").session(session))
+                .andExpect(status().isOk())
+                .andReturn().getResponse();
+        String responseToken = objectMapper.readTree(response.getContentAsString())
+                .get("data").get("token").asText();
+        CsrfToken sessionToken = java.util.Collections.list(session.getAttributeNames()).stream()
+                .map(session::getAttribute)
+                .filter(CsrfToken.class::isInstance)
+                .map(CsrfToken.class::cast)
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(responseToken).isEqualTo(sessionToken.getToken());
     }
 
     @Test
@@ -206,7 +229,7 @@ class SecurityFilterChainTest {
     @Configuration
     @EnableWebMvc
     @EnableWebSecurity
-    @Import(SecurityConfiguration.class)
+    @Import({SecurityConfiguration.class, CsrfController.class})
     static class TestConfiguration {
 
         @Bean
