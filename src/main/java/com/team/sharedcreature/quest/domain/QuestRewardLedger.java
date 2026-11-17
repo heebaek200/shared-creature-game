@@ -28,8 +28,10 @@ public class QuestRewardLedger {
     @JoinColumn(name = "quest_completion_id", nullable = false)
     private QuestCompletion questCompletion;
 
+    /** 원장의 유형별 유일 제약과 기존 문자열 저장값을 유지합니다. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "reward_type", length = 30, nullable = false)
-    private String rewardType;
+    private QuestRewardType rewardType;
 
     @Column(name = "amount", nullable = false)
     private Long amount;
@@ -66,7 +68,7 @@ public class QuestRewardLedger {
      */
     public static QuestRewardLedger create(
             QuestCompletion completion,
-            String rewardType,
+            QuestRewardType rewardType,
             long amount,
             GroupCreature groupCreature,
             SeasonMemberContribution memberContribution,

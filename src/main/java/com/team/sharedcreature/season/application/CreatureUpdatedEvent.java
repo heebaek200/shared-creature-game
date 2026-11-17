@@ -27,7 +27,7 @@ public record CreatureUpdatedEvent(
                 groupSeason.getGroup().getId(),
                 groupSeason.getSeason().getId(),
                 creature.getId(),
-                creature.getGrowthStage(),
+                creature.getGrowthStage().name(),
                 creature.getTotalExperience(),
                 visibleSpecies == null ? null : visibleSpecies.getId(),
                 occurredAt

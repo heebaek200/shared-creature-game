@@ -1,9 +1,14 @@
 package com.team.sharedcreature.admin.application;
 
+import com.team.sharedcreature.quest.domain.PhotoVerificationStatus;
+
+import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
+
 import com.team.sharedcreature.season.domain.SeasonStatus;
 
 import com.team.sharedcreature.admin.api.OperationalWarningResponse;
 import com.team.sharedcreature.admin.domain.SchedulerExecution;
+import com.team.sharedcreature.admin.domain.SchedulerExecutionStatus;
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
 import com.team.sharedcreature.payment.domain.RefundRequest;
@@ -74,11 +79,11 @@ public class OperationalWarningService {
         List<SchedulerExecution> executions = entityManager.createQuery("""
                 SELECT execution
                   FROM SchedulerExecution execution
-                 WHERE execution.status = 'FAILED'
-                    OR (execution.status = 'RUNNING' AND execution.leaseExpiresAt < :now)
+                 WHERE execution.status = com.team.sharedcreature.admin.domain.SchedulerExecutionStatus.FAILED
+                    OR (execution.status = com.team.sharedcreature.admin.domain.SchedulerExecutionStatus.RUNNING AND execution.leaseExpiresAt < :now)
                 """, SchedulerExecution.class).setParameter("now", now).getResultList();
         for (SchedulerExecution execution : executions) {
-            boolean leaseExpired = "RUNNING".equals(execution.getStatus());
+            boolean leaseExpired = execution.getStatus() == SchedulerExecutionStatus.RUNNING;
             Instant detectedAt = leaseExpired
                     ? execution.getLeaseExpiresAt()
                     : firstInstant(execution.getCompletedAt(), execution.getUpdatedAt(), now);
@@ -126,7 +131,7 @@ public class OperationalWarningService {
         List<QuestPeriod> periods = entityManager.createQuery("""
                 SELECT period
                   FROM QuestPeriod period
-                 WHERE period.status = 'FAILED'
+                 WHERE period.status = com.team.sharedcreature.quest.domain.QuestPeriodStatus.FAILED
                 """, QuestPeriod.class).getResultList();
         for (QuestPeriod period : periods) {
             String type = "TEMPLATE_SHORTAGE".equals(period.getFailureCode())
@@ -215,15 +220,15 @@ public class OperationalWarningService {
                   JOIN FETCH period.season season
                  WHERE submission.storageKey IS NOT NULL
                    AND (
-                       (submission.verificationStatus = 'VALID' AND season.endAt <= :validCutoff)
-                    OR (submission.verificationStatus = 'INVALID' AND submission.updatedAt <= :invalidCutoff)
+                       (submission.verificationStatus = com.team.sharedcreature.quest.domain.PhotoVerificationStatus.VALID AND season.endAt <= :validCutoff)
+                    OR (submission.verificationStatus = com.team.sharedcreature.quest.domain.PhotoVerificationStatus.INVALID AND submission.updatedAt <= :invalidCutoff)
                    )
                 """, PhotoSubmission.class)
                 .setParameter("validCutoff", validCutoff)
                 .setParameter("invalidCutoff", invalidCutoff)
                 .getResultList();
         for (PhotoSubmission submission : submissions) {
-            Instant deletionDueAt = "VALID".equals(submission.getVerificationStatus())
+            Instant deletionDueAt = submission.getVerificationStatus() == PhotoVerificationStatus.VALID
                     ? submission.getQuestAssignment().getQuestPeriod().getSeason().getEndAt().plus(Duration.ofDays(30))
                     : submission.getUpdatedAt().plus(Duration.ofHours(24));
             warnings.add(warning(

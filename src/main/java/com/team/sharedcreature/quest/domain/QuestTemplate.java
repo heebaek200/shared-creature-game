@@ -28,11 +28,14 @@ public class QuestTemplate {
     @Column(name = "period_type", length = 30, nullable = false)
     private String periodType;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "difficulty", length = 30, nullable = false)
-    private String difficulty;
+    private QuestDifficulty difficulty;
 
+    /** 활성 템플릿만 배정 대상으로 사용합니다. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    private QuestTemplateStatus status;
 
     @Column(name = "rotation_order", nullable = false)
     private Integer rotationOrder;

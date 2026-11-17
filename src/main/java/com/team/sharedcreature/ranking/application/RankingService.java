@@ -285,7 +285,7 @@ public class RankingService {
                             profile.getNickname(),
                             rank.contributionScore(),
                             rank.scoreReachedAt(),
-                            contribution.getParticipantStatus()
+                contribution.getParticipantStatus().name()
                     );
                 })
                 .toList();
@@ -311,7 +311,7 @@ public class RankingService {
                         snapshot.getNicknameSnapshot(),
                         snapshot.getContributionScore(),
                         snapshot.getScoreReachedAt(),
-                        snapshot.getParticipantStatus()
+                snapshot.getParticipantStatus().name()
                 ))
                 .toList();
     }

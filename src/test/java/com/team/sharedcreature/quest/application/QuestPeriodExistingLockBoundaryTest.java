@@ -1,5 +1,7 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
+
 import com.team.sharedcreature.quest.domain.QuestPeriod;
 import com.team.sharedcreature.quest.infrastructure.QuestAssignmentRepository;
 import com.team.sharedcreature.quest.infrastructure.QuestPeriodRepository;
@@ -105,7 +107,7 @@ class QuestPeriodExistingLockBoundaryTest {
                     clock.set(EXPIRED);
                     return Optional.of(active);
                 });
-        when(active.getStatus()).thenReturn("ACTIVE");
+        when(active.getStatus()).thenReturn(QuestPeriodStatus.ACTIVE);
 
         QuestPeriodPersistenceService service = new QuestPeriodPersistenceService(
                 seasonQuery, seasonRepository, calendar, selector, periods, assignments,

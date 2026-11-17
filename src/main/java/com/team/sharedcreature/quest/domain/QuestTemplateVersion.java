@@ -34,8 +34,9 @@ public class QuestTemplateVersion {
     @Column(name = "description", length = 500, nullable = false)
     private String description;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "verification_type", length = 30, nullable = false)
-    private String verificationType;
+    private QuestVerificationType verificationType;
 
     @Column(name = "verification_parameters", columnDefinition = "JSON", nullable = false)
     private String verificationParameters;

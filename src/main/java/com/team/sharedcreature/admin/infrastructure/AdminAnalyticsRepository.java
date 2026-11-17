@@ -1,5 +1,9 @@
 package com.team.sharedcreature.admin.infrastructure;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
+
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
+
 import com.team.sharedcreature.season.domain.SeasonStatus;
 
 import jakarta.persistence.EntityManager;
@@ -111,7 +115,7 @@ public class AdminAnalyticsRepository {
                 SELECT COUNT(membership.id)
                   FROM GroupMembership membership, QuestAssignment assignment
                   JOIN assignment.questPeriod period
-                 WHERE period.status IN ('ACTIVE', 'CLOSED')
+                 WHERE period.status IN (com.team.sharedcreature.quest.domain.QuestPeriodStatus.ACTIVE, com.team.sharedcreature.quest.domain.QuestPeriodStatus.CLOSED)
                    AND period.startAt < :endAt
                    AND period.endAt > :startAt
                    AND membership.joinedAt < period.endAt
@@ -141,7 +145,7 @@ public class AdminAnalyticsRepository {
                   JOIN assignment.questPeriod period
                  WHERE completion.completedAt >= :startAt
                    AND completion.completedAt < :endAt
-                   AND period.status IN ('ACTIVE', 'CLOSED')
+                   AND period.status IN (com.team.sharedcreature.quest.domain.QuestPeriodStatus.ACTIVE, com.team.sharedcreature.quest.domain.QuestPeriodStatus.CLOSED)
                 """ + groupCondition("membership.group.id", groupId);
         return number(query(jpql, groupId)
                 .setParameter("startAt", start)
@@ -166,7 +170,7 @@ public class AdminAnalyticsRepository {
         Map<String, Long> result = new LinkedHashMap<>();
         for (Object rowValue : query.getResultList()) {
             Object[] row = (Object[]) rowValue;
-            result.put(String.valueOf(row[0]), number(row[1]));
+            result.put(((CreatureGrowthStage) row[0]).name(), number(row[1]));
         }
         return result;
     }

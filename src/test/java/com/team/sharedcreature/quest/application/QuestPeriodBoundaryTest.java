@@ -1,5 +1,8 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestDifficulty;
+import com.team.sharedcreature.quest.domain.QuestVerificationType;
+
 import com.team.sharedcreature.quest.domain.QuestAssignment;
 import com.team.sharedcreature.quest.domain.QuestPeriod;
 import com.team.sharedcreature.quest.domain.QuestTemplate;
@@ -204,8 +207,8 @@ class QuestPeriodBoundaryTest {
                 .mapToObj(slot -> new QuestTemplateSelectionService.SelectedQuest(
                         slot, (long) slot, (long) slot + 10,
                         "D-TEST-" + slot,
-                        slot == 1 ? "LOW" : slot == 2 ? "MEDIUM" : "HIGH",
-                        "제목" + slot, "설명", "SELF_CHECK", "{}", 100L, 10L))
+                        slot == 1 ? QuestDifficulty.LOW : slot == 2 ? QuestDifficulty.MEDIUM : QuestDifficulty.HIGH,
+                        "제목" + slot, "설명", QuestVerificationType.SELF_CHECK, "{}", 100L, 10L))
                 .toList();
         return new QuestTemplateSelectionService.SelectionBatch("DAILY", 8L, slots);
     }

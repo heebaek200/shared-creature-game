@@ -1,5 +1,7 @@
 package com.team.sharedcreature.quest.infrastructure;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
+
 import com.team.sharedcreature.quest.domain.QuestPeriod;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -72,8 +74,8 @@ public interface QuestPeriodRepository extends JpaRepository<QuestPeriod, Long> 
               FROM QuestPeriod p
               JOIN FETCH p.season s
              WHERE s.id = :seasonId
-               AND s.status = 'ACTIVE'
-               AND p.status = 'ACTIVE'
+               AND s.status = com.team.sharedcreature.season.domain.SeasonStatus.ACTIVE
+               AND p.status = com.team.sharedcreature.quest.domain.QuestPeriodStatus.ACTIVE
                AND p.periodType = :periodType
                AND p.startAt <= :now
                AND p.endAt > :now

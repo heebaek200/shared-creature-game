@@ -1,6 +1,7 @@
 package com.team.sharedcreature.admin.domain;
 
 import com.team.sharedcreature.auth.domain.User;
+import com.team.sharedcreature.auth.domain.GlobalRole;
 import com.team.sharedcreature.group.domain.Group;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -31,8 +32,9 @@ public class AdminAuditLog {
     @JoinColumn(name = "actor_user_id", nullable = false)
     private User actorUser;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "actor_role_snapshot", length = 30, nullable = false)
-    private String actorRoleSnapshot;
+    private GlobalRole actorRoleSnapshot;
 
     @Column(name = "action_type", length = 100, nullable = false)
     private String actionType;
@@ -47,8 +49,9 @@ public class AdminAuditLog {
     @JoinColumn(name = "group_id", nullable = true)
     private Group group;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "result", length = 30, nullable = false)
-    private String result;
+    private AdminAuditResult result;
 
     @Column(name = "reason", length = 1000, nullable = false)
     private String reason;
@@ -66,7 +69,7 @@ public class AdminAuditLog {
             String targetType,
             Long targetId,
             Group group,
-            String result,
+            AdminAuditResult result,
             String reason,
             String detail,
             Instant now
@@ -74,7 +77,7 @@ public class AdminAuditLog {
         AdminAuditLog log = new AdminAuditLog();
         log.actorUser = actor;
         // 명령 실행 당시의 역할 이름을 감사 이력에 보존합니다.
-        log.actorRoleSnapshot = actor.getGlobalRole().name();
+        log.actorRoleSnapshot = actor.getGlobalRole();
         log.actionType = actionType;
         log.targetType = targetType;
         log.targetId = targetId;

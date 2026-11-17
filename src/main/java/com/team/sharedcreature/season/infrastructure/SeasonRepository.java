@@ -61,7 +61,7 @@ public interface SeasonRepository extends JpaRepository<Season, Long> {
                              FROM SchedulerExecution execution
                             WHERE execution.jobType = 'SEASON_CLOSE'
                               AND execution.scheduledFor = season.endAt
-                              AND execution.status = 'SUCCEEDED'
+                              AND execution.status = com.team.sharedcreature.admin.domain.SchedulerExecutionStatus.SUCCEEDED
                        )
                    )
                )

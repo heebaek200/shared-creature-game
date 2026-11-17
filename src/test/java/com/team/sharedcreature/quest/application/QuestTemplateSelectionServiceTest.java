@@ -1,11 +1,16 @@
 package com.team.sharedcreature.quest.application;
 
 import com.team.sharedcreature.quest.domain.QuestTemplate;
+import com.team.sharedcreature.quest.domain.QuestTemplateStatus;
+import com.team.sharedcreature.quest.domain.QuestDifficulty;
+import com.team.sharedcreature.quest.domain.QuestVerificationType;
 import com.team.sharedcreature.quest.domain.QuestTemplateVersion;
 import com.team.sharedcreature.quest.infrastructure.QuestTemplateRepository;
 import com.team.sharedcreature.quest.infrastructure.QuestTemplateVersionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -252,6 +257,18 @@ class QuestTemplateSelectionServiceTest {
         return new QuestPeriodCalendar().currentWindow(FIRST_START, now, type).orElseThrow();
     }
 
+    /** 비활성·실험용 템플릿이 조회 결과에 섞이면 기존 카탈로그 오류로 거부합니다. */
+    @ParameterizedTest
+    @EnumSource(value = QuestTemplateStatus.class, names = {"INACTIVE", "EXPERIMENTAL"})
+    void 비활성_실험용_템플릿은_배정을_거절한다(QuestTemplateStatus status) {
+        prepareCatalog("DAILY", 5, 4, 3);
+        ReflectionTestUtils.setField(catalog.getFirst(), "status", status);
+
+        var exception = assertThrows(QuestTemplateSelectionService.SelectionException.class,
+                () -> service.select(window("DAILY", 0)));
+        assertEquals(QuestTemplateSelectionService.FailureCode.INVALID_TEMPLATE_CATALOG, exception.failureCode());
+    }
+
     /**
      * JPA 실체를 흉내 내는 기간·난이도별 활성 카탈로그를 구성합니다.
      * 실 서비스와 동일하게 ID·회전 순서·기간·상태 필드를 사용합니다.
@@ -279,8 +296,8 @@ class QuestTemplateSelectionServiceTest {
             ReflectionTestUtils.setField(template, "id", id);
             ReflectionTestUtils.setField(template, "code", templateCode);
             ReflectionTestUtils.setField(template, "periodType", period);
-            ReflectionTestUtils.setField(template, "difficulty", difficulty);
-            ReflectionTestUtils.setField(template, "status", "ACTIVE");
+            ReflectionTestUtils.setField(template, "difficulty", QuestDifficulty.valueOf(difficulty));
+            ReflectionTestUtils.setField(template, "status", QuestTemplateStatus.ACTIVE);
             ReflectionTestUtils.setField(template, "rotationOrder", i);
             catalog.add(template);
 
@@ -291,7 +308,7 @@ class QuestTemplateSelectionServiceTest {
             ReflectionTestUtils.setField(version, "versionNumber", 2);
             ReflectionTestUtils.setField(version, "title", templateCode + " v2");
             ReflectionTestUtils.setField(version, "description", "테스트 퀘스트");
-            ReflectionTestUtils.setField(version, "verificationType", "SELF_CHECK");
+            ReflectionTestUtils.setField(version, "verificationType", QuestVerificationType.SELF_CHECK);
             ReflectionTestUtils.setField(version, "verificationParameters", "{}");
             ReflectionTestUtils.setField(version, "creatureExperience", 15L);
             ReflectionTestUtils.setField(version, "contributionScore", 6L);
@@ -340,6 +357,6 @@ class QuestTemplateSelectionServiceTest {
      */
     private List<String> difficulties(QuestTemplateSelectionService.SelectionBatch batch) {
         // 엔티티 참조 없이 Snapshot 난이도만 반환합니다.
-        return batch.slots().stream().map(QuestTemplateSelectionService.SelectedQuest::difficultySnapshot).toList();
+        return batch.slots().stream().map(slot -> slot.difficultySnapshot().name()).toList();
     }
 }

@@ -1,5 +1,7 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
+
 import com.team.sharedcreature.quest.domain.QuestAssignment;
 import com.team.sharedcreature.quest.domain.QuestPeriod;
 import com.team.sharedcreature.quest.infrastructure.QuestAssignmentRepository;
@@ -87,7 +89,7 @@ public class QuestPeriodPersistenceService {
             return new QuestPeriodAssignmentService.Result(
                     QuestPeriodAssignmentService.Outcome.NOT_READY, null, 0);
         }
-        if (period != null && "ACTIVE".equals(period.getStatus())) {
+        if (period != null && period.getStatus() == QuestPeriodStatus.ACTIVE) {
             return new QuestPeriodAssignmentService.Result(
                     QuestPeriodAssignmentService.Outcome.ALREADY_ACTIVE, period.getId(),
                     assignmentRepository.countByQuestPeriodId(period.getId()));
@@ -163,7 +165,7 @@ public class QuestPeriodPersistenceService {
             return new QuestPeriodAssignmentService.Result(
                     QuestPeriodAssignmentService.Outcome.NOT_READY, null, 0);
         }
-        if (period != null && "ACTIVE".equals(period.getStatus())) {
+        if (period != null && period.getStatus() == QuestPeriodStatus.ACTIVE) {
             return new QuestPeriodAssignmentService.Result(
                     QuestPeriodAssignmentService.Outcome.ALREADY_ACTIVE, period.getId(),
                     assignmentRepository.countByQuestPeriodId(period.getId()));
@@ -200,10 +202,10 @@ public class QuestPeriodPersistenceService {
     ) {
         return periodRepository.findByPeriodTypeAndStartAt(window.periodType(), window.startAt())
                 .flatMap(period -> switch (period.getStatus()) {
-                    case "ACTIVE" -> Optional.of(new QuestPeriodAssignmentService.Result(
+                    case ACTIVE -> Optional.of(new QuestPeriodAssignmentService.Result(
                             QuestPeriodAssignmentService.Outcome.ALREADY_ACTIVE, period.getId(),
                             assignmentRepository.countByQuestPeriodId(period.getId())));
-                    case "FAILED" -> Optional.of(new QuestPeriodAssignmentService.Result(
+                    case FAILED -> Optional.of(new QuestPeriodAssignmentService.Result(
                             QuestPeriodAssignmentService.Outcome.FAILED, period.getId(), 0));
                     default -> Optional.empty();
                 });

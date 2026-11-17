@@ -45,7 +45,7 @@ public interface PhotoSubmissionRepository extends JpaRepository<PhotoSubmission
     @Query("""
             SELECT submission
               FROM PhotoSubmission submission
-             WHERE submission.verificationStatus = 'PENDING'
+             WHERE submission.verificationStatus = com.team.sharedcreature.quest.domain.PhotoVerificationStatus.PENDING
                AND submission.createdAt < :cutoff
              ORDER BY submission.createdAt, submission.id
             """)
@@ -61,7 +61,7 @@ public interface PhotoSubmissionRepository extends JpaRepository<PhotoSubmission
     @Query("""
             SELECT submission
               FROM PhotoSubmission submission
-             WHERE submission.verificationStatus = 'INVALID'
+             WHERE submission.verificationStatus = com.team.sharedcreature.quest.domain.PhotoVerificationStatus.INVALID
                AND submission.fileDeletedAt IS NULL
                AND submission.updatedAt < :cutoff
              ORDER BY submission.updatedAt, submission.id
@@ -81,7 +81,7 @@ public interface PhotoSubmissionRepository extends JpaRepository<PhotoSubmission
               JOIN submission.questAssignment assignment
               JOIN assignment.questPeriod period
               JOIN period.season season
-             WHERE submission.verificationStatus = 'VALID'
+             WHERE submission.verificationStatus = com.team.sharedcreature.quest.domain.PhotoVerificationStatus.VALID
                AND submission.fileDeletedAt IS NULL
                AND season.endAt < :seasonEndCutoff
              ORDER BY season.endAt, submission.id
@@ -93,7 +93,7 @@ public interface PhotoSubmissionRepository extends JpaRepository<PhotoSubmission
     @Query("""
             SELECT submission.id
               FROM PhotoSubmission submission
-             WHERE submission.verificationStatus = 'PENDING'
+             WHERE submission.verificationStatus = com.team.sharedcreature.quest.domain.PhotoVerificationStatus.PENDING
                AND submission.createdAt < :cutoff
                AND submission.cleanupNextAttemptAt IS NULL
                AND (submission.cleanupClaimToken IS NULL OR submission.cleanupClaimExpiresAt <= :now)
@@ -109,7 +109,7 @@ public interface PhotoSubmissionRepository extends JpaRepository<PhotoSubmission
     @Query("""
             SELECT submission.id
               FROM PhotoSubmission submission
-             WHERE submission.verificationStatus = 'PENDING'
+             WHERE submission.verificationStatus = com.team.sharedcreature.quest.domain.PhotoVerificationStatus.PENDING
                AND submission.createdAt < :cutoff
                AND submission.cleanupNextAttemptAt <= :now
                AND (submission.cleanupClaimToken IS NULL OR submission.cleanupClaimExpiresAt <= :now)
@@ -125,7 +125,7 @@ public interface PhotoSubmissionRepository extends JpaRepository<PhotoSubmission
     @Query("""
             SELECT submission.id
               FROM PhotoSubmission submission
-             WHERE submission.verificationStatus = 'INVALID'
+             WHERE submission.verificationStatus = com.team.sharedcreature.quest.domain.PhotoVerificationStatus.INVALID
                AND submission.fileDeletedAt IS NULL
                AND submission.cleanupNextAttemptAt IS NULL
                AND (submission.cleanupClaimToken IS NULL OR submission.cleanupClaimExpiresAt <= :now)
@@ -137,7 +137,7 @@ public interface PhotoSubmissionRepository extends JpaRepository<PhotoSubmission
     @Query("""
             SELECT submission.id
               FROM PhotoSubmission submission
-             WHERE submission.verificationStatus = 'INVALID'
+             WHERE submission.verificationStatus = com.team.sharedcreature.quest.domain.PhotoVerificationStatus.INVALID
                AND submission.fileDeletedAt IS NULL
                AND submission.cleanupNextAttemptAt <= :now
                AND (submission.cleanupClaimToken IS NULL OR submission.cleanupClaimExpiresAt <= :now)
@@ -152,7 +152,7 @@ public interface PhotoSubmissionRepository extends JpaRepository<PhotoSubmission
               JOIN submission.questAssignment assignment
               JOIN assignment.questPeriod period
               JOIN period.season season
-             WHERE submission.verificationStatus = 'VALID'
+             WHERE submission.verificationStatus = com.team.sharedcreature.quest.domain.PhotoVerificationStatus.VALID
                AND submission.fileDeletedAt IS NULL
                AND season.status = com.team.sharedcreature.season.domain.SeasonStatus.ENDED
                AND season.endAt <= :cutoff
@@ -173,7 +173,7 @@ public interface PhotoSubmissionRepository extends JpaRepository<PhotoSubmission
               JOIN submission.questAssignment assignment
               JOIN assignment.questPeriod period
               JOIN period.season season
-             WHERE submission.verificationStatus = 'VALID'
+             WHERE submission.verificationStatus = com.team.sharedcreature.quest.domain.PhotoVerificationStatus.VALID
                AND submission.fileDeletedAt IS NULL
                AND season.status = com.team.sharedcreature.season.domain.SeasonStatus.ENDED
                AND season.endAt <= :cutoff

@@ -29,10 +29,6 @@ import java.util.Objects;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PhotoSubmission {
 
-    public static final String STATUS_PENDING = "PENDING";
-    public static final String STATUS_VALID = "VALID";
-    public static final String STATUS_INVALID = "INVALID";
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -63,8 +59,9 @@ public class PhotoSubmission {
     @Column(name = "longitude", precision = 10, scale = 7)
     private BigDecimal longitude;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "verification_status", length = 30, nullable = false)
-    private String verificationStatus;
+    private PhotoVerificationStatus verificationStatus;
 
     @Column(name = "failure_reason", length = 50)
     private String failureReason;
@@ -117,7 +114,7 @@ public class PhotoSubmission {
         submission.storageKey = storageKey;
         submission.attemptNumber = attemptNumber;
         submission.uploadedAt = uploadedAt;
-        submission.verificationStatus = STATUS_PENDING; // 대기중
+        submission.verificationStatus = PhotoVerificationStatus.PENDING; // 대기중
         submission.createdAt = uploadedAt;
         submission.updatedAt = uploadedAt;
         return submission;
@@ -146,7 +143,7 @@ public class PhotoSubmission {
         this.capturedAt = capturedAt;
         this.latitude = latitude;
         this.longitude = longitude;
-        this.verificationStatus = STATUS_INVALID; // 상태를 실패로 변경
+        this.verificationStatus = PhotoVerificationStatus.INVALID; // 상태를 실패로 변경
         this.failureReason = failureReason;
         this.updatedAt = verifiedAt;
     }
@@ -180,7 +177,7 @@ public class PhotoSubmission {
         this.capturedAt = capturedAt;
         this.latitude = latitude;
         this.longitude = longitude;
-        this.verificationStatus = STATUS_VALID; // 상태를 성공으로 변경
+        this.verificationStatus = PhotoVerificationStatus.VALID; // 상태를 성공으로 변경
         this.failureReason = null; // 성공했으므로 이전 실패 사유 초기화
         this.updatedAt = verifiedAt;
     }
@@ -246,8 +243,8 @@ public class PhotoSubmission {
     public void markPhotoAndLocationDataDeleted(Instant deletedAt) {
         Objects.requireNonNull(deletedAt, "deletedAt은 필수입니다.");
 
-        if (!STATUS_VALID.equals(this.verificationStatus)
-                && !STATUS_INVALID.equals(this.verificationStatus)) {
+        if (this.verificationStatus != PhotoVerificationStatus.VALID
+                && this.verificationStatus != PhotoVerificationStatus.INVALID) {
             throw new IllegalStateException(
                     "VALID 또는 INVALID 제출만 정리할 수 있습니다. status="
                             + this.verificationStatus
@@ -269,7 +266,7 @@ public class PhotoSubmission {
 
     /** 문지기(Guard) 메서드 */
     private void requirePending() {
-        if (!STATUS_PENDING.equals(this.verificationStatus)) {
+        if (this.verificationStatus != PhotoVerificationStatus.PENDING) {
             throw new IllegalStateException(
                     "PENDING 상태의 제출만 판정할 수 있습니다. status="
                             + this.verificationStatus

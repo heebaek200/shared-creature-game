@@ -1,5 +1,7 @@
 package com.team.sharedcreature.ranking.integration;
 
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
+
 import com.team.sharedcreature.season.domain.SeasonStatus;
 
 import com.team.sharedcreature.auth.domain.GlobalRole;
@@ -29,7 +31,24 @@ import com.team.sharedcreature.season.domain.*;
 import com.team.sharedcreature.season.infrastructure.CreatureSpeciesRepository;
 import com.team.sharedcreature.season.infrastructure.SeasonRepository;
 import com.team.sharedcreature.season.infrastructure.GroupSeasonRepository;
+import com.team.sharedcreature.season.infrastructure.GroupCreatureRepository;
 import com.team.sharedcreature.season.api.SeasonResponse;
+import com.team.sharedcreature.season.application.CreatureUpdatedEvent;
+import com.team.sharedcreature.quest.domain.QuestPeriod;
+import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
+import com.team.sharedcreature.quest.infrastructure.QuestPeriodRepository;
+import com.team.sharedcreature.quest.domain.QuestTemplate;
+import com.team.sharedcreature.quest.domain.QuestTemplateStatus;
+import com.team.sharedcreature.quest.domain.QuestDifficulty;
+import com.team.sharedcreature.quest.domain.QuestVerificationType;
+import com.team.sharedcreature.quest.domain.PhotoSubmission;
+import com.team.sharedcreature.quest.domain.PhotoVerificationStatus;
+import com.team.sharedcreature.quest.infrastructure.PhotoSubmissionRepository;
+import com.team.sharedcreature.quest.domain.QuestAssignment;
+import com.team.sharedcreature.quest.domain.QuestCompletion;
+import com.team.sharedcreature.quest.domain.QuestTemplateVersion;
+import com.team.sharedcreature.quest.infrastructure.QuestCompletionRepository;
+import com.team.sharedcreature.quest.infrastructure.QuestTemplateRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -82,6 +101,11 @@ class RankingDatabaseIntegrationTest {
     @Autowired private CreatureSpeciesRepository speciesRepository;
     @Autowired private SeasonRepository seasons;
     @Autowired private GroupSeasonRepository groupSeasons;
+    @Autowired private GroupCreatureRepository creatures;
+    @Autowired private QuestPeriodRepository periods;
+    @Autowired private QuestTemplateRepository templates;
+    @Autowired private QuestCompletionRepository completions;
+    @Autowired private PhotoSubmissionRepository photos;
     private Season season;
     private User owner;
     private Group group;
@@ -103,6 +127,341 @@ class RankingDatabaseIntegrationTest {
         em.persist(groupSeason);
     }
 
+    /** 사진 상태의 저장 코드·정리 대상 조회와 판정 이력 보존을 검증합니다. */
+    @ParameterizedTest
+    @EnumSource(PhotoVerificationStatus.class)
+    void 사진_판정_상태는_DB_코드와_정리_규칙을_유지한다(PhotoVerificationStatus status) {
+        QuestAssignment assignment = questAssignment(QuestDifficulty.LOW, QuestVerificationType.PHOTO_EXIF);
+        PhotoSubmission photo = PhotoSubmission.create(owner, assignment,
+                "enum/photo/" + UUID.randomUUID(), 1, NOW.minusSeconds(7_200));
+        if (status == PhotoVerificationStatus.VALID) {
+            photo.markValid(NOW.minusSeconds(7_200), java.math.BigDecimal.ONE,
+                    java.math.BigDecimal.ONE, NOW.minusSeconds(60));
+        } else if (status == PhotoVerificationStatus.INVALID) {
+            photo.markInvalid("TEST_FAILURE", null, null, null, NOW.minusSeconds(60));
+        }
+        em.persist(photo);
+        em.flush();
+        Long photoId = photo.getId();
+        em.clear();
+
+        PhotoSubmission reloaded = photos.findById(photoId).orElseThrow();
+        assertThat(reloaded.getVerificationStatus()).isEqualTo(status);
+        assertThat(em.createNativeQuery("SELECT verification_status FROM photo_submissions WHERE id = :id", String.class)
+                .setParameter("id", photoId).getSingleResult()).isEqualTo(status.name());
+        var stalePending = photos.findFreshStalePendingIds(NOW.minusSeconds(3_600), NOW, PageRequest.of(0, 1_000));
+        var invalid = photos.findFreshInvalidIds(NOW, PageRequest.of(0, 1_000));
+        if (status == PhotoVerificationStatus.PENDING) {
+            assertThat(stalePending).contains(photoId);
+            assertThat(invalid).doesNotContain(photoId);
+            assertThatThrownBy(() -> reloaded.markPhotoAndLocationDataDeleted(NOW))
+                    .isInstanceOf(IllegalStateException.class);
+        } else {
+            assertThat(stalePending).doesNotContain(photoId);
+            if (status == PhotoVerificationStatus.INVALID) {
+                assertThat(invalid).contains(photoId);
+            } else {
+                assertThat(invalid).doesNotContain(photoId);
+            }
+            // 파일·좌표를 정리해도 판정 결과와 최초 정리 시각은 보존합니다.
+            reloaded.markPhotoAndLocationDataDeleted(NOW);
+            reloaded.markPhotoAndLocationDataDeleted(NOW.plusSeconds(1));
+            em.flush();
+            em.clear();
+            PhotoSubmission cleaned = photos.findById(photoId).orElseThrow();
+            assertThat(cleaned.getVerificationStatus()).isEqualTo(status);
+            assertThat(cleaned.getFileDeletedAt()).isEqualTo(NOW);
+            assertThat(cleaned.getStorageKey()).isNull();
+            assertThat(cleaned.getLatitude()).isNull();
+            assertThat(cleaned.getLongitude()).isNull();
+        }
+    }
+
+    /** 검증 유형의 저장 코드·완료 집계와 배정 기록의 독립성을 검증합니다. */
+    @ParameterizedTest
+    @EnumSource(QuestVerificationType.class)
+    void 퀘스트_검증_유형은_DB_코드와_배정_기록_집계를_유지한다(QuestVerificationType type) {
+        QuestAssignment assignment = questAssignment(QuestDifficulty.LOW, type);
+        GroupMembership membership = memberships.findByUserIdAndStatus(owner.getId(), GroupMembershipStatus.ACTIVE)
+                .orElseThrow();
+        em.persist(QuestCompletion.create(owner, assignment, groupSeason, membership, NOW));
+        em.flush();
+        Long assignmentId = assignment.getId();
+        Long versionId = assignment.getQuestTemplateVersion().getId();
+        Long ownerId = owner.getId();
+        Long membershipId = membership.getId();
+        Long groupSeasonId = groupSeason.getId();
+        var date = assignment.getQuestPeriod().getPeriodDate();
+        em.clear();
+
+        assertThat(em.find(QuestTemplateVersion.class, versionId).getVerificationType()).isEqualTo(type);
+        assertThat(em.find(QuestAssignment.class, assignmentId).getVerificationTypeSnapshot()).isEqualTo(type);
+        assertThat(em.createNativeQuery("SELECT verification_type FROM quest_template_versions WHERE id = :id", String.class)
+                .setParameter("id", versionId).getSingleResult()).isEqualTo(type.name());
+        assertThat(em.createNativeQuery("SELECT verification_type_snapshot FROM quest_assignments WHERE id = :id", String.class)
+                .setParameter("id", assignmentId).getSingleResult()).isEqualTo(type.name());
+        assertThat(completions.countDailyCompletionsByVerificationTypeInDateRange(ownerId, membershipId, groupSeasonId,
+                type, date, date.plusDays(1))).isEqualTo(1);
+
+        // 원본 버전 변경으로 이미 배정된 판정 방식이 덮어써지지 않아야 합니다.
+        QuestVerificationType changed = type == QuestVerificationType.SELF_CHECK
+                ? QuestVerificationType.PHOTO_EXIF : QuestVerificationType.SELF_CHECK;
+        em.createQuery("UPDATE QuestTemplateVersion version SET version.verificationType = :type WHERE version.id = :id")
+                .setParameter("type", changed).setParameter("id", versionId).executeUpdate();
+        em.clear();
+        assertThat(em.find(QuestAssignment.class, assignmentId).getVerificationTypeSnapshot()).isEqualTo(type);
+        assertThat(completions.countDailyCompletionsByVerificationTypeInDateRange(ownerId, membershipId, groupSeasonId,
+                type, date, date.plusDays(1))).isEqualTo(1);
+        assertThat(completions.countDailyCompletionsByVerificationTypeInDateRange(ownerId, membershipId, groupSeasonId,
+                changed, date, date.plusDays(1))).isZero();
+    }
+
+    /** 난이도의 저장 코드·배정 기록 보존·난이도별 완료 집계를 검증합니다. */
+    @ParameterizedTest
+    @EnumSource(QuestDifficulty.class)
+    void 퀘스트_난이도는_DB_코드와_배정_기록_집계를_유지한다(QuestDifficulty difficulty) {
+        QuestAssignment assignment = questAssignment(difficulty, QuestVerificationType.SELF_CHECK);
+        QuestTemplate template = assignment.getQuestTemplate();
+        var date = assignment.getQuestPeriod().getPeriodDate();
+        GroupMembership membership = memberships.findByUserIdAndStatus(owner.getId(), GroupMembershipStatus.ACTIVE)
+                .orElseThrow();
+        em.persist(QuestCompletion.create(owner, assignment, groupSeason, membership, NOW));
+        em.flush();
+        Long templateId = template.getId();
+        Long assignmentId = assignment.getId();
+        Long ownerId = owner.getId();
+        Long membershipId = membership.getId();
+        Long groupSeasonId = groupSeason.getId();
+        em.clear();
+
+        assertThat(em.find(QuestTemplate.class, templateId).getDifficulty()).isEqualTo(difficulty);
+        assertThat(em.find(QuestAssignment.class, assignmentId).getDifficultySnapshot()).isEqualTo(difficulty);
+        assertThat(em.createNativeQuery("SELECT difficulty FROM quest_templates WHERE id = :id", String.class)
+                .setParameter("id", templateId).getSingleResult()).isEqualTo(difficulty.name());
+        assertThat(em.createNativeQuery("SELECT difficulty_snapshot FROM quest_assignments WHERE id = :id", String.class)
+                .setParameter("id", assignmentId).getSingleResult()).isEqualTo(difficulty.name());
+        assertThat(completions.countDailyCompletionsByDifficultyInDateRange(ownerId, membershipId, groupSeasonId,
+                difficulty, date, date.plusDays(1))).isEqualTo(1);
+
+        // 원본 난이도가 변경되어도 완료 집계는 배정 당시의 난이도를 사용합니다.
+        QuestDifficulty changed = difficulty == QuestDifficulty.LOW ? QuestDifficulty.HIGH : QuestDifficulty.LOW;
+        em.createQuery("UPDATE QuestTemplate template SET template.difficulty = :difficulty WHERE template.id = :id")
+                .setParameter("difficulty", changed).setParameter("id", templateId).executeUpdate();
+        em.clear();
+        assertThat(em.find(QuestAssignment.class, assignmentId).getDifficultySnapshot()).isEqualTo(difficulty);
+        assertThat(completions.countDailyCompletionsByDifficultyInDateRange(ownerId, membershipId, groupSeasonId,
+                difficulty, date, date.plusDays(1))).isEqualTo(1);
+        assertThat(completions.countDailyCompletionsByDifficultyInDateRange(ownerId, membershipId, groupSeasonId,
+                changed, date, date.plusDays(1))).isZero();
+    }
+
+    /** 기존 템플릿 상태의 문자열 조회와 비활성·실험용 배정 제외를 검증합니다. */
+    @ParameterizedTest
+    @EnumSource(QuestTemplateStatus.class)
+    void 퀘스트_템플릿_상태는_DB_코드와_활성_선정_조건을_유지한다(QuestTemplateStatus status) {
+        String code = "enum-" + UUID.randomUUID().toString().substring(0, 24);
+        int rotation = em.createQuery("""
+                        SELECT COALESCE(MAX(template.rotationOrder), 0) FROM QuestTemplate template
+                         WHERE template.periodType = 'DAILY' AND template.difficulty = com.team.sharedcreature.quest.domain.QuestDifficulty.LOW
+                        """, Integer.class).getSingleResult() + 1;
+        em.flush();
+        // 기존 DB와 같은 문자열로 저장한 행이 Enum으로 조회되어야 합니다.
+        em.createNativeQuery("""
+                INSERT INTO quest_templates
+                    (code, period_type, difficulty, status, rotation_order, created_at, updated_at)
+                VALUES (:code, 'DAILY', 'LOW', :status, :rotation, :now, :now)
+                """).setParameter("code", code).setParameter("status", status.name())
+                .setParameter("rotation", rotation).setParameter("now", NOW).executeUpdate();
+        em.clear();
+
+        QuestTemplate template = em.createQuery("SELECT template FROM QuestTemplate template WHERE template.code = :code",
+                        QuestTemplate.class).setParameter("code", code).getSingleResult();
+        assertThat(template.getStatus()).isEqualTo(status);
+        var selected = templates.findActiveByPeriodType("DAILY");
+        assertThat(selected).allSatisfy(row -> assertThat(row.getStatus()).isEqualTo(QuestTemplateStatus.ACTIVE));
+        if (status == QuestTemplateStatus.ACTIVE) {
+            assertThat(selected).extracting(QuestTemplate::getId).contains(template.getId());
+        } else {
+            assertThat(selected).extracting(QuestTemplate::getId).doesNotContain(template.getId());
+        }
+    }
+
+    /** 기간 상태의 기존 저장값·현재 기간 조회와 실패 재시도의 이력 보존을 검증합니다. */
+    @ParameterizedTest
+    @EnumSource(QuestPeriodStatus.class)
+    void 퀘스트_기간_상태는_DB_조회와_실패_복구_계약을_유지한다(QuestPeriodStatus status) {
+        Instant start = season.getStartAt();
+        QuestPeriod period = QuestPeriod.pending(season, "DAILY",
+                NOW.atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalDate(),
+                start, NOW.plusSeconds(3_600), NOW);
+        if (status == QuestPeriodStatus.ACTIVE) {
+            period.activate(NOW);
+        } else if (status == QuestPeriodStatus.FAILED) {
+            period.fail("TEST_FAILURE", "배정 실패 검증", NOW);
+        } else if (status == QuestPeriodStatus.CLOSED) {
+            // 종료 상태로 저장된 기존 기간의 조회 호환성을 검증합니다.
+            ReflectionTestUtils.setField(period, "status", QuestPeriodStatus.CLOSED);
+        }
+        em.persist(period);
+        em.flush();
+        Long periodId = period.getId();
+        Long seasonId = season.getId();
+        em.clear();
+
+        QuestPeriod reloaded = periods.findForUpdateByPeriodTypeAndStartAt("DAILY", start).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(status);
+        assertThat(periods.findByPeriodTypeAndStartAt("DAILY", start).orElseThrow().getId()).isEqualTo(periodId);
+        assertThat(em.createNativeQuery("SELECT status FROM quest_periods WHERE id = :id", String.class)
+                .setParameter("id", periodId).getSingleResult()).isEqualTo(status.name());
+        var current = periods.findCurrentBySeasonAndType(seasonId, "DAILY", NOW);
+        if (status == QuestPeriodStatus.ACTIVE) {
+            assertThat(current).contains(reloaded);
+        } else {
+            assertThat(current).isEmpty();
+        }
+
+        if (status == QuestPeriodStatus.FAILED) {
+            assertThat(reloaded.getFailureCode()).isEqualTo("TEST_FAILURE");
+            reloaded.prepareRetry(NOW.plusSeconds(1));
+            reloaded.activate(NOW.plusSeconds(2));
+            em.flush();
+            em.clear();
+            QuestPeriod recovered = periods.findById(periodId).orElseThrow();
+            assertThat(recovered.getStatus()).isEqualTo(QuestPeriodStatus.ACTIVE);
+            assertThat(recovered.getFailureCode()).isNull();
+            assertThat(recovered.getFailureDetail()).isNull();
+            assertThat(recovered.getCreatedAt()).isEqualTo(NOW);
+        } else if (status == QuestPeriodStatus.ACTIVE || status == QuestPeriodStatus.CLOSED) {
+            assertThatThrownBy(() -> reloaded.prepareRetry(NOW.plusSeconds(1)))
+                    .isInstanceOf(IllegalStateException.class);
+            assertThat(reloaded.getStatus()).isEqualTo(status);
+        }
+    }
+
+    /** 참여 상태의 DB 코드와 종료 순위의 상태 보존을 검증합니다. */
+    @ParameterizedTest
+    @EnumSource(GroupMembershipStatus.class)
+    void 시즌_참여_상태와_종료_순위는_DB와_API의_기존_코드를_유지한다(GroupMembershipStatus status) {
+        User target = user();
+        SeasonMemberContribution original = contribution(target, 100, NOW, status.name());
+        UserProfile profile = em.createQuery("SELECT profile FROM UserProfile profile WHERE profile.user.id = :id",
+                        UserProfile.class)
+                .setParameter("id", target.getId()).getSingleResult();
+        SeasonMemberRankSnapshot snapshot = SeasonMemberRankSnapshot.capture(
+                season, groupSeason, original, profile,
+                new SeasonRankingCalculator.MemberRank(1, target.getId(), 100, NOW), NOW
+        );
+        em.persist(snapshot);
+        em.flush();
+        Long contributionId = original.getId();
+        Long snapshotId = snapshot.getId();
+        Long seasonId = season.getId();
+        Long ownerId = owner.getId();
+        em.clear();
+
+        assertThat(em.find(SeasonMemberContribution.class, contributionId).getParticipantStatus()).isEqualTo(status);
+        assertThat(em.find(SeasonMemberRankSnapshot.class, snapshotId).getParticipantStatus()).isEqualTo(status);
+        assertThat(em.createNativeQuery("SELECT participant_status FROM season_member_contributions WHERE id = :id", String.class)
+                .setParameter("id", contributionId).getSingleResult()).isEqualTo(status.name());
+        assertThat(em.createNativeQuery("SELECT participant_status FROM season_member_rank_snapshots WHERE id = :id", String.class)
+                .setParameter("id", snapshotId).getSingleResult()).isEqualTo(status.name());
+        assertThat(service.getMemberRanking(ownerId, seasonId, 0, 20).data())
+                .singleElement().satisfies(row -> {
+                    assertThat(row.participantStatus()).isEqualTo(status.name());
+                    assertThat(row.contributionScore()).isEqualTo(100);
+                    assertThat(row.scoreReachedAt()).isEqualTo(NOW);
+                });
+
+        // 종료 이후 원본 참가 상태가 바뀌어도 확정 순위는 기존 상태를 반환해야 합니다.
+        // 조회된 엔티티는 프록시일 수 있으므로 필드 리플렉션 대신 DB에 종료 상태를 명시합니다.
+        em.createQuery("UPDATE Season season SET season.status = :status WHERE season.id = :id")
+                .setParameter("status", SeasonStatus.ENDED).setParameter("id", seasonId).executeUpdate();
+        GroupMembershipStatus changed = status == GroupMembershipStatus.ACTIVE
+                ? GroupMembershipStatus.LEFT : GroupMembershipStatus.ACTIVE;
+        em.createQuery("UPDATE SeasonMemberContribution contribution SET contribution.participantStatus = :status WHERE contribution.id = :id")
+                .setParameter("status", changed).setParameter("id", contributionId).executeUpdate();
+        em.flush();
+        em.clear();
+        assertThat(em.find(Season.class, seasonId).getStatus()).isEqualTo(SeasonStatus.ENDED);
+        assertThat(em.find(SeasonMemberContribution.class, contributionId).getParticipantStatus()).isEqualTo(changed);
+        assertThat(em.find(SeasonMemberRankSnapshot.class, snapshotId).getParticipantStatus()).isEqualTo(status);
+        assertThat(service.getMemberRanking(ownerId, seasonId, 0, 20).data())
+                .singleElement().satisfies(row -> {
+                    assertThat(row.participantStatus()).isEqualTo(status.name());
+                    assertThat(row.contributionScore()).isEqualTo(100);
+                });
+    }
+
+    /** 성장 단계의 저장값·경계값·이벤트·관리자 집계의 문자열 계약을 검증합니다. */
+    @ParameterizedTest
+    @CsvSource({
+            "EGG,50000,0,45000",
+            "HATCHLING,0,0,45000",
+            "GROWING,45000,45000,97500",
+            "MATURE,97500,97500,150000",
+            "COMPLETE,150000,150000,"
+    })
+    void 성장_단계는_DB와_이벤트_집계의_문자열_계약을_유지한다(
+            CreatureGrowthStage stage, long experience, long currentThreshold, Long nextThreshold
+    ) {
+        GroupCreature creature = GroupCreature.egg(groupSeason, NOW);
+        if (experience > 0) {
+            creature.addExperience(experience, NOW);
+        }
+        if (stage != CreatureGrowthStage.EGG) {
+            CreatureSpecies species = species();
+            groupSeason.selectRandomSpecies(species, NOW);
+            creature.hatch(species, groupSeason.getSelectionSource(), NOW);
+            groupSeason.activate(NOW);
+        }
+        em.persist(creature);
+        em.flush();
+        Long creatureId = creature.getId();
+        Long groupId = group.getId();
+        em.clear();
+
+        GroupCreature reloaded = em.find(GroupCreature.class, creatureId);
+        assertThat(reloaded.getGrowthStage()).isEqualTo(stage);
+        assertThat(reloaded.getTotalExperience()).isEqualTo(experience);
+        assertThat(reloaded.currentStageThreshold()).isEqualTo(currentThreshold);
+        assertThat(reloaded.nextStageThreshold()).isEqualTo(nextThreshold);
+        assertThat(em.createNativeQuery("SELECT growth_stage FROM group_creatures WHERE id = :id", String.class)
+                .setParameter("id", creatureId).getSingleResult()).isEqualTo(stage.name());
+        assertThat(CreatureUpdatedEvent.from(reloaded, NOW).stage()).isEqualTo(stage.name());
+        assertThat(analytics.growthStages(NOW, groupId)).containsOnlyKeys(stage.name())
+                .containsEntry(stage.name(), 1L);
+    }
+
+    /** 운영·보관 상태의 저장값과 보관 처리의 이력 보존·멱등성을 검증합니다. */
+    @ParameterizedTest
+    @EnumSource(GroupCreatureStatus.class)
+    void 공동_크리처의_상태와_보관_이력은_DB에서_유지된다(GroupCreatureStatus status) {
+        GroupCreature creature = GroupCreature.egg(groupSeason, NOW);
+        creature.addExperience(50_000L, NOW);
+        if (status == GroupCreatureStatus.ARCHIVED) {
+            creature.archiveForGroupClosure(NOW.plusSeconds(1));
+            creature.archiveForGroupClosure(NOW.plusSeconds(2));
+        }
+        em.persist(creature);
+        em.flush();
+        Long creatureId = creature.getId();
+        Long groupSeasonId = groupSeason.getId();
+        em.clear();
+
+        GroupCreature reloaded = creatures.findSnapshotByGroupSeasonId(groupSeasonId).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(status);
+        assertThat(creatures.findForUpdateByGroupSeasonId(groupSeasonId)).contains(reloaded);
+        assertThat(em.createNativeQuery("SELECT status FROM group_creatures WHERE id = :id", String.class)
+                .setParameter("id", creatureId).getSingleResult()).isEqualTo(status.name());
+        // 보관해도 알 상태·경험치·미선택 정보를 유지하고 반복 보관은 시각을 변경하지 않습니다.
+        assertThat(reloaded.getTotalExperience()).isEqualTo(50_000L);
+        assertThat(reloaded.getGrowthStage()).isEqualTo(CreatureGrowthStage.EGG);
+        assertThat(reloaded.getSelectionSource()).isNull();
+        assertThat(reloaded.getHatchedAt()).isNull();
+        assertThat(reloaded.getUpdatedAt())
+                .isEqualTo(status == GroupCreatureStatus.ARCHIVED ? NOW.plusSeconds(1) : NOW);
+    }
+
     /** 미선택·관리자 선택·무작위 선택의 출처가 두 기록에 동일하게 저장되는지 검증합니다. */
     @ParameterizedTest
     @EnumSource(CreatureSelectionSource.class)
@@ -110,14 +469,7 @@ class RankingDatabaseIntegrationTest {
     void 종_선택_출처는_미선택_null과_부화_후_DB_코드를_유지한다(CreatureSelectionSource source) {
         GroupCreature creature = GroupCreature.egg(groupSeason, NOW);
         if (source != null) {
-            CreatureSpecies species = org.springframework.beans.BeanUtils.instantiateClass(CreatureSpecies.class);
-            ReflectionTestUtils.setField(species, "code", "source-" + UUID.randomUUID());
-            ReflectionTestUtils.setField(species, "name", "선택 출처 검증");
-            ReflectionTestUtils.setField(species, "assetKey", "species/test-source");
-            ReflectionTestUtils.setField(species, "status", CreatureSpeciesStatus.ACTIVE);
-            ReflectionTestUtils.setField(species, "createdAt", NOW);
-            ReflectionTestUtils.setField(species, "updatedAt", NOW);
-            em.persist(species);
+            CreatureSpecies species = species();
             if (source == CreatureSelectionSource.ADMIN) {
                 groupSeason.selectSpecies(species, owner, NOW);
             } else {
@@ -546,7 +898,7 @@ class RankingDatabaseIntegrationTest {
 
         em.createQuery("update UserProfile p set p.nickname = :name where p.user.id = :id")
                 .setParameter("name", "변경한닉네임").setParameter("id", owner.getId()).executeUpdate();
-        em.createQuery("update SeasonMemberContribution c set c.contributionScore = 999, c.participantStatus = 'REMOVED' where c.id = :id")
+        em.createQuery("update SeasonMemberContribution c set c.contributionScore = 999, c.participantStatus = com.team.sharedcreature.group.domain.GroupMembershipStatus.REMOVED where c.id = :id")
                 .setParameter("id", original.getId()).executeUpdate();
         flushAndClear();
 
@@ -589,6 +941,60 @@ class RankingDatabaseIntegrationTest {
                 .meta().currentSubject()).isNull();
         assertThat(service.getGroupRanking(newcomer.getId(), season.getId(), 0, 20)
                 .meta().currentSubject()).isNull();
+    }
+
+    /** 난이도·검증 유형의 배정 기록을 실제 FK와 함께 준비합니다. */
+    private QuestAssignment questAssignment(QuestDifficulty difficulty, QuestVerificationType verificationType) {
+        QuestTemplate template = questTemplate(difficulty);
+        QuestTemplateVersion version = org.springframework.beans.BeanUtils.instantiateClass(QuestTemplateVersion.class);
+        ReflectionTestUtils.setField(version, "questTemplate", template);
+        ReflectionTestUtils.setField(version, "versionNumber", 1);
+        ReflectionTestUtils.setField(version, "title", "배정 기록 검증");
+        ReflectionTestUtils.setField(version, "description", "원본 변경 이후 보존 검증");
+        ReflectionTestUtils.setField(version, "verificationType", verificationType);
+        ReflectionTestUtils.setField(version, "verificationParameters", "{}");
+        ReflectionTestUtils.setField(version, "creatureExperience", 100L);
+        ReflectionTestUtils.setField(version, "contributionScore", 10L);
+        ReflectionTestUtils.setField(version, "createdAt", NOW);
+        em.persist(version);
+        var date = NOW.atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalDate();
+        QuestPeriod period = QuestPeriod.pending(season, "DAILY", date,
+                season.getStartAt(), NOW.plusSeconds(3600), NOW);
+        period.activate(NOW);
+        em.persist(period);
+        QuestAssignment assignment = QuestAssignment.capture(period, template, version, 1,
+                new QuestAssignment.Snapshot("배정 검증", "배정 기록", difficulty, verificationType, "{}", 100, 10), NOW);
+        em.persist(assignment);
+        return assignment;
+    }
+
+    /** 난이도가 바뀌어도 기존 카탈로그의 유일 제약과 충돌하지 않는 템플릿을 준비합니다. */
+    private QuestTemplate questTemplate(QuestDifficulty difficulty) {
+        int rotation = em.createQuery("SELECT COALESCE(MAX(template.rotationOrder), 0) FROM QuestTemplate template",
+                Integer.class).getSingleResult() + 1;
+        QuestTemplate template = org.springframework.beans.BeanUtils.instantiateClass(QuestTemplate.class);
+        ReflectionTestUtils.setField(template, "code", "enum-" + UUID.randomUUID().toString().substring(0, 24));
+        ReflectionTestUtils.setField(template, "periodType", "DAILY");
+        ReflectionTestUtils.setField(template, "difficulty", difficulty);
+        ReflectionTestUtils.setField(template, "status", QuestTemplateStatus.ACTIVE);
+        ReflectionTestUtils.setField(template, "rotationOrder", rotation);
+        ReflectionTestUtils.setField(template, "createdAt", NOW);
+        ReflectionTestUtils.setField(template, "updatedAt", NOW);
+        em.persist(template);
+        return template;
+    }
+
+    /** 선택·부화 검증에서 기존 초기 데이터와 충돌하지 않는 활성 종을 준비합니다. */
+    private CreatureSpecies species() {
+        CreatureSpecies species = org.springframework.beans.BeanUtils.instantiateClass(CreatureSpecies.class);
+        ReflectionTestUtils.setField(species, "code", "source-" + UUID.randomUUID());
+        ReflectionTestUtils.setField(species, "name", "선택·성장 검증");
+        ReflectionTestUtils.setField(species, "assetKey", "species/test-source");
+        ReflectionTestUtils.setField(species, "status", CreatureSpeciesStatus.ACTIVE);
+        ReflectionTestUtils.setField(species, "createdAt", NOW);
+        ReflectionTestUtils.setField(species, "updatedAt", NOW);
+        em.persist(species);
+        return species;
     }
 
     /** 각 사용자는 고유 프로필과 함께 생성하여 실제 닉네임 일괄 조회를 실행합니다. */

@@ -1,5 +1,7 @@
 package com.team.sharedcreature.ranking.application;
 
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
 import com.team.sharedcreature.season.domain.SeasonStatus;
 
 import com.team.sharedcreature.group.domain.GroupStatus;
@@ -148,7 +150,7 @@ class RankingServiceTest {
         var snapshot = entity(SeasonMemberRankSnapshot.class,
                 "user", user(4), "rankNumber", 8, "nicknameSnapshot", "종료닉네임",
                 "contributionScore", 90L, "scoreReachedAt", NOW.minusSeconds(20),
-                "participantStatus", "LEFT");
+                "participantStatus", GroupMembershipStatus.LEFT);
         when(memberSnapshotRepository.findAllByGroupSeasonIdOrderByRankNumberAsc(70L))
                 .thenReturn(List.of(snapshot));
 
@@ -274,7 +276,7 @@ class RankingServiceTest {
 
     private SeasonMemberContribution contribution(long id, long score, Instant reachedAt, String status) {
         return entity(SeasonMemberContribution.class, "user", user(id),
-                "contributionScore", score, "scoreReachedAt", reachedAt, "participantStatus", status);
+                "contributionScore", score, "scoreReachedAt", reachedAt, "participantStatus", GroupMembershipStatus.valueOf(status));
     }
 
     private SeasonGroupScore score(long id, long score, Instant reachedAt, Instant createdAt) {

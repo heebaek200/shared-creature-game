@@ -5,6 +5,7 @@ import com.team.sharedcreature.admin.application.SchedulerClaimTicket;
 import com.team.sharedcreature.admin.application.SchedulerExecutionLifecycleService;
 import com.team.sharedcreature.admin.application.SchedulerExecutionService;
 import com.team.sharedcreature.admin.domain.SchedulerExecution;
+import com.team.sharedcreature.admin.domain.SchedulerExecutionStatus;
 import com.team.sharedcreature.admin.infrastructure.SchedulerExecutionRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -118,7 +119,8 @@ class SchedulerExecutionLifecycleIntegrationTest {
 
         SchedulerExecution saved = load(ticket);
 
-        assertEquals("SUCCEEDED", saved.getStatus());
+        assertEquals(SchedulerExecutionStatus.SUCCEEDED, saved.getStatus());
+        assertStoredStatus(ticket, "SUCCEEDED");
         // JSON 문자열의 공백이나 직렬화 형식이 아닌 실제 값을 검증합니다.
         Integer processed = jdbcTemplate.queryForObject("""
         SELECT CAST(
@@ -153,7 +155,8 @@ class SchedulerExecutionLifecycleIntegrationTest {
 
         // 재시도 전에 실패 정보가 저장됐는지 검사합니다.
         SchedulerExecution failed = load(first);
-        assertEquals("FAILED", failed.getStatus());
+        assertEquals(SchedulerExecutionStatus.FAILED, failed.getStatus());
+        assertStoredStatus(first, "FAILED");
         assertEquals("TEMP_ERROR", failed.getErrorCode());
         assertNotNull(failed.getCompletedAt());
 
@@ -162,7 +165,8 @@ class SchedulerExecutionLifecycleIntegrationTest {
         // 같은 DB 행이 새로운 시도로 재사용됩니다.
         assertEquals(first.executionId(), second.executionId());
         assertEquals(2, second.attemptCount());
-        assertEquals("RUNNING", load(second).getStatus());
+        assertEquals(SchedulerExecutionStatus.RUNNING, load(second).getStatus());
+        assertStoredStatus(second, "RUNNING");
         assertNull(load(second).getErrorCode());
     }
 
@@ -193,12 +197,12 @@ class SchedulerExecutionLifecycleIntegrationTest {
                 lifecycleService.renewLease(first, LEASE)
         );
 
-        assertEquals("RUNNING", load(second).getStatus());
+        assertEquals(SchedulerExecutionStatus.RUNNING, load(second).getStatus());
         assertEquals(2, load(second).getAttemptCount());
 
         // 올바른 실행권으로는 정상 완료가 가능합니다.
         lifecycleService.markSucceeded(second, "{}");
-        assertEquals("SUCCEEDED", load(second).getStatus());
+        assertEquals(SchedulerExecutionStatus.SUCCEEDED, load(second).getStatus());
     }
 
     /**
@@ -216,7 +220,7 @@ class SchedulerExecutionLifecycleIntegrationTest {
                 lifecycleService.markSucceeded(ticket, "{}")
         );
 
-        assertEquals("RUNNING", load(ticket).getStatus());
+        assertEquals(SchedulerExecutionStatus.RUNNING, load(ticket).getStatus());
 
         // 다른 실행자는 만료된 행을 재선점할 수 있습니다.
         SchedulerClaimTicket next = claim("server-b");
@@ -245,6 +249,14 @@ class SchedulerExecutionLifecycleIntegrationTest {
     private SchedulerExecution load(SchedulerClaimTicket ticket) {
         return repository.findById(ticket.executionId())
                 .orElseThrow();
+    }
+
+    /** Enum 전환 후에도 기존 DB 문자열을 그대로 저장하는지 확인합니다. */
+    private void assertStoredStatus(SchedulerClaimTicket ticket, String expected) {
+        assertEquals(expected, jdbcTemplate.queryForObject(
+                "SELECT status FROM scheduler_executions WHERE id = ?",
+                String.class, ticket.executionId()
+        ));
     }
 
     /**

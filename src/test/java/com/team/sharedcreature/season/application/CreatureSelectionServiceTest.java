@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
+
 import com.team.sharedcreature.season.domain.GroupSeasonStatus;
 
 import com.team.sharedcreature.group.domain.GroupRole;
@@ -182,7 +184,7 @@ class CreatureSelectionServiceTest {
         locks.verify(groupSeasonRepository).findForUpdateById(100L);
         locks.verify(groupCreatureRepository).findForUpdateByGroupSeasonId(100L);
         assertThat(groupSeason.getStatus()).isEqualTo(GroupSeasonStatus.ACTIVE);
-        assertThat(creature.getGrowthStage()).isEqualTo("HATCHLING");
+        assertThat(creature.getGrowthStage()).isEqualTo(CreatureGrowthStage.HATCHLING);
     }
 
     private Group group(Long id) {
@@ -341,7 +343,7 @@ class CreatureSelectionServiceTest {
 
         // 이전의 알 상태와 그룹 시즌 준비 상태를 그대로 유지합니다.
         assertThat(groupSeason.getStatus()).isEqualTo(GroupSeasonStatus.PREPARING);
-        assertThat(creature.getGrowthStage()).isEqualTo("EGG");
+        assertThat(creature.getGrowthStage()).isEqualTo(CreatureGrowthStage.EGG);
 
         verify(speciesRepository, never())
                 .findAllByStatusOrderByDisplayOrderAscIdAsc(CreatureSpeciesStatus.ACTIVE);

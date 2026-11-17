@@ -67,7 +67,7 @@ public class CreatureHomeQueryService {
         var creatureResponse = new CreatureHomeResponse.CreatureResponse(
                 creature.getId(),
                 visibleSpecies == null ? null : visibleSpecies.getId(),
-                creature.getGrowthStage(),
+                creature.getGrowthStage().name(),
                 creature.getTotalExperience(),
                 creature.nextStageThreshold(),
                 groupSeason.getSelectionDeadlineAt()

@@ -1,6 +1,7 @@
 package com.team.sharedcreature.admin.application;
 
 import com.team.sharedcreature.admin.domain.AdminAuditLog;
+import com.team.sharedcreature.admin.domain.AdminAuditResult;
 import com.team.sharedcreature.admin.infrastructure.AdminAuditLogRepository;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.auth.domain.GlobalRole;
@@ -42,7 +43,7 @@ public class AdminAuditService {
                 targetType,
                 targetId,
                 null,
-                "FAILED",
+                AdminAuditResult.FAILED,
                 code,
                 "{}",
                 clock.instant()

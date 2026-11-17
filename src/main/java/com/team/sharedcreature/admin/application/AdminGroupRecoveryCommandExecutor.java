@@ -3,6 +3,7 @@ package com.team.sharedcreature.admin.application;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.admin.domain.AdminAuditLog;
+import com.team.sharedcreature.admin.domain.AdminAuditResult;
 import com.team.sharedcreature.admin.infrastructure.AdminAuditLogRepository;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.GlobalRole;
@@ -121,7 +122,7 @@ public class AdminGroupRecoveryCommandExecutor {
         ));
         auditLogRepository.save(AdminAuditLog.create(
                 actor, "TRANSFER_PRIMARY_AS_SUPER_ADMIN", "GROUP", groupId, group,
-                "SUCCEEDED", reason, "{}", now
+                AdminAuditResult.SUCCEEDED, reason, "{}", now
         ));
 
         String nickname = profileRepository.findByUserId(targetId)

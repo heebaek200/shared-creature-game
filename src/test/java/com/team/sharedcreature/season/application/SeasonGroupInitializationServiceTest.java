@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
+
 import com.team.sharedcreature.season.domain.SeasonStatus;
 
 import com.team.sharedcreature.auth.domain.User;
@@ -100,7 +102,7 @@ class SeasonGroupInitializationServiceTest {
 
         ArgumentCaptor<GroupCreature> creatureCaptor = ArgumentCaptor.forClass(GroupCreature.class);
         verify(creatureRepository).save(creatureCaptor.capture());
-        assertEquals("EGG", creatureCaptor.getValue().getGrowthStage());
+        assertEquals(CreatureGrowthStage.EGG, creatureCaptor.getValue().getGrowthStage());
         assertEquals(NOW, creatureCaptor.getValue().getCreatedAt());
         assertNull(creatureCaptor.getValue().getHatchedAt());
 

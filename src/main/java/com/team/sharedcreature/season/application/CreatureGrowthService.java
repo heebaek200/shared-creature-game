@@ -64,11 +64,11 @@ public class CreatureGrowthService {
     /** 보상 호출자에게 반영 후 단계·잔액과 중복 여부를 전달합니다. */
     public record GrowthResult(String stage, long totalExperience, boolean duplicate) {
         private static GrowthResult applied(GroupCreature creature) {
-            return new GrowthResult(creature.getGrowthStage(), creature.getTotalExperience(), false);
+            return new GrowthResult(creature.getGrowthStage().name(), creature.getTotalExperience(), false);
         }
 
         private static GrowthResult duplicate(GroupCreature creature) {
-            return new GrowthResult(creature.getGrowthStage(), creature.getTotalExperience(), true);
+            return new GrowthResult(creature.getGrowthStage().name(), creature.getTotalExperience(), true);
         }
     }
 }

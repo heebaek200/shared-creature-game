@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
 import com.team.sharedcreature.season.domain.SeasonStatus;
 
 import com.team.sharedcreature.auth.domain.GlobalRole;
@@ -115,7 +117,7 @@ class SeasonMemberSnapshotServiceTest {
         assertThat(snapshots).extracting(s -> s.getUser().getId())
                 .containsExactly(1L, 2L, 1L);
         assertThat(snapshots).extracting(SeasonMemberRankSnapshot::getParticipantStatus)
-                .containsExactly("LEFT", "ACTIVE", "ACTIVE");
+                .containsExactly(GroupMembershipStatus.LEFT, GroupMembershipStatus.ACTIVE, GroupMembershipStatus.ACTIVE);
         assertThat(snapshots).extracting(SeasonMemberRankSnapshot::getNicknameSnapshot)
                 .containsExactly("이동회원", "기여회원", "이동회원");
         assertThat(snapshots).extracting(SeasonMemberRankSnapshot::getCreatedAt)
@@ -140,7 +142,7 @@ class SeasonMemberSnapshotServiceTest {
         );
 
         // 기존 Snapshot만 완료된 상태에서 원본 참가 상태를 변경합니다.
-        ReflectionTestUtils.setField(source, "participantStatus", "LEFT");
+        ReflectionTestUtils.setField(source, "participantStatus", GroupMembershipStatus.LEFT);
         arrange(season, List.of(source));
         when(snapshotRepository.findAllBySeasonId(SEASON_ID)).thenReturn(List.of(existing));
 
@@ -149,7 +151,7 @@ class SeasonMemberSnapshotServiceTest {
         assertThat(progress.total()).isEqualTo(1);
         assertThat(progress.inserted()).isZero();
         assertThat(progress.remaining()).isZero();
-        assertThat(existing.getParticipantStatus()).isEqualTo("ACTIVE");
+        assertThat(existing.getParticipantStatus()).isEqualTo(GroupMembershipStatus.ACTIVE);
         assertThat(existing.getNicknameSnapshot()).isEqualTo("기존닉네임");
         assertThat(existing.getCreatedAt()).isEqualTo(CREATED);
         verifyNoInteractions(profileRepository);
@@ -357,7 +359,7 @@ class SeasonMemberSnapshotServiceTest {
         ReflectionTestUtils.setField(contribution, "user", user);
         ReflectionTestUtils.setField(contribution, "contributionScore", score);
         ReflectionTestUtils.setField(contribution, "scoreReachedAt", reachedAt);
-        ReflectionTestUtils.setField(contribution, "participantStatus", status);
+        ReflectionTestUtils.setField(contribution, "participantStatus", status == null ? null : GroupMembershipStatus.valueOf(status));
         return contribution;
     }
 

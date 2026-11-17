@@ -3,6 +3,7 @@ package com.team.sharedcreature.admin.application;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.admin.domain.AdminAuditLog;
+import com.team.sharedcreature.admin.domain.AdminAuditResult;
 import com.team.sharedcreature.admin.infrastructure.AdminAuditLogRepository;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.GlobalRole;
@@ -66,7 +67,7 @@ public class AdminModerationCommandExecutor {
         report.reject(actor, reason, now);
         auditLogRepository.save(AdminAuditLog.create(
                 actor, "DISMISS_REPORT", "USER_REPORT", reportId, report.getGroup(),
-                "SUCCEEDED", reason, "{}", now
+                AdminAuditResult.SUCCEEDED, reason, "{}", now
         ));
     }
 
@@ -114,7 +115,7 @@ public class AdminModerationCommandExecutor {
         report.resolve(actor, reason, now);
         auditLogRepository.save(AdminAuditLog.create(
                 actor, "REMOVE_REPORTED_MEMBER", "USER_REPORT", reportId, group,
-                "SUCCEEDED", reason, "{}", now
+                AdminAuditResult.SUCCEEDED, reason, "{}", now
         ));
     }
 

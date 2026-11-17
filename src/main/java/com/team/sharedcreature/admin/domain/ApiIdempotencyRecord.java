@@ -35,8 +35,9 @@ public class ApiIdempotencyRecord {
     @Column(name = "request_hash", length = 64, nullable = false)
     private String requestHash;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    private ApiIdempotencyStatus status;
 
     @Column(name = "http_status")
     private Integer httpStatus;
@@ -61,7 +62,7 @@ public class ApiIdempotencyRecord {
 
     /** 최초 성공 응답을 이후 같은 요청에 재사용하도록 저장합니다. */
     public void complete(int httpStatus, String resourceType, Long resourceId, String responseSnapshot, Instant now) {
-        this.status = "COMPLETED";
+        this.status = ApiIdempotencyStatus.COMPLETED;
         this.httpStatus = httpStatus;
         this.resourceType = resourceType;
         this.resourceId = resourceId;

@@ -1,5 +1,8 @@
 package com.team.sharedcreature.payment.integration;
 
+import com.team.sharedcreature.admin.domain.ApiIdempotencyRecord;
+import com.team.sharedcreature.admin.domain.ApiIdempotencyStatus;
+
 import com.team.sharedcreature.auth.domain.GlobalRole;
 
 import com.team.sharedcreature._core.exception.BusinessException;
@@ -664,6 +667,9 @@ class RefundTransactionMySqlIntegrationTest {
     private void prepareApproval() {
         command = approval.prepare(fixture.adminId(), fixture.refundId(), "검증 승인",
                 UUID.randomUUID().toString()).command();
+        // Native INSERT의 PROCESSING 문자열을 Enum으로 다시 읽는지 확인합니다.
+        assertThat(em.find(ApiIdempotencyRecord.class, command.idempotencyRecordId()).getStatus())
+                .isEqualTo(ApiIdempotencyStatus.PROCESSING);
     }
 
     private String status(String table, Long id) {
@@ -672,6 +678,8 @@ class RefundTransactionMySqlIntegrationTest {
     }
 
     private void assertState(String refund, String purchase, String item, String idempotency) {
+        assertThat(em.find(ApiIdempotencyRecord.class, command.idempotencyRecordId()).getStatus())
+                .isEqualTo(ApiIdempotencyStatus.valueOf(idempotency));
         assertThat(jdbc.queryForObject("SELECT status FROM refund_requests WHERE id = ?", String.class, fixture.refundId())).isEqualTo(refund);
         assertThat(jdbc.queryForObject("SELECT status FROM purchases WHERE id = ?", String.class, fixture.purchaseId())).isEqualTo(purchase);
         assertThat(jdbc.queryForObject("SELECT status FROM owned_items WHERE id = ?", String.class, fixture.itemId())).isEqualTo(item);

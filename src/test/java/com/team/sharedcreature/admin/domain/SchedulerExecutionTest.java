@@ -26,7 +26,7 @@ class SchedulerExecutionTest {
         SchedulerExecution execution = createExecution();
 
         // 신규 실행의 주요 상태를 확인합니다.
-        assertEquals("RUNNING", execution.getStatus());
+        assertEquals(SchedulerExecutionStatus.RUNNING, execution.getStatus());
         assertEquals(1, execution.getAttemptCount());
         assertEquals(NOW.plus(LEASE), execution.getLeaseExpiresAt());
         assertNull(execution.getCompletedAt());
@@ -69,7 +69,7 @@ class SchedulerExecutionTest {
         assertTrue(execution.canReclaim(expiredAt));
         execution.reclaim("server-b", expiredAt, LEASE);
 
-        assertEquals("RUNNING", execution.getStatus());
+        assertEquals(SchedulerExecutionStatus.RUNNING, execution.getStatus());
         assertEquals("server-b", execution.getOwnerInstanceId());
         assertEquals(2, execution.getAttemptCount());
     }
@@ -88,7 +88,7 @@ class SchedulerExecutionTest {
                 "TEMPORARY_ERROR", "Temporary failure"
         );
 
-        assertEquals("FAILED", execution.getStatus());
+        assertEquals(SchedulerExecutionStatus.FAILED, execution.getStatus());
         assertTrue(execution.canReclaim(NOW.plusSeconds(11)));
 
         // 새 시도로 재시작하면서 오류 정보를 비웁니다.
@@ -114,7 +114,7 @@ class SchedulerExecutionTest {
         );
 
         // 시간이 지나도 성공한 작업은 재선점하지 않습니다.
-        assertEquals("SUCCEEDED", execution.getStatus());
+        assertEquals(SchedulerExecutionStatus.SUCCEEDED, execution.getStatus());
         assertFalse(execution.canReclaim(NOW.plusSeconds(120)));
         assertEquals("{\"processed\":3}", execution.getResultSummary());
     }
@@ -140,7 +140,7 @@ class SchedulerExecutionTest {
                 )
         );
 
-        assertEquals("RUNNING", execution.getStatus());
+        assertEquals(SchedulerExecutionStatus.RUNNING, execution.getStatus());
         assertEquals(2, execution.getAttemptCount());
     }
 
@@ -183,7 +183,7 @@ class SchedulerExecutionTest {
                 )
         );
 
-        assertEquals("RUNNING", execution.getStatus());
+        assertEquals(SchedulerExecutionStatus.RUNNING, execution.getStatus());
     }
 
     /**

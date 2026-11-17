@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
 import com.team.sharedcreature.admin.domain.ApiIdempotencyRecord;
+import com.team.sharedcreature.admin.domain.ApiIdempotencyStatus;
 import com.team.sharedcreature.payment.application
         .RefundApprovalTransactionService.CommandResponse;
 import com.team.sharedcreature.payment.infrastructure.RefundIdempotencyRepository;
@@ -100,14 +101,14 @@ public class RefundResultTransactionService {
         }
 
         // 이미 응답을 저장했다면 현재 환불 상태로 다시 만들지 않습니다.
-        if ("COMPLETED".equals(idempotencyRecord.getStatus())) {
+        if (idempotencyRecord.getStatus() == ApiIdempotencyStatus.COMPLETED) {
             return objectMapper.readValue(
                     idempotencyRecord.getResponseSnapshot(),
                     CommandResponse.class
             );
         }
 
-        if (!"PROCESSING".equals(idempotencyRecord.getStatus())) {
+        if (idempotencyRecord.getStatus() != ApiIdempotencyStatus.PROCESSING) {
             throw new IllegalStateException(
                     "처리 중인 멱등 기록이 아닙니다."
             );
@@ -315,14 +316,14 @@ public class RefundResultTransactionService {
         }
 
         // 이미 응답을 저장했다면 상태 변경 없이 최초 응답을 재사용합니다.
-        if ("COMPLETED".equals(record.getStatus())) {
+        if (record.getStatus() == ApiIdempotencyStatus.COMPLETED) {
             return objectMapper.readValue(
                     record.getResponseSnapshot(),
                     CommandResponse.class
             );
         }
 
-        if (!"PROCESSING".equals(record.getStatus())) {
+        if (record.getStatus() != ApiIdempotencyStatus.PROCESSING) {
             throw new IllegalStateException(
                     "처리 중인 수동 복구 멱등 기록이 아닙니다."
             );

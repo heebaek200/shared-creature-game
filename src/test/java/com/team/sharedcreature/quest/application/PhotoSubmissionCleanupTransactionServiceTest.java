@@ -1,5 +1,7 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.PhotoVerificationStatus;
+
 import com.team.sharedcreature.season.domain.SeasonStatus;
 
 import com.team.sharedcreature.quest.application.PhotoSubmissionCleanupTransactionService.RetentionKind;
@@ -39,7 +41,7 @@ class PhotoSubmissionCleanupTransactionServiceTest {
     void marksPendingOlderThanOneHour() {
         PhotoSubmission submission = mock(PhotoSubmission.class);
         when(repository.findForCleanupUpdate(1L)).thenReturn(Optional.of(submission));
-        when(submission.getVerificationStatus()).thenReturn("PENDING");
+        when(submission.getVerificationStatus()).thenReturn(PhotoVerificationStatus.PENDING);
         when(submission.getCreatedAt()).thenReturn(NOW.minus(Duration.ofHours(1)).minusNanos(1));
 
         assertTrue(service.expirePending(1L, NOW));
@@ -56,7 +58,7 @@ class PhotoSubmissionCleanupTransactionServiceTest {
     void keepsPendingAtExactOneHour() {
         PhotoSubmission submission = mock(PhotoSubmission.class);
         when(repository.findForCleanupUpdate(2L)).thenReturn(Optional.of(submission));
-        when(submission.getVerificationStatus()).thenReturn("PENDING");
+        when(submission.getVerificationStatus()).thenReturn(PhotoVerificationStatus.PENDING);
         when(submission.getCreatedAt()).thenReturn(NOW.minus(Duration.ofHours(1)));
 
         assertFalse(service.expirePending(2L, NOW));
@@ -73,7 +75,7 @@ class PhotoSubmissionCleanupTransactionServiceTest {
     void invalidFileIsEligibleOnNextCleanup() {
         PhotoSubmission submission = mock(PhotoSubmission.class);
         when(repository.findForCleanupUpdate(3L)).thenReturn(Optional.of(submission));
-        when(submission.getVerificationStatus()).thenReturn("INVALID");
+        when(submission.getVerificationStatus()).thenReturn(PhotoVerificationStatus.INVALID);
         when(submission.getId()).thenReturn(3L);
         when(submission.getStorageKey()).thenReturn("photo-key.jpg");
         when(submission.getCleanupClaimToken()).thenReturn(null, CLAIM);
@@ -132,7 +134,7 @@ class PhotoSubmissionCleanupTransactionServiceTest {
     void refusesConfirmationWhenStorageKeyChanged() {
         PhotoSubmission submission = mock(PhotoSubmission.class);
         when(repository.findForCleanupUpdate(6L)).thenReturn(Optional.of(submission));
-        when(submission.getVerificationStatus()).thenReturn("INVALID");
+        when(submission.getVerificationStatus()).thenReturn(PhotoVerificationStatus.INVALID);
         when(submission.getStorageKey()).thenReturn("new-key.jpg");
         when(submission.getCleanupClaimToken()).thenReturn(CLAIM);
 
@@ -146,7 +148,7 @@ class PhotoSubmissionCleanupTransactionServiceTest {
     void activeClaimPreventsConcurrentFileCleanup() {
         PhotoSubmission submission = mock(PhotoSubmission.class);
         when(repository.findForCleanupUpdate(7L)).thenReturn(Optional.of(submission));
-        when(submission.getVerificationStatus()).thenReturn("INVALID");
+        when(submission.getVerificationStatus()).thenReturn(PhotoVerificationStatus.INVALID);
         when(submission.getCleanupClaimToken()).thenReturn("other-claim");
         when(submission.getCleanupClaimExpiresAt()).thenReturn(NOW.plus(Duration.ofMinutes(1)));
 
@@ -174,7 +176,7 @@ class PhotoSubmissionCleanupTransactionServiceTest {
     void claimFailureWithoutOwnerSchedulesRetry() {
         PhotoSubmission submission = mock(PhotoSubmission.class);
         when(repository.findForCleanupUpdate(9L)).thenReturn(Optional.of(submission));
-        when(submission.getVerificationStatus()).thenReturn("INVALID");
+        when(submission.getVerificationStatus()).thenReturn(PhotoVerificationStatus.INVALID);
 
         var result = service.deferAfterClaimFailure(
                 9L,
@@ -194,7 +196,7 @@ class PhotoSubmissionCleanupTransactionServiceTest {
     void claimFailurePreservesOtherActiveClaim() {
         PhotoSubmission submission = mock(PhotoSubmission.class);
         when(repository.findForCleanupUpdate(10L)).thenReturn(Optional.of(submission));
-        when(submission.getVerificationStatus()).thenReturn("INVALID");
+        when(submission.getVerificationStatus()).thenReturn(PhotoVerificationStatus.INVALID);
         when(submission.getCleanupClaimToken()).thenReturn("other-token");
         when(submission.getCleanupClaimExpiresAt()).thenReturn(NOW.plus(Duration.ofMinutes(1)));
 
@@ -251,7 +253,7 @@ class PhotoSubmissionCleanupTransactionServiceTest {
         Season season = mock(Season.class);
         when(submission.getId()).thenReturn(id);
         when(submission.getStorageKey()).thenReturn("test-photo.jpg");
-        when(submission.getVerificationStatus()).thenReturn("VALID");
+        when(submission.getVerificationStatus()).thenReturn(PhotoVerificationStatus.VALID);
         when(submission.getQuestAssignment()).thenReturn(assignment);
         when(assignment.getQuestPeriod()).thenReturn(period);
         when(period.getSeason()).thenReturn(season);

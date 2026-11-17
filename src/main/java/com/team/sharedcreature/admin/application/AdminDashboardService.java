@@ -1,5 +1,7 @@
 package com.team.sharedcreature.admin.application;
 
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
+
 import com.team.sharedcreature.season.domain.SeasonStatus;
 
 import com.team.sharedcreature._core.exception.BusinessException;
@@ -29,8 +31,8 @@ import java.util.Map;
 public class AdminDashboardService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    private static final List<String> GROWTH_STAGE_ORDER =
-            List.of("EGG", "HATCHLING", "GROWING", "MATURE", "COMPLETE");
+    private static final List<CreatureGrowthStage> GROWTH_STAGE_ORDER =
+            List.of(CreatureGrowthStage.values());
 
     private final AdminAnalyticsRepository analyticsRepository;
     private final OperationalWarningService warningService;
@@ -83,7 +85,7 @@ public class AdminDashboardService {
         Map<String, Long> growthCounts = analyticsRepository.growthStages(aggregatedAt, groupId);
         List<AdminDashboardResponse.GrowthStagePoint> growthStages = GROWTH_STAGE_ORDER.stream()
                 .map(stage -> new AdminDashboardResponse.GrowthStagePoint(
-                        stage, growthCounts.getOrDefault(stage, 0L)
+                        stage.name(), growthCounts.getOrDefault(stage.name(), 0L)
                 ))
                 .toList();
         List<AdminDashboardResponse.TopGroupPoint> topGroups = analyticsRepository

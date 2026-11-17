@@ -3,6 +3,7 @@ package com.team.sharedcreature.season.domain;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.UserProfile;
 import com.team.sharedcreature.group.domain.Group;
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -10,7 +11,6 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 import java.util.Objects;
-import java.util.Set;
 
 /**
  * season_member_rank_snapshots 테이블의 상태와 이력을 보존하는 JPA 엔티티입니다.
@@ -25,8 +25,6 @@ import java.util.Set;
 })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class SeasonMemberRankSnapshot {
-
-    private static final Set<String> PARTICIPANT_STATUSES = Set.of("ACTIVE", "LEFT", "REMOVED");
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -57,8 +55,10 @@ public class SeasonMemberRankSnapshot {
     @Column(name = "score_reached_at", nullable = false)
     private Instant scoreReachedAt;
 
+    /** 시즌 종료 시의 참여 상태를 복사하며 이후 멤버십 변경과 분리해 보존합니다. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "participant_status", length = 30, nullable = false)
-    private String participantStatus;
+    private GroupMembershipStatus participantStatus;
 
     @Column(name = "nickname_snapshot", length = 20, nullable = false)
     private String nicknameSnapshot;
@@ -108,9 +108,9 @@ public class SeasonMemberRankSnapshot {
         }
 
         // 원본의 참가 상태와 표시 닉네임을 정확히 한 번 기록합니다.
-        String status = contribution.getParticipantStatus();
+        GroupMembershipStatus status = contribution.getParticipantStatus();
         String nickname = Objects.requireNonNull(profile.getNickname(), "nickname");
-        if (status == null || !PARTICIPANT_STATUSES.contains(status)
+        if (status == null
                 || nickname.isBlank() || nickname.length() > 20) {
             throw new IllegalArgumentException("개인 Snapshot의 참가 상태 또는 닉네임이 유효하지 않습니다.");
         }

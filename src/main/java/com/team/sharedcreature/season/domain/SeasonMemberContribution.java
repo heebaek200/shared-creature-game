@@ -2,6 +2,7 @@ package com.team.sharedcreature.season.domain;
 
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.group.domain.GroupMembership;
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -42,8 +43,10 @@ public class SeasonMemberContribution {
     @Column(name = "score_reached_at", nullable = false)
     private Instant scoreReachedAt;
 
+    /** 최신 멤버십 상태를 복사하며 탈퇴·강퇴해도 점수는 보존합니다. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "participant_status", length = 30, nullable = false)
-    private String participantStatus;
+    private GroupMembershipStatus participantStatus;
 
     @Version
     @Column(name = "version", nullable = false)
@@ -76,7 +79,7 @@ public class SeasonMemberContribution {
         contribution.latestMembership = membership;
         contribution.contributionScore = 0L;
         contribution.scoreReachedAt = now;
-        contribution.participantStatus = "ACTIVE";
+        contribution.participantStatus = GroupMembershipStatus.ACTIVE;
         contribution.createdAt = now;
         contribution.updatedAt = now;
         return contribution;
@@ -111,11 +114,9 @@ public class SeasonMemberContribution {
     public void synchronizeMembership(GroupMembership membership, Instant now) {
         java.util.Objects.requireNonNull(membership, "membership");
         java.util.Objects.requireNonNull(now, "now");
-        String nextStatus = membership.getStatus() == null
-                ? null
-                : membership.getStatus().name();
+        GroupMembershipStatus nextStatus = membership.getStatus();
         // 참가 상태와 멤버십 상태를 동일하게 유지하며 외부 임의 값은 받지 않습니다.
-        if (nextStatus == null || !java.util.Set.of("ACTIVE", "LEFT", "REMOVED").contains(nextStatus)) {
+        if (nextStatus == null) {
            throw new IllegalArgumentException("유효하지 않은 멤버십 상태: " + nextStatus);
         }
         if (!java.util.Objects.equals(user.getId(), membership.getUser().getId())

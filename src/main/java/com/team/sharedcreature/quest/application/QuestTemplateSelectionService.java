@@ -1,5 +1,9 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestTemplateStatus;
+import com.team.sharedcreature.quest.domain.QuestDifficulty;
+import com.team.sharedcreature.quest.domain.QuestVerificationType;
+
 import com.team.sharedcreature.quest.domain.QuestTemplate;
 import com.team.sharedcreature.quest.domain.QuestTemplateVersion;
 import com.team.sharedcreature.quest.infrastructure.QuestTemplateRepository;
@@ -26,14 +30,14 @@ import java.util.Set;
 public class QuestTemplateSelectionService {
 
     private static final List<DifficultyRule> DAILY_RULES = List.of(
-            new DifficultyRule("LOW", 5, 1, 0),
-            new DifficultyRule("MEDIUM", 4, 1, 1),
-            new DifficultyRule("HIGH", 3, 1, 2)
+            new DifficultyRule(QuestDifficulty.LOW, 5, 1, 0),
+            new DifficultyRule(QuestDifficulty.MEDIUM, 4, 1, 1),
+            new DifficultyRule(QuestDifficulty.HIGH, 3, 1, 2)
     );
     private static final List<DifficultyRule> WEEKLY_RULES = List.of(
-            new DifficultyRule("LOW", 6, 3, 0),
-            new DifficultyRule("MEDIUM", 4, 2, 1),
-            new DifficultyRule("HIGH", 4, 2, 2)
+            new DifficultyRule(QuestDifficulty.LOW, 6, 3, 0),
+            new DifficultyRule(QuestDifficulty.MEDIUM, 4, 2, 1),
+            new DifficultyRule(QuestDifficulty.HIGH, 4, 2, 2)
     );
 
     private final QuestTemplateRepository templateRepository;
@@ -71,7 +75,7 @@ public class QuestTemplateSelectionService {
         // ACTIVE 카탈로그만 조회하고, 버전 목록은 실제 선택된 템플릿 ID로 제한합니다.
         List<QuestTemplate> candidates = Objects.requireNonNull(
                 templateRepository.findActiveByPeriodType(window.periodType()), "candidates");
-        Map<String, List<QuestTemplate>> byDifficulty = groupAndValidate(candidates, window.periodType());
+        Map<QuestDifficulty, List<QuestTemplate>> byDifficulty = groupAndValidate(candidates, window.periodType());
         List<QuestTemplate> selected = new ArrayList<>();
 
         for (DifficultyRule rule : rules) {
@@ -145,17 +149,16 @@ public class QuestTemplateSelectionService {
      * 한 난이도에서 회전 순서가 중복되면 비결정적인 배정을 방지합니다.
      * Repository의 필터링 결과가 깨진 경우에는 운영상 카탈로그 오류로 보고합니다.
      */
-    private Map<String, List<QuestTemplate>> groupAndValidate(
+    private Map<QuestDifficulty, List<QuestTemplate>> groupAndValidate(
             List<QuestTemplate> candidates, String periodType
     ) {
-        Map<String, List<QuestTemplate>> grouped = new HashMap<>();
+        Map<QuestDifficulty, List<QuestTemplate>> grouped = new HashMap<>();
         Set<Long> templateIds = new HashSet<>();
         for (QuestTemplate template : candidates) {
             if (template == null || template.getId() == null || template.getRotationOrder() == null
                     || !periodType.equals(template.getPeriodType())
-                    || !"ACTIVE".equals(template.getStatus())
-                    || template.getDifficulty() == null
-                    || !Set.of("LOW", "MEDIUM", "HIGH").contains(template.getDifficulty())) {
+                    || template.getStatus() != QuestTemplateStatus.ACTIVE
+                    || template.getDifficulty() == null) {
                 throw new SelectionException(FailureCode.INVALID_TEMPLATE_CATALOG,
                         "활성 퀘스트 카탈로그의 기간·난이도·회전 값이 잘못됐습니다.");
             }
@@ -209,7 +212,7 @@ public class QuestTemplateSelectionService {
      * ACTIVE 카탈로그가 최소 수에 미달하면 모든 배정을 중단합니다.
      * 동일 난이도 내 슬롯은 rotationOrder 오름차순으로 이어서 선택합니다.
      */
-    private record DifficultyRule(String difficulty, int minimumActive, int slots, int offset) {
+    private record DifficultyRule(QuestDifficulty difficulty, int minimumActive, int slots, int offset) {
     }
 
     /**
@@ -230,10 +233,10 @@ public class QuestTemplateSelectionService {
             Long templateId,
             Long templateVersionId,
             String templateCode,
-            String difficultySnapshot,
+            QuestDifficulty difficultySnapshot,
             String titleSnapshot,
             String descriptionSnapshot,
-            String verificationTypeSnapshot,
+            QuestVerificationType verificationTypeSnapshot,
             String verificationParametersSnapshot,
             Long creatureExperienceSnapshot,
             Long contributionScoreSnapshot

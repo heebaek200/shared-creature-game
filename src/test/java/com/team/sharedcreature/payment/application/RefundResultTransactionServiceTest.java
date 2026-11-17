@@ -2,6 +2,7 @@ package com.team.sharedcreature.payment.application;
 
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
 import com.team.sharedcreature.admin.domain.ApiIdempotencyRecord;
+import com.team.sharedcreature.admin.domain.ApiIdempotencyStatus;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
 import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
@@ -64,7 +65,7 @@ class RefundResultTransactionServiceTest {
         set(attempt, "id", 3L);
         record = BeanUtils.instantiateClass(ApiIdempotencyRecord.class);
         set(record, "operation", "approveRefund");
-        set(record, "status", "PROCESSING");
+        set(record, "status", ApiIdempotencyStatus.PROCESSING);
         command = new RefundApprovalTransactionService.CancellationCommand(
                 1L, 2L, 3L, "payment", 1000L, "KRW", "승인", attempt.getIdempotencyKey(), 4L);
         when(locks.lock(1L)).thenReturn(new RefundLockService.LockedRefund(purchase, item, refund));
@@ -104,7 +105,7 @@ class RefundResultTransactionServiceTest {
             case UNKNOWN -> PgApiResultType.UNKNOWN;
         });
         assertThat(attempt.getCompletedAt()).isEqualTo(NOW);
-        assertThat(record.getStatus()).isEqualTo("COMPLETED");
+        assertThat(record.getStatus()).isEqualTo(ApiIdempotencyStatus.COMPLETED);
         assertThat(result.httpStatus()).isEqualTo(outcome == RefundGateway.Outcome.UNKNOWN ? 409 : 200);
         assertThat(record.getHttpStatus()).isEqualTo(result.httpStatus());
         if (outcome == RefundGateway.Outcome.UNKNOWN) {

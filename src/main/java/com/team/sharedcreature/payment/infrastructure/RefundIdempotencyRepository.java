@@ -39,7 +39,7 @@ public interface RefundIdempotencyRepository
                 entry.updatedAt = :now
             WHERE entry.id = :recordId
             AND entry.operation IN ('approveRefund', 'reconcileRefund')
-            AND entry.status = 'PROCESSING'
+            AND entry.status = com.team.sharedcreature.admin.domain.ApiIdempotencyStatus.PROCESSING
             AND entry.resourceType IS NULL
             AND entry.resourceId IS NULL
             """)
@@ -85,7 +85,7 @@ public interface RefundIdempotencyRepository
         WHERE entry.resourceType = 'REFUND_REQUEST'
         AND entry.resourceId = :requestId
         AND entry.operation IN ('approveRefund', 'reconcileRefund')
-        AND entry.status = 'PROCESSING'
+        AND entry.status = com.team.sharedcreature.admin.domain.ApiIdempotencyStatus.PROCESSING
         ORDER BY entry.id ASC
         """)
     List<ApiIdempotencyRecord> findProcessingByRefundRequestIdForUpdate(

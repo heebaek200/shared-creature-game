@@ -12,14 +12,14 @@ class GroupCreatureTest {
 
     @Test
     void 성장_임계값의_직전과_도달_시점이_정확한_단계로_계산된다() {
-        assertThat(GroupCreature.stageFor(0)).isEqualTo("HATCHLING");
-        assertThat(GroupCreature.stageFor(44_999)).isEqualTo("HATCHLING");
-        assertThat(GroupCreature.stageFor(45_000)).isEqualTo("GROWING");
-        assertThat(GroupCreature.stageFor(97_499)).isEqualTo("GROWING");
-        assertThat(GroupCreature.stageFor(97_500)).isEqualTo("MATURE");
-        assertThat(GroupCreature.stageFor(149_999)).isEqualTo("MATURE");
-        assertThat(GroupCreature.stageFor(150_000)).isEqualTo("COMPLETE");
-        assertThat(GroupCreature.stageFor(200_000)).isEqualTo("COMPLETE");
+        assertThat(GroupCreature.stageFor(0)).isEqualTo(CreatureGrowthStage.HATCHLING);
+        assertThat(GroupCreature.stageFor(44_999)).isEqualTo(CreatureGrowthStage.HATCHLING);
+        assertThat(GroupCreature.stageFor(45_000)).isEqualTo(CreatureGrowthStage.GROWING);
+        assertThat(GroupCreature.stageFor(97_499)).isEqualTo(CreatureGrowthStage.GROWING);
+        assertThat(GroupCreature.stageFor(97_500)).isEqualTo(CreatureGrowthStage.MATURE);
+        assertThat(GroupCreature.stageFor(149_999)).isEqualTo(CreatureGrowthStage.MATURE);
+        assertThat(GroupCreature.stageFor(150_000)).isEqualTo(CreatureGrowthStage.COMPLETE);
+        assertThat(GroupCreature.stageFor(200_000)).isEqualTo(CreatureGrowthStage.COMPLETE);
     }
 
     @Test
@@ -29,13 +29,13 @@ class GroupCreatureTest {
 
         creature.addExperience(150_000, startedAt.plusSeconds(1));
 
-        assertThat(creature.getGrowthStage()).isEqualTo("EGG");
+        assertThat(creature.getGrowthStage()).isEqualTo(CreatureGrowthStage.EGG);
         assertThat(creature.getTotalExperience()).isEqualTo(150_000);
 
         Instant hatchedAt = startedAt.plusSeconds(72L * 60 * 60);
         creature.hatch(mock(CreatureSpecies.class), CreatureSelectionSource.ADMIN, hatchedAt);
 
-        assertThat(creature.getGrowthStage()).isEqualTo("COMPLETE");
+        assertThat(creature.getGrowthStage()).isEqualTo(CreatureGrowthStage.COMPLETE);
         assertThat(creature.getGrowthStageReachedAt()).isEqualTo(hatchedAt);
     }
 
@@ -48,7 +48,7 @@ class GroupCreatureTest {
 
         creature.addExperience(50_000, now.plusSeconds(1));
 
-        assertThat(creature.getGrowthStage()).isEqualTo("COMPLETE");
+        assertThat(creature.getGrowthStage()).isEqualTo(CreatureGrowthStage.COMPLETE);
         assertThat(creature.getTotalExperience()).isEqualTo(200_000);
         assertThat(creature.nextStageThreshold()).isNull();
     }

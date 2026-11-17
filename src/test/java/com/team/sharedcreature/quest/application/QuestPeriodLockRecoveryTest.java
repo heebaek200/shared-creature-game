@@ -1,5 +1,7 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
+
 import com.team.sharedcreature.quest.domain.QuestPeriod;
 import com.team.sharedcreature.quest.infrastructure.QuestAssignmentRepository;
 import com.team.sharedcreature.quest.infrastructure.QuestPeriodRepository;
@@ -104,7 +106,7 @@ class QuestPeriodLockRecoveryTest {
                 .thenReturn(Optional.of(period));
         when(f.periodRepository().findForUpdateByPeriodTypeAndStartAt("DAILY", WINDOW.startAt()))
                 .thenReturn(Optional.of(period));
-        when(period.getStatus()).thenReturn("ACTIVE");
+        when(period.getStatus()).thenReturn(QuestPeriodStatus.ACTIVE);
         when(period.getId()).thenReturn(17L);
         when(f.assignmentRepository().countByQuestPeriodId(17L)).thenReturn(3L);
 

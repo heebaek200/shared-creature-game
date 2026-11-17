@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
+
 import com.team.sharedcreature.season.domain.SeasonStatus;
 
 import com.team.sharedcreature.group.domain.Group;
@@ -121,7 +123,7 @@ class CreatureHomeQueryServiceTest {
         when(groupSeason.getSelectionDeadlineAt()).thenReturn(selectionDeadlineAt);
         GroupCreature creature = mock(GroupCreature.class);
         when(creature.getId()).thenReturn(40L);
-        when(creature.getGrowthStage()).thenReturn("EGG");
+        when(creature.getGrowthStage()).thenReturn(CreatureGrowthStage.EGG);
         when(creature.getTotalExperience()).thenReturn(100L);
         when(creature.nextStageThreshold()).thenReturn(45_000L);
         UUID streamId = UUID.randomUUID();
@@ -180,7 +182,7 @@ class CreatureHomeQueryServiceTest {
         GroupCreature creature = mock(GroupCreature.class);
         when(creature.getId()).thenReturn(40L);
         when(creature.getSpecies()).thenReturn(species);
-        when(creature.getGrowthStage()).thenReturn("HATCHLING");
+        when(creature.getGrowthStage()).thenReturn(CreatureGrowthStage.HATCHLING);
         when(creature.getTotalExperience()).thenReturn(100L);
         when(creature.nextStageThreshold()).thenReturn(45_000L);
         UUID streamId = UUID.randomUUID();

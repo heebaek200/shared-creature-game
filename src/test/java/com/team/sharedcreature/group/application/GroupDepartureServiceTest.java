@@ -1,5 +1,9 @@
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
+
+import com.team.sharedcreature.season.domain.GroupCreatureStatus;
+
 import com.team.sharedcreature.season.domain.GroupSeasonStatus;
 
 import com.team.sharedcreature.group.domain.GroupInviteLinkStatus;
@@ -219,7 +223,7 @@ class GroupDepartureServiceTest {
         when(groupCreatureRepository.findForUpdateByGroupSeasonId(55L))
                 .thenReturn(Optional.of(creature));
         long oldExperience = creature.getTotalExperience();
-        String oldGrowthStage = creature.getGrowthStage();
+        CreatureGrowthStage oldGrowthStage = creature.getGrowthStage();
 
         // 그룹 종료 결과와 관련 엔티티의 상태 전이를 함께 확인합니다.
         var response = service.leaveMyGroup(USER_ID);
@@ -231,7 +235,7 @@ class GroupDepartureServiceTest {
         assertThat(invitation.getStatus()).isEqualTo(GroupInviteLinkStatus.INVALIDATED);
         assertThat(invitation.getInvalidatedAt()).isEqualTo(NOW);
         assertThat(groupSeason.getStatus()).isEqualTo(GroupSeasonStatus.ENDED);
-        assertThat(creature.getStatus()).isEqualTo("ARCHIVED");
+        assertThat(creature.getStatus()).isEqualTo(GroupCreatureStatus.ARCHIVED);
         assertThat(creature.getTotalExperience()).isEqualTo(oldExperience);
         assertThat(creature.getGrowthStage()).isEqualTo(oldGrowthStage);
     }

@@ -1,5 +1,9 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestVerificationType;
+
+import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
@@ -308,9 +312,7 @@ public class PhotoVerificationService {
                                     "퀘스트 배정을 찾을 수 없습니다."
                             ));
 
-            if (!"PHOTO_EXIF".equals(
-                    assignment.getVerificationTypeSnapshot()
-            )) {
+            if (assignment.getVerificationTypeSnapshot() != QuestVerificationType.PHOTO_EXIF) {
                 throw new BusinessException(
                         ErrorCode.QUEST_COMPLETION_NOT_ALLOWED,
                         "사진 EXIF 인증 퀘스트가 아닙니다."
@@ -323,9 +325,7 @@ public class PhotoVerificationService {
                     .getSeason()
                     .getId()
                     .equals(currentSeasonId);
-            boolean activePeriod = "ACTIVE".equals(
-                    assignment.getQuestPeriod().getStatus()
-            ) && !uploadedAt.isBefore(assignment.getQuestPeriod().getStartAt())
+            boolean activePeriod = assignment.getQuestPeriod().getStatus() == QuestPeriodStatus.ACTIVE && !uploadedAt.isBefore(assignment.getQuestPeriod().getStartAt())
                     && uploadedAt.isBefore(assignment.getQuestPeriod().getEndAt());
 
             if (!currentSeason || !activePeriod) {
@@ -500,7 +500,7 @@ public class PhotoVerificationService {
                 submission.getId(),
                 assignmentId,
                 submission.getAttemptNumber(),
-                submission.getVerificationStatus(),
+                submission.getVerificationStatus().name(),
                 submission.getFailureReason(),
                 submission.getUploadedAt(),
                 submission.getCapturedAt(),

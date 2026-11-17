@@ -20,7 +20,7 @@ public interface QuestTemplateRepository extends JpaRepository<QuestTemplate, Lo
     @Query("""
             SELECT t
               FROM QuestTemplate t
-             WHERE t.status = 'ACTIVE'
+             WHERE t.status = com.team.sharedcreature.quest.domain.QuestTemplateStatus.ACTIVE
                AND t.periodType = :periodType
              ORDER BY t.difficulty ASC, t.rotationOrder ASC, t.id ASC
             """)
