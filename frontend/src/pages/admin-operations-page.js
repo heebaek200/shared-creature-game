@@ -871,31 +871,49 @@ export function adminOperationsPage() {
             if (disposed) return;
 
             if (error instanceof ApiError && error.status === 409) {
-                // 서버 상태가 변경되었으므로 기존 확인 명령은 폐기합니다.
+                // 서버 상태가 변경되었으므로 기존 확인 명령을 폐기합니다.
                 dialog.close();
                 pendingTransfer = null;
 
-                // 기존 함수가 이전 회원 선택을 초기화하고
-                // 현재 그룹의 활성 회원과 역할을 서버에서 다시 조회합니다.
+                // 이전 회원 선택을 초기화하고 현재 그룹의 최신 회원을 조회합니다.
                 await loadTransferMembers();
 
-                // 조회 도중 다른 화면으로 이동했다면 후속 UI 갱신을 중단합니다.
+                // SPA 화면이 종료되었다면 더 이상 UI를 변경하지 않습니다.
                 if (disposed) return;
 
-                // 변경 충돌을 명시적으로 알리고 관리자의 재선택을 요구합니다.
-                showNotice(
-                    transferNotice,
-                    '그룹의 관리자 또는 회원 정보가 변경되었습니다. ' +
-                    '최신 회원 목록을 확인한 뒤 변경할 대상을 다시 선택해 주세요.',
-                    'warning'
-                );
+                // 조회 실패 시 변경 가능한 회원 정보가 없음을 명확히 안내합니다.
+                if (!membersLoaded) {
+                    showNotice(
+                        transferNotice,
+                        '그룹의 관리자 또는 회원 정보가 변경되었습니다. ' +
+                        '최신 회원 목록을 불러오지 못했으므로 ' +
+                        '그룹을 다시 검색한 후 진행해 주세요.',
+                        'danger'
+                    );
+                } else if (targetSelect.options.length <= 1) {
+                    // 목록은 조회했으나 선택 가능한 MEMBER 또는 DEPUTY가 없습니다.
+                    showNotice(
+                        transferNotice,
+                        '그룹의 관리자 또는 회원 정보가 변경되었습니다. ' +
+                        '최신 회원 목록을 확인했으나 ' +
+                        '현재 주 관리자로 지정할 수 있는 회원이 없습니다.',
+                        'warning'
+                    );
+                } else {
+                    // 유효한 후보가 존재하므로 관리자가 직접 다시 선택하도록 합니다.
+                    showNotice(
+                        transferNotice,
+                        '그룹의 관리자 또는 회원 정보가 변경되었습니다. ' +
+                        '최신 회원 목록을 확인한 뒤 ' +
+                        '변경할 대상을 다시 선택해 주세요.',
+                        'warning'
+                    );
+                }
 
-                // 기존 운영 경고 갱신 동작도 유지합니다.
+                // 기존 운영 경고 갱신 동작은 그대로 유지합니다.
                 await loadWarnings();
-            } else {
-                // 실패했는데도 성공으로 표시하지 않고 Modal을 유지합니다.
-                confirmError.textContent = getErrorMessage(error);
             }
+
         } finally {
             processing = false;
             if (!disposed) updateControls();
