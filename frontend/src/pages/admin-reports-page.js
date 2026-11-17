@@ -368,7 +368,7 @@ export function adminReportsPage() {
                 report.groupId,
                 CATEGORY_LABELS[report.category] ?? report.category,
                 STATUS_LABELS[report.status] ?? report.status,
-                formatDateTime(report.createAt)
+                formatDateTime(report.createdAt)
             ];
 
             for (const value of values) {
