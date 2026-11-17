@@ -5,8 +5,13 @@ import {
     getCsrfToken,
 } from '../api/client.js';
 
-const useMock = import.meta.env.VITE_USE_MOCK_API === 'true';
+const useMock = import.meta.env?.VITE_USE_MOCK_API === 'true';
 const RECONNECT_DELAY_MS = 5000;
+const ACCESS_ERROR_CODES = [
+    'AUTH_REQUIRED',
+    'SESSION_EXPIRED',
+    'ROLE_FORBIDDEN',
+];
 
 /**
  * 현재 그룹의 Native WebSocket STOMP 연결과 단일 구독을 관리합니다.
@@ -18,19 +23,38 @@ const RECONNECT_DELAY_MS = 5000;
  *   onDisconnected: () => void,
  *   onError: (code: string, error?: unknown) => void
  * }} options
+ * @param {{
+ *   createClient?: (configuration: Record<string, any>) => any,
+ *   getCsrfToken?: () => Promise<string>,
+ *   clearCsrfToken?: () => void,
+ *   setTimeout?: (callback: () => void, delay: number) => any,
+ *   clearTimeout?: (timer: any) => void,
+ *   location?: {protocol: string, host: string},
+ *   useMock?: boolean
+ * }} [dependencies] 테스트에서 브라우저·STOMP 의존성을 대체합니다.
  */
-export function createGroupLiveClient(options) {
+export function createGroupLiveClient(options, dependencies = {}) {
     let disposed = false;
     let subscription = null;
     let terminalError = false;
     let csrfRetryUsed = false;
     let reconnectPromise = null;
+    let csrfRequestInFlight = false;
+    let csrfRetryTimer = null;
 
-    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const brokerURL = `${protocol}//${location.host}/ws`;
+    const runtimeLocation = dependencies.location ?? globalThis.location;
+    const getConnectCsrfToken = dependencies.getCsrfToken ?? getCsrfToken;
+    const clearConnectCsrfToken = dependencies.clearCsrfToken ?? clearCsrfToken;
+    const scheduleTimeout = dependencies.setTimeout ?? globalThis.setTimeout;
+    const cancelTimeout = dependencies.clearTimeout ?? globalThis.clearTimeout;
+    const mockEnabled = dependencies.useMock ?? useMock;
+    const protocol = runtimeLocation.protocol === 'https:' ? 'wss:' : 'ws:';
+    const brokerURL = `${protocol}//${runtimeLocation.host}/ws`;
     const destination = `/topic/groups/${options.groupId}/live`;
 
-    const client = new Client({
+    const createClient = dependencies.createClient
+        ?? ((configuration) => new Client(configuration));
+    const client = createClient({
         brokerURL,
         reconnectDelay: RECONNECT_DELAY_MS,
         connectionTimeout: 8000,
@@ -39,14 +63,53 @@ export function createGroupLiveClient(options) {
         debug: () => {},
     });
 
+    function clearCsrfRetryTimer() {
+        if (csrfRetryTimer === null) return;
+        cancelTimeout(csrfRetryTimer);
+        csrfRetryTimer = null;
+    }
+
+    function scheduleCsrfRetry() {
+        if (disposed || terminalError || csrfRetryTimer !== null) return;
+        csrfRetryTimer = scheduleTimeout(() => {
+            csrfRetryTimer = null;
+            if (!disposed && !terminalError && !client.active) client.activate();
+        }, RECONNECT_DELAY_MS);
+    }
+
     client.beforeConnect = async () => {
-        client.connectHeaders = {
-            'X-CSRF-TOKEN': await getCsrfToken(),
-        };
+        csrfRequestInFlight = true;
+        try {
+            const token = await getConnectCsrfToken();
+            if (disposed) return;
+            client.connectHeaders = { 'X-CSRF-TOKEN': token };
+        } catch (error) {
+            if (disposed) return;
+
+            const code = typeof error?.code === 'string'
+                ? error.code
+                : 'CONNECTION_ERROR';
+            const accessError = ACCESS_ERROR_CODES.includes(code);
+            terminalError = accessError;
+            clearConnectCsrfToken();
+            clearCsrfRetryTimer();
+            client.reconnectDelay = accessError ? 0 : RECONNECT_DELAY_MS;
+            await client.deactivate();
+            if (disposed) return;
+
+            options.onError(accessError ? code : 'CONNECTION_ERROR', error);
+            if (!accessError) {
+                options.onDisconnected();
+                scheduleCsrfRetry();
+            }
+        } finally {
+            csrfRequestInFlight = false;
+        }
     };
 
     client.onConnect = () => {
         if (disposed) return;
+        clearCsrfRetryTimer();
         terminalError = false;
         csrfRetryUsed = false;
         subscription?.unsubscribe();
@@ -100,10 +163,11 @@ export function createGroupLiveClient(options) {
     /** 현재 연결을 완전히 종료한 뒤 새 CSRF·Session 정보로 다시 시작합니다. */
     function restartConnection() {
         if (disposed) return Promise.resolve();
-        if (useMock) {
+        if (mockEnabled) {
             options.onDisconnected();
             return Promise.resolve();
         }
+        if (csrfRequestInFlight) return Promise.resolve();
         if (reconnectPromise) return reconnectPromise;
 
         terminalError = true;
@@ -128,7 +192,7 @@ export function createGroupLiveClient(options) {
         /** 연결과 자동 재연결을 시작합니다. */
         connect() {
             if (disposed) return;
-            if (useMock) {
+            if (mockEnabled) {
                 options.onDisconnected();
                 return;
             }
@@ -139,7 +203,7 @@ export function createGroupLiveClient(options) {
         reconnect() {
             if (disposed) return Promise.resolve();
             csrfRetryUsed = false;
-            clearCsrfToken();
+            clearConnectCsrfToken();
             return restartConnection();
         },
 
@@ -147,6 +211,7 @@ export function createGroupLiveClient(options) {
         async disconnect() {
             if (disposed) return;
             disposed = true;
+            clearCsrfRetryTimer();
             subscription?.unsubscribe();
             subscription = null;
             await client.deactivate();
