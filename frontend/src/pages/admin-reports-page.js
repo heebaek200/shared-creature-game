@@ -246,8 +246,8 @@ export function adminReportsPage() {
             processing || loading || totalPages === 0 || page >= totalPages - 1;
         reloadButton.disabled = processing || loading;
 
-        // 신고 상태 변경 명령은 기존과 동일하게 보호합니다.
-        statusInput.disabled = processing;
+        // 상태 변경 또는 목록 조회 중에는 필터 변경을 차단합니다.
+        statusInput.disabled = processing || loading;
         dismissButton.disabled =
             processing || selectedReport?.status !== 'RECEIVED';
         removeButton.disabled =
@@ -396,72 +396,89 @@ export function adminReportsPage() {
     }
 
     /**
-     * 신고 목록을 조회하고 성공한 결과만 현재 화면에 반영합니다.
-     * 요청 중에는 기존 행을 유지해 빈 테이블이 나타나지 않게 합니다.
-     * 페이지 번호는 조회 성공 후 확정하며 실패 시 기존 결과를 보존합니다.
-     * @param {number} [requestedPage=page] 조회할 0부터 시작하는 페이지 번호
-     * @returns {Promise<boolean>} 목록 반영 성공 여부
+     * 지정된 페이지와 신고 상태 조건으로 목록을 조회합니다.
+     * 요청 조건은 로컬 인자로 보관하고, 성공한 경우에만 적용 필터를 확정합니다.
+     * 실패 시 이전 목록·페이지·필터를 유지하고 입력 선택값을 복구합니다.
+     *
+     * @param {number} [requestedPage=page] 조회할 페이지 번호
+     * @param {string|undefined} [requestedStatus=appliedStatus] 조회할 신고 상태
+     * @returns {Promise<boolean>} 목록 갱신 성공 여부
      */
-    async function loadReports(requestedPage = page) {
+    async function loadReports(
+        requestedPage = page,
+        requestedStatus = appliedStatus
+    ) {
         const version = ++listVersion;
         const table = rowsNode.closest('table');
+        const changingFilter = requestedStatus !== appliedStatus;
 
         loading = true;
 
-        // 기존 목록은 유지하고 로딩 상태만 표시한다.
+        // 기존 목록만 유지하고 조회 중 상태만 표시한다.
         table?.setAttribute('aria-busy', 'true');
         table?.classList.add('opacity-75');
+
         showNotice('신고 목록을 갱신하고 있습니다.');
         updateControls();
 
         try {
-            // 필터 사용
+            // 현재 확정 필터가 아닌 이번 요청의 조건을 전달한다.
             const result = await listAdminReports({
-                status: appliedStatus,
+                status: requestedStatus,
                 page: requestedPage,
                 size: PAGE_SIZE
             });
 
-            // 화면 종료 또는 더 최신 조회가 있으면 결과를 버린다.
-            if (disposed || version !== listVersion) return false;
-
-            // 공통 API 응답의 페이지 메타데이터를 사용합니다.
-            const nextTotalPages = result.meta.totalPages;
-
-            // 마지막 페이지가 사라졌다면 유효한 페이지를 재조회한다.
-            if (nextTotalPages > 0 && requestedPage >= nextTotalPages) {
-                return await loadReports(nextTotalPages - 1);
+            // 다른 요청이 시작되었거나 화면이 종료되면 결과를 폐기한다.
+            if (disposed || version !== listVersion) {
+                return false;
             }
 
-            // 성공한 결과만 화면과 페이지 상태에 반영
+            const nextTotalPages = result.meta.totalPages;
+
+            // 마지막 페이지가 사라진 경우 동일한 필터로 다시 조회한다.
+            if (nextTotalPages > 0 && requestedPage >= nextTotalPages) {
+                return await loadRports(nextTotalPages - 1, requestedStatus)
+            }
+
+            // 조회가 성공했을 때만 목록, 페이지, 필터를 함께 확정한다.
             renderRows(result.data);
+
             page = nextTotalPages === 0 ? 0 : requestedPage;
             totalPages = nextTotalPages;
+            appliedStatus = requestedStatus;
 
-            pageInfo.textContent
-                = `${totalPages ? page + 1 : 0} / ${totalPages} 페이지 · 총 ${result.meta.totalElements}건`;
+            // 변경된 필터를 화면의 선택값과 동기화한다.
+            if (changingFilter) {
+                statusInput.value = requestedStatus ?? '';
+            }
 
-            showNotice(
-                `신고 목록 ${result.data.length}건을 조회했습니다.`,
-                'success'
-            );
+            pageInfo.textContent = `${totalPages ? page + 1 : 0} / ${totalPages} 페이지 · 총 ${result.meta.totalElements}건`;
+
+            showNotice(`신고 목록 ${result.data.length}건을 조회했습니다.`, 'success');
 
             return true;
         } catch (error) {
-            if (disposed || version !== listVersion) return false;
+            if (disposed || version !== listVersion) {
+                return false;
+            }
 
-            // 실패한 요청이 기존 정상 데이터를 지우지 않게 합니다.
-            showNotice(
-                `조회에 실패했습니다. 이전 목록을 유지합니다. ${getErrorMessage(error)}`,
-                'danger'
-            );
+            // 새 필터 조회가 실패하면 기존 확정 필터로 되돌린다.
+            if (changingFilter) {
+                statusInput.value = appliedStatus ?? '';
+            }
+
+            // 이전 목록과 페이지 번호는 변경하지 않는다.
+            showNotice(`조회에 실패했습니다. 이전 목록을 유지합니다. ${getErrorMessage(error)}`, 'danger');
 
             return false;
         } finally {
             if (!disposed && version === listVersion) {
                 loading = false;
+
                 table?.removeAttribute('aria-busy');
                 table?.classList.remove('opacity-75');
+
                 updateControls();
             }
         }
@@ -621,25 +638,24 @@ export function adminReportsPage() {
         }
     }
 
-
-
     /**
-     * 신고 상태 필터를 확정하고 첫 페이지를 조회합니다.
-     * 새로운 조건의 조회가 성공하면 이전 신고 상세를 초기화합니다.
-     * 조회 실패 시에는 기존 목록과 상세 내용을 유지합니다.
+     * 사용자가 선택한 신고 상태로 첫 페이지를 조회합니다.
+     * 조회 조건을 즉시 확정하지 않고 loadReports()에 전달합니다.
+     * 성공하면 이전 상세를 초기화하고, 실패하면 기존 상태를 유지합니다.
      *
      * @param {SubmitEvent} event 조회 Form 제출 이벤트
      * @returns {void}
      */
     function onFilterSubmit(event) {
         event.preventDefault();
-        if (processing) return;
 
-        // 필터는 조회 버튼을 누를 때만 변경합니다.
-        appliedStatus = statusInput.value || undefined;
+        // 다른 상태 변경이나 목록 조회 중에는 중복 요청하지 않습니다.
+        if (processing || loading) return;
 
-        // 성공하기 전에는 현재 페이지와 상세 카드를 유지합니다.
-        void loadReports(0).then(success => {
+        // 요청에 사용할 필터만 준비하고 확정은 하지 않습니다.
+        const requestedStatus = statusInput.value || undefined;
+
+        void loadReports(0, requestedStatus).then(success => {
             if (success && !disposed) {
                 clearDetail();
             }

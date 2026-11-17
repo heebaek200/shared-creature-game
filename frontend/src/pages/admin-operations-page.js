@@ -369,8 +369,8 @@ export function adminOperationsPage() {
      * @returns {void}
      */
     function updateControls() {
-        // 기존 운영 경고 관리 버튼 상태를 유지합니다.
-        typeInput.disabled = processing;
+        // 경고 조회 또는 관리자 변경 중에는 필터를 변경하지 않습니다.
+        typeInput.disabled = processing || loading;
         refreshButton.disabled = loading || processing;
         prevButton.disabled = loading || processing || page <= 0;
         nextButton.disabled =
@@ -462,49 +462,71 @@ export function adminOperationsPage() {
         rowsNode.replaceChildren(fragment);
     }
 
-
-
     /**
-     * 현재 적용된 필터로 운영 경고 목록을 조회합니다.
-     * 로딩 중 이전 목록을 유지하며 성공했을 때만 행을 교체합니다.
-     * 실패 시 기존 목록·페이지 번호를 보존하고 오류를 표시합니다.
+     * 지정된 유형과 페이지로 현재 미해결 운영 경고를 조회합니다.
+     * 요청 필터와 실제 적용 필터를 분리하여 성공 시에만 확정합니다.
+     * 실패하면 기존 경고 목록·페이지·필터를 보존합니다.
      *
-     * @param {number} [requestedPage=page] 조회할 페이지 번호
+     * @param {number} [requestedPage=page] 조회 대상 페이지 번호
+     * @param {string|undefined} [requestedType=appliedType] 조회할 경고 유형
      * @returns {Promise<boolean>} 목록 갱신 성공 여부
      */
-    async function loadWarnings(requestedPage = page) {
+    async function loadWarnings(
+        requestedPage = page,
+        requestedType = appliedType
+    ) {
         const version = ++requestVersion;
         const table = rowsNode.closest('table');
+        const changingFilter = requestedType !== appliedType;
 
         loading = true;
 
-        // 기존 목록을 유지한 채 갱신 중임을 표시합니다.
+        // 기존 데이터를 유지하며 조회 진행 상태만 변경합니다.
         table?.setAttribute('aria-busy', 'true');
         table?.classList.add('opacity-75');
+
         updateControls();
-        showNotice(warningNotice, '운영 경고를 갱신하고 있습니다.');
+        showNotice(
+            warningNotice,
+            '운영 경고를 갱신하고 있습니다.'
+        );
 
         try {
-            // 확정된 필터와 요청 페이지를 사용합니다.
+            // 요청 시점에 확정한 조건으로 API를 호출합니다.
             const result = await listOperationalWarnings({
-                type: appliedType,
+                type: requestedType,
                 page: requestedPage,
                 size: PAGE_SIZE
             });
 
-            if (disposed || version !== requestVersion) return false;
+            // 이미 무효화된 요청의 결과는 반영하지 않습니다.
+            if (disposed || version !== requestVersion) {
+                return false;
+            }
 
             const nextTotalPages = result.meta.totalPages;
 
-            // 경고 해소로 마지막 페이지가 사라졌으면 재조회합니다.
-            if (nextTotalPages > 0 && requestedPage >= nextTotalPages) {
-                return await loadWarnings(nextTotalPages - 1);
+            // 현재 페이지가 사라졌다면 동일 필터로 유효 페이지를 조회합니다.
+            if (
+                nextTotalPages > 0 &&
+                requestedPage >= nextTotalPages
+            ) {
+                return await loadWarnings(
+                    nextTotalPages - 1,
+                    requestedType
+                );
             }
 
-            // 성공 시점에만 테이블과 페이지 번호를 확정합니다.
+            // 조회 성공 후에만 목록·페이지·적용 필터를 확정합니다.
             renderWarnings(result.data);
+
             page = nextTotalPages === 0 ? 0 : requestedPage;
             totalPages = nextTotalPages;
+            appliedType = requestedType;
+
+            if (changingFilter) {
+                typeInput.value = requestedType ?? '';
+            }
 
             pageInfo.textContent =
                 `${totalPages ? page + 1 : 0} / ${totalPages} 페이지 · ` +
@@ -518,9 +540,16 @@ export function adminOperationsPage() {
 
             return true;
         } catch (error) {
-            if (disposed || version !== requestVersion) return false;
+            if (disposed || version !== requestVersion) {
+                return false;
+            }
 
-            // 이전 정상 조회 결과를 유지해 화면이 비지 않도록 합니다.
+            // 새 필터가 실패하면 기존에 확정한 유형으로 돌아갑니다.
+            if (changingFilter) {
+                typeInput.value = appliedType ?? '';
+            }
+
+            // 이전 경고 목록과 페이지 번호를 보존합니다.
             showNotice(
                 warningNotice,
                 `조회에 실패했습니다. 이전 목록을 유지합니다. ${getErrorMessage(error)}`,
@@ -531,13 +560,14 @@ export function adminOperationsPage() {
         } finally {
             if (!disposed && version === requestVersion) {
                 loading = false;
+
                 table?.removeAttribute('aria-busy');
                 table?.classList.remove('opacity-75');
+
                 updateControls();
             }
         }
     }
-
 
     /**
      * 선택 가능한 회원 목록을 초기 상태로 되돌립니다.
@@ -841,14 +871,26 @@ export function adminOperationsPage() {
             if (disposed) return;
 
             if (error instanceof ApiError && error.status === 409) {
+                // 서버 상태가 변경되었으므로 기존 확인 명령은 폐기합니다.
                 dialog.close();
                 pendingTransfer = null;
 
+                // 기존 함수가 이전 회원 선택을 초기화하고
+                // 현재 그룹의 활성 회원과 역할을 서버에서 다시 조회합니다.
+                await loadTransferMembers();
+
+                // 조회 도중 다른 화면으로 이동했다면 후속 UI 갱신을 중단합니다.
+                if (disposed) return;
+
+                // 변경 충돌을 명시적으로 알리고 관리자의 재선택을 요구합니다.
                 showNotice(
                     transferNotice,
-                    getErrorMessage(error),
+                    '그룹의 관리자 또는 회원 정보가 변경되었습니다. ' +
+                    '최신 회원 목록을 확인한 뒤 변경할 대상을 다시 선택해 주세요.',
                     'warning'
                 );
+
+                // 기존 운영 경고 갱신 동작도 유지합니다.
                 await loadWarnings();
             } else {
                 // 실패했는데도 성공으로 표시하지 않고 Modal을 유지합니다.
@@ -871,22 +913,23 @@ export function adminOperationsPage() {
     }
 
     /**
-     * 경고 유형 조회 Form의 제출을 처리합니다.
-     * 선택한 유형을 확정하고 페이지를 첫 페이지로 초기화합니다.
-     * 기본 Form 제출을 차단해 SPA 화면을 유지합니다.
+     * 선택한 경고 유형으로 첫 페이지 조회를 시작합니다.
+     * 새 필터는 API 조회 성공 전까지 적용 필터에 반영하지 않습니다.
+     * 조회 실패 시 기존 목록과 적용 조건을 유지합니다.
      *
-     * @param {SubmitEvent} event Form 제출 이벤트
+     * @param {SubmitEvent} event 필터 Form 제출 이벤트
      * @returns {void}
      */
     function onWarningFilterSubmit(event) {
         event.preventDefault();
 
-        // 관리자 변경 작업 중에는 새로운 조회를 시작하지 않습니다.
-        if (processing) return;
+        // 기존 조회 또는 관리자 변경 처리 중에는 재요청하지 않습니다.
+        if (processing || loading) return;
 
-        // 필터를 확정하되 페이지 번호는 조회 성공 후 변경합니다.
-        appliedType = typeInput.value || undefined;
-        void loadWarnings(0);
+        // 이번 조회에 사용할 조건만 전달합니다.
+        const requestedType = typeInput.value || undefined;
+
+        void loadWarnings(0, requestedType);
     }
 
     const onRefresh = () => {
@@ -908,8 +951,13 @@ export function adminOperationsPage() {
     const onDialogClose = () => {
         if (!processing) pendingTransfer = null;
     };
+    // 탭이 다시 보일 때 현재 조회가 진행 중이 아니라면 갱신합니다.
     const onVisibilityChange = () => {
-        if (!processing && document.visibilityState === 'visible') {
+        if (
+            !processing &&
+            !loading &&
+            document.visibilityState === 'visible'
+        ) {
             void loadWarnings();
         }
     };
@@ -946,8 +994,13 @@ export function adminOperationsPage() {
     targetSelect.addEventListener('change', onTransferMemberChange);
     document.addEventListener('visibilitychange', onVisibilityChange);
 
+    // 60초마다 자동 조회하되 진행 중인 요청을 덮어쓰지 않습니다.
     const intervalId = setInterval(() => {
-        if (!processing && document.visibilityState === 'visible') {
+        if (
+            !processing &&
+            !loading &&
+            document.visibilityState === 'visible'
+        ) {
             void loadWarnings();
         }
     }, REFRESH_INTERVAL_MS);

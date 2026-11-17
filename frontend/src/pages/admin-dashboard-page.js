@@ -226,11 +226,71 @@ export function adminDashboardPage() {
     let groupSearchBusy = false;
 
     // 자동 갱신에는 마지막으로 확정한 조회 조건을 사용합니다.
-    // 화면에 입력 중인 값은 submit 전까지 API 요청에 반영하지 않습니다.
+    // 마지막으로 성공한 서버 조회 조건입니다.
     let appliedFilters = {
         range: rangeInput.value,
         groupId: undefined
     };
+
+    // 마지막으로 확정한 그룹의 표시 이름입니다.
+    let appliedGroupLabel = '전체 그룹';
+
+    // 대시보드 API 조회 중 중복 요청을 방지합니다.
+    // Google Charts 비동기 렌더링은 이 상태에 포함하지 않습니다.
+    let dashboardLoading = false;
+
+    /**
+     * 대시보드와 그룹 검색의 요청 진행 상태를 UI에 반영합니다.
+     * 서버 조회 중 필터 입력을 제한하여 요청 조건을 고정합니다.
+     * 그룹 검색 중에도 대시보드 조회가 실행되지 않도록 합니다.
+     *
+     * @returns {void} 반환값 없음
+     */
+    function updateDashboardControls() {
+        const busy = dashboardLoading;
+        const submitButton = filterForm.querySelector(
+            'button[type="submit"]'
+        );
+
+        // 대시보드 조회 중에는 조건을 수정할 수 없습니다.
+        rangeInput.disabled = busy;
+        groupSelect.disabled = busy || groupSearchBusy;
+        groupSearchInput.disabled = busy || groupSearchBusy;
+        groupSearchButton.disabled = busy || groupSearchBusy;
+
+        // API 조회 중에는 새로고침과 조건 조회를 제한합니다.
+        refreshButton.disabled = busy;
+
+        if (submitButton instanceof HTMLButtonElement) {
+            submitButton.disabled = busy || groupSearchBusy;
+        }
+    }
+
+    /**
+     * 마지막으로 조회에 성공한 그룹 선택값을 복구합니다.
+     * 그룹 재검색으로 선택 옵션이 사라졌다면 다시 추가합니다.
+     * 조회 실패 후 표시 필터와 실제 집계 조건을 일치시킵니다.
+     *
+     * @returns {void} 반환값 없음
+     */
+    function restoreAppliedGroupSelection() {
+        const groupId = appliedFilters.groupId;
+        const value = groupId == null ? '' : String(groupId);
+
+        // 기존 검색 결과에 확정 그룹이 없으면 옵션을 복원합니다.
+        if (
+            value &&
+            !Array.from(groupSelect.options).some(
+                option => option.value === value
+            )
+        ) {
+            groupSelect.add(
+                new Option(appliedGroupLabel, value)
+            );
+        }
+
+        groupSelect.value = value;
+    }
 
     /**
      * 조회 중 성공, 실패 메시지를 한 영역에서 표시한다.
@@ -274,17 +334,28 @@ export function adminDashboardPage() {
      * @returns {Promise<void>} 그룹 검색 완료
      */
     async function onGroupSearch() {
-        const query = groupSearchInput.value.trim();
-
-        // 백엔드의 검색어 최대 길이 계약을 지킵니다.
-        if (query.length > 30) {
-            groupSearchMessage.textContent = '그룹 이름은 30자 이하로 입력해 주세요.';
+        // 대시보드 조회와 그룹 검색의 동시 실행을 막습니다.
+        if (disposed || dashboardLoading || groupSearchBusy) {
             return;
         }
 
+        const query = groupSearchInput.value.trim();
+
+        if (query.length > 30) {
+            groupSearchMessage.textContent =
+                '그룹 이름은 30자 이하로 입력해 주세요.';
+            return;
+        }
+
+        // 검색 전 선택값을 보관합니다.
+        const previousValue = groupSelect.value;
+        const previousLabel =
+            groupSelect.selectedOptions[0]?.textContent ?? '';
+
         const version = ++groupSearchVersion;
         groupSearchBusy = true;
-        groupSearchButton.disabled = true;
+        updateDashboardControls();
+
         groupSearchMessage.textContent = '그룹을 검색하고 있습니다.';
 
         try {
@@ -311,8 +382,21 @@ export function adminDashboardPage() {
                 );
             }
 
-            // 기존 검색 결과를 새 결과로 교체합니다.
+            // 이전 선택 그룹이 새 검색 결과에 포함되지 않았으면 보존합니다.
+            if (
+                previousValue &&
+                !result.data.some(
+                    group => String(group.groupId) === previousValue
+                )
+            ) {
+                fragment.append(
+                    new Option(previousLabel, previousValue)
+                );
+            }
+
+            // 검색 결과를 갱신한 뒤 기존 선택값을 유지합니다.
             groupSelect.replaceChildren(fragment);
+            groupSelect.value = previousValue;
 
             const total = result.meta.totalElements;
             groupSearchMessage.textContent = total > 50
@@ -328,7 +412,7 @@ export function adminDashboardPage() {
         } finally {
             if (!disposed && version === groupSearchVersion) {
                 groupSearchBusy = false;
-                groupSearchButton.disabled = false;
+                updateDashboardControls();
             }
         }
     }
@@ -489,104 +573,171 @@ export function adminDashboardPage() {
     }
 
     /**
-     * 마지막으로 확정한 필터를 이용해 대시보드 데이터를 조회합니다.
-     * applyForm이 true이면 현재 폼의 값을 검증하고 조회 조건에 반영합니다.
-     * 자동 갱신과 새로고침은 확정된 조건을 그대로 재사용합니다.
+     * 관리자 대시보드의 서버 집계를 조회하고 화면에 반영합니다.
+     * API 조회에 성공했을 때만 새로운 필터를 확정합니다.
+     * 차트는 별도 비동기 작업으로 처리하여 표 조회를 방해하지 않습니다.
      *
-     * @param {boolean} [applyForm=false] 현재 폼의 필터를 적용할지 여부
+     * @param {boolean} [applyForm=false] 입력 필터 적용 여부
      * @returns {Promise<void>} 대시보드 조회 완료
      */
     async function loadDashboard(applyForm = false) {
-        const version = ++requestVersion;
+        // 진행 중인 API 요청 또는 그룹 검색과 중복 실행하지 않습니다.
+        if (disposed || dashboardLoading || groupSearchBusy) {
+            return;
+        }
 
-        // 조회 버튼을 눌렀을 때만 입력한 조건을 확정합니다.
+        let requestedFilters = { ...appliedFilters };
+        let requestedGroupLabel = appliedGroupLabel;
+
+        // 조건 조회일 때만 입력 중인 필터를 새로운 요청에 사용합니다.
         if (applyForm) {
-            let groupId;
-
             try {
-                groupId = readGroupId();
+                requestedFilters = {
+                    range: rangeInput.value,
+                    groupId: readGroupId()
+                };
+
+                requestedGroupLabel =
+                    groupSelect.selectedOptions[0]?.textContent
+                    ?? '전체 그룹';
             } catch (error) {
+                // 잘못된 선택값은 기존 확정 필터로 복원합니다.
+                rangeInput.value = appliedFilters.range;
+                restoreAppliedGroupSelection();
+
                 showStatus(
                     error instanceof Error
                         ? error.message
-                        : '그룹 ID를 확인해 주세요.',
+                        : '조회 조건을 확인해 주세요.',
                     'danger'
                 );
-                refreshButton.disabled = false;
                 return;
             }
-
-            appliedFilters = {
-                range: rangeInput.value,
-                groupId
-            };
         }
 
-        refreshButton.disabled = true;
+        // 조회 시작 시점의 차트 버전을 기록합니다.
+        // 이전 차트는 새로운 서버 조회가 성공할 때까지 유효합니다.
+        const generationAtStart = requestVersion;
+
+        dashboardLoading = true;
+        updateDashboardControls();
         showStatus('대시보드 데이터를 불러오는 중입니다.');
 
         try {
-            // 입력 중인 값이 아니라 확정된 필터로 요청합니다.
-            const dashboard = await getAdminDashboard(appliedFilters);
-            if (disposed || version !== requestVersion) return;
+            // 이번 요청의 조건을 전달하고 서버 응답을 기다립니다.
+            const dashboard = await getAdminDashboard(requestedFilters);
 
-            // 데이터 조회는 차트 로딩보다 먼저 확정하고 즉시 표시한다.
+            if (disposed || generationAtStart !== requestVersion) {
+                return;
+            }
+
+            // 새로운 서버 집계가 준비되었으므로 이전 차트 리스너를 정리합니다.
             disposeChart();
             disposeChart = () => {};
+
+            // 카드와 표는 Google Charts보다 먼저 표시합니다.
             renderSummary(dashboard);
             renderTables(dashboard);
+
+            // 실제 데이터 갱신이 성공한 시점에 필터를 확정합니다.
+            appliedFilters = { ...requestedFilters };
+            appliedGroupLabel = requestedGroupLabel;
+
+            // 성공한 새 데이터부터 새로운 차트 버전을 사용합니다.
+            const chartVersion = ++requestVersion;
+
+            const rangeLabels = {
+                '7_DAYS': '최근 7일',
+                '30_DAYS': '최근 30일',
+                'CURRENT_SEASON': '현재 시즌'
+            };
+
+            showStatus(
+                '서버 집계 데이터를 표시했습니다. ' +
+                `적용 조건: ${rangeLabels[dashboard.range] ?? dashboard.range}` +
+                ` · ${appliedGroupLabel}`,
+                'success'
+            );
+
             chartStatus.textContent = '차트 로딩 중...';
-            showStatus('서버 집계 데이터를 표시했습니다.', 'success');
 
-            try {
-                disposeChart = await renderDashboardCharts(
-                    element,
-                    dashboard,
-                    () => ! disposed && version === requestVersion
-                );
-
-                if (!disposed && version === requestVersion) {
-                    chartStatus.textContent = '';
+            // 외부 차트 로딩은 별도로 처리합니다.
+            // 차트가 느려져도 다음 API 조회를 막지 않습니다.
+            void renderDashboardCharts(
+                element,
+                dashboard,
+                () => !disposed && chartVersion === requestVersion
+            ).then(cleanup => {
+                // 이전 요청의 차트가 늦게 완료되면 즉시 정리합니다.
+                if (disposed || chartVersion !== requestVersion) {
+                    cleanup();
+                    return;
                 }
-            } catch (error) {
-                if (! disposed && version === requestVersion) {
-                    element.querySelectorAll('[data-admin-chart]').forEach(node => {
+
+                disposeChart = cleanup;
+                chartStatus.textContent = '';
+            }).catch(error => {
+                if (disposed || chartVersion !== requestVersion) {
+                    return;
+                }
+
+                // 차트 오류가 발생해도 이미 표시한 카드와 표는 유지합니다.
+                element.querySelectorAll('[data-admin-chart]')
+                    .forEach(node => {
                         node.textContent = '차트를 표시할 수 없습니다.';
                     });
-                    chartStatus.textContent
-                        = '차트 로딩에 실패했습니다. 아래 집계 데이터 표는 계속 확인할 수 있습니다.';
-                }
 
-            }
+                chartStatus.textContent =
+                    '차트 로딩에 실패했습니다. ' +
+                    '집계 데이터 표는 계속 확인할 수 있습니다.';
+            });
         } catch (error) {
-            if (disposed || version !== requestVersion) return;
+            if (disposed || generationAtStart !== requestVersion) {
+                return;
+            }
+
+            // 새로운 조건 조회에 실패하면 이전 확정 조건을 복구합니다.
+            if (applyForm) {
+                rangeInput.value = appliedFilters.range;
+                restoreAppliedGroupSelection();
+            }
+
             const message =
-                error instanceof ApiError && error.code === 'CONCURRENT_MODIFICATION'
-                ? '현재 정상적으로 진행 중인 시즌이 없어 시즌 통계를 조회할 수 없습니다.'
-                : error instanceof Error ? error.message : '관리자 집계를 조회하지 못했습니다.';
+                error instanceof ApiError &&
+                error.code === 'CONCURRENT_MODIFICATION'
+                    ? '현재 정상적으로 진행 중인 시즌이 없어 ' +
+                    '시즌 통계를 조회할 수 없습니다.'
+                    : error instanceof Error
+                        ? error.message
+                        : '관리자 집계를 조회하지 못했습니다.';
+
             showStatus(message, 'danger');
-            chartStatus.textContent = '조회 실패: 마지막으로 성공한 집계가 표시되어 있을 수 있습니다.';
+
+            // 이전에 성공한 집계는 그대로 유지합니다.
+            chartStatus.textContent =
+                '조회 실패: 마지막으로 성공한 집계가 표시되어 있을 수 있습니다.';
         } finally {
-            if (!disposed && version == requestVersion) {
-                refreshButton.disabled = false;
+            // 화면이 유지되는 동안만 버튼 잠금 상태를 해제합니다.
+            if (!disposed) {
+                dashboardLoading = false;
+                updateDashboardControls();
             }
         }
     }
 
     /**
-     * 조건 조회 버튼으로 제출된 필터를 적용합니다.
-     * 기본 HTML Form 제출에 따른 페이지 이동을 차단합니다.
-     * 입력값 검증과 API 요청은 loadDashboard에 위임합니다.
+     * 조건 조회 Form 제출 시 새 필터 적용을 요청합니다.
+     * 그룹 검색 및 기존 대시보드 조회가 끝난 경우에만 실행합니다.
+     * 실제 필터 확정은 loadDashboard()의 API 성공 시점에 수행합니다.
      *
-     * @param {SubmitEvent} event 조회 폼 제출 이벤트
-     * @returns {void}
+     * @param {SubmitEvent} event Form 제출 이벤트
+     * @returns {void} 반환값 없음
      */
     function onSubmit(event) {
         event.preventDefault();
 
-        // 그룹 검색이 완료되기 전에는 조건을 확정하지 않습니다.
-        if (groupSearchBusy) {
-            showStatus('그룹 검색이 끝난 뒤 조건 조회를 진행해 주세요.');
+        // 다른 조회가 진행 중일 때 조건을 변경하지 않습니다.
+        if (groupSearchBusy || dashboardLoading) {
             return;
         }
 
@@ -598,8 +749,15 @@ export function adminDashboardPage() {
         void loadDashboard();
     };
 
+    // 브라우저 탭 복귀 시 API 요청이 진행 중이 아니라면 갱신합니다.
     const onVisibilityChange = () => {
-        if (document.visibilityState === 'visible') void loadDashboard();
+        if (
+            document.visibilityState === 'visible' &&
+            !dashboardLoading &&
+            !groupSearchBusy
+        ) {
+            void loadDashboard();
+        }
     };
 
     filterForm.addEventListener('submit', onSubmit);
@@ -608,9 +766,15 @@ export function adminDashboardPage() {
     groupSearchInput.addEventListener('keydown', onGroupSearchKeydown);
     document.addEventListener('visibilitychange', onVisibilityChange);
 
-    // 숨겨진 탭에서는 서버 조회를 생략하고 다시 보일 때 갱신한다.
+    // 60초 자동 갱신은 마지막 성공 필터를 재사용합니다.
     const intervalId = setInterval(() => {
-        if (document.visibilityState === 'visible') void loadDashboard();
+        if (
+            document.visibilityState === 'visible' &&
+            !dashboardLoading &&
+            !groupSearchBusy
+        ) {
+            void loadDashboard();
+        }
     }, 60_000);
 
     void loadDashboard();
