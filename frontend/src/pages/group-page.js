@@ -107,7 +107,7 @@ export function groupPage({navigate, currentUser}) {
 
                     <tbody data-member-list>
                         <tr>
-                            <td colspan="4" class="py-4">
+                            <td colspan="5" class="py-4">
                                 구성원을 불러오는 중입니다.
                             </td>
                         </tr>
@@ -471,29 +471,42 @@ export function groupPage({navigate, currentUser}) {
     }
 
     /**
-     * 최초 조회 및 재조회 중 Skeleton을 표시합니다.
-     * 오류와 재시도 버튼을 일시적으로 숨깁니다.
-     * 기존 목록은 새 조회를 시작하면서 비웁니다.
+     * 그룹 정보를 조회하기 전 화면을 초기화합니다.
+     * 기존 그룹 및 권한 정보를 숨겨 오래된 데이터 노출을 방지합니다.
+     * 조회가 성공해야만 그룹 관리와 탈퇴 버튼을 다시 활성화합니다.
      */
     function showLoading() {
-        // 재조회 중에는 이전 조회 결과로 새로운 작업을 시작하지 않습니다.
+        // 이전 API 응답으로 작업하지 못하도록 메모리 상태를 초기화합니다.
         groupSnapshot = null;
         membersSnapshot = [];
-        leaveOpenButton.disabled = true;
 
+        // 그룹 관리 및 탈퇴 기능은 조회 성공 전까지 사용할 수 없습니다.
+        leaveOpenButton.disabled = true;
+        manageLink.classList.add('d-none');
+
+        // 이전 그룹의 정보를 화면에서도 제거합니다.
+        setText('[data-group-name]', '그룹 정보 조회 중');
+        setText('[data-group-description]', '');
+        setText('[data-member-count]', '-');
+        setText('[data-primary-admin]', '-');
+        setText('[data-my-role]', '-');
+        setText('[data-total-members]', '');
+
+        // 이전 오류를 숨기고 로딩 상태를 표시합니다.
         content.setAttribute('aria-busy', 'true');
         errorBox.classList.add('d-none');
         retryButton.classList.add('d-none');
 
+        // 구성원 목록을 Skeleton으로 교체합니다.
         memberList.innerHTML = `
-            <tr aria-hidden="true">
-                <td><span class="placeholder col-8"></span></td>
-                <td><span class="placeholder col-6"></span></td>
-                <td><span class="placeholder col-8"></span></td>
-                <td><span class="placeholder col-8"></span></td>
-                <td><span class="placeholder col-6"></span></td>
-            </tr>
-        `;
+        <tr aria-hidden="true">
+            <td><span class="placeholder col-8"></span></td>
+            <td><span class="placeholder col-6"></span></td>
+            <td><span class="placeholder col-8"></span></td>
+            <td><span class="placeholder col-8"></span></td>
+            <td><span class="placeholder col-6"></span></td>
+        </tr>
+    `;
     }
 
     /**
