@@ -71,59 +71,74 @@ export function adminDashboardPage() {
       </div>
       <div class="text-body-secondary small" data-aggregated-at>집계 시각: -</div>
     </header>
+  
+    <form data-dashboard-filters
+      class="row g-3 align-items-start mb-3">
 
-    <form data-dashboard-filters class="row g-3 align-items-end mb-3">
-      <div class="col-12 col-sm-4 col-lg-3">
-        <label class="form-label" for="admin-range">조회 기간</label>
-        <select id="admin-range" class="form-select" data-range>
-          <option value="7_DAYS">최근 7일</option>
-          <option value="30_DAYS">최근 30일</option>
-          <option value="CURRENT_SEASON">현재 시즌</option>
-        </select>
-      </div>
-      
-      <div class="col-12 col-lg-5">
-        <label class="form-label" for="admin-group-search">
-            그룹 이름 검색
-        </label>
-    
-        <div class="input-group mb-2">
-            <input id="admin-group-search"
-                   type="text"
-                   maxlength="30"
-                   class="form-control"
-                   placeholder="그룹 이름 입력"
-                   data-group-search>
-    
-            <!-- 검색 버튼은 대시보드 Form을 제출하지 않습니다. -->
-            <button type="button"
-                    class="btn btn-outline-secondary"
-                    data-group-search-button>
-                그룹 검색
-            </button>
+        <!-- 조회 기간 -->
+        <div class="col-12 col-md-6 col-xl-2">
+            <label class="form-label" for="admin-range">
+                조회 기간
+            </label>
+            <select id="admin-range" class="form-select" data-range>
+                <option value="7_DAYS">최근 7일</option>
+                <option value="30_DAYS">최근 30일</option>
+                <option value="CURRENT_SEASON">현재 시즌</option>
+            </select>
         </div>
     
-        <label class="visually-hidden" for="admin-group">
-            조회 대상 그룹
-        </label>
-    
-        <!-- 그룹을 선택해도 조건 조회 전에는 통계가 바뀌지 않습니다. -->
-        <select id="admin-group"
-                class="form-select"
-                data-group-select>
-            <option value="">전체 그룹</option>
-        </select>
-    
-        <div class="form-text" role="status" aria-live="polite"
-             data-group-search-message>
-            특정 그룹을 조회하려면 이름으로 검색 후 선택하세요.
+        <!-- 그룹 이름 검색 -->
+        <div class="col-12 col-md-6 col-xl-4">
+            <label class="form-label" for="admin-group-search">
+                그룹 이름 검색
+            </label>
+            <div class="input-group">
+                <input id="admin-group-search"
+                       type="text"
+                       maxlength="30"
+                       class="form-control"
+                       placeholder="그룹 이름 입력"
+                       data-group-search>
+                <button type="button"
+                        class="btn btn-outline-secondary"
+                        data-group-search-button>
+                    검색
+                </button>
+            </div>
         </div>
-      </div>
+    
+        <!-- 그룹 검색 결과 선택 -->
+        <div class="col-12 col-md-6 col-xl-3">
+            <label class="form-label" for="admin-group">
+                조회 대상 그룹
+            </label>
+            <select id="admin-group"
+                    class="form-select"
+                    data-group-select>
+                <option value="">전체 그룹</option>
+            </select>
+            <div class="form-text"
+                 role="status"
+                 aria-live="polite"
+                 data-group-search-message>
+                그룹 이름으로 검색 후 선택하세요.
+            </div>
+        </div>
+    
+        <!-- 실제 대시보드 조회 -->
+        <div class="col-12 col-md-6 col-xl-3 pt-md-4">
+            <div class="d-flex flex-wrap gap-2">
+                <button type="submit" class="btn btn-primary">
+                    조건 조회
+                </button>
+                <button type="button"
+                        class="btn btn-outline-secondary"
+                        data-refresh>
+                    새로고침
+                </button>
+            </div>
+        </div>
 
-      <div class="col-12 col-sm-4 col-lg-auto d-flex gap-2">
-        <button type="submit" class="btn btn-primary">조건 조회</button>
-        <button type="button" class="btn btn-outline-secondary" data-refresh>새로고침</button>
-      </div>
     </form>
 
     <div class="alert alert-info mb-3" role="status" aria-live="polite" data-status>
