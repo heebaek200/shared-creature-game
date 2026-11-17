@@ -9,7 +9,7 @@ import { creaturePage } from '../pages/creature-page.js';
 import { invitePage } from '../pages/invite-page.js';
 import { questPage } from '../pages/quests-page.js';
 import { rankingsPage } from '../pages/rankings-page.js';
-import { adminPage as groupPage } from '../pages/group-page.js';
+import { groupPage } from '../pages/group-page.js';
 import { adminPage as shopPage } from '../pages/shop-page.js';
 import { adminPage as avatarPage } from '../pages/avatar-page.js';
 import { adminPage as paymentsPage } from '../pages/payments-page.js';
