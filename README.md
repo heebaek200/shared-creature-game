@@ -73,6 +73,26 @@ mysql -u shared_creature -p shared_creature_game < docs/sql/local-schema-repair.
 .\gradlew.bat test
 ```
 
+#### 로컬 테스트용 전체 관리자 계정 준비
+
+관리자 대시보드 및 관리 기능을 테스트하려면 `SUPER_ADMIN` 권한이 필요합니다.
+
+신규 Google 계정은 `.env`의 `INITIAL_SUPER_ADMIN_PROVIDER`와
+`INITIAL_SUPER_ADMIN_PROVIDER_USER_ID` 설정을 통해 최초 전체 관리자로
+가입할 수 있습니다. 단, 이미 활성 전체 관리자가 존재하거나 해당 계정이
+가입된 상태라면 이 방식으로 권한을 부여할 수 없습니다.
+
+이미 가입한 일반 계정은 로컬 개발환경 전용 SQL을 사용해 승격할 수 있습니다.
+
+1. Google 또는 Naver 로그인을 통해 회원가입을 완료합니다.
+2. MySQL의 `users` 테이블에서 해당 계정의 `id`를 확인합니다.
+3. `docs/sql/local-super-admin-promotion.sql`의 대상 사용자 ID를 지정합니다.
+4. SQL 실행 결과를 확인한 뒤 트랜잭션을 확정합니다.
+5. 로그아웃 후 다시 로그인하여 `/admin` 화면에 접근합니다.
+
+> **주의:** 이 SQL은 로컬 개발 DB에서만 수동 실행합니다.
+> 운영 DB에서는 사용하지 않으며, 실행 전 대상 계정과 현재 권한을 확인해야 합니다.
+
 ### 4. Frontend 실행
 
 ```powershell
