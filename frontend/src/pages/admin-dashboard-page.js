@@ -95,7 +95,15 @@ export function adminDashboardPage() {
     <div class="alert alert-info mb-3" role="status" aria-live="polite" data-status>
       관리자 집계를 불러오는 중입니다.
     </div>
-    <div class="row row-cols-1 row-cols-sm-2 row-cols-xl-3 g-3 mb-4" data-summary></div>
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-xl-3 g-3 mb-3" data-summary></div>
+    
+    <!-- 기간 활동 통계와 현재 상태 통계의 차이를 명시합니다. -->
+    <p class="small text-body-secondary mb-4">
+        활동 사용자·그룹은 선택한 기간의 활동 기록 기준이며,
+        이후 탈퇴·강퇴한 사용자의 과거 활동도 포함됩니다.
+        정원 사용률은 현재 활성 그룹의 회원 수를 기준으로 합니다.
+    </p>
+    
     <div class="row row-cols-1 row-cols-xl-2 g-3 mb-4" data-chart-sections></div>
 
     <section class="card mb-3">
@@ -120,7 +128,7 @@ export function adminDashboardPage() {
         ['growth', '성장 단계 분포'],
         ['top-groups', '그룹 TOP 10'],
         ['payments', '결제·환불 추이'],
-        ['capacity', '그룹 정원 사용률 분포']
+        ['capacity', '현재 그룹 정원 사용 현황']
     ];
 
     const chartGrid = element.querySelector('[data-chart-sections]');
@@ -197,13 +205,18 @@ export function adminDashboardPage() {
         const summary = dashboard.summary;
         const queues = dashboard.queues;
         const cards = [
-            ['기간 활동 사용자', `${numberFormat.format(summary.activeUsers)}명`],
-            ['활성 그룹', `${numberFormat.format(summary.activeGroups)}개`],
+            // 선택 기간에 활동 기록이 존재한 사용자를 집계합니다.
+            ['조회 기간 활동 사용자', `${numberFormat.format(summary.activeUsers)}명`],
+            ['조회 기간 활동 그룹', `${numberFormat.format(summary.activeGroups)}개`],
+
+            // 나머지 기존 통계는 계산 방식과 표시 값을 유지합니다.
             ['퀘스트 완료율', `${summary.questCompletionRate}%`],
             ['성공 결제액', `${numberFormat.format(summary.paidAmountKrw)}원`],
             ['성공 환불액', `${numberFormat.format(summary.refundedAmountKrw)}원`],
-            ['현재 정원 사용률', `${summary.capacityUsageRate}%`],
-            ['미해결 운영 경고', `${numberFormat.format(summary.operationalWarningCount)}건`],
+
+            // 정원 사용률은 조회 기간이 아닌 현재 그룹 상태를 기준으로 합니다.
+            ['현재 활성 그룹 정원 사용률', `${summary.capacityUsageRate}%`],
+            ['미해결 운영 경고', `${numberFormat.format(summary.operationalWarningCount)}건`]
         ];
 
         const summaryRoot = element.querySelector('[data-summary]');
@@ -305,8 +318,8 @@ export function adminDashboardPage() {
                 'capacity',
                 ['정원 구분', '인원'],
                 [
-                    ['사용', numberFormat.format(data.capacityUsage.occupied)],
-                    ['잔여', numberFormat.format(data.capacityUsage.remaining)]
+                    ['현재 회원', numberFormat.format(data.capacityUsage.occupied)],
+                    ['잔여 정원', numberFormat.format(data.capacityUsage.remaining)]
                 ]
             ]
 

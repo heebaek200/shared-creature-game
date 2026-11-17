@@ -135,8 +135,8 @@ export async function renderDashboardCharts(root, dashboard, isCurrent) {
             type: 'PieChart',
             rows: [
                 ['정원 구분', '인원'],
-                ['사용', Number(dashboard.capacityUsage.occupied)],
-                ['잔여', Number(dashboard.capacityUsage.remaining)]
+                ['현재 회원', Number(dashboard.capacityUsage.occupied)],
+                ['잔여 정원', Number(dashboard.capacityUsage.remaining)]
             ]
         },
 
