@@ -1,5 +1,7 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.quest.application.PhotoSubmissionCleanupTransactionService.RetentionKind;
 import com.team.sharedcreature.quest.domain.PhotoSubmission;
 import com.team.sharedcreature.quest.domain.QuestAssignment;
@@ -253,7 +255,7 @@ class PhotoSubmissionCleanupTransactionServiceTest {
         when(submission.getQuestAssignment()).thenReturn(assignment);
         when(assignment.getQuestPeriod()).thenReturn(period);
         when(period.getSeason()).thenReturn(season);
-        when(season.getStatus()).thenReturn(seasonStatus);
+        when(season.getStatus()).thenReturn(SeasonStatus.valueOf(seasonStatus));
         lenient().when(season.getEndAt()).thenReturn(seasonEnd);
         return submission;
     }

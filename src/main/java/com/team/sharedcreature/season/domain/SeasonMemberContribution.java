@@ -111,7 +111,9 @@ public class SeasonMemberContribution {
     public void synchronizeMembership(GroupMembership membership, Instant now) {
         java.util.Objects.requireNonNull(membership, "membership");
         java.util.Objects.requireNonNull(now, "now");
-        String nextStatus = membership.getStatus();
+        String nextStatus = membership.getStatus() == null
+                ? null
+                : membership.getStatus().name();
         // 참가 상태와 멤버십 상태를 동일하게 유지하며 외부 임의 값은 받지 않습니다.
         if (nextStatus == null || !java.util.Set.of("ACTIVE", "LEFT", "REMOVED").contains(nextStatus)) {
            throw new IllegalArgumentException("유효하지 않은 멤버십 상태: " + nextStatus);

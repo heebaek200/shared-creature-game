@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.SeasonRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -421,7 +423,7 @@ class SeasonLifecycleNormalizationServiceTest {
     private Season season(String status) {
         Season season = BeanUtils.instantiateClass(Season.class);
         ReflectionTestUtils.setField(season, "id", SEASON_ID);
-        ReflectionTestUtils.setField(season, "status", status);
+        ReflectionTestUtils.setField(season, "status", status == null ? null : SeasonStatus.valueOf(status));
         ReflectionTestUtils.setField(season, "startAt", START);
         ReflectionTestUtils.setField(season, "endAt", END);
         return season;

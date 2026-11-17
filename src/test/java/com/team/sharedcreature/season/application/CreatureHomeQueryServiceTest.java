@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
@@ -52,7 +54,7 @@ class CreatureHomeQueryServiceTest {
         when(season.getSeasonNumber()).thenReturn(1);
         when(season.getStartAt()).thenReturn(now.minusSeconds(60));
         when(season.getEndAt()).thenReturn(now.plusSeconds(60));
-        when(season.getStatus()).thenReturn("ACTIVE");
+        when(season.getStatus()).thenReturn(SeasonStatus.ACTIVE);
         GroupSeason groupSeason = GroupSeason.start(group, season, now);
         ReflectionTestUtils.setField(groupSeason, "id", 30L);
         GroupCreature creature = GroupCreature.egg(groupSeason, now);
@@ -107,6 +109,8 @@ class CreatureHomeQueryServiceTest {
         when(membership.getGroup()).thenReturn(group);
         Season season = mock(Season.class);
         when(season.getId()).thenReturn(20L);
+        // 현재 시즌 조회 결과는 실제 DB처럼 필수 상태를 가져야 합니다.
+        when(season.getStatus()).thenReturn(SeasonStatus.ACTIVE);
         GroupSeason groupSeason = mock(GroupSeason.class);
         when(groupSeason.getId()).thenReturn(30L);
         CreatureSpecies selectedSpecies = mock(CreatureSpecies.class);
@@ -132,6 +136,8 @@ class CreatureHomeQueryServiceTest {
         var firstResponse = service.getCreatureHome(1L);
         var changedResponse = service.getCreatureHome(1L);
 
+        assertThat(firstResponse.season().status()).isEqualTo("ACTIVE");
+        assertThat(changedResponse.season().status()).isEqualTo("ACTIVE");
         assertThat(firstResponse.creature().growthStage()).isEqualTo("EGG");
         assertThat(firstResponse.creature().creatureSpeciesId()).isEqualTo(50L);
         assertThat(firstResponse.creature().selectionDeadlineAt()).isEqualTo(selectionDeadlineAt);
@@ -164,6 +170,8 @@ class CreatureHomeQueryServiceTest {
         when(membership.getGroup()).thenReturn(group);
         Season season = mock(Season.class);
         when(season.getId()).thenReturn(20L);
+        // 부화 이후에도 현재 시즌의 상태 문자열 계약을 유지합니다.
+        when(season.getStatus()).thenReturn(SeasonStatus.ACTIVE);
         GroupSeason groupSeason = mock(GroupSeason.class);
         when(groupSeason.getId()).thenReturn(30L);
         when(groupSeason.getSelectionDeadlineAt()).thenReturn(selectionDeadlineAt);
@@ -186,6 +194,7 @@ class CreatureHomeQueryServiceTest {
 
         var response = service.getCreatureHome(1L);
 
+        assertThat(response.season().status()).isEqualTo("ACTIVE");
         assertThat(response.creature().creatureSpeciesId()).isEqualTo(50L);
         assertThat(response.creature().growthStage()).isEqualTo("HATCHLING");
         assertThat(response.creature().selectionDeadlineAt()).isEqualTo(selectionDeadlineAt);

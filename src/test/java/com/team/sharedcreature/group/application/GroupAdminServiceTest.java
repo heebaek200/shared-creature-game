@@ -1,5 +1,9 @@
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.group.domain.GroupAdminChangeType;
+
+import com.team.sharedcreature.group.domain.GroupRole;
+
 import com.team.sharedcreature.auth.domain.UserStatus;
 
 import com.team.sharedcreature.auth.domain.GlobalRole;
@@ -101,7 +105,7 @@ class GroupAdminServiceTest {
         var response = service.changeMemberRole(ACTOR_ID, TARGET_ID, "DEPUTY");
         assertThat(response.userId()).isEqualTo(TARGET_ID);
         assertThat(response.role()).isEqualTo("DEPUTY");
-        assertThat(fixture.targetMembership().getRole()).isEqualTo("DEPUTY");
+        assertThat(fixture.targetMembership().getRole()).isEqualTo(GroupRole.DEPUTY);
 
         // actor/target 뒤바뀜 회귀를 감사 이력까지 검사합니다.
         ArgumentCaptor<GroupAdminChange> captor = ArgumentCaptor.forClass(GroupAdminChange.class);
@@ -109,9 +113,9 @@ class GroupAdminServiceTest {
         GroupAdminChange history = captor.getValue();
         assertThat(history.getActorUser().getId()).isEqualTo(ACTOR_ID);
         assertThat(history.getTargetUser().getId()).isEqualTo(TARGET_ID);
-        assertThat(history.getChangeType()).isEqualTo("GRANT_DEPUTY");
-        assertThat(history.getPreviousRole()).isEqualTo("MEMBER");
-        assertThat(history.getNewRole()).isEqualTo("DEPUTY");
+        assertThat(history.getChangeType()).isEqualTo(GroupAdminChangeType.GRANT_DEPUTY);
+        assertThat(history.getPreviousRole()).isEqualTo(GroupRole.MEMBER);
+        assertThat(history.getNewRole()).isEqualTo(GroupRole.DEPUTY);
     }
 
     /**
@@ -128,14 +132,14 @@ class GroupAdminServiceTest {
         // 기존 DEPUTY 권한이 회수되어야 합니다.
         var response = service.changeMemberRole(ACTOR_ID, TARGET_ID, "MEMBER");
         assertThat(response.role()).isEqualTo("MEMBER");
-        assertThat(fixture.targetMembership().getRole()).isEqualTo("MEMBER");
+        assertThat(fixture.targetMembership().getRole()).isEqualTo(GroupRole.MEMBER);
 
         // 이력에서 이전 역할과 다음 역할을 확인합니다.
         ArgumentCaptor<GroupAdminChange> captor = ArgumentCaptor.forClass(GroupAdminChange.class);
         verify(adminChangeRepository).save(captor.capture());
-        assertThat(captor.getValue().getChangeType()).isEqualTo("REVOKE_DEPUTY");
-        assertThat(captor.getValue().getPreviousRole()).isEqualTo("DEPUTY");
-        assertThat(captor.getValue().getNewRole()).isEqualTo("MEMBER");
+        assertThat(captor.getValue().getChangeType()).isEqualTo(GroupAdminChangeType.REVOKE_DEPUTY);
+        assertThat(captor.getValue().getPreviousRole()).isEqualTo(GroupRole.DEPUTY);
+        assertThat(captor.getValue().getNewRole()).isEqualTo(GroupRole.MEMBER);
     }
 
     /**
@@ -172,8 +176,8 @@ class GroupAdminServiceTest {
         // 서비스에 포함된 두 번의 flush 호출과 도메인 상태를 확인합니다.
         var actualResponse = service.transferPrimaryAdmin(ACTOR_ID, TARGET_ID);
         assertThat(actualResponse).isSameAs(expectedResponse);
-        assertThat(fixture.actorMembership().getRole()).isEqualTo("MEMBER");
-        assertThat(fixture.targetMembership().getRole()).isEqualTo("PRIMARY");
+        assertThat(fixture.actorMembership().getRole()).isEqualTo(GroupRole.MEMBER);
+        assertThat(fixture.targetMembership().getRole()).isEqualTo(GroupRole.PRIMARY);
         assertThat(fixture.group().getPrimaryAdminUser().getId()).isEqualTo(TARGET_ID);
         verify(entityManager, times(2)).flush();
 
@@ -182,8 +186,8 @@ class GroupAdminServiceTest {
         verify(adminChangeRepository).save(captor.capture());
         assertThat(captor.getValue().getActorUser().getId()).isEqualTo(ACTOR_ID);
         assertThat(captor.getValue().getTargetUser().getId()).isEqualTo(TARGET_ID);
-        assertThat(captor.getValue().getChangeType()).isEqualTo("TRANSFER_PRIMARY");
-        assertThat(captor.getValue().getPreviousRole()).isEqualTo("MEMBER");
+        assertThat(captor.getValue().getChangeType()).isEqualTo(GroupAdminChangeType.TRANSFER_PRIMARY);
+        assertThat(captor.getValue().getPreviousRole()).isEqualTo(GroupRole.MEMBER);
     }
 
     /**
@@ -198,11 +202,11 @@ class GroupAdminServiceTest {
 
         // 새 PRIMARY 지정과 이전 역할의 기록을 함께 검증합니다.
         service.transferPrimaryAdmin(ACTOR_ID, TARGET_ID);
-        assertThat(fixture.actorMembership().getRole()).isEqualTo("MEMBER");
-        assertThat(fixture.targetMembership().getRole()).isEqualTo("PRIMARY");
+        assertThat(fixture.actorMembership().getRole()).isEqualTo(GroupRole.MEMBER);
+        assertThat(fixture.targetMembership().getRole()).isEqualTo(GroupRole.PRIMARY);
         ArgumentCaptor<GroupAdminChange> captor = ArgumentCaptor.forClass(GroupAdminChange.class);
         verify(adminChangeRepository).save(captor.capture());
-        assertThat(captor.getValue().getPreviousRole()).isEqualTo("DEPUTY");
+        assertThat(captor.getValue().getPreviousRole()).isEqualTo(GroupRole.DEPUTY);
     }
 
     /**
@@ -295,7 +299,7 @@ class GroupAdminServiceTest {
                 : GroupMembership.member(group, actor, NOW);
         GroupMembership targetMembership = GroupMembership.member(group, target, NOW);
         if ("DEPUTY".equals(targetRole)) {
-            targetMembership.changeDeputyRole("DEPUTY", NOW);
+            targetMembership.changeDeputyRole(GroupRole.DEPUTY, NOW);
         }
         ReflectionTestUtils.setField(actorMembership, "id", ACTOR_MEMBERSHIP_ID);
         ReflectionTestUtils.setField(targetMembership, "id", TARGET_MEMBERSHIP_ID);

@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
@@ -290,7 +292,7 @@ class SeasonGroupInitializationServiceTest {
     private Season arrangeSeason(String status) {
         Season season = Season.schedule(2, START, END, NOW);
         ReflectionTestUtils.setField(season, "id", SEASON_ID);
-        ReflectionTestUtils.setField(season, "status", status);
+        ReflectionTestUtils.setField(season, "status", status == null ? null : SeasonStatus.valueOf(status));
         when(seasonRepository.findForUpdateById(SEASON_ID)).thenReturn(Optional.of(season));
         return season;
     }

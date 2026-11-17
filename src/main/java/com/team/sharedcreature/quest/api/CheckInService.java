@@ -1,5 +1,7 @@
 package com.team.sharedcreature.quest.api;
 
+import com.team.sharedcreature.season.domain.GroupSeasonStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
@@ -226,7 +228,7 @@ public class CheckInService {
                         "현재 그룹 시즌이 활성 상태가 아닙니다."
                 ));
 
-        if (!"ACTIVE".equals(groupSeason.getStatus())) {
+        if (groupSeason.getStatus() != GroupSeasonStatus.ACTIVE) {
             throw new BusinessException(
                     ErrorCode.QUEST_PERIOD_ENDED,
                     "현재 그룹 시즌이 활성 상태가 아닙니다."

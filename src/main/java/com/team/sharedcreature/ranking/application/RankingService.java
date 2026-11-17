@@ -1,9 +1,12 @@
 package com.team.sharedcreature.ranking.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.ranking.api.RankingResponse;
 import com.team.sharedcreature.group.domain.GroupMembership;
+import com.team.sharedcreature.group.domain.GroupStatus;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -72,7 +75,7 @@ public class RankingService {
         List<RankingResponse.MemberDto> rankings = groupSeasonRepository
                 .findSnapshotByGroupIdAndSeasonId(groupId, season.getId())
                 .map(groupSeason -> {
-                    if ("ENDED".equals(season.getStatus())) {
+                    if ((season.getStatus() == SeasonStatus.ENDED)) {
                         return loadEndedMemberRanking(groupSeason.getId());
                     }
 
@@ -114,7 +117,7 @@ public class RankingService {
 
         // 종료 시즌은 확정 Snapshot, 현재 시즌은 저장된 점수로 계산합니다.
         List<RankingResponse.GroupDto> rankings =
-                "ENDED".equals(season.getStatus())
+                (season.getStatus() == SeasonStatus.ENDED)
                         ? loadEndedGroupRanking(season.getId())
                         : loadCurrentGroupRanking(season.getId());
 
@@ -122,7 +125,7 @@ public class RankingService {
         Long currentGroupId = groupMembershipRepository
                 .findActiveWithGroupByUserId(userId)
                 .filter(membership ->
-                        "ACTIVE".equals(membership.getGroup().getStatus())
+                        membership.getGroup().getStatus() == GroupStatus.ACTIVE
                 )
                 .map(membership -> membership.getGroup().getId())
                 .orElse(null);
@@ -168,7 +171,7 @@ public class RankingService {
                 ));
 
         // 종료 시즌은 현재 시즌을 추가 조회하지 않고 Snapshot 조회로 연결합니다.
-        if ("ENDED".equals(season.getStatus())) {
+        if ((season.getStatus() == SeasonStatus.ENDED)) {
             return season;
         }
 
@@ -201,7 +204,7 @@ public class RankingService {
                 ));
 
         // 멤버십뿐 아니라 그룹도 현재 활성 상태인지 확인합니다.
-        if (!"ACTIVE".equals(membership.getGroup().getStatus())) {
+        if (membership.getGroup().getStatus() != GroupStatus.ACTIVE) {
             throw new BusinessException(
                     ErrorCode.ROLE_FORBIDDEN,
                     "활성 그룹의 구성원만 개인 랭킹을 조회할 수 있습니다."

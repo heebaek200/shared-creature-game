@@ -28,8 +28,10 @@ public class GroupInviteLink {
     @Column(name = "token_hash", length = 64, unique = true, nullable = false)
     private String tokenHash;
 
+    /** 초대 링크의 사용 가능 여부를 기존 문자열 값으로 저장합니다. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    private GroupInviteLinkStatus status;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "issued_by_user_id", nullable = false)
@@ -55,7 +57,7 @@ public class GroupInviteLink {
     private GroupInviteLink(Group group, String tokenHash, User issuer, Instant now) {
         this.group = group;
         this.tokenHash = tokenHash;
-        this.status = "ACTIVE";
+        this.status = GroupInviteLinkStatus.ACTIVE;
         this.issuedByUser = issuer;
         this.issuedAt = now;
         this.createdAt = now;
@@ -72,12 +74,12 @@ public class GroupInviteLink {
      *  - 활성 상태의 링크만 종료 시각을 기록함
      */
     public void invalidate(Instant now) {
-        if (!"ACTIVE".equals(this.status)) {
+        if (this.status != GroupInviteLinkStatus.ACTIVE) {
             return;
         }
 
         // 기존 링크를 다시 사용할 수 없도록 처리함
-        this.status = "INVALIDATED";
+        this.status = GroupInviteLinkStatus.INVALIDATED;
         this.invalidatedAt = now;
     }
 

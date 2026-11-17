@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.infrastructure;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.season.domain.Season;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
@@ -16,7 +18,7 @@ import java.util.Optional;
  * Season 엔티티의 기본 영속성 연산을 제공합니다.
  */
 public interface SeasonRepository extends JpaRepository<Season, Long> {
-    Optional<Season> findFirstByStatusOrderByStartAtDesc(String status);
+    Optional<Season> findFirstByStatusOrderByStartAtDesc(SeasonStatus status);
 
     /**
      * 최초 시즌 달력의 기준 시각을 읽습니다.
@@ -32,7 +34,7 @@ public interface SeasonRepository extends JpaRepository<Season, Long> {
              WHERE season.status = :status
              ORDER BY season.startAt DESC
             """)
-    List<Season> findForShareByStatus(@Param("status") String status, Pageable pageable);
+    List<Season> findForShareByStatus(@Param("status") SeasonStatus status, Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT season FROM Season season WHERE season.id = :seasonId")
@@ -51,9 +53,9 @@ public interface SeasonRepository extends JpaRepository<Season, Long> {
               FROM Season season
              WHERE season.endAt <= :now
                AND (
-                   season.status IN ('ACTIVE', 'SCHEDULED', 'CLOSING')
+                   season.status IN (com.team.sharedcreature.season.domain.SeasonStatus.ACTIVE, com.team.sharedcreature.season.domain.SeasonStatus.SCHEDULED, com.team.sharedcreature.season.domain.SeasonStatus.CLOSING)
                    OR (
-                       season.status = 'ENDED'
+                       season.status = com.team.sharedcreature.season.domain.SeasonStatus.ENDED
                        AND NOT EXISTS (
                            SELECT execution.id
                              FROM SchedulerExecution execution

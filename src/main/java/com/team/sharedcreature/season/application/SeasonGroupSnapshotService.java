@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.season.domain.GroupSeason;
 import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.domain.SeasonGroupRankSnapshot;
@@ -68,7 +70,7 @@ public class SeasonGroupSnapshotService {
         // 종료 상태와 다른 작성자를 직렬화하기 위해 시즌 행을 가장 먼저 잠급니다.
         Season season = seasonRepository.findForUpdateById(seasonId)
                 .orElseThrow(() -> new IllegalStateException("시즌을 찾을 수 없습니다. seasonId=" + seasonId));
-        if (!"CLOSING".equals(season.getStatus())) {
+        if ((season.getStatus() != SeasonStatus.CLOSING)) {
             throw new IllegalStateException("CLOSING 시즌만 Snapshot을 생성할 수 있습니다.");
         }
         if (!season.requiresRankingSnapshotOnClosing()) {

@@ -1,5 +1,9 @@
 package com.team.sharedcreature.ranking.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
+import com.team.sharedcreature.group.domain.GroupStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
@@ -122,7 +126,7 @@ class RankingServiceTest {
     @Test
     void 비활성그룹은_개인랭킹_조회권한이_없다() {
         Group group = group(7);
-        ReflectionTestUtils.setField(group, "status", "INACTIVE");
+        ReflectionTestUtils.setField(group, "status", GroupStatus.INACTIVE);
         when(membershipRepository.findActiveWithGroupByUserId(4L))
                 .thenReturn(Optional.of(entity(GroupMembership.class, "group", group)));
         assertCode(() -> service.getMemberRanking(4L, null, 0, 20), ErrorCode.ROLE_FORBIDDEN);
@@ -256,12 +260,12 @@ class RankingServiceTest {
     }
 
     private Season season(String status) {
-        return entity(Season.class, "id", 10L, "status", status,
+        return entity(Season.class, "id", 10L, "status", SeasonStatus.valueOf(status),
                 "startAt", NOW.minusSeconds(3600), "endAt", NOW.plusSeconds(3600));
     }
 
     private Group group(long id) {
-        return entity(Group.class, "id", id, "name", "그룹" + id, "status", "ACTIVE");
+        return entity(Group.class, "id", id, "name", "그룹" + id, "status", GroupStatus.ACTIVE);
     }
 
     private User user(long id) {

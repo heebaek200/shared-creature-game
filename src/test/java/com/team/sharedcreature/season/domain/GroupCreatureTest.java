@@ -33,7 +33,7 @@ class GroupCreatureTest {
         assertThat(creature.getTotalExperience()).isEqualTo(150_000);
 
         Instant hatchedAt = startedAt.plusSeconds(72L * 60 * 60);
-        creature.hatch(mock(CreatureSpecies.class), "ADMIN", hatchedAt);
+        creature.hatch(mock(CreatureSpecies.class), CreatureSelectionSource.ADMIN, hatchedAt);
 
         assertThat(creature.getGrowthStage()).isEqualTo("COMPLETE");
         assertThat(creature.getGrowthStageReachedAt()).isEqualTo(hatchedAt);
@@ -44,7 +44,7 @@ class GroupCreatureTest {
         Instant now = Instant.parse("2026-11-03T00:00:00Z");
         GroupCreature creature = GroupCreature.egg(mock(GroupSeason.class), now);
         creature.addExperience(150_000, now);
-        creature.hatch(mock(CreatureSpecies.class), "ADMIN", now);
+        creature.hatch(mock(CreatureSpecies.class), CreatureSelectionSource.ADMIN, now);
 
         creature.addExperience(50_000, now.plusSeconds(1));
 

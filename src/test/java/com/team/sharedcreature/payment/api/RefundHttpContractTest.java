@@ -1,5 +1,7 @@
 package com.team.sharedcreature.payment.api;
 
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
 import com.team.sharedcreature.auth.domain.GlobalRole;
 
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
@@ -78,7 +80,7 @@ class RefundHttpContractTest {
             ReflectionTestUtils.setField(user, "id", id);
             return Optional.of(user);
         });
-        when(memberships.findByUserIdAndStatus(anyLong(), eq("ACTIVE"))).thenReturn(Optional.empty());
+        when(memberships.findByUserIdAndStatus(anyLong(), eq(GroupMembershipStatus.ACTIVE))).thenReturn(Optional.empty());
         mvc = webAppContextSetup(context).apply(springSecurity()).build();
     }
 

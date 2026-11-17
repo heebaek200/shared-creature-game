@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.admin.application.SchedulerClaimTicket;
 import com.team.sharedcreature.admin.application.SchedulerExecutionLifecycleService;
 import com.team.sharedcreature.admin.application.SchedulerExecutionService;
@@ -286,7 +288,7 @@ class SeasonCloseJobServiceTest {
     private void prepareSeason(String status) {
         when(seasonRepository.findById(SEASON_ID)).thenReturn(Optional.of(season));
         when(season.getEndAt()).thenReturn(END);
-        when(season.getStatus()).thenReturn(status);
+        when(season.getStatus()).thenReturn(SeasonStatus.valueOf(status));
     }
 
     /**

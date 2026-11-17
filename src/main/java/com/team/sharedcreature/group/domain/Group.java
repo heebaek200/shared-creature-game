@@ -34,8 +34,12 @@ public class Group {
     @Column(name = "visibility", length = 30, nullable = false)
     private String visibility;
 
+    /**
+     * 그룹의 활성·비활성 상태입니다.
+     */
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    private GroupStatus status;
 
     @Column(name = "capacity", nullable = false)
     private Integer capacity;
@@ -62,7 +66,7 @@ public class Group {
         this.normalizedName = normalizedName;
         this.description = description;
         this.visibility = "PUBLIC";
-        this.status = "ACTIVE";
+        this.status = GroupStatus.ACTIVE;
         this.capacity = 20;
         this.currentMemberCount = 1;
         this.primaryAdminUser = creator;
@@ -95,7 +99,7 @@ public class Group {
      *  - 마지막 구성원 탈퇴는 다른 기능 deactivateAfterLastMemberLeaves 에서 수행
      */
     public void decrementMemberCount(Instant now) {
-        if (!"ACTIVE".equals(this.status) || this.currentMemberCount <= 1) {
+        if (this.status != GroupStatus.ACTIVE || this.currentMemberCount <= 1) {
             throw new IllegalStateException("그룹 인원을 감소시킬 수 없습니다.");
         }
 
@@ -110,12 +114,12 @@ public class Group {
      *  - 그룹 데이터는 유지하고 관리자 참조만 해제함
      */
     public void deactivateAfterLastMemberLeaves(Instant now) {
-        if (!"ACTIVE".equals(this.status) || this.currentMemberCount != 1) {
+        if (this.status != GroupStatus.ACTIVE || this.currentMemberCount != 1) {
             throw new IllegalStateException("1인 활성 그룹만 종료할 수 있습니다.");
         }
 
         // 그룹 종료와 함께 인원 및 주 관리자 참조를 정리
-        this.status = "INACTIVE";
+        this.status = GroupStatus.INACTIVE;
         this.currentMemberCount = 0;
         this.primaryAdminUser = null;
         this.updatedAt = now;

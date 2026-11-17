@@ -1,6 +1,8 @@
 
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.group.domain.GroupInviteLinkStatus;
+
 import com.team.sharedcreature.auth.domain.GlobalRole;
 
 import com.team.sharedcreature._core.exception.BusinessException;
@@ -93,7 +95,7 @@ class GroupInvitationManagementServiceTest {
         var response = service.rotateInvitation(1L);
 
         // 기존 링크와 반환 URL이 올바른지 확인합니다.
-        assertThat(f.previous().getStatus()).isEqualTo("INVALIDATED");
+        assertThat(f.previous().getStatus()).isEqualTo(GroupInviteLinkStatus.INVALIDATED);
         assertThat(f.previous().getInvalidatedAt()).isEqualTo(NOW);
         assertThat(response.groupId()).isEqualTo(10L);
         assertThat(response.issuedByUserId()).isEqualTo(1L);
@@ -112,7 +114,7 @@ class GroupInvitationManagementServiceTest {
         assertThat(token).matches("[A-Za-z0-9_-]{43}");
         assertThat(captor.getValue().getTokenHash())
                 .isEqualTo(Hashing.sha256(token));
-        assertThat(captor.getValue().getStatus()).isEqualTo("ACTIVE");
+        assertThat(captor.getValue().getStatus()).isEqualTo(GroupInviteLinkStatus.ACTIVE);
         assertThat(captor.getValue().getIssuedByUser()).isSameAs(f.actor());
 
         // 기존 링크 UPDATE가 신규 INSERT보다 먼저 수행돼야 합니다.

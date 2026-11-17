@@ -1,5 +1,11 @@
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.group.domain.GroupInviteLinkStatus;
+
+import com.team.sharedcreature.group.domain.GroupRole;
+
+import com.team.sharedcreature.group.domain.GroupStatus;
+
 import com.team.sharedcreature.auth.domain.GlobalRole;
 
 import com.team.sharedcreature._core.exception.BusinessException;
@@ -86,7 +92,7 @@ class GroupInvitationManagementRegressionTest {
         Fixture fixture = fixture("PRIMARY");
         when(membershipRepository.findActiveWithGroupByUserId(USER_ID))
                 .thenReturn(Optional.of(fixture.membership()));
-        when(inviteLinkRepository.findByGroup_IdAndStatus(GROUP_ID, "ACTIVE"))
+        when(inviteLinkRepository.findByGroup_IdAndStatus(GROUP_ID, GroupInviteLinkStatus.ACTIVE))
                 .thenReturn(Optional.of(fixture.link()));
 
         // 정상적인 초대 관리 조회 결과만 검사합니다.
@@ -112,7 +118,7 @@ class GroupInvitationManagementRegressionTest {
         Fixture fixture = fixture("PRIMARY");
         when(membershipRepository.findActiveWithGroupByUserId(USER_ID))
                 .thenReturn(Optional.of(fixture.membership()));
-        when(inviteLinkRepository.findByGroup_IdAndStatus(GROUP_ID, "ACTIVE"))
+        when(inviteLinkRepository.findByGroup_IdAndStatus(GROUP_ID, GroupInviteLinkStatus.ACTIVE))
                 .thenReturn(Optional.empty());
 
         // 조회는 명시적 재발급 명령을 대신하지 않습니다.
@@ -134,7 +140,7 @@ class GroupInvitationManagementRegressionTest {
 
         // 기존 링크를 조회했더라도 권한을 잃은 사용자는 재발급 불가입니다.
         assertCode("ROLE_FORBIDDEN", () -> service.rotateInvitation(USER_ID));
-        assertThat(fixture.link().getStatus()).isEqualTo("ACTIVE");
+        assertThat(fixture.link().getStatus()).isEqualTo(GroupInviteLinkStatus.ACTIVE);
         assertThat(fixture.link().getInvalidatedAt()).isNull();
         verifyNoInteractions(entityManager);
         verify(inviteLinkRepository, never()).save(any());
@@ -153,7 +159,7 @@ class GroupInvitationManagementRegressionTest {
 
         // 그룹 안의 관리자 역할이더라도 재발급 권한은 없습니다.
         assertCode("ROLE_FORBIDDEN", () -> service.rotateInvitation(USER_ID));
-        assertThat(fixture.link().getStatus()).isEqualTo("ACTIVE");
+        assertThat(fixture.link().getStatus()).isEqualTo(GroupInviteLinkStatus.ACTIVE);
         verifyNoInteractions(entityManager);
         verify(inviteLinkRepository, never()).save(any());
     }
@@ -167,7 +173,7 @@ class GroupInvitationManagementRegressionTest {
     @Test
     void INACTIVE_그룹은_재발급을_거부한다() {
         Fixture fixture = fixture("PRIMARY");
-        ReflectionTestUtils.setField(fixture.group(), "status", "INACTIVE");
+        ReflectionTestUtils.setField(fixture.group(), "status", GroupStatus.INACTIVE);
         stubRotationThroughGroup(fixture);
 
         // 링크 변경 없이 그룹 상태 검증에서 실패해야 합니다.
@@ -211,7 +217,7 @@ class GroupInvitationManagementRegressionTest {
 
         // 초대 링크가 잠겨 있어도 권한 재검증 전에는 변경하지 않습니다.
         assertCode("ROLE_FORBIDDEN", () -> service.rotateInvitation(USER_ID));
-        assertThat(fixture.link().getStatus()).isEqualTo("ACTIVE");
+        assertThat(fixture.link().getStatus()).isEqualTo(GroupInviteLinkStatus.ACTIVE);
         verifyNoInteractions(entityManager);
         verify(inviteLinkRepository, never()).save(any());
     }
@@ -248,7 +254,7 @@ class GroupInvitationManagementRegressionTest {
         if (!"PRIMARY".equals(role)) {
             membership.demotePrimary(NOW);
             if ("DEPUTY".equals(role)) {
-                membership.changeDeputyRole("DEPUTY", NOW);
+                membership.changeDeputyRole(GroupRole.DEPUTY, NOW);
             }
         }
         GroupInviteLink link = GroupInviteLink.issue(

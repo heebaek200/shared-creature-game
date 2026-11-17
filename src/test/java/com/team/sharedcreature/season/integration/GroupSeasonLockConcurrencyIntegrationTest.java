@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.integration;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.auth.domain.GlobalRole;
 
 import com.team.sharedcreature.auth.domain.User;
@@ -167,7 +169,7 @@ class GroupSeasonLockConcurrencyIntegrationTest {
         tx.executeWithoutResult(status -> {
             // SeasonQueryService가 사용하는 것과 동일한 시즌 공유 잠금 쿼리입니다.
             List<Season> active = seasonRepository.findForShareByStatus(
-                    "ACTIVE", PageRequest.of(0, 1));
+                    SeasonStatus.ACTIVE, PageRequest.of(0, 1));
             assertEquals(1, active.size());
             assertEquals(seasonId, active.getFirst().getId());
 

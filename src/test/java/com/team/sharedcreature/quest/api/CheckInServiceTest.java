@@ -1,5 +1,7 @@
 package com.team.sharedcreature.quest.api;
 
+import com.team.sharedcreature.season.domain.GroupSeasonStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
@@ -142,7 +144,7 @@ class CheckInServiceTest {
         when(season.getId()).thenReturn(9L);
         when(groupSeasonRepository.findForUpdateByGroupIdAndSeasonId(5L, 9L))
                 .thenReturn(Optional.of(groupSeason));
-        when(groupSeason.getStatus()).thenReturn("ACTIVE");
+        when(groupSeason.getStatus()).thenReturn(GroupSeasonStatus.ACTIVE);
         when(serviceCheckInRepository.existsByUserIdAndCheckInDate(
                 1L,
                 now.atZone(ZoneId.of("Asia/Seoul")).toLocalDate()

@@ -1,5 +1,7 @@
 package com.team.sharedcreature.quest.api;
 
+import com.team.sharedcreature.season.domain.GroupSeasonStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
@@ -558,7 +560,7 @@ public class QuestCompletionService {
         boolean activePeriod = "ACTIVE".equals(assignment.getQuestPeriod().getStatus())
                 && !now.isBefore(assignment.getQuestPeriod().getStartAt())
                 && now.isBefore(assignment.getQuestPeriod().getEndAt());
-        boolean activeGroupSeason = "ACTIVE".equals(groupSeason.getStatus())
+        boolean activeGroupSeason = groupSeason.getStatus() == GroupSeasonStatus.ACTIVE
                 && groupSeason.getSeason().getId().equals(assignmentSeasonId);
 
         // 409  QUEST_PERIOD_ENDED  퀘스트 유효 기간 밖
@@ -664,7 +666,7 @@ public class QuestCompletionService {
                         ErrorCode.RESOURCE_NOT_FOUND, "그룹 시즌을 찾을 수 없습니다."));
 
         /**409	QUEST_PERIOD_ENDED	퀘스트 유효 기간 밖*/
-        if (!"ACTIVE".equals(groupSeason.getStatus())) {
+        if (groupSeason.getStatus() != GroupSeasonStatus.ACTIVE) {
             throw new BusinessException(
                     ErrorCode.QUEST_PERIOD_ENDED, "그룹 시즌이 활성 상태가 아닙니다.");
         }
@@ -719,7 +721,7 @@ public class QuestCompletionService {
                         "그룹 시즌을 찾을 수 없습니다."
                 ));
 
-        if (!"ACTIVE".equals(groupSeason.getStatus())) {
+        if (groupSeason.getStatus() != GroupSeasonStatus.ACTIVE) {
             throw new BusinessException(
                     ErrorCode.QUEST_PERIOD_ENDED, // 409  QUEST_PERIOD_ENDED  퀘스트 유효 기간 밖
                     "그룹 시즌이 활성 상태가 아닙니다."
@@ -835,7 +837,7 @@ public class QuestCompletionService {
                         "그룹 시즌을 찾을 수 없습니다."
                 ));
 
-        if (!"ACTIVE".equals(groupSeason.getStatus())) {
+        if (groupSeason.getStatus() != GroupSeasonStatus.ACTIVE) {
             throw new BusinessException(
                     ErrorCode.QUEST_PERIOD_ENDED,
                     "그룹 시즌이 활성 상태가 아닙니다."
@@ -907,7 +909,7 @@ public class QuestCompletionService {
                         ErrorCode.RESOURCE_NOT_FOUND,
                         "그룹 시즌을 찾을 수 없습니다."
                 ));
-        if (!"ACTIVE".equals(groupSeason.getStatus())) {
+        if (groupSeason.getStatus() != GroupSeasonStatus.ACTIVE) {
             throw new BusinessException(
                     ErrorCode.QUEST_PERIOD_ENDED,
                     "그룹 시즌이 활성 상태가 아닙니다."

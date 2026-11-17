@@ -1,5 +1,9 @@
 package com.team.sharedcreature._core.security;
 
+import com.team.sharedcreature.group.domain.GroupRole;
+
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
 import com.team.sharedcreature.auth.domain.UserStatus;
 
 import com.team.sharedcreature.auth.domain.GlobalRole;
@@ -63,9 +67,9 @@ class SessionRoleRefreshRegressionTest {
         when(user.getId()).thenReturn(1L);
         when(user.getStatus()).thenReturn(UserStatus.ACTIVE);
         when(user.getGlobalRole()).thenReturn(GlobalRole.USER);
-        when(membershipRepository.findByUserIdAndStatus(1L, "ACTIVE"))
+        when(membershipRepository.findByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE))
                 .thenReturn(Optional.of(membership));
-        when(membership.getRole()).thenReturn("PRIMARY");
+        when(membership.getRole()).thenReturn(GroupRole.PRIMARY);
 
         // DB와 달리 세션 및 이전 인증 객체에는 MEMBER만 있습니다.
         MockHttpSession session = new MockHttpSession();

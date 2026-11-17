@@ -1,5 +1,7 @@
 package com.team.sharedcreature.avatar.api;
 
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.LoginUser;
@@ -228,7 +230,7 @@ class AvatarHttpContractTest {
     /** 인증 필터가 실제로 복원하는 로그인 세션을 준비합니다. */
     private MockHttpSession authenticatedSession() {
         when(users.findById(1L)).thenReturn(Optional.of(user(1L)));
-        when(memberships.findByUserIdAndStatus(1L, "ACTIVE")).thenReturn(Optional.empty());
+        when(memberships.findByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE)).thenReturn(Optional.empty());
         var session = new MockHttpSession();
         session.setAttribute(SessionAuthenticationFilter.LOGIN_USER, new LoginUser(1L, "테스트 회원", Set.of()));
         return session;

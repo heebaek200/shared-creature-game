@@ -33,8 +33,10 @@ public class GroupCreature {
     @JoinColumn(name = "species_id", nullable = true)
     private CreatureSpecies species;
 
+    /** 부화 전에는 null이며 부화 시 그룹 시즌의 선택 경로를 복사합니다. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "selection_source", length = 30)
-    private String selectionSource;
+    private CreatureSelectionSource selectionSource;
 
     @Column(name = "total_experience", nullable = false)
     private Long totalExperience;
@@ -93,7 +95,7 @@ public class GroupCreature {
     }
 
     /** 선택이 확정된 알을 누적 경험치에 맞는 최고 단계로 부화시킵니다. */
-    public void hatch(CreatureSpecies species, String source, Instant now) {
+    public void hatch(CreatureSpecies species, CreatureSelectionSource source, Instant now) {
         if (!"EGG".equals(growthStage)) {
             return;
         }

@@ -1,5 +1,7 @@
 package com.team.sharedcreature.payment.application;
 
+import com.team.sharedcreature.group.domain.GroupStatus;
+
 import com.team.sharedcreature.admin.application.ApiIdempotencyService;
 import com.team.sharedcreature.admin.domain.ApiIdempotencyRecord;
 import com.team.sharedcreature.auth.domain.User;
@@ -68,7 +70,7 @@ class PurchaseServiceTest {
         when(item.getPriceKrw()).thenReturn(1500L);
         when(shopItemRepository.findByIdAndStatus(101L, ShopItemStatus.ACTIVE)).thenReturn(Optional.of(item));
         when(userRepository.getReferenceById(7L)).thenReturn(user);
-        when(group.getStatus()).thenReturn("ACTIVE");
+        when(group.getStatus()).thenReturn(GroupStatus.ACTIVE);
         when(membership.getGroup()).thenReturn(group);
         when(membershipRepository.findActiveWithGroupByUserId(7L)).thenReturn(Optional.of(membership));
         when(idempotencyService.claim(eq(7L), eq("CREATE_PURCHASE"), anyString(), eq("shopItemId=101"),

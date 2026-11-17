@@ -36,14 +36,20 @@ public class GroupAdminChange {
     @JoinColumn(name = "actor_user_id", nullable = false)
     private User actorUser;
 
+    /** 권한 변경과 동일한 트랜잭션에서 확정한 작업 유형입니다. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "change_type", length = 30, nullable = false)
-    private String changeType;
+    private GroupAdminChangeType changeType;
 
+    /** 변경 당시의 이전 역할이며 최초 지정 이력에서는 null입니다. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "previous_role", length = 30, nullable = true)
-    private String previousRole;
+    private GroupRole previousRole;
 
+    /** 변경 당시의 새 역할을 현재 멤버십과 독립적으로 보존합니다. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "new_role", length = 30, nullable = true)
-    private String newRole;
+    private GroupRole newRole;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
@@ -52,9 +58,9 @@ public class GroupAdminChange {
             Group group,
             User target,
             User actor,
-            String changeType,
-            String previousRole,
-            String newRole,
+            GroupAdminChangeType changeType,
+            GroupRole previousRole,
+            GroupRole newRole,
             Instant now
     ) {
         this.group = group;
@@ -69,7 +75,7 @@ public class GroupAdminChange {
     /** 그룹 생성 시 최초 주 관리자 지정 이력을 생성합니다. */
     public static GroupAdminChange initialPrimary(Group group, User user, Instant now) {
         return new GroupAdminChange(group, user, user,
-                "INITIAL_PRIMARY", null, "PRIMARY", now);
+                GroupAdminChangeType.INITIAL_PRIMARY, null, GroupRole.PRIMARY, now);
     }
 
     /**
@@ -80,11 +86,13 @@ public class GroupAdminChange {
             Group group,
             User actor,
             User target,
-            String previousRole,
-            String nextRole,
+            GroupRole previousRole,
+            GroupRole nextRole,
             Instant now
     ) {
-        String changeType = "DEPUTY".equals(nextRole) ? "GRANT_DEPUTY" : "REVOKE_DEPUTY";
+        GroupAdminChangeType changeType = nextRole == GroupRole.DEPUTY
+                ? GroupAdminChangeType.GRANT_DEPUTY
+                : GroupAdminChangeType.REVOKE_DEPUTY;
 
         return new GroupAdminChange(group, target, actor, changeType, previousRole, nextRole, now);
     }
@@ -98,12 +106,12 @@ public class GroupAdminChange {
             Group group,
             User actor,
             User target,
-            String previousRole,
+            GroupRole previousRole,
             Instant now
     ) {
         return new GroupAdminChange(
                 group, target, actor,
-                "TRANSFER_PRIMARY", previousRole, "PRIMARY", now
+                GroupAdminChangeType.TRANSFER_PRIMARY, previousRole, GroupRole.PRIMARY, now
         );
     }
 

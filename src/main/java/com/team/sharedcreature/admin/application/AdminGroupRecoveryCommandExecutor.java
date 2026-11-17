@@ -11,9 +11,7 @@ import com.team.sharedcreature.auth.infrastructure.UserProfileRepository;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.api.GroupSummaryResponse;
 import com.team.sharedcreature.group.api.MyGroupResponse;
-import com.team.sharedcreature.group.domain.Group;
-import com.team.sharedcreature.group.domain.GroupAdminChange;
-import com.team.sharedcreature.group.domain.GroupMembership;
+import com.team.sharedcreature.group.domain.*;
 import com.team.sharedcreature.group.infrastructure.GroupAdminChangeRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
@@ -89,7 +87,7 @@ public class AdminGroupRecoveryCommandExecutor {
 
         Group group = groupRepository.findByIdForUpdate(groupId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        if (!"ACTIVE".equals(group.getStatus())
+        if (group.getStatus() != GroupStatus.ACTIVE
                 || group.getPrimaryAdminUser() == null
                 || !previousPrimaryId.equals(group.getPrimaryAdminUser().getId())
                 || target.getStatus() != UserStatus.ACTIVE) {
@@ -107,9 +105,9 @@ public class AdminGroupRecoveryCommandExecutor {
         }
         GroupMembership previousMembership = memberships.get(previousMembershipId);
         GroupMembership targetMembership = memberships.get(targetMembershipId);
-        String targetPreviousRole = targetMembership.getRole();
-        if (!"PRIMARY".equals(previousMembership.getRole())
-                || (!"MEMBER".equals(targetPreviousRole) && !"DEPUTY".equals(targetPreviousRole))) {
+        GroupRole targetPreviousRole = targetMembership.getRole();
+        if (previousMembership.getRole() != GroupRole.PRIMARY
+                || (targetPreviousRole != GroupRole.MEMBER && targetPreviousRole != GroupRole.DEPUTY)) {
             throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
         }
 
@@ -130,7 +128,7 @@ public class AdminGroupRecoveryCommandExecutor {
                 .orElseThrow(() -> new IllegalStateException("새 주 관리자 프로필이 없습니다."))
                 .getNickname();
         int remaining = Math.max(0, group.getCapacity() - group.getCurrentMemberCount());
-        GroupMembership actorMembership = membershipRepository.findByUserIdAndStatus(actorId, "ACTIVE")
+        GroupMembership actorMembership = membershipRepository.findByUserIdAndStatus(actorId, GroupMembershipStatus.ACTIVE)
                 .filter(membership -> groupId.equals(membership.getGroup().getId()))
                 .orElse(null);
         boolean actorAlreadyJoined = actorMembership != null;
@@ -145,8 +143,8 @@ public class AdminGroupRecoveryCommandExecutor {
                 ),
                 new MyGroupResponse.PrimaryAdminResponse(targetId, nickname),
                 actorMembership == null ? null : new MyGroupResponse.MyMembershipResponse(
-                        actorMembership.getId(), groupId, actorMembership.getRole(),
-                        actorMembership.getStatus(), actorMembership.getJoinedAt()
+                        actorMembership.getId(), groupId, actorMembership.getRole().name(),
+                        actorMembership.getStatus().name(), actorMembership.getJoinedAt()
                 )
         );
     }

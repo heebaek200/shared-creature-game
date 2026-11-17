@@ -1,5 +1,9 @@
 package com.team.sharedcreature.season.infrastructure;
 
+import com.team.sharedcreature.season.domain.GroupSeasonStatus;
+
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.season.domain.GroupSeason;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
@@ -66,9 +70,9 @@ public interface GroupSeasonRepository extends JpaRepository<GroupSeason, Long> 
         SELECT gs
           FROM GroupSeason gs
          WHERE gs.group.id = :groupId
-           AND gs.season.status IN ('SCHEDULED', 'ACTIVE')
+           AND gs.season.status IN (com.team.sharedcreature.season.domain.SeasonStatus.SCHEDULED, com.team.sharedcreature.season.domain.SeasonStatus.ACTIVE)
            AND gs.season.endAt > :now
-           AND gs.status IN ('PREPARING', 'ACTIVE')
+           AND gs.status IN (com.team.sharedcreature.season.domain.GroupSeasonStatus.PREPARING, com.team.sharedcreature.season.domain.GroupSeasonStatus.ACTIVE)
         """)
     Optional<GroupSeason> findOpenByGroupIdForUpdate(
             @Param("groupId") Long groupId,
@@ -87,13 +91,13 @@ public interface GroupSeasonRepository extends JpaRepository<GroupSeason, Long> 
             GroupSeason AS gs
         WHERE
             gs.season.id           = :seasonId
-        AND gs.season.status       = 'ACTIVE'
+        AND gs.season.status       = com.team.sharedcreature.season.domain.SeasonStatus.ACTIVE
         AND gs.season.startAt      <= :now
         AND gs.season.endAt        > :now
         AND gs.selectionDeadlineAt <= :now
         AND gs.selectionDeadlineAt < gs.season.endAt
-        AND gs.status              = 'PREPARING'
-        AND gs.group.status        = 'ACTIVE'
+        AND gs.status              = com.team.sharedcreature.season.domain.GroupSeasonStatus.PREPARING
+        AND gs.group.status = com.team.sharedcreature.group.domain.GroupStatus.ACTIVE
         AND gs.id                  > :afterId
         ORDER BY
             gs.id ASC

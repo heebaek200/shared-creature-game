@@ -15,11 +15,13 @@ import com.team.sharedcreature.auth.domain.GlobalRole;
 import com.team.sharedcreature.auth.domain.UserStatus;
 import com.team.sharedcreature.auth.domain.UserProfile;
 import com.team.sharedcreature.auth.infrastructure.*;
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.application.GroupMembershipService;
 import com.team.sharedcreature.group.application.InvitationSessionContext;
 import com.team.sharedcreature.group.api.PublicInvitationResponse;
 import com.team.sharedcreature.group.domain.GroupInviteLink;
+import com.team.sharedcreature.group.domain.GroupInviteLinkStatus;
 import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
 import com.team.sharedcreature.group.infrastructure.GroupJoinRestrictionRepository;
 import jakarta.servlet.http.HttpSession;
@@ -106,7 +108,7 @@ public class AuthService {
             if (!(context instanceof InvitationSessionContext invitationContext)) {
                 throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE, "수락한 초대 문맥이 필요합니다.");
             }
-            invitation = inviteLinkRepository.findByIdAndStatus(invitationContext.inviteLinkId(), "ACTIVE")
+            invitation = inviteLinkRepository.findByIdAndStatus(invitationContext.inviteLinkId(), GroupInviteLinkStatus.ACTIVE)
                     .orElseThrow(() -> conflict(ErrorCode.INVITE_INVALID, "현재 사용할 수 없는 초대입니다."));
             intent = OauthLoginIntent.INVITE;
         }
@@ -305,8 +307,8 @@ public class AuthService {
         if (user.getGlobalRole() == GlobalRole.SUPER_ADMIN) {
             roles.add(GlobalRole.SUPER_ADMIN.name());
         }
-        membershipRepository.findByUserIdAndStatus(user.getId(), "ACTIVE")
-                .ifPresent(membership -> roles.add(membership.getRole()));
+        membershipRepository.findByUserIdAndStatus(user.getId(), GroupMembershipStatus.ACTIVE)
+                .ifPresent(membership -> roles.add(membership.getRole().name()));
         return Set.copyOf(roles);
     }
 
@@ -320,12 +322,12 @@ public class AuthService {
     /** 현재 사용자의 활성 그룹 멤버십을 Route Guard 응답용으로 조회합니다. */
     @Transactional(readOnly = true)
     public Optional<CurrentMembership> currentMembership(Long userId) {
-        return membershipRepository.findByUserIdAndStatus(userId, "ACTIVE")
+        return membershipRepository.findByUserIdAndStatus(userId, GroupMembershipStatus.ACTIVE)
                 .map(membership -> new CurrentMembership(
                         membership.getId(),
                         membership.getGroup().getId(),
-                        membership.getRole(),
-                        membership.getStatus(),
+                        membership.getRole().name(),
+                        membership.getStatus().name(),
                         membership.getJoinedAt()
                 ));
     }

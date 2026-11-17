@@ -1,6 +1,8 @@
 
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.SeasonRepository;
@@ -57,7 +59,7 @@ class SeasonQueryServiceTest {
     void currentSeasonReturnsWhenValid() {
         Season season = mock(Season.class);
 
-        when(repository.findFirstByStatusOrderByStartAtDesc("ACTIVE"))
+        when(repository.findFirstByStatusOrderByStartAtDesc(SeasonStatus.ACTIVE))
                 .thenReturn(Optional.of(season));
         when(season.isActiveAt(NOW)).thenReturn(true);
 
@@ -72,7 +74,7 @@ class SeasonQueryServiceTest {
      */
     @Test
     void missingCurrentSeasonReturnsConflict() {
-        when(repository.findFirstByStatusOrderByStartAtDesc("ACTIVE"))
+        when(repository.findFirstByStatusOrderByStartAtDesc(SeasonStatus.ACTIVE))
                 .thenReturn(Optional.empty());
 
         BusinessException error = assertThrows(
@@ -92,7 +94,7 @@ class SeasonQueryServiceTest {
     void invalidCurrentWindowReturnsConflict() {
         Season season = mock(Season.class);
 
-        when(repository.findFirstByStatusOrderByStartAtDesc("ACTIVE"))
+        when(repository.findFirstByStatusOrderByStartAtDesc(SeasonStatus.ACTIVE))
                 .thenReturn(Optional.of(season));
         when(season.isActiveAt(NOW)).thenReturn(false);
 
@@ -114,7 +116,7 @@ class SeasonQueryServiceTest {
         Season season = mock(Season.class);
 
         when(repository.findForShareByStatus(
-                eq("ACTIVE"), any(Pageable.class)
+                eq(SeasonStatus.ACTIVE), any(Pageable.class)
         )).thenReturn(List.of(season));
         when(season.isActiveAt(NOW)).thenReturn(false);
 
@@ -134,7 +136,7 @@ class SeasonQueryServiceTest {
         Season season = mock(Season.class);
 
         when(repository.findForShareByStatus(
-                eq("ACTIVE"), any(Pageable.class)
+                eq(SeasonStatus.ACTIVE), any(Pageable.class)
         )).thenReturn(List.of(season));
         when(season.isActiveAt(NOW)).thenReturn(true);
 

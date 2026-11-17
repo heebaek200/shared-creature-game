@@ -32,11 +32,19 @@ public class GroupMembership {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    /**
+     * 해당 그룹 안에서 사용자가 가진 역할입니다.
+     */
+    @Enumerated(EnumType.STRING)
     @Column(name = "role", length = 30, nullable = false)
-    private String role;
+    private GroupRole role;
 
+    /**
+     * 사용자의 활성 소속·자진 탈퇴·강퇴 상태입니다.
+     */
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    private GroupMembershipStatus status;
 
     @Column(name = "joined_at", nullable = false)
     private Instant joinedAt;
@@ -77,11 +85,11 @@ public class GroupMembership {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    private GroupMembership(Group group, User user, String role, Instant now) {
+    private GroupMembership(Group group, User user, GroupRole role, Instant now) {
         this.group = group;
         this.user = user;
         this.role = role;
-        this.status = "ACTIVE";
+        this.status = GroupMembershipStatus.ACTIVE;
         this.joinedAt = now;
         this.createdAt = now;
         this.updatedAt = now;
@@ -89,12 +97,12 @@ public class GroupMembership {
 
     /** 그룹 생성자를 활성 주 관리자 멤버십으로 등록합니다. */
     public static GroupMembership primary(Group group, User user, Instant now) {
-        return new GroupMembership(group, user, "PRIMARY", now);
+        return new GroupMembership(group, user, GroupRole.PRIMARY, now);
     }
 
     /** 공개 또는 초대 가입자를 활성 일반 구성원으로 등록합니다. */
     public static GroupMembership member(Group group, User user, Instant now) {
-        return new GroupMembership(group, user, "MEMBER", now);
+        return new GroupMembership(group, user, GroupRole.MEMBER, now);
     }
 
     /**
@@ -102,13 +110,13 @@ public class GroupMembership {
      * 주 관리자(PRIMARY)의 역할은 이 메서드로 부여 또는 회수할 수 _없습니다_.
      * 변경 시각은 기존 멤버십의 수정 시각에 함께 기록합니다.
      */
-    public void changeDeputyRole(String nextRole, Instant now) {
-        if (!"MEMBER".equals(nextRole) && !"DEPUTY".equals(nextRole)) {
+    public void changeDeputyRole(GroupRole nextRole, Instant now) {
+        if (nextRole != GroupRole.MEMBER && nextRole != GroupRole.DEPUTY) {
             // 허용되지 않은 역할은 도메인에서도 거부
             throw new IllegalArgumentException("변경할 수 없는 역할입니다.");
         }
 
-        if ("PRIMARY".equals(this.role)) {
+        if (this.role == GroupRole.PRIMARY) {
             throw new IllegalStateException("주 관리자 역할은 직접 변경할 수 없습니다.");
         }
 
@@ -122,12 +130,12 @@ public class GroupMembership {
      *  - 그룹별 PRIMARY UNIQUE 제약을 위한 로직
      */
     public void demotePrimary(Instant now) {
-        if (!"PRIMARY".equals(this.role)) {
+        if (this.role != GroupRole.PRIMARY) {
             throw new IllegalStateException("현재 주 관리자가 아닙니다.");
         }
 
         // 일반 사용자로 강등
-        this.role = "MEMBER";
+        this.role = GroupRole.MEMBER;
         this.updatedAt = now;
     }
 
@@ -137,12 +145,12 @@ public class GroupMembership {
      *  - 기존 주 관리자 해제 이후에 호출해야 함
      */
     public void promotePrimary(Instant now) {
-        if (!"MEMBER".equals(this.role) && !"DEPUTY".equals(this.role)) {
+        if (this.role != GroupRole.MEMBER && this.role != GroupRole.DEPUTY) {
             throw new IllegalStateException("주 관리자로 이전할 수 없는 역할입니다");
         }
 
         // 주 관리자로 승격
-        this.role = "PRIMARY";
+        this.role = GroupRole.PRIMARY;
         this.updatedAt = now;
     }
 
@@ -152,7 +160,7 @@ public class GroupMembership {
      *  - 탈퇴자와 종료 실행자를 동일한 사용자로 기록함
      */
     public void leaveBySelf(User actor, Instant now) {
-        if (!"ACTIVE".equals(this.status)) {
+        if (this.status != GroupMembershipStatus.ACTIVE) {
             throw new IllegalStateException("활성 멤버십이 아닙니다.");
         }
 
@@ -161,7 +169,7 @@ public class GroupMembership {
         }
 
         // 멤버십을 삭제하지 않고 종료 상태로 보존한다
-        this.status = "LEFT";
+        this.status = GroupMembershipStatus.LEFT;
         this.endedAt = now;
         this.endedByUser = actor;
         this.exitReason = "SELF";
@@ -174,11 +182,11 @@ public class GroupMembership {
      *  - 과거 역할과 가입 기록은 보존 / 실행 관리자와 종료 사유를 감사 레코드로 남김
      */
     public void removeForInactivity(User actor, Instant now) {
-        if (!"ACTIVE".equals(this.status)) {
+        if (this.status != GroupMembershipStatus.ACTIVE) {
             throw new IllegalStateException("활성 멤버십이 아닙니다.");
         }
 
-        if ("PRIMARY".equals(this.role)) {
+        if (this.role == GroupRole.PRIMARY) {
             throw new IllegalStateException("주 관리자는 강퇴할 수 없습니다.");
         }
 
@@ -186,7 +194,7 @@ public class GroupMembership {
             throw new IllegalArgumentException("자기 자신을 강퇴할 수 없습니다.");
         }
 
-        this.status = "REMOVED";
+        this.status = GroupMembershipStatus.REMOVED;
         this.endedAt = now;
         this.endedByUser = actor;
         this.exitReason = "INACTIVE";
@@ -195,10 +203,10 @@ public class GroupMembership {
 
     /** 전체 관리자의 신고 심사로 비주 관리자 활성 멤버십을 종료합니다. */
     public void removeForReport(User actor, Instant now) {
-        if (!"ACTIVE".equals(status) || "PRIMARY".equals(role)) {
+        if (status != GroupMembershipStatus.ACTIVE || role == GroupRole.PRIMARY) {
             throw new IllegalStateException("신고 강퇴가 가능한 활성 멤버십이 아닙니다.");
         }
-        status = "REMOVED";
+        status = GroupMembershipStatus.REMOVED;
         endedAt = now;
         endedByUser = actor;
         exitReason = "REPORTED";

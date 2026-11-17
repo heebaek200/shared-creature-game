@@ -1,5 +1,7 @@
 package com.team.sharedcreature.admin.application;
 
+import com.team.sharedcreature.group.domain.GroupStatus;
+
 import com.team.sharedcreature.admin.infrastructure.AdminAnalyticsRepository;
 import com.team.sharedcreature.admin.api.OperationalWarningResponse;
 import com.team.sharedcreature.group.domain.Group;
@@ -68,7 +70,7 @@ class AdminDashboardServiceTest {
         GroupRepository groups = mock(GroupRepository.class);
         Group selectedGroup = mock(Group.class);
         Instant now = Instant.parse("2026-11-10T03:00:00Z");
-        when(selectedGroup.getStatus()).thenReturn("ACTIVE");
+        when(selectedGroup.getStatus()).thenReturn(GroupStatus.ACTIVE);
         when(groups.findById(10L)).thenReturn(Optional.of(selectedGroup));
         when(analytics.countActiveUsers(any(), any(), eq(10L))).thenReturn(0L);
         when(analytics.countActiveGroups(any(), any(), eq(10L))).thenReturn(0L);

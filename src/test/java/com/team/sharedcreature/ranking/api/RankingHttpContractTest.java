@@ -1,5 +1,9 @@
 package com.team.sharedcreature.ranking.api;
 
+import com.team.sharedcreature.group.domain.GroupRole;
+
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
 import com.team.sharedcreature.auth.domain.GlobalRole;
 
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
@@ -253,11 +257,11 @@ class RankingHttpContractTest {
         ReflectionTestUtils.setField(user, "id", 1L);
         when(users.findById(1L)).thenReturn(Optional.of(user));
         if (role == null) {
-            when(memberships.findByUserIdAndStatus(1L, "ACTIVE")).thenReturn(Optional.empty());
+            when(memberships.findByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE)).thenReturn(Optional.empty());
         } else {
             var membership = BeanUtils.instantiateClass(GroupMembership.class);
-            ReflectionTestUtils.setField(membership, "role", role);
-            when(memberships.findByUserIdAndStatus(1L, "ACTIVE"))
+            ReflectionTestUtils.setField(membership, "role", GroupRole.valueOf(role));
+            when(memberships.findByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE))
                     .thenReturn(Optional.of(membership));
         }
         var session = new MockHttpSession();

@@ -19,7 +19,7 @@ class GroupSeasonTest {
 
         GroupSeason groupSeason = GroupSeason.start(mock(Group.class), mock(Season.class), startedAt);
 
-        assertThat(groupSeason.getStatus()).isEqualTo("PREPARING");
+        assertThat(groupSeason.getStatus()).isEqualTo(GroupSeasonStatus.PREPARING);
         assertThat(groupSeason.getSelectionDeadlineAt()).isEqualTo(Instant.parse("2026-11-06T00:00:00Z"));
     }
 
@@ -58,8 +58,8 @@ class GroupSeasonTest {
         groupSeason.selectRandomSpecies(species(2L), hatchedAt);
         groupSeason.activate(hatchedAt);
 
-        assertThat(groupSeason.getStatus()).isEqualTo("ACTIVE");
-        assertThat(groupSeason.getSelectionSource()).isEqualTo("RANDOM");
+        assertThat(groupSeason.getStatus()).isEqualTo(GroupSeasonStatus.ACTIVE);
+        assertThat(groupSeason.getSelectionSource()).isEqualTo(CreatureSelectionSource.RANDOM);
         assertThat(groupSeason.getSelectedByUser()).isNull();
     }
 

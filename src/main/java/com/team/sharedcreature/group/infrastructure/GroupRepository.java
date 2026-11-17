@@ -25,7 +25,7 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
     @Query("""
             SELECT group
               FROM Group group
-             WHERE group.status = 'ACTIVE'
+             WHERE group.status = com.team.sharedcreature.group.domain.GroupStatus.ACTIVE
                AND group.visibility = 'PUBLIC'
                AND (:query = '' OR group.normalizedName LIKE CONCAT('%', :query, '%') ESCAPE '\\')
             """)
@@ -59,7 +59,7 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
     @Query("""
             SELECT g
               FROM Group g
-             WHERE g.status = 'ACTIVE'
+             WHERE g.status = com.team.sharedcreature.group.domain.GroupStatus.ACTIVE
                AND NOT EXISTS (
                    SELECT gs.id
                      FROM GroupSeason gs

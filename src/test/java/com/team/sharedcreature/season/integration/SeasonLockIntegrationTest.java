@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.integration;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.season.infrastructure.SeasonRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -76,7 +78,7 @@ class SeasonLockIntegrationTest {
         CountDownLatch exclusiveAcquired = new CountDownLatch(1);
 
         Future<?> shared = executor.submit(() -> transaction.executeWithoutResult(status -> {
-            seasonRepository.findForShareByStatus("ACTIVE", PageRequest.of(0, 1));
+            seasonRepository.findForShareByStatus(SeasonStatus.ACTIVE, PageRequest.of(0, 1));
             sharedAcquired.countDown();
             await(releaseShared);
         }));

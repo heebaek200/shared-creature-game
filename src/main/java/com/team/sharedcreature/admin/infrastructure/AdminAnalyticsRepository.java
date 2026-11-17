@@ -1,5 +1,7 @@
 package com.team.sharedcreature.admin.infrastructure;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import org.springframework.stereotype.Repository;
@@ -154,7 +156,7 @@ public class AdminAnalyticsRepository {
                   FROM GroupCreature creature
                   JOIN creature.groupSeason groupSeason
                   JOIN groupSeason.season season
-                 WHERE season.status = 'ACTIVE'
+                 WHERE season.status = com.team.sharedcreature.season.domain.SeasonStatus.ACTIVE
                    AND season.startAt <= :now
                    AND season.endAt > :now
                 """ + groupCondition("groupSeason.group.id", groupId) + """
@@ -178,7 +180,7 @@ public class AdminAnalyticsRepository {
                   JOIN score.groupSeason groupSeason
                   JOIN groupSeason.group gameGroup
                   JOIN groupSeason.season season
-                 WHERE season.status = 'ACTIVE'
+                 WHERE season.status = com.team.sharedcreature.season.domain.SeasonStatus.ACTIVE
                    AND season.startAt <= :now
                    AND season.endAt > :now
                 """ + groupCondition("gameGroup.id", groupId) + """
@@ -226,7 +228,7 @@ public class AdminAnalyticsRepository {
                 SELECT COALESCE(SUM(gameGroup.currentMemberCount), 0)
                      , COALESCE(SUM(gameGroup.capacity - gameGroup.currentMemberCount), 0)
                   FROM Group gameGroup
-                 WHERE gameGroup.status = 'ACTIVE'
+                 WHERE gameGroup.status = com.team.sharedcreature.group.domain.GroupStatus.ACTIVE
                 """ + groupCondition("gameGroup.id", groupId);
         Object[] row = (Object[]) query(jpql, groupId).getSingleResult();
         return new long[]{number(row[0]), number(row[1])};
@@ -236,7 +238,7 @@ public class AdminAnalyticsRepository {
         String jpql = """
                 SELECT COUNT(report.id)
                   FROM UserReport report
-                 WHERE report.status = 'RECEIVED'
+                 WHERE report.status = com.team.sharedcreature.group.domain.UserReportStatus.RECEIVED
                 """ + groupCondition("report.group.id", groupId);
         return number(query(jpql, groupId).getSingleResult());
     }

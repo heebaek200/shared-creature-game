@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.auth.domain.GlobalRole;
 
 import com.team.sharedcreature.auth.domain.User;
@@ -313,8 +315,8 @@ class SeasonMemberSnapshotServiceTest {
     private Season closingSeason(String originalStatus) {
         Season season = BeanUtils.instantiateClass(Season.class);
         ReflectionTestUtils.setField(season, "id", SEASON_ID);
-        ReflectionTestUtils.setField(season, "status", "CLOSING");
-        ReflectionTestUtils.setField(season, "closingFromStatus", originalStatus);
+        ReflectionTestUtils.setField(season, "status", SeasonStatus.CLOSING);
+        ReflectionTestUtils.setField(season, "closingFromStatus", originalStatus == null ? null : SeasonStatus.valueOf(originalStatus));
         return season;
     }
 

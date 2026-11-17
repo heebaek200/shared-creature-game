@@ -1,6 +1,8 @@
 
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
 import com.team.sharedcreature.auth.domain.GlobalRole;
 
 import com.team.sharedcreature._core.exception.BusinessException;
@@ -10,6 +12,7 @@ import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.domain.GroupJoinRestriction;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.domain.ModerationAction;
+import com.team.sharedcreature.group.domain.ModerationActionType;
 import com.team.sharedcreature.group.infrastructure.GroupJoinRestrictionRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
@@ -109,7 +112,7 @@ class GroupRemovalServiceTest {
         assertThat(result.restrictionUntil())
                 .isEqualTo(NOW.plus(Duration.ofHours(24)));
 
-        assertThat(f.targetMembership().getStatus()).isEqualTo("REMOVED");
+        assertThat(f.targetMembership().getStatus()).isEqualTo(GroupMembershipStatus.REMOVED);
         assertThat(f.targetMembership().getExitReason()).isEqualTo("INACTIVE");
         assertThat(f.targetMembership().getEndedByUser()).isSameAs(f.actor());
         assertThat(f.group().getCurrentMemberCount()).isEqualTo(1);
@@ -123,7 +126,7 @@ class GroupRemovalServiceTest {
         verify(moderationActionRepository).save(captor.capture());
         assertThat(captor.getValue().getActorUser()).isSameAs(f.actor());
         assertThat(captor.getValue().getTargetUser()).isSameAs(f.target());
-        assertThat(captor.getValue().getActionType()).isEqualTo("REMOVE_INACTIVE");
+        assertThat(captor.getValue().getActionType()).isEqualTo(ModerationActionType.REMOVE_INACTIVE);
         assertThat(captor.getValue().getReason()).isEqualTo("장기간 미접속");
     }
 
@@ -146,7 +149,7 @@ class GroupRemovalServiceTest {
 
         // 경계 시각과 같아도 성공해야 합니다.
         assertThat(result.endedAt()).isEqualTo(NOW);
-        assertThat(f.targetMembership().getStatus()).isEqualTo("REMOVED");
+        assertThat(f.targetMembership().getStatus()).isEqualTo(GroupMembershipStatus.REMOVED);
         verify(moderationActionRepository).save(any(ModerationAction.class));
     }
 
@@ -172,7 +175,7 @@ class GroupRemovalServiceTest {
         );
 
         // 거부 요청에서는 데이터 변경을 수행하지 않습니다.
-        assertThat(f.targetMembership().getStatus()).isEqualTo("ACTIVE");
+        assertThat(f.targetMembership().getStatus()).isEqualTo(GroupMembershipStatus.ACTIVE);
         assertThat(f.group().getCurrentMemberCount()).isEqualTo(2);
 
         verify(restrictionRepository, never()).save(any());

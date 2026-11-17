@@ -1,5 +1,7 @@
 package com.team.sharedcreature.admin.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.admin.api.OperationalWarningResponse;
 import com.team.sharedcreature.admin.domain.SchedulerExecution;
 import com.team.sharedcreature.group.domain.Group;
@@ -93,8 +95,8 @@ public class OperationalWarningService {
         List<Season> seasons = entityManager.createQuery("""
                 SELECT season
                   FROM Season season
-                 WHERE (season.status = 'ACTIVE' AND season.endAt <= :now)
-                    OR season.status = 'CLOSING'
+                 WHERE (season.status = com.team.sharedcreature.season.domain.SeasonStatus.ACTIVE AND season.endAt <= :now)
+                    OR season.status = com.team.sharedcreature.season.domain.SeasonStatus.CLOSING
                 """, Season.class).setParameter("now", now).getResultList();
         for (Season season : seasons) {
             warnings.add(warning(
@@ -179,12 +181,12 @@ public class OperationalWarningService {
         List<Group> groups = entityManager.createQuery("""
                 SELECT gameGroup
                   FROM Group gameGroup
-                 WHERE gameGroup.status = 'ACTIVE'
+                 WHERE gameGroup.status = com.team.sharedcreature.group.domain.GroupStatus.ACTIVE
                    AND gameGroup.currentMemberCount <> (
                        SELECT COUNT(membership.id)
                          FROM GroupMembership membership
                         WHERE membership.group = gameGroup
-                          AND membership.status = 'ACTIVE'
+                           AND membership.status = com.team.sharedcreature.group.domain.GroupMembershipStatus.ACTIVE
                    )
                 """, Group.class).getResultList();
         for (Group group : groups) {

@@ -5,6 +5,7 @@ import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.admin.api.AdminReportResponse;
 import com.team.sharedcreature.auth.infrastructure.UserProfileRepository;
 import com.team.sharedcreature.group.domain.UserReport;
+import com.team.sharedcreature.group.domain.UserReportStatus;
 import com.team.sharedcreature.group.infrastructure.UserReportRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -30,10 +31,19 @@ public class AdminReportQueryService {
 
     /** 상태 필터와 고정 최신순으로 신고를 페이지 조회합니다. */
     public Page<AdminReportResponse> list(String status, int page, int size) {
+        // API의 문자열 입력은 경계에서 검증하고 저장소에는 Enum만 전달합니다.
+        UserReportStatus filter = null;
+        if (status != null) {
+            try {
+                filter = UserReportStatus.valueOf(status);
+            } catch (IllegalArgumentException exception) {
+                throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE);
+            }
+        }
         PageRequest pageable = PageRequest.of(page, size);
         Page<UserReport> reports = status == null
                 ? reportRepository.findAllByOrderByCreatedAtDescIdDesc(pageable)
-                : reportRepository.findByStatusOrderByCreatedAtDescIdDesc(status, pageable);
+                : reportRepository.findByStatusOrderByCreatedAtDescIdDesc(filter, pageable);
         return reports.map(this::toResponse);
     }
 
@@ -56,9 +66,9 @@ public class AdminReportQueryService {
                 report.getGroup().getId(),
                 report.getReporterUser().getId(),
                 report.getReportedUser().getId(),
-                report.getCategory(),
+                report.getCategory().name(),
                 report.getContent(),
-                report.getStatus(),
+                report.getStatus().name(),
                 report.getCreatedAt(),
                 report.getHandledAt(),
                 reportedNickname,

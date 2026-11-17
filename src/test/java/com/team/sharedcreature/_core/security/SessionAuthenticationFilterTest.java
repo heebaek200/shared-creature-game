@@ -1,5 +1,9 @@
 package com.team.sharedcreature._core.security;
 
+import com.team.sharedcreature.group.domain.GroupRole;
+
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
 import com.team.sharedcreature.auth.domain.UserStatus;
 
 import com.team.sharedcreature.auth.domain.GlobalRole;
@@ -47,8 +51,8 @@ class SessionAuthenticationFilterTest {
         when(user.getId()).thenReturn(1L);
         when(user.getStatus()).thenReturn(UserStatus.ACTIVE);
         when(user.getGlobalRole()).thenReturn(GlobalRole.USER);
-        when(membershipRepository.findByUserIdAndStatus(1L, "ACTIVE")).thenReturn(Optional.of(membership));
-        when(membership.getRole()).thenReturn("PRIMARY");
+        when(membershipRepository.findByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE)).thenReturn(Optional.of(membership));
+        when(membership.getRole()).thenReturn(GroupRole.PRIMARY);
 
         MockHttpSession session = new MockHttpSession();
         session.setAttribute(SessionAuthenticationFilter.LOGIN_USER, new LoginUser(1L, "새싹지기", Set.of()));
@@ -81,8 +85,8 @@ class SessionAuthenticationFilterTest {
         when(user.getId()).thenReturn(1L);
         when(user.getStatus()).thenReturn(UserStatus.ACTIVE);
         when(user.getGlobalRole()).thenReturn(GlobalRole.SUPER_ADMIN);
-        when(membershipRepository.findByUserIdAndStatus(1L, "ACTIVE")).thenReturn(Optional.of(membership));
-        when(membership.getRole()).thenReturn("MEMBER");
+        when(membershipRepository.findByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE)).thenReturn(Optional.of(membership));
+        when(membership.getRole()).thenReturn(GroupRole.MEMBER);
 
         MockHttpSession session = new MockHttpSession();
         session.setAttribute(

@@ -5,6 +5,7 @@ import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.GlobalRole;
 import com.team.sharedcreature.auth.domain.UserStatus;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -96,8 +97,11 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
                 currentRoles.add(GlobalRole.SUPER_ADMIN.name());
             }
 
-            membershipRepository.findByUserIdAndStatus(user.getId(), "ACTIVE")
-                    .ifPresent(membership -> currentRoles.add(membership.getRole()));
+            membershipRepository.findByUserIdAndStatus(
+                            user.getId(),
+                            GroupMembershipStatus.ACTIVE
+                    )
+                    .ifPresent(membership -> currentRoles.add(membership.getRole().name()));
 
             Set<String> roles = Set.copyOf(currentRoles);
             LoginUser loginUser = new LoginUser(

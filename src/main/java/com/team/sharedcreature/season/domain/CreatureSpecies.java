@@ -30,8 +30,10 @@ public class CreatureSpecies {
     @Column(name = "asset_key", length = 255, nullable = false)
     private String assetKey;
 
+    /** 활성 종만 선택·부화 대상이며 상태는 기존 문자열로 저장합니다. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    private CreatureSpeciesStatus status;
 
     @Column(name = "display_order", nullable = true)
     private Integer displayOrder;

@@ -37,7 +37,7 @@ class GroupDepartureDomainTest {
         // ID가 다른 사용자를 실행자로 넘기면 즉시 차단합니다.
         assertThatThrownBy(() -> membership.leaveBySelf(stranger, NOW))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThat(membership.getStatus()).isEqualTo("ACTIVE");
+        assertThat(membership.getStatus()).isEqualTo(GroupMembershipStatus.ACTIVE);
         assertThat(membership.getEndedAt()).isNull();
     }
 
@@ -76,7 +76,7 @@ class GroupDepartureDomainTest {
 
         // 외부 API와 DB가 사용하는 정확한 종료 상태를 검사합니다.
         link.invalidate(NOW);
-        assertThat(link.getStatus()).isEqualTo("INVALIDATED");
+        assertThat(link.getStatus()).isEqualTo(GroupInviteLinkStatus.INVALIDATED);
         assertThat(link.getInvalidatedAt()).isEqualTo(NOW);
     }
 

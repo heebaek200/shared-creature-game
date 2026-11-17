@@ -1,5 +1,9 @@
 package com.team.sharedcreature._core.security;
 
+import com.team.sharedcreature.group.domain.GroupRole;
+
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
 import com.team.sharedcreature.auth.domain.UserStatus;
 
 import com.team.sharedcreature.auth.domain.GlobalRole;
@@ -118,9 +122,9 @@ class SessionAuthenticationFilterStaleContextTest {
         when(user.getId()).thenReturn(1L);
         when(user.getStatus()).thenReturn(UserStatus.ACTIVE);
         when(user.getGlobalRole()).thenReturn(GlobalRole.USER);
-        when(memberships.findByUserIdAndStatus(1L, "ACTIVE"))
+        when(memberships.findByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE))
                 .thenReturn(Optional.of(membership));
-        when(membership.getRole()).thenReturn("MEMBER");
+        when(membership.getRole()).thenReturn(GroupRole.MEMBER);
 
         MockHttpSession session = new MockHttpSession();
         session.setAttribute(SessionAuthenticationFilter.LOGIN_USER,

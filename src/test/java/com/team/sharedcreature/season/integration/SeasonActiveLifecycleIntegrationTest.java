@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.integration;
 
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
 import com.team.sharedcreature.auth.domain.GlobalRole;
 
 import com.team.sharedcreature._core.security.LoginUser;
@@ -172,14 +174,14 @@ class SeasonActiveLifecycleIntegrationTest {
         // 실제 가입 Service로 인원을 2명으로 올려 탈퇴 처리도 실제 로직을 이용합니다.
         membershipService.joinGroup(new LoginUser(memberA.getId(), "member" + memberA.getId(), Set.of()), a.getId());
         GroupMembership memberMembership = membershipRepository
-                .findByUserIdAndStatus(memberA.getId(), "ACTIVE").orElseThrow();
+                .findByUserIdAndStatus(memberA.getId(), GroupMembershipStatus.ACTIVE).orElseThrow();
         departedMembershipId = memberMembership.getId();
 
         GroupSeason gsA = newGroupSeason(a, season);
         GroupSeason gsB = newGroupSeason(b, season);
         GroupSeason gsC = newGroupSeason(c, season);
-        GroupMembership membershipA = membershipRepository.findByUserIdAndStatus(ownerA.getId(), "ACTIVE").orElseThrow();
-        GroupMembership membershipB = membershipRepository.findByUserIdAndStatus(ownerB.getId(), "ACTIVE").orElseThrow();
+        GroupMembership membershipA = membershipRepository.findByUserIdAndStatus(ownerA.getId(), GroupMembershipStatus.ACTIVE).orElseThrow();
+        GroupMembership membershipB = membershipRepository.findByUserIdAndStatus(ownerB.getId(), GroupMembershipStatus.ACTIVE).orElseThrow();
 
         // 그룹 A의 동점 개인 두 명과 그룹 B의 단독 개인을 준비합니다.
         addContribution(gsA, ownerA, membershipA, 40L, MEMBER_SCORE_FIRST);

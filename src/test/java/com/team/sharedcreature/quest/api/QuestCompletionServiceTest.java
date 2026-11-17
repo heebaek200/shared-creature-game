@@ -1,5 +1,7 @@
 package com.team.sharedcreature.quest.api;
 
+import com.team.sharedcreature.season.domain.GroupSeasonStatus;
+
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.domain.Group;
@@ -188,7 +190,7 @@ class QuestCompletionServiceTest {
         when(membership.getGroup()).thenReturn(group);
         when(season.getId()).thenReturn(3L);
         when(groupSeason.getId()).thenReturn(31L);
-        when(groupSeason.getStatus()).thenReturn("ACTIVE");
+        when(groupSeason.getStatus()).thenReturn(GroupSeasonStatus.ACTIVE);
         when(groupSeason.getSeason()).thenReturn(season);
         when(groupSeason.getGroup()).thenReturn(group);
         when(membership.getId()).thenReturn(41L);

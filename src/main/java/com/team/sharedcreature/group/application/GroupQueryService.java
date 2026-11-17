@@ -9,6 +9,7 @@ import com.team.sharedcreature.group.api.GroupMemberResponse;
 import com.team.sharedcreature.group.api.GroupSummaryResponse;
 import com.team.sharedcreature.group.api.MyGroupResponse;
 import com.team.sharedcreature.group.domain.Group;
+import com.team.sharedcreature.group.domain.GroupStatus;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import org.springframework.data.domain.Page;
@@ -97,8 +98,8 @@ public class GroupQueryService {
         var myMembership = new MyGroupResponse.MyMembershipResponse(
                 membership.getId(),
                 group.getId(),
-                membership.getRole(),
-                membership.getStatus(),
+                membership.getRole().name(),
+                membership.getStatus().name(),
                 membership.getJoinedAt()
         );
 
@@ -148,7 +149,7 @@ public class GroupQueryService {
                 ));
 
         // 종료된 그룹의 구성원 조회는 허용하지 않습니다.
-        if (!"ACTIVE".equals(membership.getGroup().getStatus())) {
+        if (membership.getGroup().getStatus() != GroupStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 

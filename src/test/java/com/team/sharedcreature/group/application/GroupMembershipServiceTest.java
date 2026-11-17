@@ -1,5 +1,11 @@
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.group.domain.GroupInviteLinkStatus;
+
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
+import com.team.sharedcreature.group.domain.GroupStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.LoginUser;
@@ -110,7 +116,7 @@ class GroupMembershipServiceTest {
         when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user));
         when(user.getId()).thenReturn(1L);
         when(groupRepository.existsByNormalizedName("새싹모임")).thenReturn(false);
-        when(membershipRepository.existsByUserIdAndStatus(1L, "ACTIVE")).thenReturn(false);
+        when(membershipRepository.existsByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE)).thenReturn(false);
         when(restrictionRepository.existsByUserIdAndRestrictedUntilAfter(any(), any())).thenReturn(false);
         when(groupRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(membershipRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -218,10 +224,10 @@ class GroupMembershipServiceTest {
         when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user));
         Group group = mock(Group.class);
         when(group.getId()).thenReturn(10L);
-        when(group.getStatus()).thenReturn("ACTIVE");
+        when(group.getStatus()).thenReturn(GroupStatus.ACTIVE);
         when(group.getVisibility()).thenReturn("PUBLIC");
         when(groupRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(group));
-        when(membershipRepository.existsByUserIdAndStatus(1L, "ACTIVE")).thenReturn(false);
+        when(membershipRepository.existsByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE)).thenReturn(false);
         when(restrictionRepository.existsByUserIdAndRestrictedUntilAfter(any(), any())).thenReturn(false);
         when(groupRepository.incrementMemberCountIfAvailable(any(), any())).thenReturn(1);
         when(membershipRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -245,10 +251,10 @@ class GroupMembershipServiceTest {
     void joinGroup은_잠금_후_정원이_가득_찬_그룹을_거절한다() {
         when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user));
         Group group = mock(Group.class);
-        when(group.getStatus()).thenReturn("ACTIVE");
+        when(group.getStatus()).thenReturn(GroupStatus.ACTIVE);
         when(group.getVisibility()).thenReturn("PUBLIC");
         when(groupRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(group));
-        when(membershipRepository.existsByUserIdAndStatus(1L, "ACTIVE")).thenReturn(false);
+        when(membershipRepository.existsByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE)).thenReturn(false);
         when(restrictionRepository.existsByUserIdAndRestrictedUntilAfter(any(), any())).thenReturn(false);
 
         // 인원 증가가 실패하면 GROUP_FULL 오류가 반환됩니다.
@@ -270,12 +276,12 @@ class GroupMembershipServiceTest {
         when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user));
         Group group = mock(Group.class);
         when(group.getId()).thenReturn(10L);
-        when(group.getStatus()).thenReturn("ACTIVE");
+        when(group.getStatus()).thenReturn(GroupStatus.ACTIVE);
         when(group.getVisibility()).thenReturn("PUBLIC");
         when(groupRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(group));
         GroupInviteLink invitation = mock(GroupInviteLink.class);
         when(invitation.getGroup()).thenReturn(group);
-        when(inviteLinkRepository.findByIdAndStatus(20L, "ACTIVE"))
+        when(inviteLinkRepository.findByIdAndStatus(20L, GroupInviteLinkStatus.ACTIVE))
                 .thenReturn(Optional.of(invitation));
         when(inviteLinkRepository.findActiveForUpdate(20L, 10L))
                 .thenReturn(Optional.empty());
@@ -301,7 +307,7 @@ class GroupMembershipServiceTest {
         when(group.getDescription()).thenReturn("함께 걸어요");
         when(group.getCurrentMemberCount()).thenReturn(5);
         when(group.getCapacity()).thenReturn(20);
-        when(membershipRepository.existsByUserIdAndStatus(1L, "ACTIVE")).thenReturn(true);
+        when(membershipRepository.existsByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE)).thenReturn(true);
         when(restrictionRepository.existsByUserIdAndRestrictedUntilAfter(any(), any())).thenReturn(false);
         when(groupRepository.findPublicGroups(any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(group)));

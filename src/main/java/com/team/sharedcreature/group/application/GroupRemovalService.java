@@ -7,10 +7,7 @@ import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.UserStatus;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.api.LeaveMyGroupResponse;
-import com.team.sharedcreature.group.domain.Group;
-import com.team.sharedcreature.group.domain.GroupJoinRestriction;
-import com.team.sharedcreature.group.domain.GroupMembership;
-import com.team.sharedcreature.group.domain.ModerationAction;
+import com.team.sharedcreature.group.domain.*;
 import com.team.sharedcreature.group.infrastructure.GroupJoinRestrictionRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
@@ -117,7 +114,7 @@ public class GroupRemovalService {
         Group group = groupRepository.findByIdForUpdate(groupId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 
-        if (!"ACTIVE".equals(group.getStatus())) {
+        if (group.getStatus() != GroupStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
         }
 
@@ -247,7 +244,7 @@ public class GroupRemovalService {
             Long groupId,
             ErrorCode errorCode
     ) {
-        if (!"ACTIVE".equals(membership.getStatus())
+        if (membership.getStatus() != GroupMembershipStatus.ACTIVE
                 || !userId.equals(membership.getUser().getId())
                 || !groupId.equals(membership.getGroup().getId())) {
             throw new BusinessException(errorCode);
@@ -260,33 +257,33 @@ public class GroupRemovalService {
     private void validateRemovalPermission(
             Group group,
             Long actorId,
-            String actorRole,
-            String targetRole
+            GroupRole actorRole,
+            GroupRole targetRole
     ) {
         // 주 또는 부 관리자 역할을 갖고 있지 않다면 거부
-        if (!"PRIMARY".equals(actorRole) && !"DEPUTY".equals(actorRole)) {
+        if (actorRole != GroupRole.PRIMARY && actorRole != GroupRole.DEPUTY) {
             throw new BusinessException(ErrorCode.ROLE_FORBIDDEN);
         }
 
         // 현재 주 관리자 참조도 실제 실행자와 일치해야 함
-        if ("PRIMARY".equals(actorRole)
+        if (actorRole == GroupRole.PRIMARY
                 && (group.getPrimaryAdminUser() == null
                 || !actorId.equals(group.getPrimaryAdminUser().getId()))) {
             throw new BusinessException(ErrorCode.ROLE_FORBIDDEN);
         }
 
         // 부 관리자 명령으로 주 관리자(PRIMARY)를 강퇴할 수 없음
-        if ("PRIMARY".equals(targetRole)) {
+        if (targetRole == GroupRole.PRIMARY) {
             throw new BusinessException(ErrorCode.ROLE_FORBIDDEN);
         }
 
         // 부 관리자(DEPUTY)가 다른 부 관라자(DEPUTY)를 강퇴할 수 없음
-        if ("DEPUTY".equals(actorRole) && !"MEMBER".equals(targetRole)) {
+        if (actorRole == GroupRole.DEPUTY && targetRole != GroupRole.MEMBER) {
             throw new BusinessException(ErrorCode.ROLE_FORBIDDEN);
         }
 
         // 알 수 없는 역할이나 허용되지 않은 상태를 거부함
-        if (!"MEMBER".equals(targetRole) && !"DEPUTY".equals(targetRole)) {
+        if (targetRole != GroupRole.MEMBER && targetRole != GroupRole.DEPUTY) {
             throw new BusinessException(ErrorCode.ROLE_FORBIDDEN);
         }
     }

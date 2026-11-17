@@ -1,10 +1,13 @@
 package com.team.sharedcreature.admin.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.admin.api.AdminDashboardResponse;
 import com.team.sharedcreature.admin.api.OperationalWarningResponse;
 import com.team.sharedcreature.admin.infrastructure.AdminAnalyticsRepository;
+import com.team.sharedcreature.group.domain.GroupStatus;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
 import com.team.sharedcreature.season.infrastructure.SeasonRepository;
 import org.springframework.stereotype.Service;
@@ -54,7 +57,7 @@ public class AdminDashboardService {
     public AdminDashboardResponse get(String range, Long groupId) {
         Instant aggregatedAt = clock.instant();
         if (groupId != null && groupRepository.findById(groupId)
-                .filter(group -> "ACTIVE".equals(group.getStatus())).isEmpty()) {
+                .filter(group -> group.getStatus() == GroupStatus.ACTIVE).isEmpty()) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
         Instant start = rangeStart(range, aggregatedAt);
@@ -134,7 +137,7 @@ public class AdminDashboardService {
         return switch (range) {
             case "7_DAYS" -> today.minusDays(6).atStartOfDay(KST).toInstant();
             case "30_DAYS" -> today.minusDays(29).atStartOfDay(KST).toInstant();
-            case "CURRENT_SEASON" -> seasonRepository.findFirstByStatusOrderByStartAtDesc("ACTIVE")
+            case "CURRENT_SEASON" -> seasonRepository.findFirstByStatusOrderByStartAtDesc(SeasonStatus.ACTIVE)
                     .filter(season -> !now.isBefore(season.getStartAt()) && now.isBefore(season.getEndAt()))
                     .orElseThrow(() -> new BusinessException(ErrorCode.CONCURRENT_MODIFICATION))
                     .getStartAt();

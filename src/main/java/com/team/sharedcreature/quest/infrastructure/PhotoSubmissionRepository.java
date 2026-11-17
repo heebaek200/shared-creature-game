@@ -1,5 +1,7 @@
 package com.team.sharedcreature.quest.infrastructure;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.quest.domain.PhotoSubmission;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
@@ -152,7 +154,7 @@ public interface PhotoSubmissionRepository extends JpaRepository<PhotoSubmission
               JOIN period.season season
              WHERE submission.verificationStatus = 'VALID'
                AND submission.fileDeletedAt IS NULL
-               AND season.status = 'ENDED'
+               AND season.status = com.team.sharedcreature.season.domain.SeasonStatus.ENDED
                AND season.endAt <= :cutoff
                AND submission.cleanupNextAttemptAt IS NULL
                AND (submission.cleanupClaimToken IS NULL OR submission.cleanupClaimExpiresAt <= :now)
@@ -173,7 +175,7 @@ public interface PhotoSubmissionRepository extends JpaRepository<PhotoSubmission
               JOIN period.season season
              WHERE submission.verificationStatus = 'VALID'
                AND submission.fileDeletedAt IS NULL
-               AND season.status = 'ENDED'
+               AND season.status = com.team.sharedcreature.season.domain.SeasonStatus.ENDED
                AND season.endAt <= :cutoff
                AND submission.cleanupNextAttemptAt <= :now
                AND (submission.cleanupClaimToken IS NULL OR submission.cleanupClaimExpiresAt <= :now)

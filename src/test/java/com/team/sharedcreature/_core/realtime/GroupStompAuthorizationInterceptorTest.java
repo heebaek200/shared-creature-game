@@ -1,5 +1,7 @@
 package com.team.sharedcreature._core.realtime;
 
+import com.team.sharedcreature.group.domain.GroupStatus;
+
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.domain.GroupMembership;
@@ -179,7 +181,7 @@ class GroupStompAuthorizationInterceptorTest {
     private GroupMembership activeMembership(Long groupId) {
         Group group = mock(Group.class);
         when(group.getId()).thenReturn(groupId);
-        when(group.getStatus()).thenReturn("ACTIVE");
+        when(group.getStatus()).thenReturn(GroupStatus.ACTIVE);
         GroupMembership membership = mock(GroupMembership.class);
         when(membership.getGroup()).thenReturn(group);
         return membership;

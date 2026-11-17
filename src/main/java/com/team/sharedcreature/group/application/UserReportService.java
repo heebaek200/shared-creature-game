@@ -6,6 +6,7 @@ import com.team.sharedcreature.group.api.CreateUserReportRequest;
 import com.team.sharedcreature.group.api.UserReportResponse;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.domain.UserReport;
+import com.team.sharedcreature.group.domain.UserReportCategory;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.infrastructure.UserReportRepository;
 import org.springframework.stereotype.Service;
@@ -46,11 +47,21 @@ public class UserReportService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
+        // 요청 검증을 통과한 문자열은 도메인 경계에서 신고 분류로 변환합니다.
+        if (request.category() == null) {
+            throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE);
+        }
+        UserReportCategory category;
+        try {
+            category = UserReportCategory.valueOf(request.category());
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE);
+        }
         UserReport report = reportRepository.save(UserReport.receive(
                 reporter.getUser(),
                 reported.getUser(),
                 reporter.getGroup(),
-                request.category(),
+                category,
                 request.content().trim(),
                 clock.instant()
         ));
@@ -64,9 +75,9 @@ public class UserReportService {
                 report.getGroup().getId(),
                 report.getReporterUser().getId(),
                 report.getReportedUser().getId(),
-                report.getCategory(),
+                report.getCategory().name(),
                 report.getContent(),
-                report.getStatus(),
+                report.getStatus().name(),
                 report.getCreatedAt(),
                 report.getHandledAt()
         );

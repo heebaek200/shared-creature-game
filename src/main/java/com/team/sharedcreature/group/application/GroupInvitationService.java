@@ -10,6 +10,9 @@ import com.team.sharedcreature.auth.application.PendingSignup;
 import com.team.sharedcreature.group.api.NavigationResponse;
 import com.team.sharedcreature.group.api.PublicInvitationResponse;
 import com.team.sharedcreature.group.domain.GroupInviteLink;
+import com.team.sharedcreature.group.domain.GroupInviteLinkStatus;
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+import com.team.sharedcreature.group.domain.GroupStatus;
 import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import jakarta.servlet.http.HttpSession;
@@ -56,7 +59,7 @@ public class GroupInvitationService {
     @Transactional
     public NavigationResponse acceptInvitation(String token, HttpSession session) {
         GroupInviteLink invitation = activeInvitation(token);
-        if (!"ACTIVE".equals(invitation.getGroup().getStatus())) {
+        if (invitation.getGroup().getStatus() != GroupStatus.ACTIVE) {
             throw conflict(ErrorCode.INVITE_INVALID, "현재 사용할 수 없는 초대입니다.");
         }
         Object login = session.getAttribute(SessionAuthenticationFilter.LOGIN_USER);
@@ -110,7 +113,7 @@ public class GroupInvitationService {
 
         Object login = session.getAttribute(SessionAuthenticationFilter.LOGIN_USER);
         if (login instanceof LoginUser loginUser) {
-            String route = membershipRepository.existsByUserIdAndStatus(loginUser.id(), "ACTIVE")
+            String route = membershipRepository.existsByUserIdAndStatus(loginUser.id(), GroupMembershipStatus.ACTIVE)
                     ? "/creature"
                     : "/groups/select";
             return new NavigationResponse(route, "INVITATION_REJECTED");
@@ -127,7 +130,7 @@ public class GroupInvitationService {
                         ErrorCode.RESOURCE_NOT_FOUND,
                         "초대 정보를 찾을 수 없습니다."
                 ));
-        if (!"ACTIVE".equals(invitation.getStatus())) {
+        if (invitation.getStatus() != GroupInviteLinkStatus.ACTIVE) {
             throw conflict(ErrorCode.INVITE_INVALID, "현재 사용할 수 없는 초대입니다.");
         }
         return invitation;
@@ -148,7 +151,7 @@ public class GroupInvitationService {
     }
 
     private String blockedReason(com.team.sharedcreature.group.domain.Group group, HttpSession session) {
-        if (!"ACTIVE".equals(group.getStatus())) {
+        if (group.getStatus() != GroupStatus.ACTIVE) {
             return "INVITE_INVALID";
         }
         Object login = session.getAttribute(SessionAuthenticationFilter.LOGIN_USER);

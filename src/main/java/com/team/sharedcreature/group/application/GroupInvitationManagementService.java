@@ -9,9 +9,7 @@ import com.team.sharedcreature.auth.domain.UserStatus;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.api.InvitationManagementResponse;
 import com.team.sharedcreature.group.api.RotateInvitationResponse;
-import com.team.sharedcreature.group.domain.Group;
-import com.team.sharedcreature.group.domain.GroupInviteLink;
-import com.team.sharedcreature.group.domain.GroupMembership;
+import com.team.sharedcreature.group.domain.*;
 import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
@@ -97,7 +95,7 @@ public class GroupInvitationManagementService {
 
         // 활성 링크의 발급 이력만 조회하며 토큰 해시는 노출하지 않습니다.
         GroupInviteLink invitation = inviteLinkRepository
-                .findByGroup_IdAndStatus(group.getId(), "ACTIVE")
+                .findByGroup_IdAndStatus(group.getId(), GroupInviteLinkStatus.ACTIVE)
                 .orElseThrow(() ->
                         new BusinessException(ErrorCode.CONCURRENT_MODIFICATION)
                 );
@@ -143,7 +141,7 @@ public class GroupInvitationManagementService {
                         new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)
                 );
 
-        if (!"ACTIVE".equals(group.getStatus())) {
+        if (group.getStatus() != GroupStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
         }
 
@@ -221,12 +219,12 @@ public class GroupInvitationManagementService {
             Long actorId
     ) {
         // 그룹·멤버십·사용자 상태를 검사합니다.
-        if (!"ACTIVE".equals(group.getStatus())
-                || !"ACTIVE".equals(membership.getStatus())
+        if (group.getStatus() != GroupStatus.ACTIVE
+                || membership.getStatus() != GroupMembershipStatus.ACTIVE
                 || membership.getUser().getStatus() != UserStatus.ACTIVE
                 || !actorId.equals(membership.getUser().getId())
                 || !group.getId().equals(membership.getGroup().getId())
-                || !"PRIMARY".equals(membership.getRole())
+                || membership.getRole() != GroupRole.PRIMARY
                 || group.getPrimaryAdminUser() == null
                 || !actorId.equals(group.getPrimaryAdminUser().getId())) {
             throw new BusinessException(ErrorCode.ROLE_FORBIDDEN);

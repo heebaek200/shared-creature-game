@@ -17,7 +17,7 @@ public record SeasonResponse(
         return new SeasonResponse(
                 season.getId(),
                 season.getSeasonNumber(),
-                season.getStatus(),
+                season.getStatus().name(),
                 season.getStartAt(),
                 season.getEndAt()
         );

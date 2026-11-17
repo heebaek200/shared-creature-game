@@ -8,6 +8,7 @@ import com.team.sharedcreature.avatar.domain.ShopItem;
 import com.team.sharedcreature.avatar.domain.ShopItemStatus;
 import com.team.sharedcreature.avatar.infrastructure.ShopItemRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
+import com.team.sharedcreature.group.domain.GroupStatus;
 import com.team.sharedcreature.payment.api.CreatePurchaseResponse;
 import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.infrastructure.PortOneProperties;
@@ -72,7 +73,9 @@ public class PurchaseService {
                         new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)
                 );
         var membership = membershipRepository.findActiveWithGroupByUserId(userId)
-                .filter(activeMembership -> "ACTIVE".equals(activeMembership.getGroup().getStatus()))
+                .filter(activeMembership ->
+                        activeMembership.getGroup().getStatus() == GroupStatus.ACTIVE
+                )
                 .orElse(null);
         Purchase purchase = purchaseRepository.save(Purchase.ready(
                 UUID.randomUUID().toString(),

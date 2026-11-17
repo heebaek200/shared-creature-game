@@ -8,11 +8,7 @@ import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.GlobalRole;
 import com.team.sharedcreature.auth.domain.UserStatus;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
-import com.team.sharedcreature.group.domain.Group;
-import com.team.sharedcreature.group.domain.GroupJoinRestriction;
-import com.team.sharedcreature.group.domain.GroupMembership;
-import com.team.sharedcreature.group.domain.ModerationAction;
-import com.team.sharedcreature.group.domain.UserReport;
+import com.team.sharedcreature.group.domain.*;
 import com.team.sharedcreature.group.infrastructure.GroupJoinRestrictionRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
@@ -95,11 +91,11 @@ public class AdminModerationCommandExecutor {
                 .orElseThrow(() -> new BusinessException(ErrorCode.CONCURRENT_MODIFICATION));
         GroupMembership membership = membershipRepository.findByIdForUpdate(membershipId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CONCURRENT_MODIFICATION));
-        if (!"ACTIVE".equals(group.getStatus())
+        if (group.getStatus() != GroupStatus.ACTIVE
                 || target.getStatus() != UserStatus.ACTIVE
-                || !"ACTIVE".equals(membership.getStatus())
+                || membership.getStatus() != GroupMembershipStatus.ACTIVE
                 || !groupId.equals(membership.getGroup().getId())
-                || "PRIMARY".equals(membership.getRole())) {
+                || membership.getRole() == GroupRole.PRIMARY) {
             throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
         }
 
@@ -125,7 +121,7 @@ public class AdminModerationCommandExecutor {
     private UserReport requireReceivedReport(Long reportId) {
         UserReport report = reportRepository.findByIdForUpdate(reportId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        if (!"RECEIVED".equals(report.getStatus())) {
+        if (report.getStatus() != UserReportStatus.RECEIVED) {
             throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
         }
         return report;

@@ -1,5 +1,9 @@
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.group.domain.GroupInviteLinkStatus;
+
+import com.team.sharedcreature.group.domain.GroupStatus;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -156,12 +160,12 @@ class GroupInvitationServiceTest {
     private GroupInviteLink invitation(Long invitationId, Long groupId, int currentCount, int capacity) {
         Group group = mock(Group.class);
         lenient().when(group.getId()).thenReturn(groupId);
-        lenient().when(group.getStatus()).thenReturn("ACTIVE");
+        lenient().when(group.getStatus()).thenReturn(GroupStatus.ACTIVE);
         lenient().when(group.getCurrentMemberCount()).thenReturn(currentCount);
         lenient().when(group.getCapacity()).thenReturn(capacity);
         GroupInviteLink invitation = mock(GroupInviteLink.class);
         lenient().when(invitation.getId()).thenReturn(invitationId);
-        lenient().when(invitation.getStatus()).thenReturn("ACTIVE");
+        lenient().when(invitation.getStatus()).thenReturn(GroupInviteLinkStatus.ACTIVE);
         lenient().when(invitation.getGroup()).thenReturn(group);
         return invitation;
     }
