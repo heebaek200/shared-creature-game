@@ -1333,11 +1333,13 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.assignmentId | integer(int64) | Y | N | 1 이상 | 퀘스트 배정 ID |
 | data.attemptNumber | integer | Y | N | 1~5 | 제출 시도 번호 |
 | data.verificationStatus | string(enum) | Y | N | PENDING \| VALID \| INVALID | 사진 검증 상태 |
-| data.failureReason | string | Y | Y | EXIF_GPS_MISSING \| EXIF_GPS_OUT_OF_RANGE \| EXIF_CAPTURED_AT_MISSING \| PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD \| PHOTO_PROCESSING_TIMEOUT \| QUEST_PERIOD_ENDED \| QUEST_COMPLETION_FAILED \| PHOTO_PROCESSING_FAILED; 실패 외 null | 사진 제출·퀘스트 인증 실패 사유 |
+| data.failureReason | string | Y | Y | EXIF_GPS_MISSING \| EXIF_GPS_OUT_OF_RANGE \| EXIF_CAPTURED_AT_MISSING \| PHOTO_CAPTURED_AFTER_UPLOAD \| PHOTO_CAPTURED_BEFORE_MEMBERSHIP \| PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD \| PHOTO_PROCESSING_TIMEOUT \| QUEST_PERIOD_ENDED \| QUEST_COMPLETION_FAILED \| PHOTO_PROCESSING_FAILED; 실패 외 null | 사진 제출·퀘스트 인증 실패 사유 |
 | data.uploadedAt | string(date-time) | Y | N | UTC ISO 8601 | 업로드 접수 시각 |
 | data.capturedAt | string(date-time) | Y | Y | EXIF 누락 시 null | 사진 촬영 시각 |
 | data.completionId | integer(int64) | Y | Y | 확정된 보상 없으면 null | 완료 기록 ID |
 
+- `PHOTO_CAPTURED_AFTER_UPLOAD`: EXIF 촬영 시각이 서버 업로드 접수 시각보다 미래인 경우입니다.
+- `PHOTO_CAPTURED_BEFORE_MEMBERSHIP`: EXIF 촬영 시각이 현재 활성 멤버십 가입 시각보다 이전인 경우입니다.
 - `QUEST_COMPLETION_FAILED`: EXIF는 정상이지만 기간 종료 외의 확정된 업무 조건 위반으로 완료·보상이 거절된 경우입니다.
 - `PHOTO_PROCESSING_FAILED`: 결과가 확정되지 않은 `PENDING` 제출을 1시간 뒤 Scheduler가 내부 정리한 경우입니다.
 - `PHOTO_PROCESSING_TIMEOUT`: EXIF 파싱의 5초 제한을 초과한 경우입니다.
