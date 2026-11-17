@@ -88,7 +88,6 @@ public class QuestCompletionService {
      * 사용자의 체크인 기록을 조회합니다.
      */
     private final ServiceCheckInRepository serviceCheckInRepository;
-
     /**
      * 현재 활성 시즌을 조회합니다.
      */
@@ -114,6 +113,9 @@ public class QuestCompletionService {
      * 사용자별 퀘스트 완료 기록을 조회합니다.
      */
     private final QuestCompletionRepository completionRepository;
+
+    /** 사용자별 사진 제출 횟수를 조회합니다. */
+    private final PhotoSubmissionRepository photoSubmissionRepository;
 
     /**
      * 현재 시각을 제공해 기간 경계 판정을 일정하게 처리합니다.
@@ -394,6 +396,17 @@ public class QuestCompletionService {
                             progressTarget
                     );
 
+            // PHOTO_EXIF 퀘스트에 한해 사용자별 남은 제출 횟수를 계산합니다.
+            // 성공·실패·처리 중인 제출 기록 모두 최대 5회 제한에 포함합니다.
+            Integer photoAttemptsRemaining = null;
+
+            if ("PHOTO_EXIF".equals(assignment.getVerificationTypeSnapshot())) {
+                long attemptCount = photoSubmissionRepository
+                        .countByUser_IdAndQuestAssignment_Id(userId, assignment.getId());
+
+                photoAttemptsRemaining = (int) Math.max(0L, 5L - attemptCount);
+            }
+
             responses.add(new CurrentQuestResponse(
                     assignment.getId(),
                     assignment.getQuestPeriod().getId(),
@@ -412,7 +425,7 @@ public class QuestCompletionService {
                     completed ? completion.getCompletedAt() : null,
                     completed ? completion.getId() : null,
                     progress,
-                    null
+                    photoAttemptsRemaining
             ));
         }
 
