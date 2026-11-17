@@ -395,7 +395,9 @@ export function groupSelectPage({navigate, currentUser}) {
 
         // 제한 중이거나 확인 중이면 현재 표시된 가입 버튼도 잠급니다.
         content.querySelectorAll('.join-button').forEach((button) => {
-            button.disabled = locked || joining;
+            if (button instanceof HTMLButtonElement) {
+                button.disabled = locked || joining;
+            }
         });
 
         restrictionRetry.disabled = restrictionStatus === 'VERIFYING';
@@ -608,6 +610,8 @@ export function groupSelectPage({navigate, currentUser}) {
     };
 
     const loadGroup = async () => {
+        if (!pageMounted) return;
+
         if (loading) {
             pendingLoad = true;
             return;
@@ -654,6 +658,9 @@ export function groupSelectPage({navigate, currentUser}) {
             renderPagination();
 
         } catch (error) {
+            // 페이지가 종료된 후에는 오류 UI를 변경하지 않습니다.
+            if (!pageMounted) return;
+
             groupList.innerHTML = `<tr>
     <td colspan="4" class="text-center py-4 text-danger">
         그룹 목록을 불러오지 못했습니다.
@@ -677,9 +684,17 @@ export function groupSelectPage({navigate, currentUser}) {
             loading = false;
             searchButton.disabled = false;
 
-            if (pendingLoad) {
+            if (pageMounted) {
+                searchButton.disabled = false;
+
+                // 현재 페이지가 살아 있을 때만 예약된 재조회를 수행합니다.
+                if (pendingLoad) {
+                    pendingLoad = false;
+                    void loadGroup();
+                }
+            } else {
+                // 화면 종료 후에는 추가 API 요청을 만들지 않습니다.
                 pendingLoad = false;
-                loadGroup();
             }
         }
     };
