@@ -19,6 +19,8 @@ const PHOTO_FAILURE_MESSAGES = {
   EXIF_GPS_MISSING: '사진에 GPS 위치 정보가 없습니다.',
   EXIF_GPS_OUT_OF_RANGE: '사진의 GPS 위치 정보가 올바르지 않습니다.',
   EXIF_CAPTURED_AT_MISSING: '사진에 촬영 시각 정보가 없습니다.',
+  PHOTO_CAPTURED_AFTER_UPLOAD: '사진의 촬영 시각이 제출 시각보다 미래입니다.',
+  PHOTO_CAPTURED_BEFORE_MEMBERSHIP: '현재 그룹에 가입하기 전에 촬영한 사진입니다.',
   PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD: '퀘스트 기간 밖에 촬영한 사진입니다.',
   PHOTO_PROCESSING_TIMEOUT: '사진 처리 시간이 초과되었습니다. 다시 시도해 주세요.',
   QUEST_PERIOD_ENDED: '사진 처리 중 퀘스트 기간이 종료되었습니다.',

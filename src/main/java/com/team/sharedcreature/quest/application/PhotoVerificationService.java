@@ -4,6 +4,7 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
+import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.quest.api.PhotoSubmissionResponse;
 import com.team.sharedcreature.quest.api.QuestCompletionResponse;
@@ -191,13 +192,19 @@ public class PhotoVerificationService {
                 );
             }
 
-            // 9. 촬영 시각도 제출된 배정 기간 안인지 확인합니다.
-            if (capturedAt.isBefore(pending.assignmentStartAt())
-                    || !capturedAt.isBefore(pending.assignmentEndAt())) {
+            // 9. 서버 접수·현재 멤버십·배정 기간을 기준으로 촬영 시각을 검증합니다.
+            String capturedAtFailureReason = capturedAtFailureReason(
+                    capturedAt,
+                    pending.uploadedAt(),
+                    pending.membershipJoinedAt(),
+                    pending.assignmentStartAt(),
+                    pending.assignmentEndAt()
+            );
+            if (capturedAtFailureReason != null) {
                 return markInvalidAndRespond(
                         pending,
                         assignmentId,
-                        "PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD",
+                        capturedAtFailureReason,
                         capturedAt,
                         latitude,
                         longitude
@@ -302,7 +309,8 @@ public class PhotoVerificationService {
                     ));
 
             // 사진 접수 시점의 활성 멤버십을 확인합니다.
-            membershipRepository.findActiveWithGroupByUserId(userId)
+            GroupMembership membership = membershipRepository
+                    .findActiveWithGroupByUserId(userId)
                     .orElseThrow(() -> new BusinessException(
                             ErrorCode.ROLE_FORBIDDEN,
                             "요청 권한이 없습니다."
@@ -383,6 +391,7 @@ public class PhotoVerificationService {
                     assignmentId,
                     attemptNumber,
                     uploadedAt,
+                    membership.getJoinedAt(),
                     assignment.getQuestPeriod().getStartAt(),
                     assignment.getQuestPeriod().getEndAt()
             );
@@ -413,6 +422,32 @@ public class PhotoVerificationService {
         } catch (DateTimeException exception) {
             return null;
         }
+    }
+
+    /**
+     * 촬영 시각이 서버 접수 시각, 현재 멤버십 가입 시각과 배정 기간을 만족하는지 확인합니다.
+     * 서버 접수 이후 또는 현재 멤버십 가입 이전 촬영분은 진행도와 일치하도록 거절합니다.
+     *
+     * @return 실패 사유, 모든 조건을 만족하면 {@code null}
+     */
+    static String capturedAtFailureReason(
+            Instant capturedAt,
+            Instant uploadedAt,
+            Instant membershipJoinedAt,
+            Instant assignmentStartAt,
+            Instant assignmentEndAt
+    ) {
+        if (capturedAt.isAfter(uploadedAt)) {
+            return "PHOTO_CAPTURED_AFTER_UPLOAD";
+        }
+        if (capturedAt.isBefore(membershipJoinedAt)) {
+            return "PHOTO_CAPTURED_BEFORE_MEMBERSHIP";
+        }
+        if (capturedAt.isBefore(assignmentStartAt)
+                || !capturedAt.isBefore(assignmentEndAt)) {
+            return "PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD";
+        }
+        return null;
     }
 
     /**
@@ -490,6 +525,7 @@ public class PhotoVerificationService {
             Long assignmentId,
             int attemptNumber,
             Instant uploadedAt,
+            Instant membershipJoinedAt,
             Instant assignmentStartAt,
             Instant assignmentEndAt
     ) {
