@@ -1,3 +1,4 @@
+
 // @ts-check
 import {
     createGroup,
@@ -5,6 +6,7 @@ import {
     joinGroup,
 } from '../features/group/api.js';
 import { createAppShell } from '../components/app-shell.js';
+import { proofreadGroupDescription } from '../ai/api.js';
 
 /**
  * 공개 그룹 검색·가입 및 그룹 생성 Page를 생성합니다.
@@ -23,82 +25,104 @@ export function groupSelectPage({navigate, currentUser}) {
     let totalPages = 0;
 
     content.innerHTML = `
-    <section class="card border-0 shadow-sm rounded-4 mb-4">
-        <div class="card-body p-3 p-md-4">
-            <div class="d-flex flex-wrap align-content-center justify-content-between gap-3 mb-4">
-                <h2 class="h5 fw-bold mb-0">공개 그룹 선택</h2>
-                <span class="badge text-bg-light border text-secondary">공개 그룹</span>
-            </div>
-            
-            <div class="row align-items-end g-3 mb-4">
-                <div class="col-md-8">
-                    <form class="search-form">
-                        <label for="group-search" class="form-label fw-semibold">
-                            그룹명 검색
-                        </label>
-                        
-                        <div class="d-flex gap-2">
-                            <input id="group-search" class="form-control" type="search" maxlength="30" placeholder="그룹명 입력">
-                            <button class="btn btn-outline-success search-button text-nowrap flex-shrink-0" type="submit">검색</button>
-                        </div>
-                    </form>
+        <section class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-body p-3 p-md-4">
+                <div class="d-flex flex-wrap align-content-center justify-content-between gap-3 mb-4">
+                    <h2 class="h5 fw-bold mb-0">공개 그룹 선택</h2>
+                    <span class="badge text-bg-light border text-secondary">공개 그룹</span>
                 </div>
-                
-                <div class="col-md-4">
-                    <button class="btn btn-outline-success w-100 create-toggle" type="button" aria-expanded="false">+ 새 그룹 생성</button>
+
+                <div class="row align-items-end g-3 mb-4">
+                    <div class="col-md-8">
+                        <form class="search-form">
+                            <label for="group-search" class="form-label fw-semibold">
+                                그룹명 검색
+                            </label>
+
+                            <div class="d-flex gap-2">
+                                <input id="group-search" class="form-control" type="search" maxlength="30" placeholder="그룹명 입력">
+                                <button class="btn btn-outline-success search-button text-nowrap flex-shrink-0" type="submit">검색</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="col-md-4">
+                        <button class="btn btn-outline-success w-100 create-toggle" type="button" aria-expanded="false">+ 새 그룹 생성</button>
+                    </div>
                 </div>
-            </div>
-            
-            <section class="create-panel d-none mb-4">
-                <div class="border rounded-3 p-3 p-md-4">
-                    <h3 class="h6 fw-bold mb-3">새 그룹 만들기</h3>
-                    <form class="group-form">
-                        <div class="mb-3">
-                            <label class="form-label" for="group-name">그룹명</label>
-                            <input class="form-control" id="group-name" name="name" minlength="2" maxlength="30" required placeholder="그룹명을 입력하세요">
-                            <div class="form-text">2~30자 · 전역 중복 불가</div>
-                            <div class="invalid-feedback" id="group-name-error"></div>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label" for="group-description">그룹 소개</label>
-                            <textarea class="form-control" id="group-description" name="description" maxlength="500" rows="4" placeholder="그룹 소개 (선택 · 최대 500자)"></textarea>
-                            <div class="invalid-feedback" id="group-description-error"></div>
-                        </div>
-                                                       
-                        <button class="btn btn-success create-submit" type="submit">그룹 생성</button>
-                        <div class="alert d-none create-alert mt-3 mb-0" role="status" aria-live="polite"></div>
-                        
-                    </form>
+
+                <section class="create-panel d-none mb-4">
+                    <div class="border rounded-3 p-3 p-md-4">
+                        <h3 class="h6 fw-bold mb-3">새 그룹 만들기</h3>
+                        <form class="group-form">
+                            <div class="mb-3">
+                                <label class="form-label" for="group-name">그룹명</label>
+                                <input class="form-control" id="group-name" name="name" minlength="2" maxlength="30" required placeholder="그룹명을 입력하세요">
+                                <div class="form-text">2~30자 · 전역 중복 불가</div>
+                                <div class="invalid-feedback" id="group-name-error"></div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label" for="group-description">그룹 소개</label>
+                                <textarea class="form-control" id="group-description" name="description" maxlength="500" rows="4" placeholder="그룹 소개 (선택 · 최대 500자)"></textarea>
+                                <div class="invalid-feedback" id="group-description-error"></div>
+
+                                <div class="d-flex justify-content-end mt-2">
+                                    <button type="button" class="btn btn-outline-primary btn-sm ai-proofread-button">AI 맞춤형 교정</button>
+                                </div>
+                            </div>
+
+                            <div class="ai-proofread-result d-none border rounded-3 p-3 mb-3">
+                                <h4 class="h6 fw-bold">AI 교정 제안</h4>
+
+                                <div class="mb-3">
+                                    <div class="small text-secondary mb-1">원문</div>
+                                    <p class="ai-original-text mb-0"></p>
+                                </div>
+
+                                <div class="mb-3">
+                                    <div class="small text-secondary mb-1">교정 제안</div>
+                                    <p class="ai-suggested-text mb-0"></p>
+                                </div>
+
+                                <button type="button" class="btn btn-success btn-sm ai-apply-button">교정 결과 적용</button>
+                            </div>
+
+                            <div class="alert d-none ai-proofread-alert mt-2" role="status" aria-live="polite"></div>
+
+                            <button class="btn btn-success create-submit" type="submit">그룹 생성</button>
+                            <div class="alert d-none create-alert mt-3 mb-0" role="status" aria-live="polite"></div>
+                        </form>
+                    </div>
+                </section>
+
+                <div class="alert d-none list-alert" role="status" aria-live="polite"></div>
+
+                <div class="table-responsive">
+                    <table class="table align-middle mb-3">
+                        <thead class="table-light">
+                            <tr>
+                                <th scope="col">그룹</th>
+                                <th scope="col">현재 인원</th>
+                                <th scope="col">남은 자리</th>
+                                <th scope="col">동작</th>
+                            </tr>
+                        </thead>
+                        <tbody class="group-list">
+                            <tr>
+                                <td colspan="4" class="text-center py-4">그룹 목록을 불러오는 중입니다.</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
-            </section>
-            
-            <div class="alert d-none list-alert" role="status" aria-live="polite"></div>
-            <div class="table-responsive">
-                <table class="table align-middle mb-3">
-                <thead class="table-light">
-                <tr>  
-                    <th scope="col">그룹</th>
-                    <th scope="col">현재 인원</th>
-                    <th scope="col">남은 자리</th>
-                    <th scope="col">동작</th>
-                </tr>
-                </thead>
-                
-                <tbody class="group-list">
-                    <tr>
-                        <td colspan="4" class="text-center py-4">그룹 목록을 불러오는 중입니다.</td>
-                    </tr>
-                </tbody>
-                </table>
+
+                <nav class="pagination-area" aria-label="그룹 목록 페이지">
+                    <ul class="pagination justify-content-center mb-3"></ul>
+                </nav>
+
+                <div class="alert alert-secondary border-0 small mb-0" role="status"></div>
             </div>
-            
-            <nav class="pagination-area" aria-label="그룹 목록 페이지">
-                <ul class="pagination justify-content-center mb-3"></ul>
-            </nav>        
-            <div class="alert alert-secondary border-0 small mb-0" role="status"></div>
-        </div>
-    </section>
+        </section>
     `;
 
     const element = createAppShell({
@@ -108,24 +132,35 @@ export function groupSelectPage({navigate, currentUser}) {
         navigate,
     });
 
-    const searchForm = element.querySelector('.search-form')
-    const searchInput = element.querySelector('#group-search')
-    const searchButton = element.querySelector('.search-button')
+    const searchForm = element.querySelector('.search-form');
+    const searchInput = element.querySelector('#group-search');
+    const searchButton = element.querySelector('.search-button');
 
-    const createToggle = element.querySelector('.create-toggle')
-    const createPanel = element.querySelector('.create-panel')
-    const createForm = element.querySelector('.group-form')
-    const createSubmit = element.querySelector('.create-submit')
-    const createAlert = element.querySelector('.create-alert')
+    const createToggle = element.querySelector('.create-toggle');
+    const createPanel = element.querySelector('.create-panel');
+    const createForm = element.querySelector('.group-form');
+    const createSubmit = element.querySelector('.create-submit');
+    const createAlert = element.querySelector('.create-alert');
     const groupNameInput = element.querySelector('#group-name');
     const groupNameError = element.querySelector('#group-name-error');
     const groupDescriptionInput = element.querySelector('#group-description');
     const groupDescriptionError = element.querySelector('#group-description-error');
 
+    const aiProofreadButton = element.querySelector('.ai-proofread-button');
+    const aiProofreadResult = element.querySelector('.ai-proofread-result');
+    const aiOriginalText = element.querySelector('.ai-original-text');
+    const aiSuggestedText = element.querySelector('.ai-suggested-text');
+    const aiApplyButton = element.querySelector('.ai-apply-button');
+    const aiProofreadAlert = element.querySelector('.ai-proofread-alert');
+
+    let suggestedDescription = null;
+    let proofreading = false;
+
     const showGroupNameError = (message) => {
         groupNameInput.classList.add('is-invalid');
         groupNameError.textContent = message;
     };
+
     const clearGroupNameError = () => {
         groupNameInput.classList.remove('is-invalid');
         groupNameError.textContent = '';
@@ -147,7 +182,16 @@ export function groupSelectPage({navigate, currentUser}) {
         groupDescriptionError.textContent = '';
     };
 
-    const listAlert = element.querySelector('.list-alert')
+    const onGroupDescriptionInput = () => {
+        clearGroupDescriptionError();
+
+        suggestedDescription = null;
+        aiProofreadResult.classList.add('d-none');
+        hideAlert(aiProofreadAlert);
+    };
+
+    const listAlert = element.querySelector('.list-alert');
+
     // 회원가입 후 초대 그룹 가입 실패 사유 안내
     const params = new URLSearchParams(window.location.search);
     const allowedReasons = [
@@ -168,8 +212,8 @@ export function groupSelectPage({navigate, currentUser}) {
         ALREADY_IN_GROUP: '이미 다른 그룹에 가입되어 있습니다.',
     };
 
-    const groupList = element.querySelector('.group-list')
-    const pagination = element.querySelector('.pagination-area .pagination')
+    const groupList = element.querySelector('.group-list');
+    const pagination = element.querySelector('.pagination-area .pagination');
 
     const showAlert = (target, message, type = 'danger') => {
         target.classList.remove(
@@ -183,6 +227,7 @@ export function groupSelectPage({navigate, currentUser}) {
         target.classList.add('alert', `alert-${type}`);
         target.textContent = message;
     };
+
     if (reason) {
         showAlert(listAlert, reasonMessages[reason], 'warning');
     }
@@ -190,6 +235,85 @@ export function groupSelectPage({navigate, currentUser}) {
     const hideAlert = (target) => {
         target.classList.add('d-none');
         target.textContent = '';
+    };
+
+    const onAiProofread = async () => {
+        if (proofreading) return;
+
+        const originalText = groupDescriptionInput.value;
+        const normalizedText = originalText.trim();
+
+        if (!normalizedText) {
+            showAlert(aiProofreadAlert, 'AI 교정을 위해 그룹 소개를 먼저 입력해 주세요.', 'warning');
+            return;
+        }
+
+        if (normalizedText.length > 500) {
+            showAlert(aiProofreadAlert, '그룹 소개는 공백 제거 후 500자 이하여야 합니다.', 'warning');
+            return;
+        }
+
+        hideAlert(aiProofreadAlert);
+        aiProofreadResult.classList.add('d-none');
+        suggestedDescription = null;
+
+        proofreading = true;
+        aiProofreadButton.disabled = true;
+        aiProofreadButton.textContent = '교정 중...';
+
+        try {
+            const result = await proofreadGroupDescription(normalizedText);
+
+            if (groupDescriptionInput.value !== originalText) {
+                return;
+            }
+
+            if (typeof result?.suggestedText !== 'string') {
+                throw new Error('AI 교정 결과를 확인할 수 없습니다.');
+            }
+
+            suggestedDescription = result.suggestedText;
+
+            aiOriginalText.textContent = result.originalText ?? originalText;
+            aiSuggestedText.textContent = suggestedDescription;
+            aiProofreadResult.classList.remove('d-none');
+
+            if (result.changed === false) {
+                showAlert(
+                    aiProofreadAlert,
+                    '교정할 내용이 없습니다. 원문을 그대로 사용할 수 있습니다.',
+                    'info'
+                );
+            }
+        } catch (error) {
+            let message = 'AI 교정 중 오류가 발생했습니다.';
+
+            if (error?.code === 'RATE_LIMIT_EXCEEDED') {
+                message = 'AI 교정 요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요';
+            } else if (error?.code === 'AI_PROVIDER_UNAVAILABLE') {
+                message = 'AI 교정 서비스를 일시적으로 사용할 수 없습니다. 원문을 그대로 사용해 주세요.';
+            } else if (error?.message) {
+                message = error.message;
+            }
+
+            showAlert(aiProofreadAlert, message, 'danger');
+        } finally {
+            proofreading = false;
+            aiProofreadButton.disabled = false;
+            aiProofreadButton.textContent = 'AI 맞춤형 교정';
+        }
+    };
+
+    const onAiApply = () => {
+        if (suggestedDescription === null) return;
+
+        groupDescriptionInput.value = suggestedDescription;
+        clearGroupDescriptionError();
+
+        aiProofreadResult.classList.add('d-none');
+        hideAlert(aiProofreadAlert);
+
+        suggestedDescription = null;
     };
 
     const escapeHtml = (value) => {
@@ -201,6 +325,7 @@ export function groupSelectPage({navigate, currentUser}) {
                 '"': '&quot;',
                 "'": '&#039;',
             };
+
             return entities[char];
         });
     };
@@ -210,7 +335,7 @@ export function groupSelectPage({navigate, currentUser}) {
             GROUP_FULL: '그룹 정원이 가득 찼습니다.',
             JOIN_COOLDOWN_ACTIVE: '24시간 가입 제한이 적용 중입니다.',
             ALREADY_IN_GROUP: '이미 다른 그룹에 가입되어 있습니다.',
-            GROUP_NOT_FOUND: '존재하지 않는 그룹입니다'
+            GROUP_NOT_FOUND: '존재하지 않는 그룹입니다',
         };
 
         return messages[reason] ?? '그룹에 가입할 수 없습니다';
@@ -247,39 +372,36 @@ export function groupSelectPage({navigate, currentUser}) {
                 <td>
                     <div class="fw-semibold">${groupName}</div>
                     ${group.description
-                ? ` <div class="small text-secondary mt-1">
+                        ? `<div class="small text-secondary mt-1">
                                 ${escapeHtml(group.description)}
-                            </div>`
-                : ''
-            }
+                           </div>`
+                        : ''
+                    }
                 </td>
-                
                 <td>
                     ${currentCount} / ${groupCapacity}
-                </td>              
-                 <td>
+                </td>
+                <td>
                     ${remaining}
                 </td>
-                
                 <td>
                     ${canJoin
-                ? ` <button type="button" class="btn btn-success btn-sm join-button" data-group-id="${groupId}">가입</button>`
-                : `
-                    <button
-                        type="button"
-                        class="btn btn-outline-secondary btn-sm"
-                        disabled
-                    >
-                        ${remaining <= 0 ? '정원 마감' : '가입 불가'}
-                    </button>
-                
-                    <div class="small text-danger mt-1">
-                        ${escapeHtml(getBlockedMessage(group.joinBlockedReason))}
-                    </div>
-                `
-            }
+                        ? `<button type="button" class="btn btn-success btn-sm join-button" data-group-id="${groupId}">가입</button>`
+                        : `
+                            <button
+                                type="button"
+                                class="btn btn-outline-secondary btn-sm"
+                                disabled
+                            >
+                                ${remaining <= 0 ? '정원 마감' : '가입 불가'}
+                            </button>
+                            <div class="small text-danger mt-1">
+                                ${escapeHtml(getBlockedMessage(group.joinBlockedReason))}
+                            </div>
+                        `
+                    }
                 </td>
-              `;
+            `;
 
             groupList.append(row);
         });
@@ -338,17 +460,19 @@ export function groupSelectPage({navigate, currentUser}) {
             hideAlert(listAlert);
         }
 
-        groupList.innerHTML = `<tr>
-        <td colspan="4" class="text-center py-4">
-            그룹 목록을 불러오는 중입니다.
-        </td>
-    </tr>`;
+        groupList.innerHTML = `
+            <tr>
+                <td colspan="4" class="text-center py-4">
+                    그룹 목록을 불러오는 중입니다.
+                </td>
+            </tr>
+        `;
 
         try {
             const result = await listPublicGroups({
                 q: currentQuery,
                 page: currentPage,
-                size: PAGE_SIZE
+                size: PAGE_SIZE,
             });
 
             const groups = Array.isArray(result?.data)
@@ -366,19 +490,21 @@ export function groupSelectPage({navigate, currentUser}) {
 
             renderGroups(groups);
             renderPagination();
-
         } catch (error) {
-            groupList.innerHTML = `<tr>
-    <td colspan="4" class="text-center py-4 text-danger">
-        그룹 목록을 불러오지 못했습니다.
-        <button
-            type="button"
-            class="btn btn-outline-primary btn-sm ms-2 retry-button"
-        >
-            재시도
-        </button>
-    </td>
-</tr>`;
+            groupList.innerHTML = `
+                <tr>
+                    <td colspan="4" class="text-center py-4 text-danger">
+                        그룹 목록을 불러오지 못했습니다.
+                        <button
+                            type="button"
+                            class="btn btn-outline-primary btn-sm ms-2 retry-button"
+                        >
+                            재시도
+                        </button>
+                    </td>
+                </tr>
+            `;
+
             showAlert(
                 listAlert,
                 error.message || '그룹 목록 조회 중 오류가 발생했습니다.'
@@ -386,7 +512,6 @@ export function groupSelectPage({navigate, currentUser}) {
 
             totalPages = 0;
             renderPagination();
-
         } finally {
             loading = false;
             searchButton.disabled = false;
@@ -420,7 +545,6 @@ export function groupSelectPage({navigate, currentUser}) {
             : '- 그룹 생성 닫기';
     };
 
-
     const onCreate = async (event) => {
         event.preventDefault();
 
@@ -435,7 +559,7 @@ export function groupSelectPage({navigate, currentUser}) {
         try {
             const result = await createGroup({
                 name: element.querySelector('#group-name').value.trim(),
-                description: element.querySelector('#group-description').value
+                description: element.querySelector('#group-description').value,
             });
 
             creationSucceeded = true;
@@ -503,7 +627,6 @@ export function groupSelectPage({navigate, currentUser}) {
 
                 linkArea.append(linkDisplay, copyButton);
                 createAlert.append(linkLabel, linkArea, copyStatus);
-
             } else {
                 const warning = document.createElement('p');
                 warning.className = 'small mb-3';
@@ -525,7 +648,6 @@ export function groupSelectPage({navigate, currentUser}) {
             createAlert.append(moveButton);
 
             createForm.reset();
-
         } catch (error) {
             const nameFieldError = error?.fieldErrors?.find(
                 (fieldError) => fieldError.field === 'name'
@@ -558,12 +680,10 @@ export function groupSelectPage({navigate, currentUser}) {
                     error.message || '그룹 생성에 실패했습니다.'
                 );
             }
-        }
-        finally {
+        } finally {
             createSubmit.disabled = creationSucceeded;
         }
     };
-
 
     const onJoin = async (event) => {
         const button = event.target.closest('.join-button');
@@ -576,12 +696,11 @@ export function groupSelectPage({navigate, currentUser}) {
 
         joining = true;
         button.disabled = true;
-        button.textContent = '가입 중...'
+        button.textContent = '가입 중...';
 
         try {
             const result = await joinGroup(groupId);
             navigate(result?.nextRoute || '/creature');
-
         } catch (error) {
             const joinErrorMessages = {
                 JOIN_COOLDOWN_ACTIVE:
@@ -639,8 +758,10 @@ export function groupSelectPage({navigate, currentUser}) {
     searchForm.addEventListener('submit', onSearch);
     createToggle.addEventListener('click', onCreateToggle);
     createForm.addEventListener('submit', onCreate);
+    aiProofreadButton.addEventListener('click', onAiProofread);
+    aiApplyButton.addEventListener('click', onAiApply);
     groupNameInput.addEventListener('input', clearGroupNameError);
-    groupDescriptionInput.addEventListener('input', clearGroupDescriptionError);
+    groupDescriptionInput.addEventListener('input', onGroupDescriptionInput);
     groupList.addEventListener('click', onGroupListClick);
     pagination.addEventListener('click', onPagination);
 
@@ -652,12 +773,12 @@ export function groupSelectPage({navigate, currentUser}) {
             searchForm.removeEventListener('submit', onSearch);
             createToggle.removeEventListener('click', onCreateToggle);
             createForm.removeEventListener('submit', onCreate);
+            aiProofreadButton.removeEventListener('click', onAiProofread);
+            aiApplyButton.removeEventListener('click', onAiApply);
             groupNameInput.removeEventListener('input', clearGroupNameError);
-            groupDescriptionInput.removeEventListener('input', clearGroupDescriptionError);
+            groupDescriptionInput.removeEventListener('input', onGroupDescriptionInput);
             groupList.removeEventListener('click', onGroupListClick);
             pagination.removeEventListener('click', onPagination);
         },
     };
 }
-
-
