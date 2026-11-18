@@ -244,14 +244,24 @@ export function adminRefundsPage({ navigate } = {}) {
 
   async function runReconcile() {
     if (!detail || processing || !window.confirm('PG 취소 상태를 다시 조회할까요? 취소 요청을 재실행하지 않습니다.')) return;
+    const requestId = detail.refundRequestId;
     processing = true; renderList(); renderDetail();
     try {
-      detail = await reconcileRefund(detail.refundRequestId);
+      let feedbackResult;
+      try {
+        detail = await reconcileRefund(requestId);
+        feedbackResult = adminRefundFeedback(detail.status);
+      } catch (error) {
+        const unknown = error?.code === 'PG_CANCEL_RESULT_UNKNOWN';
+        feedbackResult = {
+          message: unknown ? 'PG 취소 결과가 아직 확정되지 않았습니다.' : error?.message ?? '결과를 복구하지 못했습니다.',
+          type: unknown ? 'warning' : 'danger',
+        };
+      }
       if (disposed) return;
-      showFeedback(detail.status === 'COMPLETED' ? '환불 완료 상태를 확인했습니다.' : '최신 PG 취소 상태를 확인했습니다.', detail.status === 'COMPLETED' ? 'success' : 'warning');
-      await loadList(page); renderDetail();
-    } catch (error) {
-      if (!disposed) { const unknown = error?.code === 'PG_CANCEL_RESULT_UNKNOWN'; showFeedback(unknown ? 'PG 취소 결과가 아직 확정되지 않았습니다.' : error?.message ?? '결과를 복구하지 못했습니다.', unknown ? 'warning' : 'danger'); await loadList(page); await loadDetail(detail.refundRequestId); }
+      await loadList(page);
+      if (!disposed) await loadDetail(requestId);
+      if (!disposed) showFeedback(feedbackResult.message, feedbackResult.type);
     } finally { processing = false; renderList(); renderDetail(); renderPagination(); }
   }
 
