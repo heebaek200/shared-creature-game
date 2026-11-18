@@ -682,7 +682,6 @@ export function groupSelectPage({navigate, currentUser}) {
 
         } finally {
             loading = false;
-            searchButton.disabled = false;
 
             if (pageMounted) {
                 searchButton.disabled = false;
