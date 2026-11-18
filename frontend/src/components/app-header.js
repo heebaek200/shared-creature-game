@@ -4,7 +4,7 @@ import titleIconDark from '../../assets/ui/header-title-icon-dark.png';
 import { logout } from '../features/auth/api.js';
 import {stopSeasonTracker} from '../features/season/season-tracker.js';
 
-export function createAppHeader({ currentUser = null, navigate, showGroupBadge = true, showSeasonInfo = true } = {}) {
+export function createAppHeader({ currentUser = null, navigate, showGroupBadge = true, showSeasonInfo = true, showConnectionStatus = true } = {}) {
     const header = document.createElement('header');
     const isAuthenticated =
         currentUser?.authenticationState === 'AUTHENTICATED';
@@ -27,12 +27,12 @@ export function createAppHeader({ currentUser = null, navigate, showGroupBadge =
             </span>
           ` : ''}
         
-          <span class="badge rounded-pill text-nowrap ms-auto me-2 px-3 py-2 app-header__connection-status"
+          ${showConnectionStatus ? `<span class="badge rounded-pill text-nowrap ms-auto me-2 px-3 py-2 app-header__connection-status"
             data-header-connection-status data-connection-state="pending" role="status" aria-live="polite" aria-atomic="true"
             aria-label="실시간 연결 상태: 연결 확인 중" title="실시간 연결 상태: 연결 확인 중">
             <span class="me-2 app-header__connection-dot" aria-hidden="true">●</span>
             <span class="connection-status-label">연결 확인 중</span>
-          </span>
+          </span>` : ''}
         </div>        
         <div class="app-header__actions d-flex align-items-center gap-2" data-header-actions>
             ${isAuthenticated

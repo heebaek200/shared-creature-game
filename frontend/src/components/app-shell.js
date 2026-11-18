@@ -19,7 +19,7 @@ function updateSeasonHeader(text) {
  * 공통 Shell 과 페이지 콘텐츠 영역을 생성합니다.
  * @returns {{ shell: HTMLDivElement, body: HTMLDivElement }}
  */
-export function createBaseLayout({currentUser, navigate, showGroupBadge = true, showSeasonInfo = true} = {}) {
+export function createBaseLayout({currentUser, navigate, showGroupBadge = true, showSeasonInfo = true, showConnectionStatus = true} = {}) {
     const shell = document.createElement('div');
     shell.className =
         'd-flex flex-column min-vh-100 app-shell app-shell-root w-100 m-0 p-0 overflow-x-hidden';
@@ -35,7 +35,8 @@ export function createBaseLayout({currentUser, navigate, showGroupBadge = true, 
         currentUser,
         navigate,
         showGroupBadge,
-        showSeasonInfo: canShowSeason
+        showSeasonInfo: canShowSeason,
+        showConnectionStatus,
     });
 
     const seasonInfo = header.querySelector('[data-header-season-info]');
@@ -77,8 +78,8 @@ export function createBaseLayout({currentUser, navigate, showGroupBadge = true, 
  * @param {{ content: HTMLElement }} options
  * @returns {HTMLElement}
  */
-export function createHeaderLayout({content, currentUser, navigate, showGroupBadge = true, showSeasonInfo = true}) {
-    const {shell, body} = createBaseLayout({currentUser, navigate, showGroupBadge, showSeasonInfo});
+export function createHeaderLayout({content, currentUser, navigate, showGroupBadge = true, showSeasonInfo = true, showConnectionStatus = true}) {
+    const {shell, body} = createBaseLayout({currentUser, navigate, showGroupBadge, showSeasonInfo, showConnectionStatus});
     body.append(content);
     return shell;
 }
