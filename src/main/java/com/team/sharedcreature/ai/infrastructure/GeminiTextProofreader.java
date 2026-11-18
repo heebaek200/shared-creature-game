@@ -17,7 +17,7 @@ import java.util.Map;
 @Component
 public class GeminiTextProofreader implements TextProofreader {
 
-    private static final String GEMINI_API_URL =  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent";;
+    private static final String GEMINI_API_URL =  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent";
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper;

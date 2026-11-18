@@ -22,12 +22,11 @@ public class TextProofreadingController {
 
     public record ProofreadingRequest(
             @NotBlank(message = "그룹 소개를 입력해 주세요.")
-            @Size(max = 500, message = "그룹 소개는 500자 이하여야 합니다.")
             String text
     ) {
     }
 
-    @PostMapping("/api/v1/ai/proofread")
+    @PostMapping("/api/v1/ai/proofreads")
     public ApiResponse<TextProofreadingService.ProofreadingResult> proofread(
             @Valid @RequestBody ProofreadingRequest request,
             @AuthenticationPrincipal LoginUser loginUser
