@@ -21,10 +21,29 @@ export function createRouter(root, routes) {
   groupLiveManager.subscribeErrors((error) => {
     const target = creatureAccessErrorRoute(error);
     if (!target) return;
+
+    // 권한이 없거나 세션이 만료된 그룹 연결을 종료합니다.
     void groupLiveManager.stop().catch((stopError) => {
       console.error('그룹 실시간 연결 종료 실패:', stopError);
     });
-    if (location.pathname !== target) replace(target);
+
+    const currentRoute = routes.find(
+        (candidate) => candidate.path === location.pathname
+    );
+
+    const isGroupProtectedPage =
+        currentRoute?.access === 'GROUP_MEMBER' ||
+        currentRoute?.access === 'GROUP_ADMIN';
+
+    // 그룹 권한 오류로 일반 로그인 사용자용 화면을 벗어나지 않습니다.
+    if (target === '/403' && !isGroupProtectedPage) {
+      return;
+    }
+
+    // 세션 만료는 현재 화면과 관계없이 로그인 흐름으로 이동합니다.
+    if (location.pathname !== target) {
+      replace(target);
+    }
   });
 
   function syncGroupLiveConnection(me) {

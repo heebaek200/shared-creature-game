@@ -31,12 +31,17 @@ export function createBaseLayout({currentUser, navigate, showGroupBadge = true, 
         showSeasonInfo &&
         currentUser?.authenticationState === 'AUTHENTICATED';
 
+    const canShowConnection =
+        showConnectionStatus &&
+        currentUser?.authenticationState === 'AUTHENTICATED' &&
+        currentUser?.membership?.groupId != null;
+
     const header = createAppHeader({
         currentUser,
         navigate,
         showGroupBadge,
         showSeasonInfo: canShowSeason,
-        showConnectionStatus,
+        showConnectionStatus: canShowConnection,
     });
 
     const seasonInfo = header.querySelector('[data-header-season-info]');
