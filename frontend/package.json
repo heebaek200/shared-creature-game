@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@popperjs/core": "^2.11.8",
+    "@portone/browser-sdk": "^0.1.13",
     "@stomp/stompjs": "^7.2.1",
     "bootstrap": "^5.3.8"
   },
