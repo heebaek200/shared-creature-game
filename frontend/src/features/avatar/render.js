@@ -17,6 +17,13 @@ const itemImages = import.meta.glob('../../../assets/item/*.png', {
 const layerOrder = ['FACE', 'BODY', 'HEAD', 'ACCESSORY'];
 const AVATAR_SIZE = 72;
 
+/** 상점 카드에 표시할 정지·우측 방향 첫 프레임 이미지를 반환합니다. */
+export function getShopItemImage(slot, assetKey) {
+    if (typeof slot !== 'string' || typeof assetKey !== 'string') return '';
+    const path = `../../../assets/item/stop-right-${slot.toLowerCase()}-${assetKey}-1.png`;
+    return itemImages[path] ?? '';
+}
+
 /**
  * 그룹원 아바타의 기본 이미지와 장착 아이템 레이어를 생성합니다.
  * 누락된 아이템 이미지는 해당 레이어만 숨겨 나머지 외형을 유지합니다.

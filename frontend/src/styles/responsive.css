@@ -314,6 +314,14 @@
 
 /* 768px 이하: Header와 크리처 정보를 더 좁은 폭에 맞춤 */
 @media (max-width: 770px) {
+    .commerce-page .page-header {
+        flex-wrap: wrap;
+    }
+
+    .commerce-sticky-card {
+        position: static;
+    }
+
     /* Header 제목은 아이콘만 표시 */
     .app-header {
         flex-wrap: nowrap;
@@ -424,6 +432,15 @@
 
     /* 시즌 선택은 모바일 Header 아래에서 전체 너비를 사용합니다. */
     .ranking-season-field {
+        width: 100%;
+    }
+
+    .commerce-tabs {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .commerce-tabs .nav-link {
         width: 100%;
     }
 }

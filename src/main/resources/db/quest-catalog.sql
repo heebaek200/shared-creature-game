@@ -5,6 +5,14 @@
 
 -- 이전 data.sql의 임시 3개는 삭제 대신 비활성화 및 회전 번호 이동 처리.
 -- 현재·과거 quest_assignments가 이 템플릿을 참조하는 경우에도 FK가 보존됩니다.
+-- 과거 PHOTO_EXIF 수동 테스트가 남긴 전용 템플릿도 Snapshot 참조를 보존한 채 비활성화합니다.
+-- 버전 없는 레거시 템플릿이 ACTIVE이면 현재 퀘스트 배정 전체가 실패할 수 있습니다.
+UPDATE quest_templates
+   SET status     = 'INACTIVE'
+     , updated_at = UTC_TIMESTAMP(6)
+ WHERE code = 'D-X-EXIF-TEST'
+   AND status <> 'INACTIVE';
+
 UPDATE quest_templates
    SET status         = 'INACTIVE'
      , rotation_order = 1001
