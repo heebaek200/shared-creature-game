@@ -20,7 +20,7 @@ public class PortOneWebhookController {
         this.webhookService = webhookService;
     }
 
-    /** 서명 검증된 이벤트를 비동기 처리 대상으로 수락합니다. */
+    /** 서명 검증된 이벤트를 처리하고 PortOne 재전송 조건에 맞춰 200을 반환합니다. */
     @PostMapping
     public ResponseEntity<ApiResponse<Map<String, Object>>> receivePortOneWebhook(
             @RequestHeader("webhook-id") String eventId,
@@ -35,7 +35,7 @@ public class PortOneWebhookController {
                     signature,
                     timestamp
             );
-            return ResponseEntity.accepted().body(ApiResponse.success(Map.of()));
+            return ResponseEntity.ok(ApiResponse.success(Map.of()));
         } catch (PortOneWebhookVerifier.InvalidWebhookSignatureException exception) {
             return ResponseEntity.badRequest().build();
         }

@@ -1,8 +1,19 @@
 // @ts-check
-import { apiRequest } from '../../api/client.js';
+import { apiRequest, apiRequestWithMeta } from '../../api/client.js';
 import { mockApi } from '../../mocks/mock-api.js';
 
 const useMock = import.meta.env.VITE_USE_MOCK_API === 'true';
+
+/**
+ * 판매 중인 상품을 슬롯과 페이지 조건으로 조회합니다.
+ * @param {{page?: number, size?: number, slot?: string}} filters
+ */
+export function listShopItems({ page = 0, size = 20, slot } = {}) {
+    if (useMock) return mockApi.listShopItems({ page, size, slot });
+    const query = new URLSearchParams({ page: String(page), size: String(size) });
+    if (slot) query.set('slot', slot);
+    return apiRequestWithMeta(`/api/v1/shop-items?${query}`);
+}
 
 /**
  * 판매 중인 상품 상세를 조회합니다.

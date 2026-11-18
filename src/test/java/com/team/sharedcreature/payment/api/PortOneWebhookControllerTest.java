@@ -12,14 +12,14 @@ import static org.mockito.Mockito.*;
 class PortOneWebhookControllerTest {
 
     @Test
-    void 유효한_Webhook은_202와_빈_data를_반환한다() {
+    void 유효한_Webhook은_200과_빈_data를_반환한다() {
         PaymentWebhookService service = mock(PaymentWebhookService.class);
         PortOneWebhookController controller = new PortOneWebhookController(service);
         byte[] body = "{}".getBytes(StandardCharsets.UTF_8);
 
         var response = controller.receivePortOneWebhook("event-1", "100", "signature", body);
 
-        assertThat(response.getStatusCode().value()).isEqualTo(202);
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().data()).isEmpty();
         verify(service).receive("{}", "event-1", "signature", "100");
