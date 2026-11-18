@@ -95,12 +95,12 @@ VALUES
 
     -- HEAD
     (
-        'BROWN_LOB', '갈색 단발머리', '갈색 단발머리',
+        'BROWN_LOB', '갈색 단발 머리', '갈색 단발 머리',
         1000, 'HEAD', 'brown-lob', 'ACTIVE',
         UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
     ),
     (
-        'BLACK_LONG', '검정색 긴머리', '검정색 긴머리',
+        'BLACK_LONG', '검정색 긴 머리', '검정색 긴 머리',
         1000, 'HEAD', 'black-long', 'ACTIVE',
         UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
     ),
