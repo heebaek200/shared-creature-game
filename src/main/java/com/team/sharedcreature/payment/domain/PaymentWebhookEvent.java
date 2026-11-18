@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
@@ -26,8 +28,10 @@ public class PaymentWebhookEvent {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "provider", length = 30, nullable = false)
-    private String provider;
+    private PaymentProvider provider;
 
     @Column(name = "provider_event_id", length = 255, nullable = false)
     private String providerEventId;
@@ -92,7 +96,7 @@ public class PaymentWebhookEvent {
             String payloadSummary,
             Instant now
     ) {
-        this.provider = "PORTONE";
+        this.provider = PaymentProvider.PORTONE;
         this.providerEventId = providerEventId;
         this.providerPaymentId = providerPaymentId;
         this.purchase = purchase;

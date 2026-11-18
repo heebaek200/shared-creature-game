@@ -1,6 +1,7 @@
 package com.team.sharedcreature.season.api;
 
 import com.team.sharedcreature.season.domain.Season;
+import com.team.sharedcreature.season.domain.SeasonStatus;
 
 import java.time.Instant;
 
@@ -8,7 +9,7 @@ import java.time.Instant;
 public record SeasonResponse(
         Long seasonId,
         Integer seasonNumber,
-        String status,
+        SeasonStatus status,
         Instant startAt,
         Instant endAt
 ) {
@@ -17,7 +18,7 @@ public record SeasonResponse(
         return new SeasonResponse(
                 season.getId(),
                 season.getSeasonNumber(),
-                season.getStatus().name(),
+                season.getStatus(),
                 season.getStartAt(),
                 season.getEndAt()
         );

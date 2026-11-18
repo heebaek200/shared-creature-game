@@ -1,5 +1,6 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
 import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
 
 import com.team.sharedcreature.quest.domain.QuestPeriod;
@@ -33,7 +34,7 @@ class QuestPeriodLockRecoveryTest {
     private static final Instant NOW = Instant.parse("2026-11-09T18:00:00Z");
     private static final QuestPeriodCalendar.PeriodWindow WINDOW =
             new QuestPeriodCalendar.PeriodWindow(
-                    "DAILY", LocalDate.of(2026, 11, 10),
+                    QuestPeriodType.DAILY, LocalDate.of(2026, 11, 10),
                     Instant.parse("2026-11-09T15:00:00Z"),
                     Instant.parse("2026-11-10T15:00:00Z"), 8);
 
@@ -80,7 +81,7 @@ class QuestPeriodLockRecoveryTest {
     @Test
     void missingPeriodDoesNotAcquireWriteLock() {
         Fixture f = fixture();
-        when(f.periodRepository().findByPeriodTypeAndStartAt("DAILY", WINDOW.startAt()))
+        when(f.periodRepository().findByPeriodTypeAndStartAt(QuestPeriodType.DAILY, WINDOW.startAt()))
                 .thenReturn(Optional.empty());
         when(f.selector().select(WINDOW)).thenThrow(
                 new QuestTemplateSelectionService.SelectionException(
@@ -90,7 +91,7 @@ class QuestPeriodLockRecoveryTest {
         assertThrows(QuestTemplateSelectionService.SelectionException.class,
                 () -> f.service().assign(WINDOW));
         verify(f.periodRepository(), never())
-                .findForUpdateByPeriodTypeAndStartAt(anyString(), any());
+                .findForUpdateByPeriodTypeAndStartAt(any(QuestPeriodType.class), any());
     }
 
     /**
@@ -102,9 +103,9 @@ class QuestPeriodLockRecoveryTest {
     void existingPeriodRetainsWriteLock() {
         Fixture f = fixture();
         QuestPeriod period = mock(QuestPeriod.class);
-        when(f.periodRepository().findByPeriodTypeAndStartAt("DAILY", WINDOW.startAt()))
+        when(f.periodRepository().findByPeriodTypeAndStartAt(QuestPeriodType.DAILY, WINDOW.startAt()))
                 .thenReturn(Optional.of(period));
-        when(f.periodRepository().findForUpdateByPeriodTypeAndStartAt("DAILY", WINDOW.startAt()))
+        when(f.periodRepository().findForUpdateByPeriodTypeAndStartAt(QuestPeriodType.DAILY, WINDOW.startAt()))
                 .thenReturn(Optional.of(period));
         when(period.getStatus()).thenReturn(QuestPeriodStatus.ACTIVE);
         when(period.getId()).thenReturn(17L);
@@ -113,7 +114,7 @@ class QuestPeriodLockRecoveryTest {
         var result = f.service().assign(WINDOW);
         assertEquals(QuestPeriodAssignmentService.Outcome.ALREADY_ACTIVE, result.outcome());
         assertEquals(Long.valueOf(17L), result.periodId());
-        verify(f.periodRepository()).findForUpdateByPeriodTypeAndStartAt("DAILY", WINDOW.startAt());
+        verify(f.periodRepository()).findForUpdateByPeriodTypeAndStartAt(QuestPeriodType.DAILY, WINDOW.startAt());
     }
 
     /**
@@ -137,7 +138,7 @@ class QuestPeriodLockRecoveryTest {
         when(season.getStartAt()).thenReturn(START);
         when(season.getEndAt()).thenReturn(START.plusSeconds(28L * 24 * 3600));
         when(seasons.findFirstByOrderByStartAtAsc()).thenReturn(Optional.of(season));
-        when(calendar.currentWindow(START, NOW, "DAILY")).thenReturn(Optional.of(WINDOW));
+        when(calendar.currentWindow(START, NOW, QuestPeriodType.DAILY)).thenReturn(Optional.of(WINDOW));
 
         QuestPeriodPersistenceService service = new QuestPeriodPersistenceService(
                 seasonQuery, seasons, calendar, selector, periods,

@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -63,8 +65,10 @@ public class PhotoSubmission {
     @Column(name = "verification_status", length = 30, nullable = false)
     private PhotoVerificationStatus verificationStatus;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "failure_reason", length = 50)
-    private String failureReason;
+    private PhotoFailureReason failureReason;
 
     @Column(name = "file_deleted_at")
     private Instant fileDeletedAt;
@@ -125,7 +129,7 @@ public class PhotoSubmission {
      * EXIF 누락이나 파싱 Timeout처럼 값이 없는 경우 capturedAt, latitude, longitude에 null을 전달할 수 있습니다.
      */
     public void markInvalid(
-            String failureReason,
+            PhotoFailureReason failureReason,
             Instant capturedAt,
             BigDecimal latitude,
             BigDecimal longitude,
@@ -134,10 +138,8 @@ public class PhotoSubmission {
         requirePending(); // 현재 상태가 PENDING인지 선행 검증
         Objects.requireNonNull(verifiedAt, "verifiedAt은 필수입니다.");
 
-        if (failureReason == null
-                || failureReason.isBlank()
-                || failureReason.length() > 50) {
-            throw new IllegalArgumentException("failureReason은 1~50자여야 합니다.");
+        if (failureReason == null) {
+            throw new IllegalArgumentException("failureReason은 필수입니다.");
         }
 
         this.capturedAt = capturedAt;
@@ -190,7 +192,7 @@ public class PhotoSubmission {
 
         // 한 시간 안에 결과가 확정되지 않은 제출을 처리 실패로 종료합니다.
         markInvalid(
-                "PHOTO_PROCESSING_FAILED",
+                PhotoFailureReason.PHOTO_PROCESSING_FAILED,
                 null,
                 null,
                 null,

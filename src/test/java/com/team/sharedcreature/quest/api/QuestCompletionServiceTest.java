@@ -1,11 +1,14 @@
 package com.team.sharedcreature.quest.api;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
 import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
 
 import com.team.sharedcreature.season.domain.CreatureGrowthStage;
 
 import com.team.sharedcreature.season.domain.GroupSeasonStatus;
 
+import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.domain.Group;
@@ -39,7 +42,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
@@ -54,10 +60,13 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -131,6 +140,42 @@ class QuestCompletionServiceTest {
         completion = mock(QuestCompletion.class);
     }
 
+    @ParameterizedTest
+    @NullSource
+    @EnumSource(QuestPeriodType.class)
+    void listsCurrentAssignmentsForRequestedPeriods(QuestPeriodType filter) {
+        givenCurrentGroupSeason();
+
+        assertThat(service.listCurrentQuests(7L, filter == null ? null : filter.name())).isEmpty();
+
+        verify(periodRepository, times(filter == null || filter == QuestPeriodType.DAILY ? 1 : 0))
+                .findCurrentBySeasonAndType(21L, QuestPeriodType.DAILY, NOW);
+        verify(periodRepository, times(filter == null || filter == QuestPeriodType.WEEKLY ? 1 : 0))
+                .findCurrentBySeasonAndType(21L, QuestPeriodType.WEEKLY, NOW);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"daily", "", " WEEKLY ", "MONTHLY"})
+    void rejectsInvalidPeriodBeforeLookingUpAssignments(String filter) {
+        givenCurrentGroupSeason();
+
+        assertThatThrownBy(() -> service.listCurrentQuests(7L, filter))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.INVALID_FIELD_VALUE));
+
+        verifyNoInteractions(periodRepository, assignmentRepository);
+    }
+
+    private void givenCurrentGroupSeason() {
+        when(membershipRepository.findActiveWithGroupByUserId(7L)).thenReturn(Optional.of(membership));
+        when(membership.getGroup()).thenReturn(group);
+        when(group.getId()).thenReturn(11L);
+        when(seasonQueryService.findCurrentSeason()).thenReturn(season);
+        when(season.getId()).thenReturn(21L);
+        when(groupSeasonRepository.findSnapshotByGroupIdAndSeasonId(11L, 21L))
+                .thenReturn(Optional.of(groupSeason));
+    }
+
     @Test
     void 완료_보상은_요청값이_아닌_배정_Snapshot의_경험치와_기여도를_사용한다() {
         givenValidSelfCheckAssignment();
@@ -170,7 +215,7 @@ class QuestCompletionServiceTest {
     @ParameterizedTest
     @MethodSource("savedAndLegacyGrowthStages")
     void 이미_완료한_배정은_시즌이_끝난_뒤에도_기존_결과를_반환한다(
-            CreatureGrowthStage stage, Instant hatchedAt, String expectedStage
+            CreatureGrowthStage stage, Instant hatchedAt, CreatureGrowthStage expectedStage
     ) {
         when(user.getId()).thenReturn(7L);
         when(membership.getId()).thenReturn(41L);
@@ -224,11 +269,11 @@ class QuestCompletionServiceTest {
     /** 저장된 다섯 단계와 과거 미기록 데이터의 부화 전·후 복원 경로를 검증합니다. */
     private static java.util.stream.Stream<Arguments> savedAndLegacyGrowthStages() {
         var saved = java.util.Arrays.stream(CreatureGrowthStage.values())
-                .map(stage -> Arguments.of(stage, null, stage.name()));
+                .map(stage -> Arguments.of(stage, null, stage));
         var legacy = java.util.stream.Stream.of(
-                Arguments.of(null, null, "EGG"),
-                Arguments.of(null, NOW.minusSeconds(7_200), "HATCHLING"),
-                Arguments.of(null, NOW.minusSeconds(1_800), "EGG")
+                Arguments.of(null, null, CreatureGrowthStage.EGG),
+                Arguments.of(null, NOW.minusSeconds(7_200), CreatureGrowthStage.HATCHLING),
+                Arguments.of(null, NOW.minusSeconds(1_800), CreatureGrowthStage.EGG)
         );
         return java.util.stream.Stream.concat(saved, legacy);
     }
@@ -245,7 +290,7 @@ class QuestCompletionServiceTest {
         when(membership.getId()).thenReturn(41L);
         when(period.getSeason()).thenReturn(season);
         when(period.getStatus()).thenReturn(QuestPeriodStatus.ACTIVE);
-        when(period.getPeriodType()).thenReturn("WEEKLY");
+        when(period.getPeriodType()).thenReturn(QuestPeriodType.WEEKLY);
         when(period.getStartAt()).thenReturn(NOW.minusSeconds(60));
         when(period.getEndAt()).thenReturn(NOW.plusSeconds(60));
         when(assignment.getId()).thenReturn(11L);

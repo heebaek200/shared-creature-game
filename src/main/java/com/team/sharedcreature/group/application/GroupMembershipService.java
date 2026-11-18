@@ -138,7 +138,7 @@ public class GroupMembershipService {
         var primary = new CreateGroupResponse.GroupMemberResponse(
                 creator.getId(), loginUser.nickname(), "PRIMARY", membership.getJoinedAt());
         var myMembership = new CreateGroupResponse.MembershipResponse(
-                membership.getId(), group.getId(), "PRIMARY", membership.getJoinedAt(), "ACTIVE");
+                membership.getId(), group.getId(), membership.getRole(), membership.getJoinedAt(), membership.getStatus());
         return new CreateGroupResponse(
                 new CreateGroupResponse.GroupDetailResponse(summary, primary, myMembership),
                 appBaseUrl + "/invite/" + invitationToken
@@ -210,8 +210,9 @@ public class GroupMembershipService {
                             group.getCurrentMemberCount(),
                             group.getCapacity(),
                             active && group.getCurrentMemberCount() < group.getCapacity(),
-                            !active ? "INVITE_INVALID"
-                                    : group.getCurrentMemberCount() >= group.getCapacity() ? "GROUP_FULL" : null
+                            !active ? GroupJoinBlockedReason.INVITE_INVALID
+                                    : group.getCurrentMemberCount() >= group.getCapacity()
+                                            ? GroupJoinBlockedReason.GROUP_FULL : null
                     );
                 });
     }
@@ -239,7 +240,7 @@ public class GroupMembershipService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REQUIRED));
         Group group = groupRepository.findByIdForUpdate(groupId)
                 .orElseThrow(() -> notFound("가입할 그룹을 찾을 수 없습니다."));
-        if (group.getStatus() != GroupStatus.ACTIVE || !"PUBLIC".equals(group.getVisibility())) {
+        if (group.getStatus() != GroupStatus.ACTIVE || group.getVisibility() != GroupVisibility.PUBLIC) {
             throw notFound("가입할 그룹을 찾을 수 없습니다.");
         }
         if (invitationId != null
@@ -264,18 +265,19 @@ public class GroupMembershipService {
         return new MembershipResponse(
                 membership.getId(),
                 group.getId(),
-                membership.getRole().name(),
+                membership.getRole(),
                 membership.getJoinedAt(),
-                membership.getStatus().name(),
+                membership.getStatus(),
                 nickname
         );
     }
 
     private GroupSummaryResponse summary(Group group, boolean alreadyInGroup, boolean restricted) {
         int remaining = Math.max(0, group.getCapacity() - group.getCurrentMemberCount());
-        String reason = alreadyInGroup
-                ? "ALREADY_IN_GROUP"
-                : restricted ? "JOIN_COOLDOWN_ACTIVE" : remaining == 0 ? "GROUP_FULL" : null;
+        GroupJoinBlockedReason reason = alreadyInGroup
+                ? GroupJoinBlockedReason.ALREADY_IN_GROUP
+                : restricted ? GroupJoinBlockedReason.JOIN_COOLDOWN_ACTIVE
+                : remaining == 0 ? GroupJoinBlockedReason.GROUP_FULL : null;
         return new GroupSummaryResponse(
                 group.getId(),
                 group.getName(),
@@ -437,7 +439,7 @@ public class GroupMembershipService {
 
         // Commit
         return new LeaveMyGroupResponse(
-                groupId, userId, now, "SELF", now.plusSeconds(24L * 60 * 60), isPrimary
+                groupId, userId, now, membership.getExitReason(), now.plusSeconds(24L * 60 * 60), isPrimary
         );
     }
 

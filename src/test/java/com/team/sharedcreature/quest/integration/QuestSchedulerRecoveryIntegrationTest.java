@@ -1,5 +1,6 @@
 package com.team.sharedcreature.quest.integration;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
 import com.team.sharedcreature.admin.application.SchedulerJobRunner;
 import com.team.sharedcreature.quest.application.QuestAssignmentNormalizationService;
 import com.team.sharedcreature.quest.infrastructure.QuestPeriodRepository;
@@ -154,8 +155,8 @@ class QuestSchedulerRecoveryIntegrationTest {
 
         // 성공 이력과 Snapshot은 각 기간별로 한 세트씩만 존재해야 합니다.
         assertEquals(2L, count("SELECT COUNT(*) FROM quest_periods WHERE status = 'ACTIVE'"));
-        assertTrue(questPeriods.findCurrentBySeasonAndType(seasonId, "DAILY", clock.instant()).isPresent());
-        assertTrue(questPeriods.findCurrentBySeasonAndType(seasonId, "WEEKLY", clock.instant()).isPresent());
+        assertTrue(questPeriods.findCurrentBySeasonAndType(seasonId, QuestPeriodType.DAILY, clock.instant()).isPresent());
+        assertTrue(questPeriods.findCurrentBySeasonAndType(seasonId, QuestPeriodType.WEEKLY, clock.instant()).isPresent());
         assertEquals(10L, count("SELECT COUNT(*) FROM quest_assignments"));
         assertEquals(2L, count("SELECT COUNT(*) FROM scheduler_executions WHERE status = 'SUCCEEDED'"));
         assertEquals(8L, skippedInSummary("QUEST_ASSIGN_DAILY"));
@@ -187,7 +188,7 @@ class QuestSchedulerRecoveryIntegrationTest {
         assertNotNull(failed.periods().get(0).error());
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, failed.periods().get(1).execution());
         assertEquals("FAILED", periodStatus("DAILY"));
-        assertTrue(questPeriods.findCurrentBySeasonAndType(seasonId, "DAILY", clock.instant()).isEmpty());
+        assertTrue(questPeriods.findCurrentBySeasonAndType(seasonId, QuestPeriodType.DAILY, clock.instant()).isEmpty());
         assertEquals("ACTIVE", periodStatus("WEEKLY"));
         assertEquals("FAILED", executionStatus("QUEST_ASSIGN_DAILY"));
         assertEquals("SUCCEEDED", executionStatus("QUEST_ASSIGN_WEEKLY"));
@@ -203,7 +204,7 @@ class QuestSchedulerRecoveryIntegrationTest {
         assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, recovered.periods().get(1).execution());
         assertEquals(beforeId, periodId("DAILY"));
         assertEquals("ACTIVE", periodStatus("DAILY"));
-        assertTrue(questPeriods.findCurrentBySeasonAndType(seasonId, "DAILY", clock.instant()).isPresent());
+        assertTrue(questPeriods.findCurrentBySeasonAndType(seasonId, QuestPeriodType.DAILY, clock.instant()).isPresent());
         assertEquals("SUCCEEDED", executionStatus("QUEST_ASSIGN_DAILY"));
         assertEquals(10L, count("SELECT COUNT(*) FROM quest_assignments"));
         assertEquals(2L, count("SELECT attempt_count FROM scheduler_executions "

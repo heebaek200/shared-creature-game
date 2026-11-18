@@ -1,5 +1,7 @@
 package com.team.sharedcreature.admin.application;
 
+import com.team.sharedcreature.admin.domain.AdminAuditActionType;
+import com.team.sharedcreature.admin.domain.AdminAuditTargetType;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.admin.domain.AdminAuditLog;
@@ -66,7 +68,7 @@ public class AdminModerationCommandExecutor {
         Instant now = clock.instant();
         report.reject(actor, reason, now);
         auditLogRepository.save(AdminAuditLog.create(
-                actor, "DISMISS_REPORT", "USER_REPORT", reportId, report.getGroup(),
+                actor, AdminAuditActionType.DISMISS_REPORT, AdminAuditTargetType.USER_REPORT, reportId, report.getGroup(),
                 AdminAuditResult.SUCCEEDED, reason, "{}", now
         ));
     }
@@ -114,7 +116,7 @@ public class AdminModerationCommandExecutor {
         ));
         report.resolve(actor, reason, now);
         auditLogRepository.save(AdminAuditLog.create(
-                actor, "REMOVE_REPORTED_MEMBER", "USER_REPORT", reportId, group,
+                actor, AdminAuditActionType.REMOVE_REPORTED_MEMBER, AdminAuditTargetType.USER_REPORT, reportId, group,
                 AdminAuditResult.SUCCEEDED, reason, "{}", now
         ));
     }

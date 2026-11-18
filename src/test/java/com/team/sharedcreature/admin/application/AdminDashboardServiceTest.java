@@ -4,10 +4,19 @@ import com.team.sharedcreature.group.domain.GroupStatus;
 
 import com.team.sharedcreature.admin.infrastructure.AdminAnalyticsRepository;
 import com.team.sharedcreature.admin.api.OperationalWarningResponse;
+import com.team.sharedcreature.admin.domain.OperationalWarningSeverity;
+import com.team.sharedcreature.admin.domain.OperationalWarningType;
+import com.team.sharedcreature.admin.api.AdminDashboardResponse.GrowthStagePoint;
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
+import com.team.sharedcreature.season.domain.Season;
+import com.team.sharedcreature.season.domain.SeasonStatus;
 import com.team.sharedcreature.season.infrastructure.SeasonRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -26,20 +35,26 @@ import static org.mockito.Mockito.when;
 
 class AdminDashboardServiceTest {
 
-    @Test
-    void 서버_집계값으로_완료율_정원율과_금액_요약을_구성한다() {
+    @ParameterizedTest
+    @CsvSource({"7_DAYS,7", "30_DAYS,30", "CURRENT_SEASON,10"})
+    void 서버_집계값으로_완료율_정원율과_금액_요약을_구성한다(String range, int days) {
         AdminAnalyticsRepository analytics = mock(AdminAnalyticsRepository.class);
         OperationalWarningService warnings = mock(OperationalWarningService.class);
         SeasonRepository seasons = mock(SeasonRepository.class);
         GroupRepository groups = mock(GroupRepository.class);
         Instant now = Instant.parse("2026-11-10T03:00:00Z");
+        Season season = mock(Season.class);
+        when(season.getStartAt()).thenReturn(Instant.parse("2026-11-01T00:00:00Z"));
+        when(season.getEndAt()).thenReturn(Instant.parse("2026-12-01T00:00:00Z"));
+        when(seasons.findFirstByStatusOrderByStartAtDesc(SeasonStatus.ACTIVE)).thenReturn(Optional.of(season));
         when(analytics.countActiveUsers(any(), any(), isNull())).thenReturn(8L);
         when(analytics.countActiveGroups(any(), any(), isNull())).thenReturn(3L);
         when(analytics.countQuestOpportunities(any(), any(), isNull())).thenReturn(10L);
         when(analytics.countQuestCompletions(any(), any(), isNull())).thenReturn(5L);
         when(analytics.dailyActiveUsers(any(), any(), isNull())).thenReturn(Map.of());
         when(analytics.dailyQuestCompletions(any(), any(), isNull())).thenReturn(Map.of());
-        when(analytics.growthStages(any(), isNull())).thenReturn(Map.of());
+        when(analytics.growthStages(any(), isNull()))
+                .thenReturn(Map.of(CreatureGrowthStage.EGG, 2L, CreatureGrowthStage.COMPLETE, 1L));
         when(analytics.topGroups(any(), isNull())).thenReturn(List.of());
         when(analytics.dailyPayments(any(), any(), isNull())).thenReturn(Map.of(
                 LocalDate.of(2026, 11, 10), new long[]{3000L, 1000L}
@@ -52,13 +67,27 @@ class AdminDashboardServiceTest {
                 analytics, warnings, seasons, groups, Clock.fixed(now, ZoneOffset.UTC)
         );
 
-        var response = service.get("7_DAYS", null);
+        var response = service.get(range, null);
 
         assertThat(response.summary().questCompletionRate()).isEqualByComparingTo("50.00");
         assertThat(response.summary().capacityUsageRate()).isEqualByComparingTo("25.00");
         assertThat(response.summary().paidAmountKrw()).isEqualTo(3000L);
         assertThat(response.summary().refundedAmountKrw()).isEqualTo(1000L);
-        assertThat(response.activitySeries()).hasSize(7);
+        assertThat(response.activitySeries()).hasSize(days);
+        assertThat(response.growthStages()).containsExactly(
+                new GrowthStagePoint(CreatureGrowthStage.EGG, 2),
+                new GrowthStagePoint(CreatureGrowthStage.HATCHLING, 0),
+                new GrowthStagePoint(CreatureGrowthStage.GROWING, 0),
+                new GrowthStagePoint(CreatureGrowthStage.MATURE, 0),
+                new GrowthStagePoint(CreatureGrowthStage.COMPLETE, 1)
+        );
+        var mapper = new ObjectMapper();
+        var json = mapper.readTree(mapper.writeValueAsString(response));
+        assertThat(json.get("range").isString()).isTrue();
+        assertThat(json.get("range").asString()).isEqualTo(range);
+        var stage = json.at("/growthStages/0/stage");
+        assertThat(stage.isString()).isTrue();
+        assertThat(stage.asString()).isEqualTo("EGG");
         assertThat(response.queues().pendingReports()).isEqualTo(2);
     }
 
@@ -86,8 +115,8 @@ class AdminDashboardServiceTest {
         when(analytics.countPendingRefunds(10L)).thenReturn(0L);
         OperationalWarningResponse otherGroupWarning = new OperationalWarningResponse(
                 "MEMBER_COUNT_MISMATCH:GROUP:20",
-                "MEMBER_COUNT_MISMATCH",
-                "WARNING",
+                OperationalWarningType.MEMBER_COUNT_MISMATCH,
+                OperationalWarningSeverity.WARNING,
                 "GROUP",
                 20L,
                 "다른 그룹 경고",
@@ -102,5 +131,9 @@ class AdminDashboardServiceTest {
 
         assertThat(response.summary().operationalWarningCount()).isOne();
         assertThat(response.queues().operationalWarnings()).containsExactly(otherGroupWarning);
+        var mapper = new ObjectMapper();
+        var warningJson = mapper.readTree(mapper.writeValueAsString(response)).at("/queues/operationalWarnings/0");
+        assertThat(warningJson.get("type").asString()).isEqualTo("MEMBER_COUNT_MISMATCH");
+        assertThat(warningJson.get("severity").asString()).isEqualTo("WARNING");
     }
 }

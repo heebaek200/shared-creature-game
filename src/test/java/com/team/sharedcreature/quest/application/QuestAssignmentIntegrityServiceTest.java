@@ -1,5 +1,6 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
 import com.team.sharedcreature.quest.domain.QuestDifficulty;
 import com.team.sharedcreature.quest.domain.QuestVerificationType;
 
@@ -35,10 +36,10 @@ class QuestAssignmentIntegrityServiceTest {
 
     private static final Instant START = Instant.parse("2026-11-09T15:00:00Z");
     private static final QuestPeriodCalendar.PeriodWindow WINDOW =
-            new QuestPeriodCalendar.PeriodWindow("DAILY", LocalDate.of(2026, 11, 10),
+            new QuestPeriodCalendar.PeriodWindow(QuestPeriodType.DAILY, LocalDate.of(2026, 11, 10),
                     START, START.plusSeconds(86400), 8);
     private static final QuestPeriodCalendar.PeriodWindow WEEKLY_WINDOW =
-            new QuestPeriodCalendar.PeriodWindow("WEEKLY", LocalDate.of(2026, 11, 9),
+            new QuestPeriodCalendar.PeriodWindow(QuestPeriodType.WEEKLY, LocalDate.of(2026, 11, 9),
                     Instant.parse("2026-11-08T15:00:00Z"),
                     Instant.parse("2026-11-15T15:00:00Z"), 1);
     private static final Long SEASON_ID = 7L;
@@ -101,7 +102,7 @@ class QuestAssignmentIntegrityServiceTest {
         allowExecution(SchedulerExecutionStatus.SUCCEEDED);
         QuestPeriod p = mock(QuestPeriod.class);
         when(p.getStatus()).thenReturn(QuestPeriodStatus.FAILED);
-        when(periods.findByPeriodTypeAndStartAt("DAILY", START)).thenReturn(Optional.of(p));
+        when(periods.findByPeriodTypeAndStartAt(QuestPeriodType.DAILY, START)).thenReturn(Optional.of(p));
         var audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
         assertEquals(QuestAssignmentIntegrityService.AuditOutcome.INCONSISTENT, audit.outcome());
         assertTrue(audit.detail().contains("PERIOD_NOT_ACTIVE"));

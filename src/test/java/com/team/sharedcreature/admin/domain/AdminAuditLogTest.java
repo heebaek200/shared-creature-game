@@ -1,5 +1,7 @@
 package com.team.sharedcreature.admin.domain;
 
+import com.team.sharedcreature.admin.domain.AdminAuditActionType;
+import com.team.sharedcreature.admin.domain.AdminAuditTargetType;
 import com.team.sharedcreature.auth.domain.GlobalRole;
 import com.team.sharedcreature.auth.domain.User;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -20,7 +22,7 @@ class AdminAuditLogTest {
         when(actor.getGlobalRole()).thenReturn(originalRole);
         Instant now = Instant.parse("2026-11-17T00:00:00Z");
         AdminAuditLog log = AdminAuditLog.create(
-                actor, "SUSPEND_USER", "USER", 21L, null,
+                actor, AdminAuditActionType.DISMISS_REPORT, AdminAuditTargetType.USER_REPORT, 21L, null,
                 AdminAuditResult.SUCCEEDED, "snapshot test", "{}", now);
 
         GlobalRole changedRole = originalRole == GlobalRole.SUPER_ADMIN

@@ -4,6 +4,7 @@ import com.team.sharedcreature.season.domain.SeasonStatus;
 
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
+import com.team.sharedcreature._core.exception.InternalApiException;
 import com.team.sharedcreature.ranking.api.RankingResponse;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.domain.GroupStatus;
@@ -273,10 +274,7 @@ public class RankingService {
 
                     // 프로필 누락으로 사용자를 순위에서 임의로 제외하지 않습니다.
                     if (profile == null) {
-                        throw new BusinessException(
-                                ErrorCode.INTERNAL_SERVER_ERROR,
-                                "랭킹 사용자 프로필이 누락되었습니다."
-                        );
+                        throw new InternalApiException("랭킹 사용자 프로필이 누락되었습니다.");
                     }
 
                     return new RankingResponse.MemberDto(
@@ -285,7 +283,7 @@ public class RankingService {
                             profile.getNickname(),
                             rank.contributionScore(),
                             rank.scoreReachedAt(),
-                contribution.getParticipantStatus().name()
+                    contribution.getParticipantStatus()
                     );
                 })
                 .toList();
@@ -311,7 +309,7 @@ public class RankingService {
                         snapshot.getNicknameSnapshot(),
                         snapshot.getContributionScore(),
                         snapshot.getScoreReachedAt(),
-                snapshot.getParticipantStatus().name()
+                        snapshot.getParticipantStatus()
                 ))
                 .toList();
     }

@@ -26,6 +26,6 @@ class PhotoSubmissionTest {
 
         assertThat(submission.getVerificationStatus()).isEqualTo(PhotoVerificationStatus.INVALID);
         assertThat(submission.getFailureReason())
-                .isEqualTo("PHOTO_PROCESSING_FAILED");
+                .isEqualTo(PhotoFailureReason.PHOTO_PROCESSING_FAILED);
     }
 }

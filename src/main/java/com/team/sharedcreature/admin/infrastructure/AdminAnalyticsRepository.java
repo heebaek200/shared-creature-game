@@ -14,6 +14,7 @@ import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -153,7 +154,7 @@ public class AdminAnalyticsRepository {
                 .getSingleResult());
     }
 
-    public Map<String, Long> growthStages(Instant now, Long groupId) {
+    public Map<CreatureGrowthStage, Long> growthStages(Instant now, Long groupId) {
         String jpql = """
                 SELECT creature.growthStage
                      , COUNT(creature.id)
@@ -167,10 +168,10 @@ public class AdminAnalyticsRepository {
                  GROUP BY creature.growthStage
                 """;
         Query query = query(jpql, groupId).setParameter("now", now);
-        Map<String, Long> result = new LinkedHashMap<>();
+        Map<CreatureGrowthStage, Long> result = new EnumMap<>(CreatureGrowthStage.class);
         for (Object rowValue : query.getResultList()) {
             Object[] row = (Object[]) rowValue;
-            result.put(((CreatureGrowthStage) row[0]).name(), number(row[1]));
+            result.put((CreatureGrowthStage) row[0], number(row[1]));
         }
         return result;
     }

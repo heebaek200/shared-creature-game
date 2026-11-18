@@ -25,8 +25,9 @@ public class QuestTemplate {
     @Column(name = "code", length = 30, unique = true, nullable = false)
     private String code;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "period_type", length = 30, nullable = false)
-    private String periodType;
+    private QuestPeriodType periodType;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "difficulty", length = 30, nullable = false)

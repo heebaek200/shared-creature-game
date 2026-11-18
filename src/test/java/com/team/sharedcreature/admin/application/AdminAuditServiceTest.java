@@ -1,5 +1,7 @@
 package com.team.sharedcreature.admin.application;
 
+import com.team.sharedcreature.admin.domain.AdminAuditActionType;
+import com.team.sharedcreature.admin.domain.AdminAuditTargetType;
 import com.team.sharedcreature.admin.domain.AdminAuditLog;
 import com.team.sharedcreature.admin.domain.AdminAuditResult;
 import com.team.sharedcreature.admin.infrastructure.AdminAuditLogRepository;
@@ -31,7 +33,7 @@ class AdminAuditServiceTest {
         User actor = User.register(GlobalRole.SUPER_ADMIN, NOW);
         when(users.findById(7L)).thenReturn(Optional.of(actor));
 
-        service.recordFailure(7L, "SUSPEND_USER", "USER", 21L, "USER_NOT_FOUND");
+        service.recordFailure(7L, AdminAuditActionType.DISMISS_REPORT, AdminAuditTargetType.USER_REPORT, 21L, "USER_NOT_FOUND");
 
         var captor = ArgumentCaptor.forClass(AdminAuditLog.class);
         verify(logs).save(captor.capture());
@@ -39,8 +41,8 @@ class AdminAuditServiceTest {
         assertThat(log.getResult()).isEqualTo(AdminAuditResult.FAILED);
         assertThat(log.getActorUser()).isSameAs(actor);
         assertThat(log.getActorRoleSnapshot()).isEqualTo(GlobalRole.SUPER_ADMIN);
-        assertThat(log.getActionType()).isEqualTo("SUSPEND_USER");
-        assertThat(log.getTargetType()).isEqualTo("USER");
+        assertThat(log.getActionType()).isEqualTo(AdminAuditActionType.DISMISS_REPORT);
+        assertThat(log.getTargetType()).isEqualTo(AdminAuditTargetType.USER_REPORT);
         assertThat(log.getTargetId()).isEqualTo(21L);
         assertThat(log.getReason()).isEqualTo("USER_NOT_FOUND");
         assertThat(log.getDetail()).isEqualTo("{}");
@@ -51,7 +53,7 @@ class AdminAuditServiceTest {
     @Test
     void ordinaryUserDoesNotCreateAuditLog() {
         when(users.findById(7L)).thenReturn(Optional.of(User.register(GlobalRole.USER, NOW)));
-        service.recordFailure(7L, "SUSPEND_USER", "USER", 21L, "FORBIDDEN");
+        service.recordFailure(7L, AdminAuditActionType.DISMISS_REPORT, AdminAuditTargetType.USER_REPORT, 21L, "FORBIDDEN");
         verifyNoInteractions(logs);
     }
 
@@ -59,7 +61,7 @@ class AdminAuditServiceTest {
     @Test
     void missingActorDoesNotCreateAuditLog() {
         when(users.findById(7L)).thenReturn(Optional.empty());
-        service.recordFailure(7L, "SUSPEND_USER", "USER", 21L, "FORBIDDEN");
+        service.recordFailure(7L, AdminAuditActionType.DISMISS_REPORT, AdminAuditTargetType.USER_REPORT, 21L, "FORBIDDEN");
         verifyNoInteractions(logs);
     }
 }

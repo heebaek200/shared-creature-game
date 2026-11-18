@@ -1,5 +1,6 @@
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.group.domain.GroupMembershipExitReason;
 import com.team.sharedcreature.season.domain.CreatureGrowthStage;
 
 import com.team.sharedcreature.season.domain.GroupCreatureStatus;
@@ -114,7 +115,7 @@ class GroupDepartureServiceTest {
         assertThat(response.groupId()).isEqualTo(GROUP_ID);
         assertThat(response.userId()).isEqualTo(USER_ID);
         assertThat(response.endedAt()).isEqualTo(NOW);
-        assertThat(response.exitReason()).isEqualTo("SELF");
+        assertThat(response.exitReason()).isEqualTo(GroupMembershipExitReason.SELF);
         assertThat(response.restrictionUntil()).isEqualTo(NOW.plusSeconds(86_400));
         assertThat(response.groupDeactivated()).isFalse();
 
@@ -122,7 +123,7 @@ class GroupDepartureServiceTest {
         assertThat(fixture.membership().getRole()).isEqualTo(GroupRole.MEMBER);
         assertThat(fixture.membership().getEndedAt()).isEqualTo(NOW);
         assertThat(fixture.membership().getEndedByUser()).isSameAs(fixture.actor());
-        assertThat(fixture.membership().getExitReason()).isEqualTo("SELF");
+        assertThat(fixture.membership().getExitReason()).isEqualTo(GroupMembershipExitReason.SELF);
         assertThat(fixture.group().getCurrentMemberCount()).isEqualTo(2);
         assertThat(fixture.group().getStatus()).isEqualTo(GroupStatus.ACTIVE);
 

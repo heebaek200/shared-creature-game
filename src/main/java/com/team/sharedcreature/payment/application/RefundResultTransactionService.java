@@ -1,5 +1,6 @@
 package com.team.sharedcreature.payment.application;
 
+import com.team.sharedcreature.payment.domain.PaymentProvider;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.payment.api.AdminRefundResponse;
@@ -441,7 +442,7 @@ public class RefundResultTransactionService {
 
         CommandResponse response;
 
-        if (RefundStatus.CANCEL_UNKNOWN.name().equals(data.status())) {
+        if (data.status() == RefundStatus.CANCEL_UNKNOWN) {
             // 결과 불명은 상태를 저장한 뒤 HTTP 409로 전달합니다.
             var error = errorResponseFactory.create(
                     ErrorCode.PG_CANCEL_RESULT_UNKNOWN,
@@ -556,7 +557,7 @@ public class RefundResultTransactionService {
         if (transaction == null && result.providerTransactionId() != null) {
             transaction = transactionRepository
                     .findByProviderAndProviderTransactionId(
-                            "PORTONE",
+                            PaymentProvider.PORTONE,
                             result.providerTransactionId()
                     )
                     .orElse(null);

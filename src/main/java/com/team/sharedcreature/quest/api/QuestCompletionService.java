@@ -1,5 +1,6 @@
 package com.team.sharedcreature.quest.api;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
 import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
 
 import com.team.sharedcreature.quest.domain.QuestRewardType;
@@ -172,30 +173,18 @@ public class QuestCompletionService {
 
     /**조회 하고자 하는 일일,주간 유형을 받고, 그에 맞는 퀘스트 목록을 리스트로 반환*/
 
-    /**
-     * 방어 코드 DAILY나 WEEKLY가 아닐경우 400 Bad Request 던짐
-     */
-    public List<QuestAssignment> findCurrentAssignments(String periodType) {
-        if (periodType != null
-                && !periodType.equals("DAILY")
-                && !periodType.equals("WEEKLY")) {
-            throw new BusinessException(
-                    ErrorCode.INVALID_FIELD_VALUE,
-                    "기간 유형이 올바르지 않습니다."
-            );
-        }
-
+    public List<QuestAssignment> findCurrentAssignments(QuestPeriodType periodType) {
         /**null이 들어오면 DAILY WEEKLY 둘다 조회할 리스트로 생성*/
         Instant now = Instant.now(clock);
         Long seasonId = seasonQueryService.findCurrentSeason().getId();
-        List<String> periodTypes = periodType == null
-                ? List.of("DAILY", "WEEKLY")
+        List<QuestPeriodType> periodTypes = periodType == null
+                ? List.of(QuestPeriodType.DAILY, QuestPeriodType.WEEKLY)
                 : List.of(periodType);
 
         /**반복문으로 퀘스트 수집*/
         List<QuestAssignment> assignments = new ArrayList<>();
 
-        for (String type : periodTypes) {
+        for (QuestPeriodType type : periodTypes) {
             periodRepository.findCurrentBySeasonAndType(seasonId, type, now)
                     .ifPresent(period ->
                             assignments.addAll(
@@ -281,7 +270,16 @@ public class QuestCompletionService {
                 ));
 
         /**퀘스트 할당과 완료 이력 조회*/
-        List<QuestAssignment> assignments = findCurrentAssignments(periodType);
+        QuestPeriodType filter;
+        try {
+            filter = periodType == null ? null : QuestPeriodType.valueOf(periodType);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_FIELD_VALUE,
+                    "기간 유형이 올바르지 않습니다."
+            );
+        }
+        List<QuestAssignment> assignments = findCurrentAssignments(filter);
         Map<Long, QuestCompletion> completionsByAssignmentId =
                 findCompletionsByAssignmentId(userId, assignments);
 
@@ -414,8 +412,8 @@ public class QuestCompletionService {
                     assignment.getQuestTemplate().getCode(),
                     assignment.getTitleSnapshot(),
                     assignment.getDescriptionSnapshot(),
-                        assignment.getDifficultySnapshot().name(),
-                        assignment.getVerificationTypeSnapshot().name(),
+                    assignment.getDifficultySnapshot(),
+                    assignment.getVerificationTypeSnapshot(),
                     assignment.getCreatureExperienceSnapshot(),
                     assignment.getContributionScoreSnapshot(),
                     completed,
@@ -737,9 +735,8 @@ public class QuestCompletionService {
         }
 
         // 실제 기상 퀘스트 체크 이력 검증
-        boolean morningQuest = "DAILY".equals(
-                assignment.getQuestPeriod().getPeriodType()
-        ) && "D-M-01".equals(assignment.getQuestTemplate().getCode());
+        boolean morningQuest = assignment.getQuestPeriod().getPeriodType() == QuestPeriodType.DAILY
+                && "D-M-01".equals(assignment.getQuestTemplate().getCode());
 
         boolean morningCheckInExists =
                 serviceCheckInRepository.existsByUserIdAndCheckInDateAndIsMorningTrue(
@@ -902,7 +899,7 @@ public class QuestCompletionService {
         }
 
         // 실제 출석일 검증
-        if (!"WEEKLY".equals(assignment.getQuestPeriod().getPeriodType())) {
+        if (assignment.getQuestPeriod().getPeriodType() != QuestPeriodType.WEEKLY) {
             return Optional.empty();
         }
 
@@ -1052,7 +1049,7 @@ public class QuestCompletionService {
                 )
         ));
         // 달성 여부를 검사 이후 집계 퀘스트 처리
-        if ("DAILY".equals(assignment.getQuestPeriod().getPeriodType())) {
+        if (assignment.getQuestPeriod().getPeriodType() == QuestPeriodType.DAILY) {
             completeEligibleAggregateQuests(user, membership, groupSeason);
         }
         completion.recordResultSnapshot(
@@ -1078,7 +1075,7 @@ public class QuestCompletionService {
                 experience,
                 contributionAmount,
                 creature.getTotalExperience(),
-                creature.getGrowthStage().name(),
+                creature.getGrowthStage(),
                 groupScore.getScore()
         );
     }
@@ -1096,8 +1093,8 @@ public class QuestCompletionService {
             GroupMembership membership,
             GroupSeason groupSeason
     ) {
-        List<QuestAssignment> weeklyAssignments = findCurrentAssignments("WEEKLY");
-        List<QuestAssignment> dailyAssignments = findCurrentAssignments("DAILY");
+        List<QuestAssignment> weeklyAssignments = findCurrentAssignments(QuestPeriodType.WEEKLY);
+        List<QuestAssignment> dailyAssignments = findCurrentAssignments(QuestPeriodType.DAILY);
 
         // "D-H-03" 퀘스트 보상 처리
         for (QuestAssignment dailyAssignment : dailyAssignments) {
@@ -1356,7 +1353,7 @@ public class QuestCompletionService {
                 experienceAwarded,
                 contributionAwarded,
                 creatureTotalExperience,
-                creatureGrowthStage.name(),
+                creatureGrowthStage,
                 groupSeasonScore
         );
     }

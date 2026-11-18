@@ -2,6 +2,7 @@ package com.team.sharedcreature.avatar.application;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.team.sharedcreature.avatar.api.AvatarResponse;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
 
 import java.time.Instant;
 
@@ -18,7 +19,7 @@ import java.time.Instant;
 public record AvatarEquipmentChangedEvent(
         Long groupId,
         Long userId,
-        String slot,
+        AvatarSlot slot,
         AvatarResponse.Equipment equippedItem,
         Instant occurredAt
 ) {

@@ -30,20 +30,11 @@ public class AdminReportQueryService {
     }
 
     /** 상태 필터와 고정 최신순으로 신고를 페이지 조회합니다. */
-    public Page<AdminReportResponse> list(String status, int page, int size) {
-        // API의 문자열 입력은 경계에서 검증하고 저장소에는 Enum만 전달합니다.
-        UserReportStatus filter = null;
-        if (status != null) {
-            try {
-                filter = UserReportStatus.valueOf(status);
-            } catch (IllegalArgumentException exception) {
-                throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE);
-            }
-        }
+    public Page<AdminReportResponse> list(UserReportStatus status, int page, int size) {
         PageRequest pageable = PageRequest.of(page, size);
         Page<UserReport> reports = status == null
                 ? reportRepository.findAllByOrderByCreatedAtDescIdDesc(pageable)
-                : reportRepository.findByStatusOrderByCreatedAtDescIdDesc(filter, pageable);
+                : reportRepository.findByStatusOrderByCreatedAtDescIdDesc(status, pageable);
         return reports.map(this::toResponse);
     }
 
@@ -66,9 +57,9 @@ public class AdminReportQueryService {
                 report.getGroup().getId(),
                 report.getReporterUser().getId(),
                 report.getReportedUser().getId(),
-                report.getCategory().name(),
+                report.getCategory(),
                 report.getContent(),
-                report.getStatus().name(),
+                report.getStatus(),
                 report.getCreatedAt(),
                 report.getHandledAt(),
                 reportedNickname,

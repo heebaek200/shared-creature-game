@@ -102,9 +102,9 @@ class GroupAdminServiceTest {
         arrangeTargetProfile(fixture);
 
         // 실제 도메인 상태와 응답 DTO를 함께 확인합니다.
-        var response = service.changeMemberRole(ACTOR_ID, TARGET_ID, "DEPUTY");
+        var response = service.changeMemberRole(ACTOR_ID, TARGET_ID, GroupRole.DEPUTY);
         assertThat(response.userId()).isEqualTo(TARGET_ID);
-        assertThat(response.role()).isEqualTo("DEPUTY");
+        assertThat(response.role()).isEqualTo(GroupRole.DEPUTY);
         assertThat(fixture.targetMembership().getRole()).isEqualTo(GroupRole.DEPUTY);
 
         // actor/target 뒤바뀜 회귀를 감사 이력까지 검사합니다.
@@ -130,8 +130,8 @@ class GroupAdminServiceTest {
         arrangeTargetProfile(fixture);
 
         // 기존 DEPUTY 권한이 회수되어야 합니다.
-        var response = service.changeMemberRole(ACTOR_ID, TARGET_ID, "MEMBER");
-        assertThat(response.role()).isEqualTo("MEMBER");
+        var response = service.changeMemberRole(ACTOR_ID, TARGET_ID, GroupRole.MEMBER);
+        assertThat(response.role()).isEqualTo(GroupRole.MEMBER);
         assertThat(fixture.targetMembership().getRole()).isEqualTo(GroupRole.MEMBER);
 
         // 이력에서 이전 역할과 다음 역할을 확인합니다.
@@ -155,8 +155,8 @@ class GroupAdminServiceTest {
         Instant originalUpdatedAt = fixture.targetMembership().getUpdatedAt();
 
         // 멱등 요청은 동일 상태를 반환합니다.
-        var response = service.changeMemberRole(ACTOR_ID, TARGET_ID, "DEPUTY");
-        assertThat(response.role()).isEqualTo("DEPUTY");
+        var response = service.changeMemberRole(ACTOR_ID, TARGET_ID, GroupRole.DEPUTY);
+        assertThat(response.role()).isEqualTo(GroupRole.DEPUTY);
         assertThat(fixture.targetMembership().getUpdatedAt()).isEqualTo(originalUpdatedAt);
         verify(adminChangeRepository, never()).save(any());
     }
@@ -170,7 +170,7 @@ class GroupAdminServiceTest {
     @Test
     void PRIMARY_이전은_두_멤버십과_그룹_참조를_동시에_바꾼다() {
         Fixture fixture = arrange("PRIMARY", "MEMBER");
-        MyGroupResponse expectedResponse = org.mockito.Mockito.mock(MyGroupResponse.class);
+        MyGroupResponse expectedResponse = new MyGroupResponse(null, null, null);
         when(groupQueryService.getMyGroup(ACTOR_ID)).thenReturn(expectedResponse);
 
         // 서비스에 포함된 두 번의 flush 호출과 도메인 상태를 확인합니다.
@@ -220,7 +220,7 @@ class GroupAdminServiceTest {
         arrange("MEMBER", "MEMBER");
 
         // 그룹의 관리자 참조만으로는 변경 권한을 얻을 수 없습니다.
-        assertThatThrownBy(() -> service.changeMemberRole(ACTOR_ID, TARGET_ID, "DEPUTY"))
+        assertThatThrownBy(() -> service.changeMemberRole(ACTOR_ID, TARGET_ID, GroupRole.DEPUTY))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.code()).isEqualTo("ROLE_FORBIDDEN"));
         verifyNoInteractions(adminChangeRepository);
@@ -269,7 +269,7 @@ class GroupAdminServiceTest {
     @Test
     void 역할_변경_API로_PRIMARY를_직접_부여할_수_없다() {
         // PRIMARY는 별도의 전용 이전 API로만 지정할 수 있습니다.
-        assertThatThrownBy(() -> service.changeMemberRole(ACTOR_ID, TARGET_ID, "PRIMARY"))
+        assertThatThrownBy(() -> service.changeMemberRole(ACTOR_ID, TARGET_ID, GroupRole.PRIMARY))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.code()).isEqualTo("INVALID_FIELD_VALUE"));
         verifyNoInteractions(userRepository, groupRepository, membershipRepository);

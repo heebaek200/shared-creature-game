@@ -56,8 +56,9 @@ public class GroupMembership {
     @JoinColumn(name = "ended_by_user_id")
     private User endedByUser;
 
+    @Convert(converter = GroupMembershipExitReason.JpaConverter.class)
     @Column(name = "exit_reason", length = 30, nullable = true)
-    private String exitReason;
+    private GroupMembershipExitReason exitReason;
 
     @Column(
             name = "active_user_id",
@@ -172,7 +173,7 @@ public class GroupMembership {
         this.status = GroupMembershipStatus.LEFT;
         this.endedAt = now;
         this.endedByUser = actor;
-        this.exitReason = "SELF";
+        this.exitReason = GroupMembershipExitReason.SELF;
         this.updatedAt = now;
     }
 
@@ -197,7 +198,7 @@ public class GroupMembership {
         this.status = GroupMembershipStatus.REMOVED;
         this.endedAt = now;
         this.endedByUser = actor;
-        this.exitReason = "INACTIVE";
+        this.exitReason = GroupMembershipExitReason.INACTIVE;
         this.updatedAt = now;
     }
 
@@ -209,7 +210,7 @@ public class GroupMembership {
         status = GroupMembershipStatus.REMOVED;
         endedAt = now;
         endedByUser = actor;
-        exitReason = "REPORTED";
+        exitReason = GroupMembershipExitReason.REPORT;
         updatedAt = now;
     }
 

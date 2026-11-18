@@ -1,5 +1,6 @@
 package com.team.sharedcreature.payment.application;
 
+import com.team.sharedcreature.payment.domain.PaymentProvider;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
@@ -95,7 +96,7 @@ class PaymentReconciliationServiceTest {
         when(purchaseRepository.findByIdAndUserId(10L, 7L)).thenReturn(Optional.of(purchase));
         when(purchaseRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(purchase));
         when(paymentGateway.getPayment(PAYMENT_ID)).thenReturn(snapshot);
-        when(transactionRepository.findByProviderAndProviderTransactionId("PORTONE", "tx-1"))
+        when(transactionRepository.findByProviderAndProviderTransactionId(PaymentProvider.PORTONE, "tx-1"))
                 .thenReturn(Optional.empty());
         when(transactionRepository.save(any(PaymentTransaction.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -228,7 +229,7 @@ class PaymentReconciliationServiceTest {
         when(purchaseRepository.findByIdAndUserId(10L, 7L)).thenReturn(Optional.of(purchase));
         when(purchaseRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(purchase));
         when(paymentGateway.getPayment(PAYMENT_ID)).thenReturn(paidSnapshot(1000L, "EASY_PAY", "KAKAOPAY", "TEST"));
-        when(transactionRepository.findByProviderAndProviderTransactionId("PORTONE", "tx-1"))
+        when(transactionRepository.findByProviderAndProviderTransactionId(PaymentProvider.PORTONE, "tx-1"))
                 .thenReturn(Optional.of(transaction));
         when(ownedItemRepository.findByPurchaseId(10L)).thenReturn(Optional.of(ownedItem));
         when(queryService.get(7L, 10L)).thenReturn(expected);
@@ -248,7 +249,7 @@ class PaymentReconciliationServiceTest {
         when(purchaseRepository.findByIdAndUserId(10L, 7L)).thenReturn(Optional.of(purchase));
         when(purchaseRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(purchase));
         when(paymentGateway.getPayment(PAYMENT_ID)).thenReturn(paidSnapshot(1000L, "EASY_PAY", "KAKAOPAY", "TEST"));
-        when(transactionRepository.findByProviderAndProviderTransactionId("PORTONE", "tx-1"))
+        when(transactionRepository.findByProviderAndProviderTransactionId(PaymentProvider.PORTONE, "tx-1"))
                 .thenReturn(Optional.of(transaction));
         when(ownedItemRepository.findByPurchaseId(10L)).thenReturn(Optional.empty());
         executeTransactionsImmediately();

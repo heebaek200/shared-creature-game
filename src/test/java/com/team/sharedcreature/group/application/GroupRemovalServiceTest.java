@@ -1,6 +1,7 @@
 
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.group.domain.GroupMembershipExitReason;
 import com.team.sharedcreature.group.domain.GroupMembershipStatus;
 
 import com.team.sharedcreature.auth.domain.GlobalRole;
@@ -107,13 +108,13 @@ class GroupRemovalServiceTest {
         );
 
         // 멤버십과 그룹 상태가 함께 변경돼야 합니다.
-        assertThat(result.exitReason()).isEqualTo("INACTIVE");
+        assertThat(result.exitReason()).isEqualTo(GroupMembershipExitReason.INACTIVE);
         assertThat(result.groupDeactivated()).isFalse();
         assertThat(result.restrictionUntil())
                 .isEqualTo(NOW.plus(Duration.ofHours(24)));
 
         assertThat(f.targetMembership().getStatus()).isEqualTo(GroupMembershipStatus.REMOVED);
-        assertThat(f.targetMembership().getExitReason()).isEqualTo("INACTIVE");
+        assertThat(f.targetMembership().getExitReason()).isEqualTo(GroupMembershipExitReason.INACTIVE);
         assertThat(f.targetMembership().getEndedByUser()).isSameAs(f.actor());
         assertThat(f.group().getCurrentMemberCount()).isEqualTo(1);
 

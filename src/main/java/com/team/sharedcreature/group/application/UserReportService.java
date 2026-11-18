@@ -75,9 +75,9 @@ public class UserReportService {
                 report.getGroup().getId(),
                 report.getReporterUser().getId(),
                 report.getReportedUser().getId(),
-                report.getCategory().name(),
+                report.getCategory(),
                 report.getContent(),
-                report.getStatus().name(),
+                report.getStatus(),
                 report.getCreatedAt(),
                 report.getHandledAt()
         );

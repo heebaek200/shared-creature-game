@@ -73,10 +73,10 @@ class RefundResultTransactionServiceTest {
         when(idempotency.findForUpdateByIdAndRefundRequestId(4L, 1L)).thenReturn(Optional.of(record));
         when(transactions.save(any(PaymentTransaction.class))).thenAnswer(call -> call.getArgument(0));
         when(queries.getAdminRefund(1L)).thenAnswer(call -> new AdminRefundResponse(
-                1L, 2L, 7L, "요청", "승인", refund.getStatus().name(), NOW.minusSeconds(600),
+                1L, 2L, 7L, "요청", "승인", refund.getStatus(), NOW.minusSeconds(600),
                 NOW.minusSeconds(300), refund.getCompletedAt(), 7L,
-                new AdminRefundResponse.PurchaseInfo("payment", "아이템", 1000L, purchase.getStatus().name()),
-                new AdminRefundResponse.OwnedItemInfo(8L, item.getStatus().name(), item.getUsedAt()), null));
+                new AdminRefundResponse.PurchaseInfo("payment", "아이템", 1000L, purchase.getStatus()),
+                new AdminRefundResponse.OwnedItemInfo(8L, item.getStatus(), item.getUsedAt()), null));
     }
 
     @ParameterizedTest
@@ -118,10 +118,13 @@ class RefundResultTransactionServiceTest {
     void 같은_성공결과를_재반영해도_거래를_추가하거나_다시_회수하지_않는다() {
         service.apply(command, pgResult(RefundGateway.Outcome.SUCCESS), "first");
         String snapshot = record.getResponseSnapshot();
+        assertThat(snapshot).contains("\"status\":\"COMPLETED\"");
         Instant revokedAt = item.getRevokedAt();
         var replay = service.apply(command, pgResult(RefundGateway.Outcome.UNKNOWN), "second");
         assertThat(replay.httpStatus()).isEqualTo(200);
-        assertThat(replay.data().status()).isEqualTo("COMPLETED");
+        assertThat(replay.data().status()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(replay.data().purchase().status()).isEqualTo(PurchaseStatus.CANCELLED);
+        assertThat(replay.data().ownedItem().status()).isEqualTo(OwnedItemStatus.REVOKED);
         assertThat(item.getRevokedAt()).isEqualTo(revokedAt);
         assertThat(record.getResponseSnapshot()).isEqualTo(snapshot);
         verify(transactions, times(1)).save(any(PaymentTransaction.class));

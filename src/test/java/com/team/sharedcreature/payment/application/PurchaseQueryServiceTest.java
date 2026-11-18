@@ -2,7 +2,10 @@ package com.team.sharedcreature.payment.application;
 
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
+import com.team.sharedcreature.avatar.domain.OwnedItem;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
+import com.team.sharedcreature.payment.domain.PaymentTransaction;
 import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
@@ -13,13 +16,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.NullSource;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.test.util.ReflectionTestUtils;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Optional;
@@ -52,11 +54,14 @@ class PurchaseQueryServiceTest {
         when(items.findByPurchaseId(20L)).thenReturn(Optional.empty());
         when(refunds.findFirstByPurchaseIdOrderByRequestedAtDesc(20L)).thenReturn(Optional.empty());
 
-        var result = service.list(1L, 0, 20, status.name());
+        var result = service.list(1L, 0, 20, status);
 
-        assertThat(result.getContent().getFirst().status()).isEqualTo(status.name());
-        assertThat(result.getContent().getFirst().ownedItemStatus()).isNull();
-        assertThat(result.getContent().getFirst().latestRefundStatus()).isNull();
+        var summary = result.getContent().getFirst();
+        assertThat(summary.status()).isEqualTo(status);
+        assertThat(new ObjectMapper().writeValueAsString(summary))
+                .contains("\"status\":\"" + status.name() + "\"", "\"ownedItemStatus\":null", "\"latestRefundStatus\":null");
+        assertThat(summary.ownedItemStatus()).isNull();
+        assertThat(summary.latestRefundStatus()).isNull();
         assertThat(result.getTotalElements()).isEqualTo(1);
         verify(purchases, never()).findByUserId(anyLong(), any());
     }
@@ -71,7 +76,9 @@ class PurchaseQueryServiceTest {
 
         var result = service.get(1L, 20L);
 
-        assertThat(result.status()).isEqualTo(status.name());
+        assertThat(result.status()).isEqualTo(status);
+        assertThat(new ObjectMapper().writeValueAsString(result))
+                .contains("\"status\":\"" + status.name() + "\"", "\"ownedItemStatus\":null", "\"latestRefundStatus\":null");
         assertThat(result.ownedItemStatus()).isNull();
         assertThat(result.latestRefundStatus()).isNull();
         assertThat(result.transactions()).isEmpty();
@@ -79,22 +86,49 @@ class PurchaseQueryServiceTest {
     }
 
     @ParameterizedTest
-    @NullSource
-    @ValueSource(strings = {"", " ", "\t"})
-    void 서비스의_미지정과_공백필터는_기존대로_전체조회한다(String status) {
-        when(purchases.findByUserId(eq(1L), any())).thenReturn(Page.empty());
+    @EnumSource(OwnedItemStatus.class)
+    void purchaseResponsesSerializeOwnedItemStatusAsString(OwnedItemStatus status) {
+        var item = mock(OwnedItem.class);
+        when(item.getStatus()).thenReturn(status);
+        var purchase = purchase(PurchaseStatus.PAID);
+        when(purchases.findByIdAndUserId(20L, 1L)).thenReturn(Optional.of(purchase));
+        when(purchases.findByUserId(eq(1L), any())).thenReturn(new PageImpl<>(List.of(purchase)));
+        when(items.findByPurchaseId(20L)).thenReturn(Optional.of(item));
 
-        assertThat(service.list(1L, 0, 20, status)).isEmpty();
-        verify(purchases, never()).findByUserIdAndStatus(anyLong(), any(), any());
+        var detail = service.get(1L, 20L);
+        var summary = service.list(1L, 0, 20, null).getContent().getFirst();
+
+        assertThat(detail.ownedItemStatus()).isEqualTo(status);
+        assertThat(summary.ownedItemStatus()).isEqualTo(status);
+        var mapper = new ObjectMapper();
+        String expectedJson = "\"ownedItemStatus\":\"" + status.name() + "\"";
+        assertThat(mapper.writeValueAsString(detail)).contains(expectedJson);
+        assertThat(mapper.writeValueAsString(summary)).contains(expectedJson);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"paid", " PAID", "PAID ", "UNKNOWN", "CANCEL_PENDING"})
-    void 잘못된_상태는_구매조회전에_필드오류로_거절한다(String status) {
-        assertThatThrownBy(() -> service.list(1L, 0, 20, status))
-                .isInstanceOfSatisfying(BusinessException.class, exception ->
-                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.INVALID_FIELD_VALUE));
-        verifyNoInteractions(purchases, items, transactions, refunds);
+    @Test
+    void purchaseHistorySerializesProviderAsString() {
+        var purchase = purchase(PurchaseStatus.PAID);
+        var approval = PaymentTransaction.approved(purchase, "approval", purchase.getPriceKrwSnapshot(), NOW, NOW);
+        when(purchases.findByIdAndUserId(20L, 1L)).thenReturn(Optional.of(purchase));
+        when(transactions.findByPurchaseIdOrderByCreatedAtAsc(20L)).thenReturn(List.of(approval));
+
+        var response = service.get(1L, 20L);
+
+        assertThat(response.transactions()).singleElement().satisfies(transaction ->
+                assertThat(transaction.provider()).isEqualTo("PORTONE"));
+        var mapper = new ObjectMapper();
+        var provider = mapper.readTree(mapper.writeValueAsString(response)).at("/transactions/0/provider");
+        assertThat(provider.isString()).isTrue();
+        assertThat(provider.asString()).isEqualTo("PORTONE");
+    }
+
+    @Test
+    void listsAllPurchasesWhenStatusIsOmitted() {
+        when(purchases.findByUserId(eq(1L), any())).thenReturn(Page.empty());
+
+        assertThat(service.list(1L, 0, 20, null)).isEmpty();
+        verify(purchases, never()).findByUserIdAndStatus(anyLong(), any(), any());
     }
 
     @Test

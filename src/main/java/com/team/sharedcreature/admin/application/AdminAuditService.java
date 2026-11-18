@@ -1,5 +1,7 @@
 package com.team.sharedcreature.admin.application;
 
+import com.team.sharedcreature.admin.domain.AdminAuditActionType;
+import com.team.sharedcreature.admin.domain.AdminAuditTargetType;
 import com.team.sharedcreature.admin.domain.AdminAuditLog;
 import com.team.sharedcreature.admin.domain.AdminAuditResult;
 import com.team.sharedcreature.admin.infrastructure.AdminAuditLogRepository;
@@ -32,7 +34,10 @@ public class AdminAuditService {
 
     /** 권한 확인 뒤 발생한 업무 실패를 독립 트랜잭션으로 기록합니다. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordFailure(Long actorId, String actionType, String targetType, Long targetId, String code) {
+    public void recordFailure(
+            Long actorId, AdminAuditActionType actionType, AdminAuditTargetType targetType,
+            Long targetId, String code
+    ) {
         var actor = userRepository.findById(actorId).orElse(null);
         if (actor == null || actor.getGlobalRole() != GlobalRole.SUPER_ADMIN) {
             return;

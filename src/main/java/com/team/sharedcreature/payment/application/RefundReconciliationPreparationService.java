@@ -113,7 +113,7 @@ public class RefundReconciliationPreparationService {
 
             CommandResponse response;
 
-            if (RefundStatus.CANCEL_UNKNOWN.name().equals(data.status())) {
+        if (data.status() == RefundStatus.CANCEL_UNKNOWN) {
                 response = new CommandResponse(
                         409,
                         null,

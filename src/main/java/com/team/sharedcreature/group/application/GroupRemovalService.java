@@ -226,7 +226,7 @@ public class GroupRemovalService {
                 groupId,
                 targetId,
                 now,
-                "INACTIVE",
+                targetMembership.getExitReason(),
                 now.plus(JOIN_COOLDOWN),
                 false
         );

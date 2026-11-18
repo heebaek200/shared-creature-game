@@ -1,5 +1,6 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
 import com.team.sharedcreature.quest.domain.QuestDifficulty;
 
 import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
@@ -120,9 +121,8 @@ public class QuestAssignmentIntegrityService {
         }
 
         int expected = switch (window.periodType()) {
-            case "DAILY" -> 3;
-            case "WEEKLY" -> 7;
-            default -> throw new IllegalArgumentException("지원하지 않는 기간: " + window.periodType());
+            case DAILY -> 3;
+            case WEEKLY -> 7;
         };
         List<QuestAssignment> assignments = assignmentRepository.findAllWithSnapshotByPeriodId(period.getId());
         if (assignments.size() != expected) {
@@ -179,8 +179,8 @@ public class QuestAssignmentIntegrityService {
      * DAILY는 1 LOW / 1 MEDIUM / 1 HIGH, WEEKLY는 3 LOW / 2 MEDIUM / 2 HIGH입니다.
      * 슬롯 번호가 범위를 벗어나면 예상하지 못한 검사 호출이므로 예외를 반환합니다.
      */
-    private QuestDifficulty expectedDifficulty(String periodType, int slotNumber) {
-        if ("DAILY".equals(periodType)) {
+    private QuestDifficulty expectedDifficulty(QuestPeriodType periodType, int slotNumber) {
+        if (periodType == QuestPeriodType.DAILY) {
             return switch (slotNumber) {
                 case 1 -> QuestDifficulty.LOW;
                 case 2 -> QuestDifficulty.MEDIUM;
@@ -188,7 +188,7 @@ public class QuestAssignmentIntegrityService {
                 default -> throw new IllegalArgumentException("DAILY 슬롯 범위 초과: " + slotNumber);
             };
         }
-        if ("WEEKLY".equals(periodType)) {
+        if (periodType == QuestPeriodType.WEEKLY) {
             if (slotNumber >= 1 && slotNumber <= 3) return QuestDifficulty.LOW;
             if (slotNumber >= 4 && slotNumber <= 5) return QuestDifficulty.MEDIUM;
             if (slotNumber >= 6 && slotNumber <= 7) return QuestDifficulty.HIGH;

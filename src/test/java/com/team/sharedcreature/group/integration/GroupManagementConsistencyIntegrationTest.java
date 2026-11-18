@@ -7,6 +7,7 @@ import com.team.sharedcreature.group.application.GroupAdminService;
 import com.team.sharedcreature.group.application.GroupInvitationManagementService;
 import com.team.sharedcreature.group.application.GroupMembershipService;
 import com.team.sharedcreature.group.application.GroupRemovalService;
+import com.team.sharedcreature.group.domain.GroupRole;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
@@ -207,7 +208,7 @@ class GroupManagementConsistencyIntegrationTest {
 
         // PRIMARY가 MEMBER를 DEPUTY로 바꾸는 동안 비활동 강퇴합니다.
         List<String> results = race(
-                () -> adminService.changeMemberRole(f.actor(), f.target(), "DEPUTY"),
+                () -> adminService.changeMemberRole(f.actor(), f.target(), GroupRole.DEPUTY),
                 () -> removalService.removeInactiveMember(f.actor(), f.target(), "STEP7 강퇴")
         );
         assertThat(results).contains("SUCCESS");

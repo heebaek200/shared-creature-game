@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -29,8 +31,10 @@ public class PaymentTransaction {
     @JoinColumn(name = "purchase_id", nullable = false)
     private Purchase purchase;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "provider", length = 30, nullable = false)
-    private String provider;
+    private PaymentProvider provider;
 
     @Column(name = "provider_transaction_id", length = 255)
     private String providerTransactionId;
@@ -69,7 +73,7 @@ public class PaymentTransaction {
             Instant now
     ) {
         this.purchase = purchase;
-        this.provider = "PORTONE";
+        this.provider = PaymentProvider.PORTONE;
         this.providerTransactionId = providerTransactionId;
         this.transactionType = PaymentTransactionType.APPROVAL;
         this.amountKrw = amountKrw;
@@ -146,7 +150,7 @@ public class PaymentTransaction {
 
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.purchase = purchase;
-        transaction.provider = "PORTONE";
+        transaction.provider = PaymentProvider.PORTONE;
         transaction.transactionType = PaymentTransactionType.CANCELLATION;
         transaction.amountKrw = amount;
         transaction.status = PaymentTransactionStatus.REQUESTED;

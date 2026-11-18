@@ -1,5 +1,8 @@
 package com.team.sharedcreature.group.api;
 
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+import com.team.sharedcreature.group.domain.GroupRole;
+
 import java.time.Instant;
 
 /**
@@ -24,8 +27,8 @@ public record MyGroupResponse(
     public record MyMembershipResponse(
             Long membershipId,
             Long groupId,
-            String role,
-            String status,
+            GroupRole role,
+            GroupMembershipStatus status,
             Instant joinedAt
     ) {}
 

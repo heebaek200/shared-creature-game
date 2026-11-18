@@ -77,7 +77,7 @@ class CreatureHomeQueryServiceTest {
         assertThat(response.season().seasonNumber()).isEqualTo(1);
         assertThat(response.creature().groupCreatureId()).isEqualTo(40L);
         assertThat(response.creature().creatureSpeciesId()).isNull();
-        assertThat(response.creature().growthStage()).isEqualTo("EGG");
+        assertThat(response.creature().growthStage()).isEqualTo(CreatureGrowthStage.EGG);
         assertThat(response.creature().selectionDeadlineAt()).isEqualTo(now.plusSeconds(72L * 60 * 60));
         assertThat(response.onlineMembers()).isEmpty();
         assertThat(response.recentContributions()).isEmpty();
@@ -138,12 +138,12 @@ class CreatureHomeQueryServiceTest {
         var firstResponse = service.getCreatureHome(1L);
         var changedResponse = service.getCreatureHome(1L);
 
-        assertThat(firstResponse.season().status()).isEqualTo("ACTIVE");
-        assertThat(changedResponse.season().status()).isEqualTo("ACTIVE");
-        assertThat(firstResponse.creature().growthStage()).isEqualTo("EGG");
+        assertThat(firstResponse.season().status()).isEqualTo(SeasonStatus.ACTIVE);
+        assertThat(changedResponse.season().status()).isEqualTo(SeasonStatus.ACTIVE);
+        assertThat(firstResponse.creature().growthStage()).isEqualTo(CreatureGrowthStage.EGG);
         assertThat(firstResponse.creature().creatureSpeciesId()).isEqualTo(50L);
         assertThat(firstResponse.creature().selectionDeadlineAt()).isEqualTo(selectionDeadlineAt);
-        assertThat(changedResponse.creature().growthStage()).isEqualTo("EGG");
+        assertThat(changedResponse.creature().growthStage()).isEqualTo(CreatureGrowthStage.EGG);
         assertThat(changedResponse.creature().creatureSpeciesId()).isEqualTo(60L);
         assertThat(changedResponse.creature().selectionDeadlineAt()).isEqualTo(selectionDeadlineAt);
     }
@@ -196,9 +196,9 @@ class CreatureHomeQueryServiceTest {
 
         var response = service.getCreatureHome(1L);
 
-        assertThat(response.season().status()).isEqualTo("ACTIVE");
+        assertThat(response.season().status()).isEqualTo(SeasonStatus.ACTIVE);
         assertThat(response.creature().creatureSpeciesId()).isEqualTo(50L);
-        assertThat(response.creature().growthStage()).isEqualTo("HATCHLING");
+        assertThat(response.creature().growthStage()).isEqualTo(CreatureGrowthStage.HATCHLING);
         assertThat(response.creature().selectionDeadlineAt()).isEqualTo(selectionDeadlineAt);
     }
 }

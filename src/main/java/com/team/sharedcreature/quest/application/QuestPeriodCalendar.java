@@ -1,5 +1,6 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
 import org.springframework.stereotype.Component;
 
 import java.time.DayOfWeek;
@@ -36,7 +37,7 @@ public class QuestPeriodCalendar {
     public Optional<PeriodWindow> currentWindow(
             Instant firstSeasonStart,
             Instant now,
-            String periodType
+            QuestPeriodType periodType
     ) {
         Objects.requireNonNull(firstSeasonStart, "firstSeasonStart");
         Objects.requireNonNull(now, "now");
@@ -48,9 +49,6 @@ public class QuestPeriodCalendar {
                 || !originKst.toLocalTime().equals(LocalTime.MIDNIGHT)) {
             throw new IllegalArgumentException("최초 시즌은 KST 월요일 00:00에 시작해야 합니다.");
         }
-        if (!"DAILY".equals(periodType) && !"WEEKLY".equals(periodType)) {
-            throw new IllegalArgumentException("지원하지 않는 퀘스트 기간 유형: " + periodType);
-        }
 
         // 서비스 최초 시즌 이전 시각에는 유효한 퀘스트 기간이 존재하지 않습니다.
         if (now.isBefore(firstSeasonStart)) {
@@ -59,7 +57,7 @@ public class QuestPeriodCalendar {
 
         LocalDate originDate = originKst.toLocalDate();
         LocalDate today = now.atZone(KST).toLocalDate();
-        boolean daily = "DAILY".equals(periodType);
+        boolean daily = periodType == QuestPeriodType.DAILY;
 
         // 주간 기간은 매주 월요일 00:00, 일일 기간은 매일 00:00에 시작합니다.
         LocalDate startDate = daily
@@ -85,11 +83,14 @@ public class QuestPeriodCalendar {
      * [startAt, endAt) 범위와 0부터 시작하는 누적 순회 인덱스를 사용합니다.
      */
     public record PeriodWindow(
-            String periodType,
+            QuestPeriodType periodType,
             LocalDate periodDate,
             Instant startAt,
             Instant endAt,
             long rotationIndex
     ) {
+        public PeriodWindow {
+            Objects.requireNonNull(periodType, "periodType");
+        }
     }
 }

@@ -195,14 +195,12 @@ public class GroupAdminService {
     public GroupMemberResponse changeMemberRole(
             Long actorId,
             Long targetId,
-            String nextRole
+            GroupRole requestedRole
     ) {
         // 변경 허용된 값
-        if (!"MEMBER".equals(nextRole) && !"DEPUTY".equals(nextRole)) {
+        if (requestedRole != GroupRole.MEMBER && requestedRole != GroupRole.DEPUTY) {
             throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE);
         }
-        // 요청 문자열은 기존 허용값을 검증한 뒤 도메인 역할로 변환합니다.
-        GroupRole requestedRole = GroupRole.valueOf(nextRole);
 
         LockedRoles locked = lockRoles(actorId, targetId);
         GroupMembership targetMembership = locked.targetMembership();

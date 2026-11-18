@@ -1,6 +1,8 @@
 package com.team.sharedcreature.avatar.api;
 
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
 import com.team.sharedcreature.avatar.domain.ShopItem;
+import com.team.sharedcreature.avatar.domain.ShopItemStatus;
 
 /**
  * 상점 상품 목록과 상세 조회의 상품 정보를 전달합니다.
@@ -22,9 +24,9 @@ public record ShopItemResponse(
         String name,
         String description,
         Long priceKrw,
-        String slot,
+        AvatarSlot slot,
         String assetKey,
-        String status
+        ShopItemStatus status
 ) {
 
     /**
@@ -40,10 +42,10 @@ public record ShopItemResponse(
                 shopItem.getName(),
                 shopItem.getDescription(),
                 shopItem.getPriceKrw(),
-                // Enum 이름을 사용해 기존 API 문자열을 유지합니다.
-                shopItem.getSlotCode().name(),
+                // 슬롯 enum은 JSON에 이름으로 전달합니다.
+                shopItem.getSlotCode(),
                 shopItem.getAssetKey(),
-                shopItem.getStatus().name()
+                shopItem.getStatus()
         );
     }
 }

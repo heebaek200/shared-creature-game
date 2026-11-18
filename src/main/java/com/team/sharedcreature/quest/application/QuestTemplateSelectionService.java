@@ -1,5 +1,6 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
 import com.team.sharedcreature.quest.domain.QuestTemplateStatus;
 import com.team.sharedcreature.quest.domain.QuestDifficulty;
 import com.team.sharedcreature.quest.domain.QuestVerificationType;
@@ -67,15 +68,16 @@ public class QuestTemplateSelectionService {
     @Transactional(readOnly = true)
     public SelectionBatch select(QuestPeriodCalendar.PeriodWindow window) {
         Objects.requireNonNull(window, "window");
-        List<DifficultyRule> rules = rulesFor(window.periodType());
+        QuestPeriodType periodType = window.periodType();
+        List<DifficultyRule> rules = rulesFor(periodType);
         if (window.rotationIndex() < 0) {
             throw new IllegalArgumentException("회전 인덱스는 0 이상이어야 합니다.");
         }
 
         // ACTIVE 카탈로그만 조회하고, 버전 목록은 실제 선택된 템플릿 ID로 제한합니다.
         List<QuestTemplate> candidates = Objects.requireNonNull(
-                templateRepository.findActiveByPeriodType(window.periodType()), "candidates");
-        Map<QuestDifficulty, List<QuestTemplate>> byDifficulty = groupAndValidate(candidates, window.periodType());
+                templateRepository.findActiveByPeriodType(periodType), "candidates");
+        Map<QuestDifficulty, List<QuestTemplate>> byDifficulty = groupAndValidate(candidates, periodType);
         List<QuestTemplate> selected = new ArrayList<>();
 
         for (DifficultyRule rule : rules) {
@@ -136,11 +138,10 @@ public class QuestTemplateSelectionService {
      * DAILY 1·1·1, WEEKLY 3·2·2 구성이며 난이도 순서가 슬롯 순서입니다.
      * 알 수 없는 기간 문자열은 임의로 DAILY로 간주하지 않고 거절합니다.
      */
-    private List<DifficultyRule> rulesFor(String periodType) {
+    private List<DifficultyRule> rulesFor(QuestPeriodType periodType) {
         return switch (periodType) {
-            case "DAILY" -> DAILY_RULES;
-            case "WEEKLY" -> WEEKLY_RULES;
-            default -> throw new IllegalArgumentException("지원하지 않는 기간 유형: " + periodType);
+            case DAILY -> DAILY_RULES;
+            case WEEKLY -> WEEKLY_RULES;
         };
     }
 
@@ -150,13 +151,13 @@ public class QuestTemplateSelectionService {
      * Repository의 필터링 결과가 깨진 경우에는 운영상 카탈로그 오류로 보고합니다.
      */
     private Map<QuestDifficulty, List<QuestTemplate>> groupAndValidate(
-            List<QuestTemplate> candidates, String periodType
+            List<QuestTemplate> candidates, QuestPeriodType periodType
     ) {
         Map<QuestDifficulty, List<QuestTemplate>> grouped = new HashMap<>();
         Set<Long> templateIds = new HashSet<>();
         for (QuestTemplate template : candidates) {
             if (template == null || template.getId() == null || template.getRotationOrder() == null
-                    || !periodType.equals(template.getPeriodType())
+                    || template.getPeriodType() != periodType
                     || template.getStatus() != QuestTemplateStatus.ACTIVE
                     || template.getDifficulty() == null) {
                 throw new SelectionException(FailureCode.INVALID_TEMPLATE_CATALOG,
@@ -220,7 +221,7 @@ public class QuestTemplateSelectionService {
      * 실제 기간 레코드 저장이나 멱등성 판단은 포함하지 않습니다.
      * 슬롯 번호는 1부터 시작하며 난이도 LOW → MEDIUM → HIGH 순서입니다.
      */
-    public record SelectionBatch(String periodType, long rotationIndex, List<SelectedQuest> slots) {
+    public record SelectionBatch(QuestPeriodType periodType, long rotationIndex, List<SelectedQuest> slots) {
     }
 
     /**

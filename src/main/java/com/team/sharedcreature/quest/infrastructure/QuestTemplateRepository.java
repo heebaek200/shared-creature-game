@@ -1,5 +1,6 @@
 package com.team.sharedcreature.quest.infrastructure;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
 import com.team.sharedcreature.quest.domain.QuestTemplate;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -24,5 +25,5 @@ public interface QuestTemplateRepository extends JpaRepository<QuestTemplate, Lo
                AND t.periodType = :periodType
              ORDER BY t.difficulty ASC, t.rotationOrder ASC, t.id ASC
             """)
-    List<QuestTemplate> findActiveByPeriodType(@Param("periodType") String periodType);
+    List<QuestTemplate> findActiveByPeriodType(@Param("periodType") QuestPeriodType periodType);
 }

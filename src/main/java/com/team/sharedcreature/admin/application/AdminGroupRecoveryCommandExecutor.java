@@ -1,5 +1,7 @@
 package com.team.sharedcreature.admin.application;
 
+import com.team.sharedcreature.admin.domain.AdminAuditActionType;
+import com.team.sharedcreature.admin.domain.AdminAuditTargetType;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.admin.domain.AdminAuditLog;
@@ -121,7 +123,7 @@ public class AdminGroupRecoveryCommandExecutor {
                 group, actor, target, targetPreviousRole, now
         ));
         auditLogRepository.save(AdminAuditLog.create(
-                actor, "TRANSFER_PRIMARY_AS_SUPER_ADMIN", "GROUP", groupId, group,
+                actor, AdminAuditActionType.TRANSFER_PRIMARY_AS_SUPER_ADMIN, AdminAuditTargetType.GROUP, groupId, group,
                 AdminAuditResult.SUCCEEDED, reason, "{}", now
         ));
 
@@ -134,9 +136,9 @@ public class AdminGroupRecoveryCommandExecutor {
                 .orElse(null);
         boolean actorAlreadyJoined = actorMembership != null;
         boolean joinable = !actorAlreadyJoined && remaining > 0;
-        String blockedReason = actorAlreadyJoined
-                ? "ALREADY_IN_GROUP"
-                : (remaining > 0 ? null : "GROUP_FULL");
+        GroupJoinBlockedReason blockedReason = actorAlreadyJoined
+                ? GroupJoinBlockedReason.ALREADY_IN_GROUP
+                : remaining > 0 ? null : GroupJoinBlockedReason.GROUP_FULL;
         return new MyGroupResponse(
                 new GroupSummaryResponse(
                         group.getId(), group.getName(), group.getDescription(), group.getCurrentMemberCount(),
@@ -144,8 +146,8 @@ public class AdminGroupRecoveryCommandExecutor {
                 ),
                 new MyGroupResponse.PrimaryAdminResponse(targetId, nickname),
                 actorMembership == null ? null : new MyGroupResponse.MyMembershipResponse(
-                        actorMembership.getId(), groupId, actorMembership.getRole().name(),
-                        actorMembership.getStatus().name(), actorMembership.getJoinedAt()
+                        actorMembership.getId(), groupId, actorMembership.getRole(),
+                        actorMembership.getStatus(), actorMembership.getJoinedAt()
                 )
         );
     }

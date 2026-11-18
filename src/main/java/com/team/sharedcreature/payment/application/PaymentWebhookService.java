@@ -1,5 +1,6 @@
 package com.team.sharedcreature.payment.application;
 
+import com.team.sharedcreature.payment.domain.PaymentProvider;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -68,7 +69,7 @@ public class PaymentWebhookService {
             eventDatabaseId = transactionTemplate.execute(status -> persist(eventId, parsed, body));
         } catch (DataIntegrityViolationException exception) {
             // UNIQUE 경합으로 실제 중복 행이 확정된 경우에만 정상적인 재수신으로 처리합니다.
-            if (eventRepository.existsByProviderAndProviderEventId("PORTONE", eventId)) {
+            if (eventRepository.existsByProviderAndProviderEventId(PaymentProvider.PORTONE, eventId)) {
                 return;
             }
             throw exception;
@@ -139,7 +140,7 @@ public class PaymentWebhookService {
     }
 
     private Long persist(String eventId, ParsedWebhook parsed, String body) {
-        var duplicate = eventRepository.findByProviderAndProviderEventId("PORTONE", eventId);
+        var duplicate = eventRepository.findByProviderAndProviderEventId(PaymentProvider.PORTONE, eventId);
         if (duplicate.isPresent()) {
             return null;
         }

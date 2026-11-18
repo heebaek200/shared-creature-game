@@ -88,7 +88,7 @@ class AvatarServiceTest {
         verify(eventPublisher).publishAfterCommit(event.capture());
         assertThat(event.getValue().groupId()).isEqualTo(7L);
         assertThat(event.getValue().userId()).isEqualTo(1L);
-        assertThat(event.getValue().slot()).isEqualTo("HEAD");
+        assertThat(event.getValue().slot()).isEqualTo(AvatarSlot.HEAD);
         assertThat(event.getValue().equippedItem().ownedItemId()).isEqualTo(10L);
         assertThat(event.getValue().occurredAt()).isEqualTo(NOW);
 
@@ -219,7 +219,7 @@ class AvatarServiceTest {
         var event = ArgumentCaptor.forClass(AvatarEquipmentChangedEvent.class);
         verify(eventPublisher).publishAfterCommit(event.capture());
         assertThat(event.getValue().equippedItem()).isNull();
-        assertThat(event.getValue().slot()).isEqualTo("HEAD");
+        assertThat(event.getValue().slot()).isEqualTo(AvatarSlot.HEAD);
         assertThat(event.getValue().groupId()).isEqualTo(7L);
         verifyNoInteractions(purchaseRepository, ownedItemRepository, refundRepository);
     }
@@ -268,7 +268,7 @@ class AvatarServiceTest {
         return equipment;
     }
 
-    /** 필터 문자열은 Enum으로 조회하고 응답은 기존 문자열로 반환해야 합니다. */
+    /** 보유 상태 Enum이 조회 조건과 응답에 반영되는지 확인합니다. */
     @ParameterizedTest
     @EnumSource(OwnedItemStatus.class)
     void 보유목록은_상태필터를_Enum으로_조회하고_응답문자열을_유지한다(OwnedItemStatus status) {
@@ -283,10 +283,10 @@ class AvatarServiceTest {
                 .thenReturn(new PageImpl<>(List.of(item)));
         when(equipmentRepository.findAllByUserId(1L)).thenReturn(List.of());
 
-        var response = service.listOwnedItems(1L, 0, 20, "HEAD", status.name());
+        var response = service.listOwnedItems(1L, 0, 20, "HEAD", status);
 
-        assertThat(response.getContent().getFirst().slot()).isEqualTo("HEAD");
-        assertThat(response.getContent().getFirst().status()).isEqualTo(status.name());
+        assertThat(response.getContent().getFirst().slot()).isEqualTo(AvatarSlot.HEAD);
+        assertThat(response.getContent().getFirst().status()).isEqualTo(status);
         assertThat(response.getContent().getFirst().equipped()).isFalse();
     }
 
@@ -303,14 +303,6 @@ class AvatarServiceTest {
     @ValueSource(strings = {"head", " HEAD", "", "HAT"})
     void 잘못된_목록슬롯은_조회전에_필드오류로_거절한다(String slot) {
         assertBusinessError(() -> service.listOwnedItems(1L, 0, 20, slot, null),
-                ErrorCode.INVALID_FIELD_VALUE);
-        verifyNoInteractions(ownedItemRepository, equipmentRepository);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"owned_unused", " OWNED_USED", "", "ACTIVE", "CANCEL_PENDING"})
-    void 다른_도메인상태나_잘못된_보유필터는_거절한다(String status) {
-        assertBusinessError(() -> service.listOwnedItems(1L, 0, 20, null, status),
                 ErrorCode.INVALID_FIELD_VALUE);
         verifyNoInteractions(ownedItemRepository, equipmentRepository);
     }

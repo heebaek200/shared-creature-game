@@ -44,8 +44,8 @@ class ShopQueryServiceTest {
 
         var result = service.list(0, 20, slot.name()).getContent().getFirst();
 
-        assertThat(result.slot()).isEqualTo(slot.name());
-        assertThat(result.status()).isEqualTo("ACTIVE");
+        assertThat(result.slot()).isEqualTo(slot);
+        assertThat(result.status()).isEqualTo(ShopItemStatus.ACTIVE);
     }
 
     @Test
@@ -70,7 +70,7 @@ class ShopQueryServiceTest {
         var shop = unusedItem(10L, 1L, "HEAD").getShopItem();
         when(repository.findByIdAndStatus(110L, ShopItemStatus.ACTIVE)).thenReturn(Optional.of(shop));
 
-        assertThat(service.get(110L).status()).isEqualTo("ACTIVE");
+        assertThat(service.get(110L).status()).isEqualTo(ShopItemStatus.ACTIVE);
     }
 
     @Test

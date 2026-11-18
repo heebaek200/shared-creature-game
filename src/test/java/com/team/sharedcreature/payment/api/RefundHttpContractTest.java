@@ -5,7 +5,6 @@ import com.team.sharedcreature.group.domain.GroupMembershipStatus;
 import com.team.sharedcreature.auth.domain.GlobalRole;
 
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
-import com.team.sharedcreature._core.exception.RefundApiExceptionHandler;
 import com.team.sharedcreature._core.exception.RestApiExceptionHandler;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.*;
@@ -15,6 +14,7 @@ import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.payment.application.*;
+import com.team.sharedcreature.payment.domain.RefundStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -182,12 +182,13 @@ class RefundHttpContractTest {
 
     @Test
     void 생성성공은_201과_null키를_포함한_공통응답이다() throws Exception {
-        var response = new RefundResponse(1L, 2L, 1L, "환불", null, "REQUESTED", Instant.EPOCH, null, null);
+        var response = new RefundResponse(1L, 2L, 1L, "환불", null, RefundStatus.REQUESTED, Instant.EPOCH, null, null);
         when(refunds.createRefundRequest(1L, 2L, "환불", key)).thenReturn(response);
         mvc.perform(post("/api/v1/purchases/2/refund-requests").session(session(1)).with(csrf().asHeader())
                         .header("Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reason\":\"  환불  \"}"))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.data.refundRequestId").value(1))
+                .andExpect(jsonPath("$.data.status").value("REQUESTED"))
                 .andExpect(jsonPath("$.data.decisionReason").value(nullValue()))
                 .andExpect(jsonPath("$.data.reviewedAt").value(nullValue()));
         verify(refunds).createRefundRequest(1L, 2L, "환불", key);
@@ -218,7 +219,7 @@ class RefundHttpContractTest {
     @EnableWebSecurity
     @Import({SecurityConfiguration.class, WebConfiguration.class,
             RefundController.class, AdminRefundController.class,
-            RefundApiExceptionHandler.class, RestApiExceptionHandler.class,
+            RestApiExceptionHandler.class,
             StrictQueryParameterInterceptor.class, SessionAuthenticationFilter.class,
             RequestIdFilter.class, SecurityErrorWriter.class, ErrorResponseFactory.class})
     static class ConfigurationForTest implements WebMvcConfigurer {

@@ -16,6 +16,7 @@ import com.team.sharedcreature.auth.domain.UserStatus;
 import com.team.sharedcreature.auth.domain.UserProfile;
 import com.team.sharedcreature.auth.infrastructure.*;
 import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+import com.team.sharedcreature.group.domain.GroupRole;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.application.GroupMembershipService;
 import com.team.sharedcreature.group.application.InvitationSessionContext;
@@ -326,8 +327,8 @@ public class AuthService {
                 .map(membership -> new CurrentMembership(
                         membership.getId(),
                         membership.getGroup().getId(),
-                        membership.getRole().name(),
-                        membership.getStatus().name(),
+                        membership.getRole(),
+                        membership.getStatus(),
                         membership.getJoinedAt()
                 ));
     }
@@ -366,8 +367,8 @@ public class AuthService {
     public record CurrentMembership(
             Long membershipId,
             Long groupId,
-            String role,
-            String status,
+            GroupRole role,
+            GroupMembershipStatus status,
             Instant joinedAt
     ) {
     }

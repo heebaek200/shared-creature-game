@@ -3,15 +3,23 @@ package com.team.sharedcreature.group.api;
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
 import com.team.sharedcreature._core.exception.RestApiExceptionHandler;
 import com.team.sharedcreature._core.security.LoginUser;
+import com.team.sharedcreature.group.application.GroupAdminService;
+import com.team.sharedcreature.group.application.GroupInvitationManagementService;
 import com.team.sharedcreature.group.application.GroupMembershipService;
 import com.team.sharedcreature.group.application.GroupQueryService;
+import com.team.sharedcreature.group.application.GroupRemovalService;
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+import com.team.sharedcreature.group.domain.GroupRole;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.springframework.data.domain.Page;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
@@ -20,11 +28,13 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -38,6 +48,7 @@ class GroupControllerValidationTest {
 
     private MockMvc mockMvc;
     private GroupQueryService groupQueryService;
+    private GroupAdminService groupAdminService;
     private LocalValidatorFactoryBean validator;
 
     /**
@@ -49,6 +60,7 @@ class GroupControllerValidationTest {
     @BeforeEach
     void setUp() {
         groupQueryService = mock(GroupQueryService.class);
+        groupAdminService = mock(GroupAdminService.class);
         validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
 
@@ -60,7 +72,9 @@ class GroupControllerValidationTest {
 
         // Spring MVC 내장 메서드 파라미터 검증과 공통 예외 처리를 사용합니다.
         mockMvc = MockMvcBuilders.standaloneSetup(
-                        new GroupController(mock(GroupMembershipService.class), groupQueryService)
+                        new GroupController(mock(GroupMembershipService.class), groupQueryService),
+                        new GroupAdminController(groupAdminService, mock(GroupRemovalService.class),
+                                mock(GroupInvitationManagementService.class))
                 )
                 .setValidator(validator)
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
@@ -113,15 +127,48 @@ class GroupControllerValidationTest {
      */
     @Test
     void 페이징_기본값은_0페이지_20건이다() throws Exception {
-        var emptyPage = Page.<GroupMemberResponse>empty(PageRequest.of(0, 20));
-        when(groupQueryService.listMyGroupMembers(1L, 0, 20)).thenReturn(emptyPage);
+        var member = new GroupMemberResponse(
+                2L, "member", 10L, GroupRole.PRIMARY, GroupMembershipStatus.ACTIVE, Instant.EPOCH, null);
+        var members = new PageImpl<>(List.of(member), PageRequest.of(0, 20), 1);
+        when(groupQueryService.listMyGroupMembers(1L, 0, 20)).thenReturn(members);
 
         // 인자를 생략하고 호출했을 때 기본값을 사용하는지 확인합니다.
         mockMvc.perform(get("/api/v1/groups/me/members"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].role").value("PRIMARY"))
+                .andExpect(jsonPath("$.data[0].status").value("ACTIVE"))
                 .andExpect(jsonPath("$.meta.page").value(0))
                 .andExpect(jsonPath("$.meta.size").value(20));
 
         verify(groupQueryService).listMyGroupMembers(1L, 0, 20);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = GroupRole.class, names = {"MEMBER", "DEPUTY"})
+    void roleChangeAcceptsDocumentedRoles(GroupRole role) throws Exception {
+        var member = new GroupMemberResponse(
+                2L, "member", 10L, role, GroupMembershipStatus.ACTIVE, Instant.EPOCH, null);
+        when(groupAdminService.changeMemberRole(1L, 2L, role)).thenReturn(member);
+
+        mockMvc.perform(patch("/api/v1/groups/me/members/2/role")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"%s\"}".formatted(role.name())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.role").value(role.name()));
+
+        verify(groupAdminService).changeMemberRole(1L, 2L, role);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{\"role\":\"PRIMARY\"}", "{\"role\":\"deputy\"}", "{\"role\":null}"})
+    void roleChangeRejectsInvalidRoles(String body) throws Exception {
+        mockMvc.perform(patch("/api/v1/groups/me/members/2/role")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_FIELD_VALUE"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("request"));
+
+        verifyNoInteractions(groupAdminService);
     }
 }

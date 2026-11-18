@@ -20,6 +20,7 @@ import com.team.sharedcreature.auth.application.AuthService;
 import com.team.sharedcreature.auth.application.PendingSignup;
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.domain.GroupInviteLink;
+import com.team.sharedcreature.group.domain.GroupJoinBlockedReason;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
@@ -34,6 +35,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockHttpSession;
+import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
 class GroupInvitationServiceTest {
@@ -155,6 +157,18 @@ class GroupInvitationServiceTest {
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.code()).isEqualTo("INVALID_FIELD_VALUE"));
         verify(inviteLinkRepository, never()).findByTokenHash(anyString());
+    }
+
+    @Test
+    void fullGroupInvitationSerializesJoinBlockedReasonAsString() {
+        GroupInviteLink invitation = invitation(20L, 3L, 20, 20);
+        when(inviteLinkRepository.findByTokenHash(anyString())).thenReturn(Optional.of(invitation));
+
+        var response = service.getPublicInvitation(VALID_TOKEN, new MockHttpSession());
+
+        assertThat(response.joinable()).isFalse();
+        assertThat(response.joinBlockedReason()).isEqualTo(GroupJoinBlockedReason.GROUP_FULL);
+        assertThat(new ObjectMapper().writeValueAsString(response)).contains("\"joinBlockedReason\":\"GROUP_FULL\"");
     }
 
     private GroupInviteLink invitation(Long invitationId, Long groupId, int currentCount, int capacity) {

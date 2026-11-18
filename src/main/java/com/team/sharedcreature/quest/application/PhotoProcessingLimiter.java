@@ -107,7 +107,7 @@ public class PhotoProcessingLimiter {
         } catch (InterruptedException exception) {
             future.cancel(true);
             Thread.currentThread().interrupt();
-            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+            throw new IllegalStateException("EXIF Worker 응답 대기가 중단됐습니다.", exception);
         } catch (ExecutionException exception) {
             Throwable cause = exception.getCause();
             if (cause instanceof RuntimeException runtimeException) {

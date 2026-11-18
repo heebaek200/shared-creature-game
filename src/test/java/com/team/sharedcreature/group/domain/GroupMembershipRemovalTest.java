@@ -42,7 +42,7 @@ class GroupMembershipRemovalTest {
 
         assertThat(membership.getStatus()).isEqualTo(GroupMembershipStatus.REMOVED);
         assertThat(membership.getRole()).isEqualTo(GroupRole.MEMBER);
-        assertThat(membership.getExitReason()).isEqualTo("INACTIVE");
+        assertThat(membership.getExitReason()).isEqualTo(GroupMembershipExitReason.INACTIVE);
         assertThat(membership.getEndedByUser()).isSameAs(actor);
         assertThat(membership.getEndedAt()).isEqualTo(NOW);
     }

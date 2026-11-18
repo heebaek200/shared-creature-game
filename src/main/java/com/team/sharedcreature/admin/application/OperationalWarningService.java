@@ -7,6 +7,8 @@ import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
 import com.team.sharedcreature.season.domain.SeasonStatus;
 
 import com.team.sharedcreature.admin.api.OperationalWarningResponse;
+import com.team.sharedcreature.admin.domain.OperationalWarningSeverity;
+import com.team.sharedcreature.admin.domain.OperationalWarningType;
 import com.team.sharedcreature.admin.domain.SchedulerExecution;
 import com.team.sharedcreature.admin.domain.SchedulerExecutionStatus;
 import com.team.sharedcreature.group.domain.Group;
@@ -52,7 +54,7 @@ public class OperationalWarningService {
     /** 유형 필터와 페이지 조건에 맞는 현재 경고를 반환합니다. */
     public Page<OperationalWarningResponse> list(String type, int page, int size) {
         List<OperationalWarningResponse> warnings = currentWarnings().stream()
-                .filter(warning -> type == null || type.equals(warning.type()))
+                .filter(warning -> type == null || type.equals(warning.type().name()))
                 .sorted(Comparator.comparing(OperationalWarningResponse::detectedAt).reversed()
                         .thenComparing(OperationalWarningResponse::warningKey))
                 .toList();
@@ -88,7 +90,8 @@ public class OperationalWarningService {
                     ? execution.getLeaseExpiresAt()
                     : firstInstant(execution.getCompletedAt(), execution.getUpdatedAt(), now);
             warnings.add(warning(
-                    "SCHEDULER_FAILED", leaseExpired ? "CRITICAL" : "WARNING",
+                    OperationalWarningType.SCHEDULER_FAILED,
+                    leaseExpired ? OperationalWarningSeverity.CRITICAL : OperationalWarningSeverity.WARNING,
                     "SCHEDULER_EXECUTION", execution.getId(),
                     leaseExpired ? "Scheduler Lease가 만료됐습니다." : "Scheduler 실행이 실패했습니다.",
                     detectedAt
@@ -105,7 +108,7 @@ public class OperationalWarningService {
                 """, Season.class).setParameter("now", now).getResultList();
         for (Season season : seasons) {
             warnings.add(warning(
-                    "SEASON_STATE_INVALID", "CRITICAL", "SEASON", season.getId(),
+                    OperationalWarningType.SEASON_STATE_INVALID, OperationalWarningSeverity.CRITICAL, "SEASON", season.getId(),
                     "현재 시각과 시즌 상태가 일치하지 않습니다.", season.getEndAt()
             ));
         }
@@ -118,10 +121,10 @@ public class OperationalWarningService {
                 """, Long.class).setParameter("now", now).getSingleResult();
         if (covering == 0L) {
             Instant expectedStart = expectedSeasonStart(now);
-            String key = "SEASON_STATE_INVALID:SEASON:CURRENT_PERIOD:"
+            String key = OperationalWarningType.SEASON_STATE_INVALID.name() + ":SEASON:CURRENT_PERIOD:"
                     + expectedStart.atZone(KST).toLocalDate();
             warnings.add(new OperationalWarningResponse(
-                    key, "SEASON_STATE_INVALID", "CRITICAL", "SEASON", null,
+                    key, OperationalWarningType.SEASON_STATE_INVALID, OperationalWarningSeverity.CRITICAL, "SEASON", null,
                     "현재 4주 구간의 시즌이 없습니다.", expectedStart
             ));
         }
@@ -134,10 +137,10 @@ public class OperationalWarningService {
                  WHERE period.status = com.team.sharedcreature.quest.domain.QuestPeriodStatus.FAILED
                 """, QuestPeriod.class).getResultList();
         for (QuestPeriod period : periods) {
-            String type = "TEMPLATE_SHORTAGE".equals(period.getFailureCode())
-                    ? "TEMPLATE_SHORTAGE" : "QUEST_PERIOD_FAILED";
+            OperationalWarningType type = "TEMPLATE_SHORTAGE".equals(period.getFailureCode())
+                    ? OperationalWarningType.TEMPLATE_SHORTAGE : OperationalWarningType.QUEST_PERIOD_FAILED;
             warnings.add(warning(
-                    type, "WARNING", "QUEST_PERIOD", period.getId(),
+                    type, OperationalWarningSeverity.WARNING, "QUEST_PERIOD", period.getId(),
                     "퀘스트 기간 배정이 실패했습니다.", period.getUpdatedAt()
             ));
         }
@@ -162,7 +165,8 @@ public class OperationalWarningService {
                 """, PaymentTransaction.class).getResultList();
         for (PaymentTransaction transaction : transactions) {
             warnings.add(warning(
-                    "PAYMENT_UNCERTAIN", "CRITICAL", "PURCHASE", transaction.getPurchase().getId(),
+                    OperationalWarningType.PAYMENT_UNCERTAIN, OperationalWarningSeverity.CRITICAL,
+                    "PURCHASE", transaction.getPurchase().getId(),
                     "결제 결과가 확정되지 않았습니다.", transaction.getUpdatedAt()
             ));
         }
@@ -176,7 +180,7 @@ public class OperationalWarningService {
                 """, RefundRequest.class).getResultList();
         for (RefundRequest refund : refunds) {
             warnings.add(warning(
-                    "REFUND_UNCERTAIN", "CRITICAL", "REFUND_REQUEST", refund.getId(),
+                    OperationalWarningType.REFUND_UNCERTAIN, OperationalWarningSeverity.CRITICAL, "REFUND_REQUEST", refund.getId(),
                     "환불 취소 결과가 확정되지 않았습니다.", refund.getUpdatedAt()
             ));
         }
@@ -203,7 +207,7 @@ public class OperationalWarningService {
             Instant detectedAt = membershipUpdatedAt == null || group.getUpdatedAt().isAfter(membershipUpdatedAt)
                     ? group.getUpdatedAt() : membershipUpdatedAt;
             warnings.add(warning(
-                    "MEMBER_COUNT_MISMATCH", "WARNING", "GROUP", group.getId(),
+                    OperationalWarningType.MEMBER_COUNT_MISMATCH, OperationalWarningSeverity.WARNING, "GROUP", group.getId(),
                     "그룹 인원 카운터와 활성 멤버십 수가 일치하지 않습니다.", detectedAt
             ));
         }
@@ -232,7 +236,8 @@ public class OperationalWarningService {
                     ? submission.getQuestAssignment().getQuestPeriod().getSeason().getEndAt().plus(Duration.ofDays(30))
                     : submission.getUpdatedAt().plus(Duration.ofHours(24));
             warnings.add(warning(
-                    "PHOTO_DELETION_FAILED", "WARNING", "PHOTO_SUBMISSION", submission.getId(),
+                    OperationalWarningType.PHOTO_DELETION_FAILED, OperationalWarningSeverity.WARNING,
+                    "PHOTO_SUBMISSION", submission.getId(),
                     "보존 기한이 지난 사진 파일이 삭제되지 않았습니다.", deletionDueAt
             ));
         }
@@ -254,15 +259,15 @@ public class OperationalWarningService {
     }
 
     private OperationalWarningResponse warning(
-            String type,
-            String severity,
+            OperationalWarningType type,
+            OperationalWarningSeverity severity,
             String resourceType,
             Long resourceId,
             String message,
             Instant detectedAt
     ) {
         return new OperationalWarningResponse(
-                type + ":" + resourceType + ":" + resourceId,
+                type.name() + ":" + resourceType + ":" + resourceId,
                 type,
                 severity,
                 resourceType,

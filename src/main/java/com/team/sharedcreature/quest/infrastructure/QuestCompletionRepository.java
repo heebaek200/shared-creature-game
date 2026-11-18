@@ -47,7 +47,7 @@ public interface QuestCompletionRepository extends JpaRepository<QuestCompletion
             WHERE c.user.id = :userId
             AND c.membership.id = :membershipId
             AND c.groupSeason.id = :groupSeasonId
-            AND p.periodType = 'DAILY'
+            AND p.periodType = com.team.sharedcreature.quest.domain.QuestPeriodType.DAILY
             AND p.periodDate >= :startDate
             AND p.periodDate < :endDateExclusive
             """)
@@ -76,7 +76,7 @@ public interface QuestCompletionRepository extends JpaRepository<QuestCompletion
             WHERE c.user.id = :userId
             AND c.membership.id = :membershipId
             AND c.groupSeason.id = :groupSeasonId
-            AND p.periodType = 'DAILY'
+            AND p.periodType = com.team.sharedcreature.quest.domain.QuestPeriodType.DAILY
             AND p.periodDate >= :startDate
             AND p.periodDate < :endDateExclusive
             """)
@@ -106,7 +106,7 @@ public interface QuestCompletionRepository extends JpaRepository<QuestCompletion
             WHERE c.user.id = :userId
             AND c.membership.id = :membershipId
             AND c.groupSeason.id = :groupSeasonId
-            AND p.periodType = 'DAILY'
+            AND p.periodType = com.team.sharedcreature.quest.domain.QuestPeriodType.DAILY
             AND a.difficultySnapshot = :difficulty
             AND p.periodDate >= :startDate
             AND p.periodDate < :endDateExclusive
@@ -136,7 +136,7 @@ public interface QuestCompletionRepository extends JpaRepository<QuestCompletion
             WHERE c.user.id = :userId
             AND c.membership.id = :membershipId
             AND c.groupSeason.id = :groupSeasonId
-            AND p.periodType = 'DAILY'
+            AND p.periodType = com.team.sharedcreature.quest.domain.QuestPeriodType.DAILY
             AND a.verificationTypeSnapshot = :verificationType
             AND p.periodDate >= :startDate
             AND p.periodDate < :endDateExclusive

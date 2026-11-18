@@ -29,8 +29,9 @@ public class QuestPeriod {
     @JoinColumn(name = "season_id", nullable = false)
     private Season season;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "period_type", length = 30, nullable = false)
-    private String periodType;
+    private QuestPeriodType periodType;
 
     @Column(name = "period_date", nullable = false)
     private LocalDate periodDate;
@@ -67,14 +68,14 @@ public class QuestPeriod {
      * 중간 실패 시 전체 트랜잭션을 롤백해 부분 배정을 방지합니다.
      */
     public static QuestPeriod pending(
-            Season season, String type, LocalDate date, Instant start, Instant end, Instant now
+            Season season, QuestPeriodType type, LocalDate date, Instant start, Instant end, Instant now
     ) {
         Objects.requireNonNull(season, "season");
         Objects.requireNonNull(date, "date");
         Objects.requireNonNull(start, "start");
         Objects.requireNonNull(end, "end");
         Objects.requireNonNull(now, "now");
-        if (!"DAILY".equals(type) && !"WEEKLY".equals(type)) {
+        if (type == null) {
             throw new IllegalArgumentException("지원하지 않는 기간: " + type);
         }
         if (!start.isBefore(end)) {

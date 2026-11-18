@@ -82,10 +82,10 @@ public class AdminDashboardService {
             ));
         }
 
-        Map<String, Long> growthCounts = analyticsRepository.growthStages(aggregatedAt, groupId);
+        Map<CreatureGrowthStage, Long> growthCounts = analyticsRepository.growthStages(aggregatedAt, groupId);
         List<AdminDashboardResponse.GrowthStagePoint> growthStages = GROWTH_STAGE_ORDER.stream()
                 .map(stage -> new AdminDashboardResponse.GrowthStagePoint(
-                        stage.name(), growthCounts.getOrDefault(stage.name(), 0L)
+                        stage, growthCounts.getOrDefault(stage, 0L)
                 ))
                 .toList();
         List<AdminDashboardResponse.TopGroupPoint> topGroups = analyticsRepository

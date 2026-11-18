@@ -1,8 +1,11 @@
 package com.team.sharedcreature.group.application;
 
 import com.team.sharedcreature.group.domain.GroupInviteLinkStatus;
+import com.team.sharedcreature.group.domain.GroupJoinBlockedReason;
 
 import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+import com.team.sharedcreature.group.domain.GroupRole;
+import tools.jackson.databind.ObjectMapper;
 
 import com.team.sharedcreature.group.domain.GroupStatus;
 
@@ -13,6 +16,7 @@ import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.api.CreateGroupRequest;
 import com.team.sharedcreature.group.domain.Group;
+import com.team.sharedcreature.group.domain.GroupVisibility;
 import com.team.sharedcreature.group.domain.GroupInviteLink;
 import com.team.sharedcreature.group.infrastructure.GroupAdminChangeRepository;
 import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
@@ -130,6 +134,14 @@ class GroupMembershipServiceTest {
         // 생성 결과와 연관 데이터 저장 요청을 검증합니다.
         assertThat(result.group().group().name()).isEqualTo("새싹모임");
         assertThat(result.initialInvitationUrl()).startsWith("http://localhost:5173/invite/");
+        assertThat(result.group().myMembership().role()).isEqualTo(GroupRole.PRIMARY);
+        assertThat(result.group().myMembership().status()).isEqualTo(GroupMembershipStatus.ACTIVE);
+        var mapper = new ObjectMapper();
+        var json = mapper.readTree(mapper.writeValueAsString(result));
+        assertThat(json.at("/group/group/joinBlockedReason").isNull()).isTrue();
+        var membershipJson = json.at("/group/myMembership");
+        assertThat(membershipJson.get("role").asString()).isEqualTo("PRIMARY");
+        assertThat(membershipJson.get("status").asString()).isEqualTo("ACTIVE");
         verify(seasonQueryService).findCurrentSeasonForShare();
         verify(inviteLinkRepository).save(any());
         verify(adminChangeRepository).save(any());
@@ -225,7 +237,7 @@ class GroupMembershipServiceTest {
         Group group = mock(Group.class);
         when(group.getId()).thenReturn(10L);
         when(group.getStatus()).thenReturn(GroupStatus.ACTIVE);
-        when(group.getVisibility()).thenReturn("PUBLIC");
+        when(group.getVisibility()).thenReturn(GroupVisibility.PUBLIC);
         when(groupRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(group));
         when(membershipRepository.existsByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE)).thenReturn(false);
         when(restrictionRepository.existsByUserIdAndRestrictedUntilAfter(any(), any())).thenReturn(false);
@@ -236,8 +248,10 @@ class GroupMembershipServiceTest {
         var result = service.joinGroup(new LoginUser(1L, "가입자", Set.of()), 10L);
 
         assertThat(result.groupId()).isEqualTo(10L);
-        assertThat(result.role()).isEqualTo("MEMBER");
-        assertThat(result.status()).isEqualTo("ACTIVE");
+        assertThat(result.role()).isEqualTo(GroupRole.MEMBER);
+        assertThat(result.status()).isEqualTo(GroupMembershipStatus.ACTIVE);
+        assertThat(new ObjectMapper().writeValueAsString(result))
+                .contains("\"role\":\"MEMBER\"", "\"status\":\"ACTIVE\"");
         assertThat(result.nickname()).isEqualTo("가입자");
         verify(groupRepository).incrementMemberCountIfAvailable(10L, clock.instant());
     }
@@ -252,7 +266,7 @@ class GroupMembershipServiceTest {
         when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user));
         Group group = mock(Group.class);
         when(group.getStatus()).thenReturn(GroupStatus.ACTIVE);
-        when(group.getVisibility()).thenReturn("PUBLIC");
+        when(group.getVisibility()).thenReturn(GroupVisibility.PUBLIC);
         when(groupRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(group));
         when(membershipRepository.existsByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE)).thenReturn(false);
         when(restrictionRepository.existsByUserIdAndRestrictedUntilAfter(any(), any())).thenReturn(false);
@@ -277,7 +291,7 @@ class GroupMembershipServiceTest {
         Group group = mock(Group.class);
         when(group.getId()).thenReturn(10L);
         when(group.getStatus()).thenReturn(GroupStatus.ACTIVE);
-        when(group.getVisibility()).thenReturn("PUBLIC");
+        when(group.getVisibility()).thenReturn(GroupVisibility.PUBLIC);
         when(groupRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(group));
         GroupInviteLink invitation = mock(GroupInviteLink.class);
         when(invitation.getGroup()).thenReturn(group);
@@ -319,7 +333,9 @@ class GroupMembershipServiceTest {
 
         assertThat(result.getContent()).singleElement().satisfies(summary -> {
             assertThat(summary.joinable()).isFalse();
-            assertThat(summary.joinBlockedReason()).isEqualTo("ALREADY_IN_GROUP");
+            assertThat(summary.joinBlockedReason()).isEqualTo(GroupJoinBlockedReason.ALREADY_IN_GROUP);
+            assertThat(new ObjectMapper().writeValueAsString(summary))
+                    .contains("\"joinBlockedReason\":\"ALREADY_IN_GROUP\"");
         });
     }
 

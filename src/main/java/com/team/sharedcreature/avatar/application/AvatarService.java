@@ -97,7 +97,7 @@ public class AvatarService {
             int page,
             int size,
             String slot,
-            String status
+            OwnedItemStatus status
     ) {
         PageRequest pageable = PageRequest.of(
                 page,
@@ -108,7 +108,7 @@ public class AvatarService {
         Page<OwnedItem> items = ownedItemRepository.findAllForUser(
                 userId,
                 parseSlot(slot),
-                parseOwnedItemStatus(status),
+                status,
                 pageable
         );
 
@@ -291,7 +291,7 @@ public class AvatarService {
         if (equipmentChanged) {
             scheduleEquipmentChangedEvent(
                     userId,
-                    slot,
+                    avatarSlot,
                     AvatarResponse.Equipment.from(item),
                     now
             );
@@ -357,7 +357,7 @@ public class AvatarService {
         avatarEquipmentRepository.flush();
 
         // 해제 이벤트에는 변경 후 장착 아이템을 null로 전달합니다.
-        scheduleEquipmentChangedEvent(userId, slot, null, now);
+        scheduleEquipmentChangedEvent(userId, avatarSlot, null, now);
 
         return getAvatar(userId);
     }
@@ -374,7 +374,7 @@ public class AvatarService {
      */
     private void scheduleEquipmentChangedEvent(
             Long userId,
-            String slot,
+            AvatarSlot slot,
             AvatarResponse.Equipment equippedItem,
             Instant occurredAt
     ) {
@@ -412,29 +412,6 @@ public class AvatarService {
             throw new BusinessException(
                     ErrorCode.INVALID_FIELD_VALUE,
                     "슬롯은 HEAD, FACE, BODY, ACCESSORY 중 하나여야 합니다."
-            );
-        }
-    }
-
-    /**
-     * 선택적인 보유 상태 필터를 도메인 타입으로 변환합니다.
-     *
-     * @param status 요청 보유 상태, 미지정이면 null
-     * @return 보유 상태, 미지정이면 null
-     * @throws BusinessException 허용되지 않은 보유 상태인 경우
-     */
-    private OwnedItemStatus parseOwnedItemStatus(String status) {
-        if (status == null) {
-            return null;
-        }
-
-        try {
-            // 환불 상태나 상품 판매 상태는 보유 상태로 허용하지 않습니다.
-            return OwnedItemStatus.valueOf(status);
-        } catch (IllegalArgumentException exception) {
-            throw new BusinessException(
-                    ErrorCode.INVALID_FIELD_VALUE,
-                    "보유 상태는 OWNED_UNUSED, OWNED_USED, REVOKED 중 하나여야 합니다."
             );
         }
     }

@@ -5,6 +5,7 @@ import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature._core.security.SessionAuthenticationFilter;
 import com.team.sharedcreature.group.application.GroupMembershipService;
 import com.team.sharedcreature.group.application.GroupQueryService;
+import com.team.sharedcreature.group.domain.GroupRole;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -79,9 +80,9 @@ public class GroupController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(result));
     }
 
-    private void updateSessionRole(LoginUser loginUser, String role, HttpSession session) {
+    private void updateSessionRole(LoginUser loginUser, GroupRole role, HttpSession session) {
         var roles = new HashSet<>(loginUser.roles());
-        roles.add(role);
+        roles.add(role.name());
         session.setAttribute(
                 SessionAuthenticationFilter.LOGIN_USER,
                 new LoginUser(loginUser.id(), loginUser.nickname(), Set.copyOf(roles))

@@ -11,6 +11,7 @@ import com.team.sharedcreature.group.api.NavigationResponse;
 import com.team.sharedcreature.group.api.PublicInvitationResponse;
 import com.team.sharedcreature.group.domain.GroupInviteLink;
 import com.team.sharedcreature.group.domain.GroupInviteLinkStatus;
+import com.team.sharedcreature.group.domain.GroupJoinBlockedReason;
 import com.team.sharedcreature.group.domain.GroupMembershipStatus;
 import com.team.sharedcreature.group.domain.GroupStatus;
 import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
@@ -76,7 +77,7 @@ public class GroupInvitationService {
             }
             var membership = membershipService.joinInvitation(loginUser, invitation.getId());
             var roles = new HashSet<>(loginUser.roles());
-            roles.add(membership.role());
+            roles.add(membership.role().name());
             session.setAttribute(
                     SessionAuthenticationFilter.LOGIN_USER,
                     new LoginUser(loginUser.id(), loginUser.nickname(), Set.copyOf(roles))
@@ -138,7 +139,7 @@ public class GroupInvitationService {
 
     private PublicInvitationResponse response(GroupInviteLink invitation, HttpSession session) {
         var group = invitation.getGroup();
-        String blockedReason = blockedReason(group, session);
+        GroupJoinBlockedReason blockedReason = blockedReason(group, session);
         return new PublicInvitationResponse(
                 group.getId(),
                 group.getName(),
@@ -150,22 +151,22 @@ public class GroupInvitationService {
         );
     }
 
-    private String blockedReason(com.team.sharedcreature.group.domain.Group group, HttpSession session) {
+    private GroupJoinBlockedReason blockedReason(com.team.sharedcreature.group.domain.Group group, HttpSession session) {
         if (group.getStatus() != GroupStatus.ACTIVE) {
-            return "INVITE_INVALID";
+            return GroupJoinBlockedReason.INVITE_INVALID;
         }
         Object login = session.getAttribute(SessionAuthenticationFilter.LOGIN_USER);
         if (login instanceof LoginUser loginUser) {
             var membership = membershipRepository.findActiveWithGroupByUserId(loginUser.id());
             if (membership.isPresent()) {
-                return "ALREADY_IN_GROUP";
+                return GroupJoinBlockedReason.ALREADY_IN_GROUP;
             }
             if (membershipService.isJoinRestricted(loginUser.id())) {
-                return "JOIN_COOLDOWN_ACTIVE";
+                return GroupJoinBlockedReason.JOIN_COOLDOWN_ACTIVE;
             }
         }
         if (group.getCurrentMemberCount() >= group.getCapacity()) {
-            return "GROUP_FULL";
+            return GroupJoinBlockedReason.GROUP_FULL;
         }
         return null;
     }

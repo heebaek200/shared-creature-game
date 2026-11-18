@@ -1,5 +1,12 @@
 package com.team.sharedcreature.ranking.integration;
 
+import com.team.sharedcreature.auth.domain.OauthLoginAttempt;
+import com.team.sharedcreature.auth.domain.OauthLoginIntent;
+import com.team.sharedcreature.auth.domain.SocialProvider;
+import com.team.sharedcreature.quest.domain.UserActivityEvent;
+import com.team.sharedcreature.quest.domain.UserActivityEventType;
+import com.team.sharedcreature.quest.domain.UserActivitySourceType;
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
 import com.team.sharedcreature.season.domain.CreatureGrowthStage;
 
 import com.team.sharedcreature.season.domain.SeasonStatus;
@@ -9,7 +16,10 @@ import com.team.sharedcreature.auth.domain.GlobalRole;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.UserProfile;
 import com.team.sharedcreature.group.domain.Group;
+import com.team.sharedcreature.group.domain.GroupVisibility;
+import com.team.sharedcreature.group.infrastructure.GroupRepository;
 import com.team.sharedcreature.group.domain.GroupMembership;
+import com.team.sharedcreature.group.domain.GroupMembershipExitReason;
 import com.team.sharedcreature.group.domain.GroupMembershipStatus;
 import com.team.sharedcreature.group.domain.GroupRole;
 import com.team.sharedcreature.group.domain.GroupInviteLink;
@@ -41,6 +51,7 @@ import com.team.sharedcreature.quest.domain.QuestTemplate;
 import com.team.sharedcreature.quest.domain.QuestTemplateStatus;
 import com.team.sharedcreature.quest.domain.QuestDifficulty;
 import com.team.sharedcreature.quest.domain.QuestVerificationType;
+import com.team.sharedcreature.quest.domain.PhotoFailureReason;
 import com.team.sharedcreature.quest.domain.PhotoSubmission;
 import com.team.sharedcreature.quest.domain.PhotoVerificationStatus;
 import com.team.sharedcreature.quest.infrastructure.PhotoSubmissionRepository;
@@ -56,6 +67,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContextInitializer;
@@ -65,6 +77,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 import java.net.URI;
 import java.time.Duration;
@@ -94,6 +107,7 @@ class RankingDatabaseIntegrationTest {
     @Autowired private EntityManager em;
     @Autowired private RankingService service;
     @Autowired private GroupMembershipRepository memberships;
+    @Autowired private GroupRepository groups;
     @Autowired private GroupInviteLinkRepository inviteLinks;
     @Autowired private UserReportRepository reports;
     @Autowired private AdminReportQueryService reportQueries;
@@ -110,6 +124,125 @@ class RankingDatabaseIntegrationTest {
     private User owner;
     private Group group;
     private GroupSeason groupSeason;
+
+    /** 공개 범위의 저장값과 공개 목록·가입 인원 갱신 쿼리의 호환성을 검증합니다. */
+    @Test
+    void publicVisibilitySupportsListingAndNativeMemberIncrement() {
+        em.flush();
+        Long groupId = group.getId();
+        String query = group.getNormalizedName();
+        em.clear();
+
+        Group saved = groups.findById(groupId).orElseThrow();
+        assertThat(saved.getVisibility()).isEqualTo(GroupVisibility.PUBLIC);
+        assertThat(em.createNativeQuery("SELECT visibility FROM game_groups WHERE id = :id", String.class)
+                .setParameter("id", groupId).getSingleResult()).isEqualTo("PUBLIC");
+        assertThat(groups.findPublicGroups(query, PageRequest.of(0, 100)).getContent())
+                .extracting(Group::getId).contains(groupId);
+
+        // Native SQL의 문자열 조건도 Enum 저장값과 일치해야 가입 인원이 증가합니다.
+        int before = saved.getCurrentMemberCount();
+        assertThat(groups.incrementMemberCountIfAvailable(groupId, NOW)).isEqualTo(1);
+        em.clear();
+        assertThat(groups.findById(groupId).orElseThrow().getCurrentMemberCount()).isEqualTo(before + 1);
+    }
+
+    /** 시작 시각이 같아도 일일·주간 기간은 각 유형으로 저장되고 별도로 조회됩니다. */
+    @ParameterizedTest
+    @EnumSource(QuestPeriodType.class)
+    void questPeriodTypeRoundTripsAndFiltersCurrentPeriod(QuestPeriodType expectedType) {
+        Instant start = season.getStartAt();
+        Long seasonId = season.getId();
+        var date = start.atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalDate();
+        QuestPeriod expected = null;
+        for (QuestPeriodType type : QuestPeriodType.values()) {
+            int days = type == QuestPeriodType.DAILY ? 1 : 7;
+            QuestPeriod period = QuestPeriod.pending(season, type, date, start, start.plus(Duration.ofDays(days)), NOW);
+            period.activate(NOW);
+            em.persist(period);
+            if (type == expectedType) {
+                expected = period;
+            }
+        }
+        em.flush();
+        Long periodId = java.util.Objects.requireNonNull(expected).getId();
+        em.clear();
+
+        assertThat(em.createNativeQuery("SELECT period_type FROM quest_periods WHERE id = :id", String.class)
+                .setParameter("id", periodId).getSingleResult()).isEqualTo(expectedType.name());
+        QuestPeriod saved = periods.findCurrentBySeasonAndType(seasonId, expectedType, NOW).orElseThrow();
+        assertThat(saved.getId()).isEqualTo(periodId);
+        assertThat(saved.getPeriodType()).isEqualTo(expectedType);
+    }
+
+    /** 실제 체크인과 기존 시드 데이터의 DB 코드가 그대로 왕복하는지 검증합니다. */
+    @ParameterizedTest
+    @CsvSource({
+            "CHECK_IN, SERVICE_CHECK_IN, check_in, service_check_in",
+            "SERVICE_CHECK_IN, MANUAL_TEST_SEED, SERVICE_CHECK_IN, MANUAL_TEST_SEED",
+            "QUEST_COMPLETED, QUEST_COMPLETION, QUEST_COMPLETED, QUEST_COMPLETION"
+    })
+    void activityCodesRoundTrip(
+            UserActivityEventType eventType, UserActivitySourceType sourceType,
+            String storedEventType, String storedSourceType
+    ) {
+        GroupMembership membership = memberships.findActiveWithGroupByUserId(owner.getId()).orElseThrow();
+        var date = NOW.atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalDate();
+        UserActivityEvent event = UserActivityEvent.create(
+                owner, eventType, sourceType, owner.getId(), membership, groupSeason, date, NOW, null, null);
+        em.persist(event);
+        em.flush();
+        Long id = event.getId();
+        em.clear();
+
+        Object[] codes = (Object[]) em.createNativeQuery(
+                        "SELECT event_type, source_type FROM user_activity_events WHERE id = :id")
+                .setParameter("id", id).getSingleResult();
+        assertThat(codes).containsExactly(storedEventType, storedSourceType);
+        UserActivityEvent saved = em.find(UserActivityEvent.class, id);
+        assertThat(saved.getEventType()).isEqualTo(eventType);
+        assertThat(saved.getSourceType()).isEqualTo(sourceType);
+    }
+
+    /** 탈퇴·강퇴 사유를 그대로 저장하고 기존 DB 코드로부터 Enum을 읽습니다. */
+    @ParameterizedTest
+    @CsvSource({"SELF, SELF", "INACTIVE, INACTIVE", "REPORT, REPORTED"})
+    void membershipExitReasonRoundTrips(GroupMembershipExitReason reason, String storedCode) {
+        User target = user();
+        GroupMembership membership = GroupMembership.member(group, target, NOW);
+        em.persist(membership);
+        Long id = membership.getId();
+        assertThat(membership.getExitReason()).isNull();
+
+        switch (reason) {
+            case SELF -> membership.leaveBySelf(target, NOW);
+            case INACTIVE -> membership.removeForInactivity(owner, NOW);
+            case REPORT -> membership.removeForReport(owner, NOW);
+        }
+        em.flush();
+        em.clear();
+
+        assertThat(em.createNativeQuery("SELECT exit_reason FROM group_memberships WHERE id = :id", String.class)
+                .setParameter("id", id).getSingleResult()).isEqualTo(storedCode);
+        assertThat(em.find(GroupMembership.class, id).getExitReason()).isEqualTo(reason);
+    }
+
+    /** API에 정의된 복귀 경로의 DB 문자열 저장과 재조회를 검증합니다. */
+    @ParameterizedTest
+    @ValueSource(strings = {"DEFAULT", "INVITE"})
+    void oauthReturnRouteRoundTrips(String route) {
+        String hash = com.team.sharedcreature._core.security.Hashing.sha256(UUID.randomUUID().toString());
+        OauthLoginIntent intent = "INVITE".equals(route) ? OauthLoginIntent.INVITE : OauthLoginIntent.LOGIN;
+        var attempt = OauthLoginAttempt.start(hash, hash, SocialProvider.GOOGLE, intent, null, route, NOW);
+        em.persist(attempt);
+        em.flush();
+        Long id = attempt.getId();
+        em.clear();
+
+        assertThat(em.createNativeQuery("SELECT return_route FROM oauth_login_attempts WHERE id = :id", String.class)
+                .setParameter("id", id).getSingleResult()).isEqualTo(route);
+        assertThat(em.find(OauthLoginAttempt.class, id).getReturnRoute()).isEqualTo(route);
+    }
 
     @BeforeEach
     void setUp() {
@@ -138,7 +271,7 @@ class RankingDatabaseIntegrationTest {
             photo.markValid(NOW.minusSeconds(7_200), java.math.BigDecimal.ONE,
                     java.math.BigDecimal.ONE, NOW.minusSeconds(60));
         } else if (status == PhotoVerificationStatus.INVALID) {
-            photo.markInvalid("TEST_FAILURE", null, null, null, NOW.minusSeconds(60));
+            photo.markInvalid(PhotoFailureReason.EXIF_GPS_MISSING, null, null, null, NOW.minusSeconds(60));
         }
         em.persist(photo);
         em.flush();
@@ -147,6 +280,12 @@ class RankingDatabaseIntegrationTest {
 
         PhotoSubmission reloaded = photos.findById(photoId).orElseThrow();
         assertThat(reloaded.getVerificationStatus()).isEqualTo(status);
+        PhotoFailureReason expectedReason =
+                status == PhotoVerificationStatus.INVALID ? PhotoFailureReason.EXIF_GPS_MISSING : null;
+        assertThat(reloaded.getFailureReason()).isEqualTo(expectedReason);
+        assertThat(em.createNativeQuery("SELECT failure_reason FROM photo_submissions WHERE id = :id", String.class)
+                .setParameter("id", photoId).getSingleResult())
+                .isEqualTo(expectedReason == null ? null : expectedReason.name());
         assertThat(em.createNativeQuery("SELECT verification_status FROM photo_submissions WHERE id = :id", String.class)
                 .setParameter("id", photoId).getSingleResult()).isEqualTo(status.name());
         var stalePending = photos.findFreshStalePendingIds(NOW.minusSeconds(3_600), NOW, PageRequest.of(0, 1_000));
@@ -170,6 +309,7 @@ class RankingDatabaseIntegrationTest {
             em.clear();
             PhotoSubmission cleaned = photos.findById(photoId).orElseThrow();
             assertThat(cleaned.getVerificationStatus()).isEqualTo(status);
+            assertThat(cleaned.getFailureReason()).isEqualTo(expectedReason);
             assertThat(cleaned.getFileDeletedAt()).isEqualTo(NOW);
             assertThat(cleaned.getStorageKey()).isNull();
             assertThat(cleaned.getLatitude()).isNull();
@@ -262,7 +402,7 @@ class RankingDatabaseIntegrationTest {
         String code = "enum-" + UUID.randomUUID().toString().substring(0, 24);
         int rotation = em.createQuery("""
                         SELECT COALESCE(MAX(template.rotationOrder), 0) FROM QuestTemplate template
-                         WHERE template.periodType = 'DAILY' AND template.difficulty = com.team.sharedcreature.quest.domain.QuestDifficulty.LOW
+                         WHERE template.periodType = com.team.sharedcreature.quest.domain.QuestPeriodType.DAILY AND template.difficulty = com.team.sharedcreature.quest.domain.QuestDifficulty.LOW
                         """, Integer.class).getSingleResult() + 1;
         em.flush();
         // 기존 DB와 같은 문자열로 저장한 행이 Enum으로 조회되어야 합니다.
@@ -277,7 +417,8 @@ class RankingDatabaseIntegrationTest {
         QuestTemplate template = em.createQuery("SELECT template FROM QuestTemplate template WHERE template.code = :code",
                         QuestTemplate.class).setParameter("code", code).getSingleResult();
         assertThat(template.getStatus()).isEqualTo(status);
-        var selected = templates.findActiveByPeriodType("DAILY");
+        assertThat(template.getPeriodType()).isEqualTo(QuestPeriodType.DAILY);
+        var selected = templates.findActiveByPeriodType(QuestPeriodType.DAILY);
         assertThat(selected).allSatisfy(row -> assertThat(row.getStatus()).isEqualTo(QuestTemplateStatus.ACTIVE));
         if (status == QuestTemplateStatus.ACTIVE) {
             assertThat(selected).extracting(QuestTemplate::getId).contains(template.getId());
@@ -291,7 +432,7 @@ class RankingDatabaseIntegrationTest {
     @EnumSource(QuestPeriodStatus.class)
     void 퀘스트_기간_상태는_DB_조회와_실패_복구_계약을_유지한다(QuestPeriodStatus status) {
         Instant start = season.getStartAt();
-        QuestPeriod period = QuestPeriod.pending(season, "DAILY",
+        QuestPeriod period = QuestPeriod.pending(season, QuestPeriodType.DAILY,
                 NOW.atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalDate(),
                 start, NOW.plusSeconds(3_600), NOW);
         if (status == QuestPeriodStatus.ACTIVE) {
@@ -308,12 +449,12 @@ class RankingDatabaseIntegrationTest {
         Long seasonId = season.getId();
         em.clear();
 
-        QuestPeriod reloaded = periods.findForUpdateByPeriodTypeAndStartAt("DAILY", start).orElseThrow();
+        QuestPeriod reloaded = periods.findForUpdateByPeriodTypeAndStartAt(QuestPeriodType.DAILY, start).orElseThrow();
         assertThat(reloaded.getStatus()).isEqualTo(status);
-        assertThat(periods.findByPeriodTypeAndStartAt("DAILY", start).orElseThrow().getId()).isEqualTo(periodId);
+        assertThat(periods.findByPeriodTypeAndStartAt(QuestPeriodType.DAILY, start).orElseThrow().getId()).isEqualTo(periodId);
         assertThat(em.createNativeQuery("SELECT status FROM quest_periods WHERE id = :id", String.class)
                 .setParameter("id", periodId).getSingleResult()).isEqualTo(status.name());
-        var current = periods.findCurrentBySeasonAndType(seasonId, "DAILY", NOW);
+        var current = periods.findCurrentBySeasonAndType(seasonId, QuestPeriodType.DAILY, NOW);
         if (status == QuestPeriodStatus.ACTIVE) {
             assertThat(current).contains(reloaded);
         } else {
@@ -367,7 +508,7 @@ class RankingDatabaseIntegrationTest {
                 .setParameter("id", snapshotId).getSingleResult()).isEqualTo(status.name());
         assertThat(service.getMemberRanking(ownerId, seasonId, 0, 20).data())
                 .singleElement().satisfies(row -> {
-                    assertThat(row.participantStatus()).isEqualTo(status.name());
+                    assertThat(row.participantStatus()).isEqualTo(status);
                     assertThat(row.contributionScore()).isEqualTo(100);
                     assertThat(row.scoreReachedAt()).isEqualTo(NOW);
                 });
@@ -387,7 +528,7 @@ class RankingDatabaseIntegrationTest {
         assertThat(em.find(SeasonMemberRankSnapshot.class, snapshotId).getParticipantStatus()).isEqualTo(status);
         assertThat(service.getMemberRanking(ownerId, seasonId, 0, 20).data())
                 .singleElement().satisfies(row -> {
-                    assertThat(row.participantStatus()).isEqualTo(status.name());
+                    assertThat(row.participantStatus()).isEqualTo(status);
                     assertThat(row.contributionScore()).isEqualTo(100);
                 });
     }
@@ -427,9 +568,9 @@ class RankingDatabaseIntegrationTest {
         assertThat(reloaded.nextStageThreshold()).isEqualTo(nextThreshold);
         assertThat(em.createNativeQuery("SELECT growth_stage FROM group_creatures WHERE id = :id", String.class)
                 .setParameter("id", creatureId).getSingleResult()).isEqualTo(stage.name());
-        assertThat(CreatureUpdatedEvent.from(reloaded, NOW).stage()).isEqualTo(stage.name());
-        assertThat(analytics.growthStages(NOW, groupId)).containsOnlyKeys(stage.name())
-                .containsEntry(stage.name(), 1L);
+        assertThat(CreatureUpdatedEvent.from(reloaded, NOW).stage()).isEqualTo(stage);
+        assertThat(analytics.growthStages(NOW, groupId)).containsOnlyKeys(stage)
+                .containsEntry(stage, 1L);
     }
 
     /** 운영·보관 상태의 저장값과 보관 처리의 이력 보존·멱등성을 검증합니다. */
@@ -556,7 +697,7 @@ class RankingDatabaseIntegrationTest {
                 .setParameter("id", seasonId).getSingleResult();
         assertThat(stored[0]).isEqualTo(status.name());
         assertThat(stored[1]).isEqualTo(origin == null ? null : origin.name());
-        assertThat(SeasonResponse.from(reloaded).status()).isEqualTo(status.name());
+        assertThat(SeasonResponse.from(reloaded).status()).isEqualTo(status);
         assertThat(seasons.findFirstByStatusOrderByStartAtDesc(status).orElseThrow().getStatus())
                 .isEqualTo(status);
         assertThat(seasons.findForShareByStatus(status, PageRequest.of(0, 1)))
@@ -617,8 +758,10 @@ class RankingDatabaseIntegrationTest {
         assertThat(em.createNativeQuery("SELECT category FROM user_reports WHERE id = :id", String.class)
                 .setParameter("id", reportId).getSingleResult()).isEqualTo(category.name());
         assertThat(com.team.sharedcreature.group.application.UserReportService.toResponse(reloaded).category())
-                .isEqualTo(category.name());
-        assertThat(reportQueries.get(reportId).category()).isEqualTo(category.name());
+                .isEqualTo(category);
+        var response = reportQueries.get(reportId);
+        assertThat(response.category()).isEqualTo(category);
+        assertThat(new ObjectMapper().writeValueAsString(response)).contains("\"category\":\"" + category.name() + "\"");
     }
 
     /** 신고 상태 전환·필터·집계와 API 문자열의 호환성을 실제 DB에서 검증합니다. */
@@ -644,9 +787,11 @@ class RankingDatabaseIntegrationTest {
         assertThat(reports.findByStatusOrderByCreatedAtDescIdDesc(status, PageRequest.of(0, 50)).getContent())
                 .extracting(UserReport::getId).contains(reportId);
         assertThat(reports.countByStatus(status)).isPositive();
-        assertThat(reportQueries.get(reportId).status()).isEqualTo(status.name());
-        assertThat(reportQueries.list(status.name(), 0, 50).getContent())
-                .allSatisfy(row -> assertThat(row.status()).isEqualTo(status.name()));
+        var response = reportQueries.get(reportId);
+        assertThat(response.status()).isEqualTo(status);
+        assertThat(new ObjectMapper().writeValueAsString(response)).contains("\"status\":\"" + status.name() + "\"");
+        assertThat(reportQueries.list(status, 0, 50).getContent())
+                .allSatisfy(row -> assertThat(row.status()).isEqualTo(status));
         assertThat(analytics.countPendingReports(groupId))
                 .isEqualTo(status == UserReportStatus.RECEIVED ? 1L : 0L);
 
@@ -793,12 +938,12 @@ class RankingDatabaseIntegrationTest {
         assertThat(em.createNativeQuery("SELECT role FROM group_memberships WHERE id = :id", String.class)
                 .setParameter("id", membershipId).getSingleResult()).isEqualTo(role.name());
 
-        // 역할·상태 Enum을 받는 JPQL 생성자가 기존 API 문자열을 반환해야 합니다.
+        // JPQL 조회 결과는 역할과 상태를 enum으로 전달합니다.
         var page = memberships.findActiveMemberResponsesByGroupId(groupId, PageRequest.of(0, 20));
         assertThat(page.getContent()).filteredOn(row -> row.membershipId().equals(membershipId))
                 .singleElement().satisfies(row -> {
-                    assertThat(row.role()).isEqualTo(role.name());
-                    assertThat(row.status()).isEqualTo("ACTIVE");
+                    assertThat(row.role()).isEqualTo(role);
+                    assertThat(row.status()).isEqualTo(GroupMembershipStatus.ACTIVE);
                 });
         assertThat(page.getTotalElements()).isEqualTo(role == GroupRole.PRIMARY ? 1 : 2);
     }
@@ -830,7 +975,7 @@ class RankingDatabaseIntegrationTest {
         assertThat(firstPage.data()).extracting(row -> row.userId())
                 .containsExactly(first.getId(), second.getId());
         assertThat(firstPage.data()).extracting(row -> row.participantStatus())
-                .containsExactly("LEFT", "REMOVED");
+                .containsExactly(GroupMembershipStatus.LEFT, GroupMembershipStatus.REMOVED);
         assertThat(secondPage.data()).extracting(row -> row.userId())
                 .containsExactly(third.getId(), owner.getId());
         assertThat(secondPage.data()).extracting(row -> row.rank()).containsExactly(3, 4);
@@ -905,7 +1050,7 @@ class RankingDatabaseIntegrationTest {
         var after = service.getMemberRanking(owner.getId(), season.getId(), 0, 20);
         assertThat(after).isEqualTo(before);
         assertThat(after.data().getFirst().contributionScore()).isEqualTo(80);
-        assertThat(after.data().getFirst().participantStatus()).isEqualTo("ACTIVE");
+        assertThat(after.data().getFirst().participantStatus()).isEqualTo(GroupMembershipStatus.ACTIVE);
         assertThat(after.data().getFirst().nickname()).isNotEqualTo("변경한닉네임");
         assertThat(em.createQuery("select s from SeasonMemberRankSnapshot s where s.groupSeason.id = :id", SeasonMemberRankSnapshot.class)
                 .setParameter("id", groupSeason.getId()).getSingleResult().getCreatedAt()).isEqualTo(NOW);
@@ -958,7 +1103,7 @@ class RankingDatabaseIntegrationTest {
         ReflectionTestUtils.setField(version, "createdAt", NOW);
         em.persist(version);
         var date = NOW.atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalDate();
-        QuestPeriod period = QuestPeriod.pending(season, "DAILY", date,
+        QuestPeriod period = QuestPeriod.pending(season, QuestPeriodType.DAILY, date,
                 season.getStartAt(), NOW.plusSeconds(3600), NOW);
         period.activate(NOW);
         em.persist(period);
@@ -974,7 +1119,7 @@ class RankingDatabaseIntegrationTest {
                 Integer.class).getSingleResult() + 1;
         QuestTemplate template = org.springframework.beans.BeanUtils.instantiateClass(QuestTemplate.class);
         ReflectionTestUtils.setField(template, "code", "enum-" + UUID.randomUUID().toString().substring(0, 24));
-        ReflectionTestUtils.setField(template, "periodType", "DAILY");
+        ReflectionTestUtils.setField(template, "periodType", QuestPeriodType.DAILY);
         ReflectionTestUtils.setField(template, "difficulty", difficulty);
         ReflectionTestUtils.setField(template, "status", QuestTemplateStatus.ACTIVE);
         ReflectionTestUtils.setField(template, "rotationOrder", rotation);

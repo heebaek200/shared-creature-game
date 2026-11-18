@@ -2,7 +2,12 @@ package com.team.sharedcreature.payment.application;
 
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
+import com.team.sharedcreature.payment.api.AdminRefundResponse;
+import com.team.sharedcreature.payment.domain.PaymentTransaction;
+import com.team.sharedcreature.payment.domain.PaymentTransactionStatus;
+import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import com.team.sharedcreature.payment.domain.RefundRequest;
 import com.team.sharedcreature.payment.domain.RefundStatus;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
@@ -19,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.test.util.ReflectionTestUtils;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 
@@ -65,9 +71,9 @@ class RefundQueryServiceTest {
         var mine = service.listMyRefunds(1L, 0, 20, status.name());
         var admin = service.listAdminRefunds(0, 20, status.name());
 
-        assertThat(mine.getContent().getFirst().status()).isEqualTo(status.name());
+        assertThat(mine.getContent().getFirst().status()).isEqualTo(status);
         assertThat(mine.getContent().getFirst().requestedByUserId()).isEqualTo(1L);
-        assertThat(admin.getContent().getFirst().status()).isEqualTo(status.name());
+        assertThat(admin.getContent().getFirst().status()).isEqualTo(status);
         assertThat(mine.getTotalElements()).isEqualTo(1);
         verifyNoInteractions(items, transactions);
     }
@@ -101,5 +107,27 @@ class RefundQueryServiceTest {
     private void assertFieldError(Runnable action) {
         assertThatThrownBy(action::run).isInstanceOfSatisfying(BusinessException.class,
                 exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.INVALID_FIELD_VALUE));
+    }
+
+    @Test
+    void adminRefundDetailSerializesNestedStatusesAsStringsAndReadsThemBack() {
+        var item = unusedItem(10L, 1L, "HEAD");
+        var refund = RefundRequest.create(item.getPurchase(), item.getUser(), "test refund", CREATED_AT);
+        var cancellation = PaymentTransaction.cancellationRequested(item.getPurchase(), NOW);
+        var mapper = new ObjectMapper();
+
+        String json = mapper.writeValueAsString(AdminRefundResponse.from(refund, item, cancellation));
+        var tree = mapper.readTree(json);
+        assertThat(tree.at("/purchase/status").asString()).isEqualTo("PAID");
+        assertThat(tree.at("/ownedItem/status").asString()).isEqualTo("OWNED_UNUSED");
+        assertThat(tree.at("/latestCancellation/status").asString()).isEqualTo("REQUESTED");
+
+        var decoded = mapper.readValue(json, AdminRefundResponse.class);
+        assertThat(decoded.purchase().status()).isEqualTo(PurchaseStatus.PAID);
+        assertThat(decoded.ownedItem().status()).isEqualTo(OwnedItemStatus.OWNED_UNUSED);
+        assertThat(decoded.latestCancellation().status()).isEqualTo(PaymentTransactionStatus.REQUESTED);
+
+        String jsonWithoutOptionalDetails = mapper.writeValueAsString(AdminRefundResponse.from(refund, null, null));
+        assertThat(jsonWithoutOptionalDetails).contains("\"ownedItem\":null", "\"latestCancellation\":null");
     }
 }

@@ -4,6 +4,7 @@ import com.team.sharedcreature._core.api.ApiResponse;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.admin.application.AdminModerationService;
 import com.team.sharedcreature.admin.application.AdminReportQueryService;
+import com.team.sharedcreature.group.domain.UserReportStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -47,7 +48,8 @@ public class AdminReportController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size
     ) {
-        return ApiResponse.page(queryService.list(status, page, size));
+        UserReportStatus filter = status == null ? null : UserReportStatus.valueOf(status);
+        return ApiResponse.page(queryService.list(filter, page, size));
     }
 
     /** 신고 상세와 처리 결과를 조회합니다. */

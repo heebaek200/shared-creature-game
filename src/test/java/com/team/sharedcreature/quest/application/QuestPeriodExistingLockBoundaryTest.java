@@ -1,5 +1,6 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
 import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
 
 import com.team.sharedcreature.quest.domain.QuestPeriod;
@@ -36,7 +37,7 @@ class QuestPeriodExistingLockBoundaryTest {
     private static final Instant EXPIRED = Instant.parse("2026-11-10T15:00:00Z");
     private static final QuestPeriodCalendar.PeriodWindow WINDOW =
             new QuestPeriodCalendar.PeriodWindow(
-                    "DAILY", LocalDate.of(2026, 11, 10),
+                    QuestPeriodType.DAILY, LocalDate.of(2026, 11, 10),
                     Instant.parse("2026-11-09T15:00:00Z"), EXPIRED, 8L);
 
     /**
@@ -97,12 +98,12 @@ class QuestPeriodExistingLockBoundaryTest {
         when(season.getStartAt()).thenReturn(FIRST_START);
         when(season.getEndAt()).thenReturn(FIRST_START.plus(Duration.ofDays(28)));
         when(seasonRepository.findFirstByOrderByStartAtAsc()).thenReturn(Optional.of(season));
-        when(calendar.currentWindow(FIRST_START, NOW, "DAILY")).thenReturn(Optional.of(WINDOW));
+        when(calendar.currentWindow(FIRST_START, NOW, QuestPeriodType.DAILY)).thenReturn(Optional.of(WINDOW));
 
         // 부재 확인 뒤 실제 SELECT FOR UPDATE를 통과하는 순간 Clock이 경계를 넘습니다.
-        when(periods.findByPeriodTypeAndStartAt("DAILY", WINDOW.startAt()))
+        when(periods.findByPeriodTypeAndStartAt(QuestPeriodType.DAILY, WINDOW.startAt()))
                 .thenReturn(Optional.of(active));
-        when(periods.findForUpdateByPeriodTypeAndStartAt("DAILY", WINDOW.startAt()))
+        when(periods.findForUpdateByPeriodTypeAndStartAt(QuestPeriodType.DAILY, WINDOW.startAt()))
                 .thenAnswer(invocation -> {
                     clock.set(EXPIRED);
                     return Optional.of(active);

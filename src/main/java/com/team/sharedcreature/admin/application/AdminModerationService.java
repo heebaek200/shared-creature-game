@@ -1,5 +1,7 @@
 package com.team.sharedcreature.admin.application;
 
+import com.team.sharedcreature.admin.domain.AdminAuditActionType;
+import com.team.sharedcreature.admin.domain.AdminAuditTargetType;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature.admin.api.AdminReportResponse;
 import org.springframework.stereotype.Service;
@@ -29,7 +31,7 @@ public class AdminModerationService {
             commandExecutor.dismiss(actorId, reportId, reason.trim());
             return queryService.get(reportId);
         } catch (BusinessException exception) {
-            auditService.recordFailure(actorId, "DISMISS_REPORT", "USER_REPORT", reportId, exception.code());
+            auditService.recordFailure(actorId, AdminAuditActionType.DISMISS_REPORT, AdminAuditTargetType.USER_REPORT, reportId, exception.code());
             throw exception;
         }
     }
@@ -40,7 +42,7 @@ public class AdminModerationService {
             commandExecutor.remove(actorId, reportId, reason.trim());
             return queryService.get(reportId);
         } catch (BusinessException exception) {
-            auditService.recordFailure(actorId, "REMOVE_REPORTED_MEMBER", "USER_REPORT", reportId, exception.code());
+            auditService.recordFailure(actorId, AdminAuditActionType.REMOVE_REPORTED_MEMBER, AdminAuditTargetType.USER_REPORT, reportId, exception.code());
             throw exception;
         }
     }

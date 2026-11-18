@@ -58,7 +58,7 @@ class GroupDepartureDomainTest {
         assertThatThrownBy(() -> membership.leaveBySelf(member, NOW.plusSeconds(10)))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(membership.getEndedAt()).isEqualTo(NOW);
-        assertThat(membership.getExitReason()).isEqualTo("SELF");
+        assertThat(membership.getExitReason()).isEqualTo(GroupMembershipExitReason.SELF);
     }
 
     /**

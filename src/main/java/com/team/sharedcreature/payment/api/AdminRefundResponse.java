@@ -2,8 +2,12 @@ package com.team.sharedcreature.payment.api;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
+import com.team.sharedcreature.payment.domain.PaymentTransactionStatus;
+import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import com.team.sharedcreature.payment.domain.RefundRequest;
+import com.team.sharedcreature.payment.domain.RefundStatus;
 
 import java.time.Instant;
 
@@ -18,7 +22,7 @@ public record AdminRefundResponse(
         Long requestedByUserId,
         String requestReason,
         String decisionReason,
-        String status,
+        RefundStatus status,
         Instant requestedAt,
         Instant reviewedAt,
         Instant completedAt,
@@ -49,8 +53,8 @@ public record AdminRefundResponse(
                 refund.getRequestedByUser().getId(),
                 refund.getRequestReason(),
                 refund.getDecisionReason(),
-                // 환불 상태 Enum을 기존 API 문자열로 변환합니다.
-                refund.getStatus().name(),
+                // 환불 상태 enum은 JSON에 이름으로 전달합니다.
+                refund.getStatus(),
                 refund.getRequestedAt(),
                 refund.getReviewedAt(),
                 refund.getCompletedAt(),
@@ -61,21 +65,18 @@ public record AdminRefundResponse(
                         purchase.getOrderNumber(),
                         purchase.getItemNameSnapshot(),
                         purchase.getPriceKrwSnapshot(),
-                        // 구매 상태 Enum을 기존 API 문자열로 변환합니다.
-                        purchase.getStatus().name()
+                        purchase.getStatus()
                 ),
                 // 미지급 아이템은 빈 객체 대신 null로 반환합니다.
                 item == null ? null : new OwnedItemInfo(
                         item.getId(),
-                        // 보유 상태 Enum을 기존 API 문자열로 변환합니다.
-                        item.getStatus().name(),
+                        item.getStatus(),
                         item.getUsedAt()
                 ),
                 // 취소 거래가 없다면 latestCancellation 키를 null로 유지합니다.
                 cancellation == null ? null : new CancellationInfo(
                         cancellation.getProviderTransactionId(),
-                        // 취소 거래 상태 Enum을 기존 API 문자열로 변환합니다.
-                        cancellation.getStatus().name(),
+                        cancellation.getStatus(),
                         cancellation.getProcessedAt()
                 )
         );
@@ -88,7 +89,7 @@ public record AdminRefundResponse(
             String orderNumber,
             String itemName,
             Long priceKrw,
-            String status
+            PurchaseStatus status
     ) {
     }
 
@@ -98,7 +99,7 @@ public record AdminRefundResponse(
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record OwnedItemInfo(
             Long ownedItemId,
-            String status,
+            OwnedItemStatus status,
             Instant usedAt
     ) {
     }
@@ -109,7 +110,7 @@ public record AdminRefundResponse(
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record CancellationInfo(
             String providerTransactionId,
-            String status,
+            PaymentTransactionStatus status,
             Instant processedAt
     ) {
     }

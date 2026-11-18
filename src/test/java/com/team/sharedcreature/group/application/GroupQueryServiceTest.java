@@ -3,6 +3,7 @@ package com.team.sharedcreature.group.application;
 import com.team.sharedcreature.group.domain.GroupRole;
 
 import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+import com.team.sharedcreature.group.domain.GroupJoinBlockedReason;
 
 import com.team.sharedcreature.group.domain.GroupStatus;
 
@@ -90,10 +91,11 @@ class GroupQueryServiceTest {
         assertThat(result.group().remainingCapacity()).isEqualTo(17);
         assertThat(result.group().joinable()).isFalse();
         assertThat(result.group().joinBlockedReason())
-                .isEqualTo("ALREADY_IN_GROUP");
+                .isEqualTo(GroupJoinBlockedReason.ALREADY_IN_GROUP);
 
         assertThat(result.primaryAdmin().nickname()).isEqualTo("그룹장");
-        assertThat(result.myMembership().role()).isEqualTo("DEPUTY");
+        assertThat(result.myMembership().role()).isEqualTo(GroupRole.DEPUTY);
+        assertThat(result.myMembership().status()).isEqualTo(GroupMembershipStatus.ACTIVE);
         assertThat(result.myMembership().joinedAt()).isEqualTo(joinedAt);
     }
 
@@ -129,7 +131,7 @@ class GroupQueryServiceTest {
 
         Instant now = Instant.parse("2026-11-04T00:00:00Z");
         GroupMemberResponse member = new GroupMemberResponse(
-                2L, "일반회원", 102L, "MEMBER", "ACTIVE", now, now
+                2L, "일반회원", 102L, GroupRole.MEMBER, GroupMembershipStatus.ACTIVE, now, now
         );
 
         var pageable = PageRequest.of(0, 20);

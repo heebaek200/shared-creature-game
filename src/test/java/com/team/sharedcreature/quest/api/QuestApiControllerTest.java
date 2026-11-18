@@ -2,11 +2,16 @@ package com.team.sharedcreature.quest.api;
 
 import com.team.sharedcreature._core.api.ApiResponse;
 import com.team.sharedcreature._core.security.LoginUser;
+import com.team.sharedcreature.quest.domain.QuestDifficulty;
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
+import com.team.sharedcreature.quest.domain.QuestVerificationType;
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -41,15 +46,15 @@ class QuestApiControllerTest {
         CurrentQuestResponse quest = new CurrentQuestResponse(
                 11L,
                 21L,
-                "DAILY",
+                QuestPeriodType.DAILY,
                 Instant.parse("2026-11-04T15:00:00Z"),
                 Instant.parse("2026-11-05T15:00:00Z"),
                 1,
                 "D-L-01",
                 "물 마시기",
                 "물 한 잔 마십니다.",
-                "LOW",
-                "SELF_CHECK",
+                QuestDifficulty.LOW,
+                QuestVerificationType.SELF_CHECK,
                 100L,
                 10L,
                 false,
@@ -65,6 +70,11 @@ class QuestApiControllerTest {
                 questController.listCurrentQuests(loginUser, "DAILY");
 
         assertThat(response.data()).containsExactly(quest);
+        assertThat(new ObjectMapper().writeValueAsString(response)).contains(
+                "\"periodType\":\"DAILY\"",
+                "\"difficulty\":\"LOW\"",
+                "\"verificationType\":\"SELF_CHECK\""
+        );
         verify(questCompletionService).listCurrentQuests(7L, "DAILY");
     }
 
@@ -79,7 +89,7 @@ class QuestApiControllerTest {
                 100L,
                 10L,
                 500L,
-                "HATCHLING",
+                CreatureGrowthStage.HATCHLING,
                 10L
         );
         when(questCompletionService.completeQuestAssignment(7L, 11L))
@@ -89,6 +99,8 @@ class QuestApiControllerTest {
                 questController.completeQuestAssignment(loginUser, 11L);
 
         assertThat(response.data()).isSameAs(completion);
+        assertThat(new ObjectMapper().writeValueAsString(response))
+                .contains("\"creatureGrowthStage\":\"HATCHLING\"");
         verify(questCompletionService).completeQuestAssignment(7L, 11L);
     }
 

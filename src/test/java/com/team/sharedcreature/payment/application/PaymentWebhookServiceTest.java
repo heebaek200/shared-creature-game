@@ -1,5 +1,6 @@
 package com.team.sharedcreature.payment.application;
 
+import com.team.sharedcreature.payment.domain.PaymentProvider;
 import com.team.sharedcreature.payment.domain.PaymentWebhookEvent;
 import com.team.sharedcreature.payment.domain.WebhookProcessingStatus;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
@@ -66,7 +67,7 @@ class PaymentWebhookServiceTest {
                   "storeId":"store-test","paymentId":"payment-21","transactionId":"tx-1","cancellationId":"cancel-1"
                 }}
                 """;
-        when(eventRepository.findByProviderAndProviderEventId("PORTONE", "event-1"))
+        when(eventRepository.findByProviderAndProviderEventId(PaymentProvider.PORTONE, "event-1"))
                 .thenReturn(Optional.empty());
         when(purchaseRepository.findByOrderNumber("payment-21")).thenReturn(Optional.empty());
         when(eventRepository.save(any(PaymentWebhookEvent.class)))
@@ -93,7 +94,7 @@ class PaymentWebhookServiceTest {
                   "storeId":"store-test","paymentId":"payment-21","transactionId":"tx-1"
                 }}
                 """;
-        when(eventRepository.findByProviderAndProviderEventId("PORTONE", "event-1"))
+        when(eventRepository.findByProviderAndProviderEventId(PaymentProvider.PORTONE, "event-1"))
                 .thenReturn(Optional.of(mock(PaymentWebhookEvent.class)));
         executeTransactionsImmediately();
 
@@ -111,7 +112,7 @@ class PaymentWebhookServiceTest {
                 }}
                 """;
         when(transactionTemplate.execute(any())).thenThrow(new DataIntegrityViolationException("duplicate"));
-        when(eventRepository.existsByProviderAndProviderEventId("PORTONE", "event-1")).thenReturn(true);
+        when(eventRepository.existsByProviderAndProviderEventId(PaymentProvider.PORTONE, "event-1")).thenReturn(true);
 
         service.receive(body, "event-1", "signature", "100");
 
@@ -127,7 +128,7 @@ class PaymentWebhookServiceTest {
                 """;
         DataIntegrityViolationException failure = new DataIntegrityViolationException("not duplicate");
         when(transactionTemplate.execute(any())).thenThrow(failure);
-        when(eventRepository.existsByProviderAndProviderEventId("PORTONE", "event-1")).thenReturn(false);
+        when(eventRepository.existsByProviderAndProviderEventId(PaymentProvider.PORTONE, "event-1")).thenReturn(false);
 
         assertThatThrownBy(() -> service.receive(body, "event-1", "signature", "100"))
                 .isSameAs(failure);
@@ -143,7 +144,7 @@ class PaymentWebhookServiceTest {
         Purchase purchase = mock(Purchase.class);
         PaymentTransaction transaction = mock(PaymentTransaction.class);
         AtomicReference<PaymentWebhookEvent> saved = new AtomicReference<>();
-        when(eventRepository.findByProviderAndProviderEventId("PORTONE", "event-1"))
+        when(eventRepository.findByProviderAndProviderEventId(PaymentProvider.PORTONE, "event-1"))
                 .thenReturn(Optional.empty());
         when(purchaseRepository.findByOrderNumber("payment-21")).thenReturn(Optional.of(purchase));
         when(eventRepository.save(any(PaymentWebhookEvent.class))).thenAnswer(invocation -> {
@@ -173,7 +174,7 @@ class PaymentWebhookServiceTest {
                   "storeId":"store-test","paymentId":"unknown-payment","transactionId":"tx-1"
                 }}
                 """;
-        when(eventRepository.findByProviderAndProviderEventId("PORTONE", "event-1"))
+        when(eventRepository.findByProviderAndProviderEventId(PaymentProvider.PORTONE, "event-1"))
                 .thenReturn(Optional.empty());
         when(purchaseRepository.findByOrderNumber("unknown-payment")).thenReturn(Optional.empty());
         when(eventRepository.save(any(PaymentWebhookEvent.class)))

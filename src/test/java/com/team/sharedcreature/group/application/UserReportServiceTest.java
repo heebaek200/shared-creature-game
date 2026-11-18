@@ -6,11 +6,13 @@ import com.team.sharedcreature.group.api.CreateUserReportRequest;
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.domain.UserReportCategory;
+import com.team.sharedcreature.group.domain.UserReportStatus;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.infrastructure.UserReportRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -49,8 +51,10 @@ class UserReportServiceTest {
 
         var response = service.create(1L, new CreateUserReportRequest(2L, category.name(), " 반복 광고 "));
 
-        assertThat(response.status()).isEqualTo("RECEIVED");
-        assertThat(response.category()).isEqualTo(category.name());
+        assertThat(response.status()).isEqualTo(UserReportStatus.RECEIVED);
+        assertThat(response.category()).isEqualTo(category);
+        assertThat(new ObjectMapper().writeValueAsString(response))
+                .contains("\"category\":\"" + category.name() + "\"", "\"status\":\"RECEIVED\"");
         assertThat(response.content()).isEqualTo("반복 광고");
         assertThat(response.groupId()).isEqualTo(10L);
         verify(reportRepository).save(org.mockito.ArgumentMatchers.any());

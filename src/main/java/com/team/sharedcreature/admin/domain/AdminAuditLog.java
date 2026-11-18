@@ -7,6 +7,8 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
@@ -36,11 +38,15 @@ public class AdminAuditLog {
     @Column(name = "actor_role_snapshot", length = 30, nullable = false)
     private GlobalRole actorRoleSnapshot;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "action_type", length = 100, nullable = false)
-    private String actionType;
+    private AdminAuditActionType actionType;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "target_type", length = 50, nullable = false)
-    private String targetType;
+    private AdminAuditTargetType targetType;
 
     @Column(name = "target_id", nullable = false)
     private Long targetId;
@@ -50,6 +56,7 @@ public class AdminAuditLog {
     private Group group;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "result", length = 30, nullable = false)
     private AdminAuditResult result;
 
@@ -65,8 +72,8 @@ public class AdminAuditLog {
     /** 전체 관리자 명령의 성공 또는 업무 실패 감사 레코드를 생성합니다. */
     public static AdminAuditLog create(
             User actor,
-            String actionType,
-            String targetType,
+            AdminAuditActionType actionType,
+            AdminAuditTargetType targetType,
             Long targetId,
             Group group,
             AdminAuditResult result,

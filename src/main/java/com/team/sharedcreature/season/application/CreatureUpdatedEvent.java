@@ -1,5 +1,6 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
 import com.team.sharedcreature.season.domain.GroupCreature;
 
 import java.time.Instant;
@@ -9,7 +10,7 @@ public record CreatureUpdatedEvent(
         Long groupId,
         Long seasonId,
         Long groupCreatureId,
-        String stage,
+        CreatureGrowthStage stage,
         long experience,
         Long creatureSpeciesId,
         Instant occurredAt
@@ -27,7 +28,7 @@ public record CreatureUpdatedEvent(
                 groupSeason.getGroup().getId(),
                 groupSeason.getSeason().getId(),
                 creature.getId(),
-                creature.getGrowthStage().name(),
+                creature.getGrowthStage(),
                 creature.getTotalExperience(),
                 visibleSpecies == null ? null : visibleSpecies.getId(),
                 occurredAt

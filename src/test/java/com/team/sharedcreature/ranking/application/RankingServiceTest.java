@@ -8,6 +8,7 @@ import com.team.sharedcreature.group.domain.GroupStatus;
 
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
+import com.team.sharedcreature._core.exception.InternalApiException;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.UserProfile;
 import com.team.sharedcreature.auth.infrastructure.UserProfileRepository;
@@ -76,8 +77,8 @@ class RankingServiceTest {
         assertThat(first.data()).extracting(row -> row.userId()).containsExactly(1L, 2L);
         assertThat(second.data()).extracting(row -> row.userId()).containsExactly(3L, 4L);
         assertThat(second.data()).extracting(row -> row.rank()).containsExactly(3, 4);
-        assertThat(first.data().get(1).participantStatus()).isEqualTo("LEFT");
-        assertThat(second.data().get(0).participantStatus()).isEqualTo("REMOVED");
+        assertThat(first.data().get(1).participantStatus()).isEqualTo(GroupMembershipStatus.LEFT);
+        assertThat(second.data().get(0).participantStatus()).isEqualTo(GroupMembershipStatus.REMOVED);
         assertThat(first.meta().totalElements()).isEqualTo(4);
         assertThat(first.meta().totalPages()).isEqualTo(2);
         assertThat(first.meta().currentSubject().subjectId()).isEqualTo(4L);
@@ -138,7 +139,9 @@ class RankingServiceTest {
     void 프로필이_누락돼도_랭킹대상을_임의로_제외하지_않는다() {
         stubCurrentMember(List.of(contribution(4, 10, NOW, "ACTIVE")));
         when(profileRepository.findAllByUserIdIn(anyCollection())).thenReturn(List.of());
-        assertCode(() -> service.getMemberRanking(4L, null, 0, 20), ErrorCode.INTERNAL_SERVER_ERROR);
+        assertThatThrownBy(() -> service.getMemberRanking(4L, null, 0, 20))
+                .isInstanceOf(InternalApiException.class)
+                .hasMessage("랭킹 사용자 프로필이 누락되었습니다.");
     }
 
     @Test
@@ -159,7 +162,7 @@ class RankingServiceTest {
 
         assertThat(first).isEqualTo(second);
         assertThat(first.data().getFirst().nickname()).isEqualTo("종료닉네임");
-        assertThat(first.data().getFirst().participantStatus()).isEqualTo("LEFT");
+        assertThat(first.data().getFirst().participantStatus()).isEqualTo(GroupMembershipStatus.LEFT);
         assertThat(first.meta().currentSubject().rank()).isEqualTo(8);
         assertThat(first.meta().currentSubject().score()).isEqualTo(90);
         verifyNoInteractions(seasonQueryService, contributionRepository, profileRepository);

@@ -1,5 +1,6 @@
 package com.team.sharedcreature.quest.infrastructure;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
 import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
 
 import com.team.sharedcreature.quest.domain.QuestPeriod;
@@ -30,7 +31,7 @@ public interface QuestPeriodRepository extends JpaRepository<QuestPeriod, Long> 
                AND p.startAt = :startAt
             """)
     Optional<QuestPeriod> findForUpdateByPeriodTypeAndStartAt(
-            @Param("periodType") String periodType,
+            @Param("periodType") QuestPeriodType periodType,
             @Param("startAt") Instant startAt
     );
 
@@ -39,7 +40,7 @@ public interface QuestPeriodRepository extends JpaRepository<QuestPeriod, Long> 
      * 상태 판정은 단일 기간 행에만 의존하도록 제한합니다.
      * 배정 상세는 별도 Repository에서 읽습니다.
      */
-    Optional<QuestPeriod> findByPeriodTypeAndStartAt(String periodType, Instant startAt);
+    Optional<QuestPeriod> findByPeriodTypeAndStartAt(QuestPeriodType periodType, Instant startAt);
 
     /**
      * 첫 시즌 이후 이미 저장된 만료 퀘스트 기간의 시작 시각을 조회합니다.
@@ -55,7 +56,7 @@ public interface QuestPeriodRepository extends JpaRepository<QuestPeriod, Long> 
              ORDER BY p.startAt ASC
             """)
     List<Instant> findHistoricalStartAts(
-            @Param("periodType") String periodType,
+            @Param("periodType") QuestPeriodType periodType,
             @Param("firstStart") Instant firstStart,
             @Param("currentStart") Instant currentStart
     );
@@ -83,7 +84,7 @@ public interface QuestPeriodRepository extends JpaRepository<QuestPeriod, Long> 
             """)
     Optional<QuestPeriod> findCurrentBySeasonAndType(
             @Param("seasonId") Long seasonId,
-            @Param("periodType") String periodType,
+            @Param("periodType") QuestPeriodType periodType,
             @Param("now") Instant now
     );
 }

@@ -1,5 +1,6 @@
 package com.team.sharedcreature.payment.infrastructure;
 
+import com.team.sharedcreature.payment.domain.PaymentProvider;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
 import com.team.sharedcreature.payment.domain.PaymentTransactionType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -19,7 +20,7 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
     );
 
     Optional<PaymentTransaction> findByProviderAndProviderTransactionId(
-            String provider,
+            PaymentProvider provider,
             String providerTransactionId
     );
 }

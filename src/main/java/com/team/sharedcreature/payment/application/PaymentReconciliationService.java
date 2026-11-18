@@ -1,5 +1,6 @@
 package com.team.sharedcreature.payment.application;
 
+import com.team.sharedcreature.payment.domain.PaymentProvider;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
@@ -154,7 +155,7 @@ public class PaymentReconciliationService {
     private ReconciliationResult reconcilePaid(Purchase locked, PaymentSnapshot actual) {
         if (locked.getStatus() == PurchaseStatus.READY) {
             if (transactionRepository.findByProviderAndProviderTransactionId(
-                    "PORTONE",
+                    PaymentProvider.PORTONE,
                     actual.transactionId()
             ).isPresent() || ownedItemRepository.findByPurchaseId(locked.getId()).isPresent()) {
                 throw new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN);
@@ -172,7 +173,7 @@ public class PaymentReconciliationService {
         }
         if (locked.getStatus() == PurchaseStatus.PAID) {
             PaymentTransaction transaction = transactionRepository
-                    .findByProviderAndProviderTransactionId("PORTONE", actual.transactionId())
+                    .findByProviderAndProviderTransactionId(PaymentProvider.PORTONE, actual.transactionId())
                     .filter(candidate -> isApprovalConsistent(locked, candidate, actual))
                     .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN));
             ownedItemRepository.findByPurchaseId(locked.getId())
@@ -222,7 +223,7 @@ public class PaymentReconciliationService {
             PaymentSnapshot actual
     ) {
         return Objects.equals(transaction.getPurchase().getId(), purchase.getId())
-                && "PORTONE".equals(transaction.getProvider())
+                && transaction.getProvider() == PaymentProvider.PORTONE
                 && transaction.getTransactionType() == PaymentTransactionType.APPROVAL
                 && transaction.getStatus() == PaymentTransactionStatus.SUCCESS
                 && Objects.equals(transaction.getAmountKrw(), actual.totalAmount());

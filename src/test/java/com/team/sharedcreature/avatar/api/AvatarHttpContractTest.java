@@ -10,11 +10,13 @@ import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.avatar.application.AvatarCommandRetryService;
 import com.team.sharedcreature.avatar.application.AvatarService;
 import com.team.sharedcreature.avatar.application.ShopQueryService;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.avatar.support.AvatarHttpTestConfiguration;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -58,6 +60,30 @@ class AvatarHttpContractTest {
     void setUp() {
         reset(users, memberships, avatarService, commands, shopService);
         mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
+    }
+
+    @ParameterizedTest
+    @EnumSource(OwnedItemStatus.class)
+    void passesDocumentedOwnedItemStatusToService(OwnedItemStatus filter) throws Exception {
+        when(avatarService.listOwnedItems(1L, 0, 20, null, filter))
+                .thenReturn(Page.empty(PageRequest.of(0, 20)));
+
+        mvc.perform(get("/api/v1/owned-items").session(authenticatedSession())
+                        .queryParam("status", filter.name()))
+                .andExpect(status().isOk());
+
+        verify(avatarService).listOwnedItems(1L, 0, 20, null, filter);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"owned_unused", " OWNED_USED", "", "ACTIVE", "CANCEL_PENDING"})
+    void rejectsInvalidOwnedItemStatusWithExistingFieldError(String filter) throws Exception {
+        mvc.perform(get("/api/v1/owned-items").session(authenticatedSession()).queryParam("status", filter))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_FIELD_VALUE"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("status"));
+
+        verifyNoInteractions(avatarService);
     }
 
     @ParameterizedTest

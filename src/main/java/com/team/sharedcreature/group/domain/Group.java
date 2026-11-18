@@ -31,8 +31,9 @@ public class Group {
     @Column(name = "description", length = 500, nullable = false)
     private String description;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "visibility", length = 30, nullable = false)
-    private String visibility;
+    private GroupVisibility visibility;
 
     /**
      * 그룹의 활성·비활성 상태입니다.
@@ -65,7 +66,7 @@ public class Group {
         this.name = name;
         this.normalizedName = normalizedName;
         this.description = description;
-        this.visibility = "PUBLIC";
+        this.visibility = GroupVisibility.PUBLIC;
         this.status = GroupStatus.ACTIVE;
         this.capacity = 20;
         this.currentMemberCount = 1;

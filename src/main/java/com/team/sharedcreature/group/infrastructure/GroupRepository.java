@@ -26,7 +26,7 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
             SELECT group
               FROM Group group
              WHERE group.status = com.team.sharedcreature.group.domain.GroupStatus.ACTIVE
-               AND group.visibility = 'PUBLIC'
+               AND group.visibility = com.team.sharedcreature.group.domain.GroupVisibility.PUBLIC
                AND (:query = '' OR group.normalizedName LIKE CONCAT('%', :query, '%') ESCAPE '\\')
             """)
     Page<Group> findPublicGroups(@Param("query") String query, Pageable pageable);

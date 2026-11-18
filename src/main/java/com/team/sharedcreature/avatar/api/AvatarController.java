@@ -6,6 +6,7 @@ import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.avatar.application.AvatarService;
 import com.team.sharedcreature.avatar.application.AvatarCommandRetryService;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
@@ -142,7 +143,7 @@ public class AvatarController {
                 pageNumber,
                 pageSize,
                 slot,
-                status
+                status == null ? null : OwnedItemStatus.valueOf(status)
         );
 
         return ApiResponse.page(result);

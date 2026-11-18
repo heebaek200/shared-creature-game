@@ -1,6 +1,8 @@
 package com.team.sharedcreature.group.integration;
 
 import com.team.sharedcreature.group.api.GroupMemberResponse;
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+import com.team.sharedcreature.group.domain.GroupRole;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -104,8 +106,8 @@ class GroupMemberQueryIntegrationTest {
         GroupMemberResponse firstMember = first.getContent().get(0);
         assertThat(firstMember.userId()).isEqualTo(primary);
         assertThat(firstMember.membershipId()).isPositive();
-        assertThat(firstMember.role()).isEqualTo("PRIMARY");
-        assertThat(firstMember.status()).isEqualTo("ACTIVE");
+        assertThat(firstMember.role()).isEqualTo(GroupRole.PRIMARY);
+        assertThat(firstMember.status()).isEqualTo(GroupMembershipStatus.ACTIVE);
         assertThat(firstMember.joinedAt()).isEqualTo(START);
         assertThat(firstMember.lastActiveAt()).isEqualTo(ACTIVE_AT);
     }

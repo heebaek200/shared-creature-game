@@ -206,7 +206,7 @@ class RankingHttpContractTest {
     void 개인응답에_참여상태와_페이지밖_현재순위와_UTC시각을_포함한다() throws Exception {
         when(service.getMemberRanking(1L, null, 0, 20)).thenReturn(
                 new RankingResponse.PageDto<>(List.of(new RankingResponse.MemberDto(
-                        1, 2L, "탈퇴회원", 100L, Instant.parse("2026-11-12T00:00:00Z"), "LEFT")),
+                        1, 2L, "탈퇴회원", 100L, Instant.parse("2026-11-12T00:00:00Z"), GroupMembershipStatus.LEFT)),
                         new RankingResponse.Meta(0, 20, 25, 2,
                                 new RankingResponse.CurrentSubject(1L, 23, 5L))));
         mvc.perform(get("/api/v1/rankings/members").session(session("MEMBER")))
@@ -281,7 +281,7 @@ class RankingHttpContractTest {
     @Import({SecurityConfiguration.class, WebConfiguration.class, RequestIdFilter.class,
             StrictQueryParameterInterceptor.class, SessionAuthenticationFilter.class,
             SecurityErrorWriter.class, ErrorResponseFactory.class, RestApiExceptionHandler.class,
-            RankingApiExceptionHandler.class, RankingController.class, IsolationController.class})
+            RankingController.class, IsolationController.class})
     static class Configuration {
         @Bean Clock clock() { return Clock.systemUTC(); }
         @Bean JsonMapper objectMapper() { return JsonMapper.builder().build(); }

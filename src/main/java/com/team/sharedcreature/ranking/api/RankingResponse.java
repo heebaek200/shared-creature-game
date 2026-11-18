@@ -1,6 +1,7 @@
 package com.team.sharedcreature.ranking.api;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
 
 import java.time.Instant;
 import java.util.List;
@@ -25,7 +26,7 @@ public final class RankingResponse {
             String nickname,
             Long contributionScore,
             Instant scoreReachedAt,
-            String participantStatus
+            GroupMembershipStatus participantStatus
     ) {
     }
 

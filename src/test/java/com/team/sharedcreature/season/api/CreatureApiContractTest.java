@@ -1,6 +1,9 @@
 package com.team.sharedcreature.season.api;
 
 import com.team.sharedcreature._core.api.ApiResponse;
+import com.team.sharedcreature._core.realtime.GroupLivePayloads;
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
+import com.team.sharedcreature.season.domain.SeasonStatus;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 
@@ -19,7 +22,7 @@ class CreatureApiContractTest {
         var response = new SeasonResponse(
                 1L,
                 3,
-                "ACTIVE",
+                SeasonStatus.ACTIVE,
                 Instant.parse("2026-11-01T00:00:00Z"),
                 Instant.parse("2026-12-01T00:00:00Z")
         );
@@ -29,6 +32,7 @@ class CreatureApiContractTest {
         assertThat(json).contains(
                 "\"seasonId\":1",
                 "\"seasonNumber\":3",
+                "\"status\":\"ACTIVE\"",
                 "\"startAt\":\"2026-11-01T00:00:00Z\"",
                 "\"endAt\":\"2026-12-01T00:00:00Z\""
         );
@@ -57,8 +61,8 @@ class CreatureApiContractTest {
         var response = new CreatureHomeResponse(
                 10L,
                 "테스트 그룹",
-                new SeasonResponse(1L, 3, "ACTIVE", snapshotAt.minusSeconds(60), snapshotAt.plusSeconds(60)),
-                new CreatureHomeResponse.CreatureResponse(20L, 30L, "HATCHLING", 100L, 45000L, snapshotAt),
+                new SeasonResponse(1L, 3, SeasonStatus.ACTIVE, snapshotAt.minusSeconds(60), snapshotAt.plusSeconds(60)),
+                new CreatureHomeResponse.CreatureResponse(20L, 30L, CreatureGrowthStage.HATCHLING, 100L, 45000L, snapshotAt),
                 100L,
                 List.of(onlineMember),
                 List.of(contribution),
@@ -69,6 +73,7 @@ class CreatureApiContractTest {
 
         String json = objectMapper.writeValueAsString(ApiResponse.success(response));
 
+        assertThat(objectMapper.readTree(json).at("/data/season/status").asString()).isEqualTo("ACTIVE");
         assertThat(json).contains(
                 "\"groupName\":\"테스트 그룹\"",
                 "\"groupCreatureId\":20",
@@ -98,15 +103,15 @@ class CreatureApiContractTest {
     @Test
     void 알_상태의_종_ID는_선택_여부에_따라_null_또는_ID로_직렬화한다() throws Exception {
         Instant now = Instant.parse("2026-11-10T00:00:00Z");
-        SeasonResponse season = new SeasonResponse(1L, 3, "ACTIVE", now.minusSeconds(60), now.plusSeconds(60));
+        SeasonResponse season = new SeasonResponse(1L, 3, SeasonStatus.ACTIVE, now.minusSeconds(60), now.plusSeconds(60));
         CreatureHomeResponse unselectedEgg = creatureHomeWith(
                 season,
-                new CreatureHomeResponse.CreatureResponse(20L, null, "EGG", 0L, 45_000L, now),
+                new CreatureHomeResponse.CreatureResponse(20L, null, CreatureGrowthStage.EGG, 0L, 45_000L, now),
                 now
         );
         CreatureHomeResponse selectedEgg = creatureHomeWith(
                 season,
-                new CreatureHomeResponse.CreatureResponse(20L, 30L, "EGG", 0L, 45_000L, now),
+                new CreatureHomeResponse.CreatureResponse(20L, 30L, CreatureGrowthStage.EGG, 0L, 45_000L, now),
                 now
         );
 
@@ -141,6 +146,14 @@ class CreatureApiContractTest {
                 "\"selectionDeadlineAt\":\"2026-11-13T00:00:00Z\""
         );
         assertThat(selectionJson).doesNotContain("speciesName", "selectionSource", "changeableUntil");
+    }
+
+    @Test
+    void creatureUpdatedPayloadSerializesGrowthStageAsString() {
+        var payload = new GroupLivePayloads.CreatureUpdated(
+                1L, 20L, 150_000L, CreatureGrowthStage.COMPLETE, 30L, Instant.EPOCH);
+
+        assertThat(objectMapper.writeValueAsString(payload)).contains("\"growthStage\":\"COMPLETE\"");
     }
 
     private CreatureHomeResponse creatureHomeWith(

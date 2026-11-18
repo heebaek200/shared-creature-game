@@ -6,12 +6,14 @@ import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
 
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
+import com.team.sharedcreature._core.exception.InternalApiException;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.quest.api.PhotoSubmissionResponse;
 import com.team.sharedcreature.quest.api.QuestCompletionResponse;
 import com.team.sharedcreature.quest.api.QuestCompletionService;
+import com.team.sharedcreature.quest.domain.PhotoFailureReason;
 import com.team.sharedcreature.quest.domain.PhotoSubmission;
 import com.team.sharedcreature.quest.domain.QuestAssignment;
 import com.team.sharedcreature.quest.infrastructure.PhotoFileStorage;
@@ -98,10 +100,7 @@ public class PhotoVerificationService {
             try {
                 storageKey = photoFileStorage.store(jpegBytes);
             } catch (IOException exception) {
-                throw new BusinessException(
-                        ErrorCode.INTERNAL_SERVER_ERROR,
-                        "사진 파일을 저장하지 못했습니다."
-                );
+                throw new InternalApiException("사진 파일을 저장하지 못했습니다.", exception);
             }
 
             PendingPhoto pending;
@@ -134,7 +133,7 @@ public class PhotoVerificationService {
                 return markInvalidAndRespond(
                         pending,
                         assignmentId,
-                        "PHOTO_PROCESSING_TIMEOUT",
+                        PhotoFailureReason.PHOTO_PROCESSING_TIMEOUT,
                         null,
                         null,
                         null
@@ -144,7 +143,7 @@ public class PhotoVerificationService {
                 return markInvalidAndRespond(
                         pending,
                         assignmentId,
-                        "EXIF_CAPTURED_AT_MISSING",
+                        PhotoFailureReason.EXIF_CAPTURED_AT_MISSING,
                         null,
                         null,
                         null
@@ -159,7 +158,7 @@ public class PhotoVerificationService {
                 return markInvalidAndRespond(
                         pending,
                         assignmentId,
-                        "EXIF_GPS_MISSING",
+                        PhotoFailureReason.EXIF_GPS_MISSING,
                         null,
                         latitude,
                         longitude
@@ -170,7 +169,7 @@ public class PhotoVerificationService {
                 return markInvalidAndRespond(
                         pending,
                         assignmentId,
-                        "EXIF_GPS_OUT_OF_RANGE",
+                        PhotoFailureReason.EXIF_GPS_OUT_OF_RANGE,
                         null,
                         latitude,
                         longitude
@@ -187,7 +186,7 @@ public class PhotoVerificationService {
                 return markInvalidAndRespond(
                         pending,
                         assignmentId,
-                        "EXIF_CAPTURED_AT_MISSING",
+                        PhotoFailureReason.EXIF_CAPTURED_AT_MISSING,
                         null,
                         latitude,
                         longitude
@@ -200,7 +199,7 @@ public class PhotoVerificationService {
                 return markInvalidAndRespond(
                         pending,
                         assignmentId,
-                        "PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD",
+                        PhotoFailureReason.PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD,
                         capturedAt,
                         latitude,
                         longitude
@@ -219,7 +218,7 @@ public class PhotoVerificationService {
                     return markInvalidAndRespond(
                             pending,
                             assignmentId,
-                            "QUEST_PERIOD_ENDED",
+                            PhotoFailureReason.QUEST_PERIOD_ENDED,
                             capturedAt,
                             latitude,
                             longitude
@@ -232,7 +231,7 @@ public class PhotoVerificationService {
                     markInvalidAndRespond(
                             pending,
                             assignmentId,
-                            "QUEST_COMPLETION_FAILED",
+                            PhotoFailureReason.QUEST_COMPLETION_FAILED,
                             capturedAt,
                             latitude,
                             longitude
@@ -427,7 +426,7 @@ public class PhotoVerificationService {
     private PhotoSubmissionResponse markInvalidAndRespond(
             PendingPhoto pending,
             Long assignmentId,
-            String failureReason,
+            PhotoFailureReason failureReason,
             Instant capturedAt,
             BigDecimal latitude, // 정밀한 연산이 필요함 BigDecimal 사용
             BigDecimal longitude
@@ -496,12 +495,13 @@ public class PhotoVerificationService {
             Long assignmentId,
             Long completionId
     ) {
+        PhotoFailureReason failureReason = submission.getFailureReason();
         return new PhotoSubmissionResponse(
                 submission.getId(),
                 assignmentId,
                 submission.getAttemptNumber(),
-                submission.getVerificationStatus().name(),
-                submission.getFailureReason(),
+                submission.getVerificationStatus(),
+                failureReason == null ? null : failureReason.name(),
                 submission.getUploadedAt(),
                 submission.getCapturedAt(),
                 completionId

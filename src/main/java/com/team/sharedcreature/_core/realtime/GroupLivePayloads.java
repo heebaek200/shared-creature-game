@@ -2,7 +2,9 @@ package com.team.sharedcreature._core.realtime;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.team.sharedcreature.avatar.api.AvatarResponse;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
 import com.team.sharedcreature.season.api.CreatureHomeResponse;
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
 
 /** 그룹 실시간 이벤트별 Payload 계약을 모읍니다. */
 public final class GroupLivePayloads {
@@ -28,7 +30,7 @@ public final class GroupLivePayloads {
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record AvatarEquipmentChanged(
             Long userId,
-            String slot,
+            AvatarSlot slot,
             AvatarResponse.Equipment equippedItem
     ) {
     }
@@ -38,7 +40,7 @@ public final class GroupLivePayloads {
             Long seasonId,
             Long groupCreatureId,
             long totalExperience,
-            String growthStage,
+            CreatureGrowthStage growthStage,
             Long creatureSpeciesId,
             java.time.Instant lastUpdatedAt
     ) {

@@ -1,5 +1,7 @@
 package com.team.sharedcreature.admin.application;
 
+import com.team.sharedcreature.admin.domain.AdminAuditActionType;
+import com.team.sharedcreature.admin.domain.AdminAuditTargetType;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature.group.api.MyGroupResponse;
 import org.springframework.stereotype.Service;
@@ -26,7 +28,7 @@ public class AdminGroupRecoveryService {
             return commandExecutor.transfer(actorId, groupId, targetId, reason.trim());
         } catch (BusinessException exception) {
             auditService.recordFailure(
-                    actorId, "TRANSFER_PRIMARY_AS_SUPER_ADMIN", "GROUP", groupId, exception.code()
+                    actorId, AdminAuditActionType.TRANSFER_PRIMARY_AS_SUPER_ADMIN, AdminAuditTargetType.GROUP, groupId, exception.code()
             );
             throw exception;
         }

@@ -25,6 +25,7 @@ import com.team.sharedcreature.payment.domain.PaymentWebhookEvent;
 import com.team.sharedcreature.payment.domain.WebhookProcessingStatus;
 import com.team.sharedcreature.payment.infrastructure.PaymentWebhookEventRepository;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
+import com.team.sharedcreature.payment.domain.PaymentProvider;
 import com.team.sharedcreature.payment.domain.PaymentTransactionStatus;
 import com.team.sharedcreature.payment.domain.PaymentTransactionType;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
@@ -52,6 +53,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.ObjectMapper;
 
 import java.net.URI;
 import java.sql.Timestamp;
@@ -212,6 +214,9 @@ class RefundTransactionMySqlIntegrationTest {
                 fixture.ownerId(), status, PageRequest.of(0, 20));
         assertThat(mine.getTotalElements()).isEqualTo(1);
         assertThat(mine.getContent().getFirst().getStatus()).isEqualTo(status);
+        assertThat(purchaseQueries.get(fixture.ownerId(), fixture.purchaseId()).status()).isEqualTo(status);
+        assertThat(purchaseQueries.list(fixture.ownerId(), 0, 20, status).getContent())
+                .singleElement().satisfies(summary -> assertThat(summary.status()).isEqualTo(status));
         assertThat(purchaseRepository.findByUserIdAndStatus(
                 fixture.adminId(), status, PageRequest.of(0, 20))).isEmpty();
     }
@@ -240,16 +245,28 @@ class RefundTransactionMySqlIntegrationTest {
                 String.class, cancellationId)).isEqualTo("CANCELLATION");
         assertThat(jdbc.queryForObject("SELECT status FROM payment_transactions WHERE id = ?",
                 String.class, cancellationId)).isEqualTo(status.name());
+        assertThat(jdbc.queryForObject("SELECT provider FROM payment_transactions WHERE id = ?",
+                String.class, cancellationId)).isEqualTo("PORTONE");
+        var approval = transactionRepository.findByProviderAndProviderTransactionId(
+                PaymentProvider.PORTONE, "approval-" + fixture.purchaseId()).orElseThrow();
+        assertThat(approval.getTransactionType()).isEqualTo(PaymentTransactionType.APPROVAL);
         var cancellation = transactionRepository.findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
                 fixture.purchaseId(), PaymentTransactionType.CANCELLATION).orElseThrow();
         assertThat(cancellation.getId()).isEqualTo(cancellationId);
         assertThat(cancellation.getStatus()).isEqualTo(status);
+        assertThat(cancellation.getProvider()).isEqualTo(PaymentProvider.PORTONE);
         assertThat(refundQueries.getAdminRefund(fixture.refundId()).latestCancellation().status())
-                .isEqualTo(status.name());
-        assertThat(purchaseQueries.get(fixture.ownerId(), fixture.purchaseId()).transactions())
+                .isEqualTo(status);
+        var purchaseResponse = purchaseQueries.get(fixture.ownerId(), fixture.purchaseId());
+        var mapper = new ObjectMapper();
+        assertThat(mapper.writeValueAsString(purchaseResponse)).contains("\"transactionType\":\"APPROVAL\"");
+        assertThat(purchaseResponse.transactions())
                 .anySatisfy(transaction -> {
-                    assertThat(transaction.transactionType()).isEqualTo("CANCELLATION");
-                    assertThat(transaction.status()).isEqualTo(status.name());
+                    assertThat(transaction.transactionType()).isEqualTo(PaymentTransactionType.CANCELLATION);
+                    assertThat(transaction.status()).isEqualTo(status);
+                    assertThat(transaction.provider()).isEqualTo("PORTONE");
+                    assertThat(mapper.writeValueAsString(transaction))
+                            .contains("\"transactionType\":\"CANCELLATION\"", "\"status\":\"" + status.name() + "\"");
                 });
 
         // 기존 문자열로 저장된 거래도 새 조회에서 Enum으로 읽힙니다.
@@ -280,7 +297,16 @@ class RefundTransactionMySqlIntegrationTest {
 
         assertThat(jdbc.queryForObject("SELECT processing_status FROM payment_webhook_events WHERE id = ?",
                 String.class, enumWebhookId)).isEqualTo(status.name());
-        assertThat(webhookRepository.findById(enumWebhookId).orElseThrow().getProcessingStatus()).isEqualTo(status);
+        assertThat(jdbc.queryForObject("SELECT provider FROM payment_webhook_events WHERE id = ?",
+                String.class, enumWebhookId)).isEqualTo("PORTONE");
+        var storedEvent = webhookRepository.findById(enumWebhookId).orElseThrow();
+        assertThat(storedEvent.getProcessingStatus()).isEqualTo(status);
+        assertThat(storedEvent.getProvider()).isEqualTo(PaymentProvider.PORTONE);
+        assertThat(webhookRepository.existsByProviderAndProviderEventId(
+                PaymentProvider.PORTONE, storedEvent.getProviderEventId())).isTrue();
+        var duplicate = webhookRepository.findByProviderAndProviderEventId(
+                PaymentProvider.PORTONE, storedEvent.getProviderEventId()).orElseThrow();
+        assertThat(duplicate.getId()).isEqualTo(enumWebhookId);
         var candidates = webhookRepository.findRecoverable(List.of("Transaction.Paid"),
                 now.minusSeconds(300), PageRequest.of(0, 1000));
         if (status == WebhookProcessingStatus.PENDING || status == WebhookProcessingStatus.FAILED) {
@@ -365,8 +391,25 @@ class RefundTransactionMySqlIntegrationTest {
                 String.class, fixture.refundId())).isEqualTo(status.name());
         var mine = refundQueries.listMyRefunds(fixture.ownerId(), 0, 20, status.name());
         assertThat(mine.getTotalElements()).isEqualTo(1);
-        assertThat(mine.getContent().getFirst().status()).isEqualTo(status.name());
+        assertThat(mine.getContent().getFirst().status()).isEqualTo(status);
         assertThat(refundQueries.listMyRefunds(fixture.adminId(), 0, 20, status.name())).isEmpty();
+
+        var purchase = purchaseQueries.get(fixture.ownerId(), fixture.purchaseId());
+        assertThat(purchase.latestRefundStatus()).isEqualTo(status);
+        assertThat(purchase.refundRequests()).singleElement().satisfies(refund ->
+                assertThat(refund.status()).isEqualTo(status));
+        var summary = purchaseQueries.list(fixture.ownerId(), 0, 20, null).getContent().getFirst();
+        assertThat(summary.latestRefundStatus()).isEqualTo(status);
+        var mapper = new ObjectMapper();
+        var adminRefund = refundQueries.getAdminRefund(fixture.refundId());
+        assertThat(adminRefund.status()).isEqualTo(status);
+        assertThat(mapper.writeValueAsString(adminRefund)).contains("\"status\":\"" + status.name() + "\"");
+        assertThat(mapper.writeValueAsString(mine.getContent().getFirst()))
+                .contains("\"status\":\"" + status.name() + "\"");
+        var purchaseJson = mapper.readTree(mapper.writeValueAsString(purchase));
+        assertThat(purchaseJson.at("/latestRefundStatus").asString()).isEqualTo(status.name());
+        assertThat(purchaseJson.at("/refundRequests/0/status").asString()).isEqualTo(status.name());
+        assertThat(mapper.writeValueAsString(summary)).contains("\"latestRefundStatus\":\"" + status.name() + "\"");
 
         // 목록과 전체 건수 계산에 같은 Enum 상태 조건이 적용되는지 확인합니다.
         var all = refundRepository.findAdminRefunds(status, PageRequest.of(0, 100));
@@ -389,7 +432,7 @@ class RefundTransactionMySqlIntegrationTest {
         Timestamp revokedAt = jdbc.queryForObject("SELECT revoked_at FROM owned_items WHERE id = ?",
                 Timestamp.class, fixture.itemId());
         var replay = results.apply(command, pgResult(RefundGateway.Outcome.UNKNOWN), "second");
-        assertThat(replay.data().status()).isEqualTo("COMPLETED");
+        assertThat(replay.data().status()).isEqualTo(RefundStatus.COMPLETED);
         assertThat(jdbc.queryForObject("SELECT revoked_at FROM owned_items WHERE id = ?",
                 Timestamp.class, fixture.itemId())).isEqualTo(revokedAt);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payment_transactions WHERE purchase_id = ? AND transaction_type = 'CANCELLATION'",
@@ -582,7 +625,7 @@ class RefundTransactionMySqlIntegrationTest {
         // 업무만 복구되고 멱등 키가 영구 PROCESSING으로 남으면 재요청이 막힙니다.
         var response = refunds.approveRefund(fixture.adminId(), fixture.refundId(), "중단 검증", key, "retry");
         assertThat(response.httpStatus()).isEqualTo(200);
-        assertThat(response.data().status()).isEqualTo("COMPLETED");
+        assertThat(response.data().status()).isEqualTo(RefundStatus.COMPLETED);
         verifyNoInteractions(gateway);
     }
 
