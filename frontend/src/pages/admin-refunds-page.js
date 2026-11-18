@@ -6,7 +6,10 @@ import {
   reconcileRefund,
   rejectRefund,
 } from '../features/payment/api.js';
-import { adminRefundActions } from '../features/payment/payment-policy.js';
+import {
+  adminRefundActions,
+  pgCancellationPresentation,
+} from '../features/payment/payment-policy.js';
 
 const PAGE_SIZE = 10;
 const STATUSES = ['', 'REQUESTED', 'REJECTED', 'CANCEL_PENDING', 'CANCEL_UNKNOWN', 'COMPLETED', 'FAILED'];
@@ -155,19 +158,27 @@ export function adminRefundsPage({ navigate } = {}) {
     const title = document.createElement('h2'); title.className = 'h5'; title.tabIndex = -1; title.textContent = detail ? `환불 #${detail.refundRequestId}` : '선택 환불 상세';
     detailNode.append(title);
     if (!detail) { const message = document.createElement('p'); message.className = 'text-body-secondary mb-0'; message.textContent = '목록에서 환불 요청을 선택해 주세요.'; detailNode.append(message); return; }
+    const pgCancellation = pgCancellationPresentation(detail);
     const description = document.createElement('dl'); description.className = 'row small';
     const values = [
       ['상품', detail.purchase?.itemName], ['금액', `${Number(detail.purchase?.priceKrw ?? 0).toLocaleString('ko-KR')}원`],
       ['구매 상태', detail.purchase?.status], ['아이템 상태', detail.ownedItem?.status ?? '-'],
       ['환불 상태', LABELS[detail.status] ?? detail.status], ['신청 사유', detail.requestReason],
-      ['관리자 사유', detail.decisionReason ?? '-'], ['PG 취소 상태', detail.latestCancellation?.status ?? '-'],
+      ['관리자 사유', detail.decisionReason ?? '-'], ['PG 취소 상태', pgCancellation.label],
     ];
     for (const [term, value] of values) { const dt = document.createElement('dt'); dt.className = 'col-4'; dt.textContent = term; const dd = document.createElement('dd'); dd.className = 'col-8 text-break'; dd.textContent = String(value ?? '-'); description.append(dt, dd); }
     const actions = document.createElement('div'); actions.className = 'd-flex flex-wrap gap-2 mt-3';
     for (const action of adminRefundActions(detail.status)) {
       const button = document.createElement('button'); button.type = 'button'; button.dataset.action = action; button.className = action === 'approve' ? 'btn btn-primary' : action === 'reject' ? 'btn btn-outline-danger' : 'btn btn-warning'; button.textContent = action === 'approve' ? '승인' : action === 'reject' ? '거절' : '결과 복구'; button.disabled = processing; actions.append(button);
     }
-    detailNode.append(description, actions);
+    detailNode.append(description);
+    if (pgCancellation.hint) {
+      const hint = document.createElement('p');
+      hint.className = 'alert alert-info small py-2 mb-0';
+      hint.textContent = pgCancellation.hint;
+      detailNode.append(hint);
+    }
+    detailNode.append(actions);
   }
 
   async function loadList(targetPage = page, targetStatus = status) {

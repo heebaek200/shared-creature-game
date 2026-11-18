@@ -23,7 +23,7 @@ export function shopPage({ navigate, currentUser }) {
     <nav class="nav nav-pills commerce-tabs mb-4" aria-label="상품 슬롯" data-slots></nav>
     <div class="row g-4">
       <section class="col-xl-8 order-2 order-xl-1" aria-live="polite" data-list></section>
-      <aside class="col-xl-4 order-1 order-xl-2" data-detail></aside>
+      <aside class="col-xl-4 order-1 order-xl-2" data-detail style="scroll-margin-top: calc(var(--app-header-height) + 12px)"></aside>
     </div>
     <div class="d-flex justify-content-between align-items-center mt-4" data-pagination>
       <button class="btn btn-outline-primary" type="button" data-action="prev">이전</button>
@@ -32,6 +32,18 @@ export function shopPage({ navigate, currentUser }) {
     </div>`;
 
   const element = createAppShell({ content, currentPath: '/shop', currentUser, navigate });
+  const purchaseBlocker = document.createElement('div');
+  purchaseBlocker.className = 'purchase-blocker d-none';
+  purchaseBlocker.setAttribute('role', 'status');
+  purchaseBlocker.setAttribute('aria-live', 'polite');
+  purchaseBlocker.setAttribute('aria-hidden', 'true');
+  purchaseBlocker.innerHTML = `
+    <div class="purchase-blocker__panel">
+      <span class="spinner-border text-primary" aria-hidden="true"></span>
+      <strong>결제창을 준비하고 있습니다.</strong>
+      <span class="small text-app-muted">잠시만 기다려 주세요.</span>
+    </div>`;
+  element.append(purchaseBlocker);
   const listNode = content.querySelector('[data-list]');
   const detailNode = content.querySelector('[data-detail]');
   const feedbackNode = content.querySelector('[data-feedback]');
@@ -49,6 +61,16 @@ export function shopPage({ navigate, currentUser }) {
   let purchasing = false;
   let mounted = true;
   let loadVersion = 0;
+
+  /** 결제 처리 중에는 공통 화면 조작을 막고 진행 상태를 표시합니다. */
+  function renderPurchasingState() {
+    for (const child of element.children) {
+      if (child instanceof HTMLElement && child !== purchaseBlocker) child.inert = purchasing;
+    }
+    element.setAttribute('aria-busy', String(purchasing));
+    purchaseBlocker.classList.toggle('d-none', !purchasing);
+    purchaseBlocker.setAttribute('aria-hidden', String(!purchasing));
+  }
 
   function showFeedback(message, type = 'danger') {
     if (!(feedbackNode instanceof HTMLElement)) return;
@@ -126,7 +148,7 @@ export function shopPage({ navigate, currentUser }) {
     image.alt = `${selected.name} 상세 미리보기`;
     const body = document.createElement('div');
     body.className = 'card-body p-4';
-    const title = document.createElement('h2'); title.className = 'h4'; title.textContent = selected.name;
+    const title = document.createElement('h2'); title.className = 'h4'; title.tabIndex = -1; title.textContent = selected.name;
     const description = document.createElement('p'); description.className = 'text-app-muted'; description.textContent = selected.description || '상품 설명이 없습니다.';
     const price = document.createElement('p'); price.className = 'fs-4 fw-bold'; price.textContent = `${Number(selected.priceKrw).toLocaleString('ko-KR')}원`;
     const note = document.createElement('p'); note.className = 'small text-app-muted'; note.textContent = '결제 금액은 서버가 확정하며, 결제창 결과를 서버에서 다시 검증합니다.';
@@ -149,13 +171,29 @@ export function shopPage({ navigate, currentUser }) {
     history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
   }
 
-  async function selectItem(itemId, sync = true) {
+  /** 모바일 레이아웃에서 선택한 상품의 상세 카드로 이동합니다. */
+  function moveToDetailCard() {
+    if (!(detailNode instanceof HTMLElement) || !window.matchMedia('(max-width: 1032px)').matches) return;
+    const heading = detailNode.querySelector('h2');
+    if (heading instanceof HTMLElement) heading.focus({ preventScroll: true });
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    detailNode.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+  }
+
+  /**
+   * 상품 상세를 조회하고 사용자가 모바일 목록에서 선택한 경우 상세 카드로 이동합니다.
+   * @param {number} itemId 조회할 상품 ID
+   * @param {boolean} [sync=true] URL Query에 선택 상품을 반영할지 여부
+   * @param {boolean} [moveToDetail=false] 조회 후 상세 카드로 이동할지 여부
+   */
+  async function selectItem(itemId, sync = true, moveToDetail = false) {
     try {
       const item = await getShopItem(itemId);
       if (!mounted) return;
       selected = item;
       if (sync) syncItemQuery(item.shopItemId);
       renderList(); renderDetail();
+      if (moveToDetail) moveToDetailCard();
     } catch (error) {
       if (!mounted) return;
       selected = null; syncItemQuery(null); renderList(); renderDetail();
@@ -185,7 +223,7 @@ export function shopPage({ navigate, currentUser }) {
   async function purchaseSelected() {
     if (!selected || purchasing) return;
     if (!window.confirm(`${selected.name}을(를) ${Number(selected.priceKrw).toLocaleString('ko-KR')}원에 결제할까요?`)) return;
-    purchasing = true; renderDetail();
+    purchasing = true; renderDetail(); renderPurchasingState();
     try {
       const order = await createPurchase(selected.shopItemId);
       if (!mounted) return;
@@ -212,7 +250,7 @@ export function shopPage({ navigate, currentUser }) {
       if (!mounted) return;
       showFeedback(error?.message ?? '결제를 시작하지 못했습니다.');
     } finally {
-      purchasing = false; renderDetail();
+      purchasing = false; renderDetail(); renderPurchasingState();
     }
   }
 
@@ -224,7 +262,7 @@ export function shopPage({ navigate, currentUser }) {
     }
     const selectButton = event.target.closest('[data-select-item]');
     if (selectButton instanceof HTMLButtonElement) {
-      const itemId = parseShopItemId(selectButton.dataset.selectItem); if (itemId) await selectItem(itemId); return;
+      const itemId = parseShopItemId(selectButton.dataset.selectItem); if (itemId) await selectItem(itemId, true, true); return;
     }
     const action = event.target.closest('[data-action]');
     if (!(action instanceof HTMLButtonElement)) return;

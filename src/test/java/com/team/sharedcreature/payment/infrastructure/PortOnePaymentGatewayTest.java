@@ -58,7 +58,7 @@ class PortOnePaymentGatewayTest {
                           "status": "PAID",
                           "amount": {"total": 1000},
                           "currency": "KRW",
-                          "method": {"type": "EASY_PAY", "provider": "KAKAOPAY"},
+                          "method": {"type": "PaymentMethodEasyPay", "provider": "KAKAOPAY"},
                           "channel": {"type": "TEST"},
                           "paidAt": "2026-11-09T08:00:00Z",
                           "cancellations": []

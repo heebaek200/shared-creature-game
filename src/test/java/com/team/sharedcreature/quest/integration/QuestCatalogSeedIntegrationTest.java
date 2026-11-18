@@ -134,6 +134,32 @@ class QuestCatalogSeedIntegrationTest {
     }
 
     /**
+     * 과거 PHOTO_EXIF 수동 테스트의 버전 없는 활성 템플릿을 재현합니다.
+     * 공통 카탈로그 시드는 행을 삭제하지 않고 비활성화해 현재 배정 실패를 방지해야 합니다.
+     */
+    @Test
+    void legacyPhotoExifTemplateWithoutVersionIsArchived() {
+        insertOldDemo("D-X-EXIF-TEST", "DAILY", "MEDIUM", 6);
+        Long legacyId = jdbc.queryForObject(
+                "SELECT id FROM quest_templates WHERE code = 'D-X-EXIF-TEST'", Long.class);
+
+        runCatalogSeed();
+
+        assertEquals(legacyId, jdbc.queryForObject(
+                "SELECT id FROM quest_templates WHERE code = 'D-X-EXIF-TEST'", Long.class));
+        assertEquals("INACTIVE", jdbc.queryForObject(
+                "SELECT status FROM quest_templates WHERE code = 'D-X-EXIF-TEST'", String.class));
+        assertEquals(0L, count("""
+                SELECT COUNT(*)
+                  FROM quest_template_versions AS version
+                  JOIN quest_templates AS template
+                    ON template.id = version.quest_template_id
+                 WHERE template.code = 'D-X-EXIF-TEST'
+                """));
+        assertCount("DAILY", "MEDIUM", 5);
+    }
+
+    /**
      * 애플리케이션에 등록되는 동일 SQL 리소스를 테스트 트랜잭션에 실행합니다.
      * ResourceDatabasePopulator는 현재 트랜잭션에 연결된 JDBC 커넥션을 재사용합니다.
      * 각 테스트 종료 시 @Transactional의 롤백으로 카탈로그 INSERT가 취소됩니다.

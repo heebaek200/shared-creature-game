@@ -5,6 +5,7 @@ import {
   canRequestRefund,
   parsePaymentReturn,
   parseShopItemId,
+  pgCancellationPresentation,
 } from '../src/features/payment/payment-policy.js';
 
 test('결제 완료·미사용·진행 중 환불 없음인 구매만 환불할 수 있다', () => {
@@ -19,6 +20,28 @@ test('관리자 환불 동작은 서버 상태에 따라 제한한다', () => {
   assert.deepEqual(adminRefundActions('CANCEL_PENDING'), ['reconcile']);
   assert.deepEqual(adminRefundActions('CANCEL_UNKNOWN'), ['reconcile']);
   assert.deepEqual(adminRefundActions('COMPLETED'), []);
+});
+
+test('PG 취소 상태는 미실행 사유와 자동 점검 안내를 구분한다', () => {
+  assert.deepEqual(
+      pgCancellationPresentation({ status: 'REJECTED', latestCancellation: null }),
+      { label: '미실행 (환불 거절)', hint: null },
+  );
+  assert.deepEqual(
+      pgCancellationPresentation({ status: 'REQUESTED', latestCancellation: null }),
+      { label: '승인 전', hint: null },
+  );
+  assert.equal(
+      pgCancellationPresentation({
+        status: 'CANCEL_UNKNOWN',
+        latestCancellation: { status: 'UNKNOWN' },
+      }).label,
+      '결과 확인 필요',
+  );
+  assert.match(
+      pgCancellationPresentation({ status: 'CANCEL_PENDING', latestCancellation: null }).hint,
+      /5분 주기로/,
+  );
 });
 
 test('상점 직접 진입 ID는 1 이상의 안전한 정수만 허용한다', () => {
