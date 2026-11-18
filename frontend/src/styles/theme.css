@@ -86,6 +86,29 @@
   background-color: var(--app-text);
 }
 
+.app-header__connection-status[data-connection-state="connected"] {
+  color: var(--app-on-primary);
+  background-color: var(--app-primary);
+}
+
+.app-header__connection-status[data-connection-state="connected"]
+.app-header__connection-dot {
+  color: inherit;
+}
+
+.app-header__connection-status[data-connection-state="polling"],
+.app-header__connection-status[data-connection-state="error"] {
+  color: var(--app-text);
+  background-color: var(--app-accent);
+}
+
+.app-header__connection-status[data-connection-state="polling"]
+.app-header__connection-dot,
+.app-header__connection-status[data-connection-state="error"]
+.app-header__connection-dot {
+  color: inherit;
+}
+
 .mobile-navigation {
   border-color: var(--app-border);
   border-top-color: var(--app-border);

@@ -8,9 +8,13 @@ import { createAvatarField } from '../features/creature/avatar-field.js';
 import { creatureAccessErrorRoute } from '../features/creature/access-error-policy.js';
 import { createGroupLiveClient } from '../realtime/group-live-client.js';
 import { createSnapshotSync } from '../realtime/snapshot-sync.js';
+import {
+    updateHeaderConnectionStatus,
+} from '../components/app-header.js';
 
 import creatureLv0 from '../../assets/creature/lv0.png';
 import { createAppShell } from '../components/app-shell.js';
+
 /**
  * 크리처 홈 페이지 마운트 및 렌더링합니다.
  * @param {{ navigate: (path: string) => void }} context
@@ -56,7 +60,6 @@ export function creaturePage(context) {
                 <div class="d-flex justify-content-between align-items-center mb-2">
                   <h2 class="h5 card-title mb-0 fw-bold text-app" id="creature-title-name">시즌 크리처 - ???</h2>
                   <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
-                    <span class="small text-app-muted" id="live-status" role="status" aria-live="polite">실시간 연결 준비 중</span>
                     <span class="badge rounded-pill py-2 px-3 online-count-badge" id="online-count">접속 0명</span>
                   </div>
                 </div>
@@ -172,7 +175,6 @@ export function creaturePage(context) {
     const loadErrorDetails = element.querySelector('#creature-load-error-details');
     const retryButton = element.querySelector('#creature-error-retry');
     const loginButton = element.querySelector('#creature-error-login');
-    const liveStatus = element.querySelector('#live-status');
 
     // API 오류를 사용자 안내 문구로 변환 및 재시도 가능 여부 판단
     function getApiErrorMessage(error) {
@@ -646,15 +648,9 @@ export function creaturePage(context) {
     }
 
     function setLiveStatus(status) {
-        if (!liveStatus) return;
-        const labels = {
-            connecting: '실시간 연결 중',
-            live: '실시간 연결됨',
-            polling: '30초 동기화 중',
-            error: '연결 복구 중',
-        };
-        liveStatus.textContent = labels[status] ?? '연결 상태 확인 중';
-        liveStatus.dataset.liveStatus = status;
+        if (!isMounted) return;
+
+        updateHeaderConnectionStatus(element, status);
     }
 
     function applySnapshot(snapshot) {
