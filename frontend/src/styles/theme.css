@@ -338,6 +338,7 @@ body {
 }
 
 .group-avatar-visual {
+  --avatar-item-hue: 0deg;
   position: relative;
   display: block;
   width: 72px;

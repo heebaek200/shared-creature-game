@@ -96,17 +96,17 @@ VALUES
     -- HEAD
     (
         'BROWN_LOB', '갈색 단발 머리', '갈색 단발 머리',
-        1000, 'HEAD', 'brown-lob', 'ACTIVE',
+        2000, 'HEAD', 'brown-lob', 'ACTIVE',
         UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
     ),
     (
         'BLACK_LONG', '검정색 긴 머리', '검정색 긴 머리',
-        1000, 'HEAD', 'black-long', 'ACTIVE',
+        2000, 'HEAD', 'black-long', 'ACTIVE',
         UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
     ),
     (
         'BLUE_SHORT', '파란색 짧은 머리', '파란색 짧은 머리',
-        1000, 'HEAD', 'blue-short', 'ACTIVE',
+        2000, 'HEAD', 'blue-short', 'ACTIVE',
         UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
     ),
 
@@ -130,22 +130,23 @@ VALUES
     -- BODY
     (
         'BLUE_SHIRT', '티셔츠 세트(파랑)', '티셔츠 세트(파랑)',
-        1000, 'BODY', 'blue-shirt', 'ACTIVE',
+        2000, 'BODY', 'blue-shirt', 'ACTIVE',
         UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
     ),
     (
         'WHITE_OVERALLS', '멜빵 세트(하양)', '멜빵 세트(하양)',
-        1000, 'BODY', 'white-overalls', 'ACTIVE',
+        2000, 'BODY', 'white-overalls', 'ACTIVE',
         UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
     ),
     (
         'GREEN_DRESS', '원피스 세트(초록)', '원피스 세트(초록)',
-        1000, 'BODY', 'green-dress', 'ACTIVE',
+        2000, 'BODY', 'green-dress', 'ACTIVE',
         UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
     )
     ON DUPLICATE KEY UPDATE
                          name = VALUES(name),
                          description = VALUES(description),
+                         price_krw = VALUES(price_krw),
                          slot_code = VALUES(slot_code),
                          asset_key = VALUES(asset_key),
                          updated_at = UTC_TIMESTAMP(6);
