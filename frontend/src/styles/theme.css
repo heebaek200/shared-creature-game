@@ -86,6 +86,29 @@
   background-color: var(--app-text);
 }
 
+.app-header__connection-status[data-connection-state="connected"] {
+  color: var(--app-on-primary);
+  background-color: var(--app-primary);
+}
+
+.app-header__connection-status[data-connection-state="connected"]
+.app-header__connection-dot {
+  color: inherit;
+}
+
+.app-header__connection-status[data-connection-state="polling"],
+.app-header__connection-status[data-connection-state="error"] {
+  color: var(--app-text);
+  background-color: var(--app-accent);
+}
+
+.app-header__connection-status[data-connection-state="polling"]
+.app-header__connection-dot,
+.app-header__connection-status[data-connection-state="error"]
+.app-header__connection-dot {
+  color: inherit;
+}
+
 .mobile-navigation {
   border-color: var(--app-border);
   border-top-color: var(--app-border);
@@ -338,6 +361,7 @@ body {
 }
 
 .group-avatar-visual {
+  --avatar-item-hue: 0deg;
   position: relative;
   display: block;
   width: 72px;
@@ -442,6 +466,15 @@ body {
 :focus-visible {
   outline: 3px solid var(--app-primary);
   outline-offset: 3px;
+}
+
+.mobile-navigation__link:focus-visible {
+  outline-offset: -3px;
+  box-shadow: none;
+}
+
+.mobile-navigation__link.active:focus-visible {
+  outline-color: var(--app-on-primary);
 }
 
 #btn-goto-shop {
@@ -711,4 +744,286 @@ body {
 .commerce-page .list-group-item {
   color: var(--app-text);
   border-color: var(--app-border);
+}
+
+
+/* 아바타 페이지: 공통 */
+.avatar-page .avatar-page-heading {
+  min-height: 2rem;
+}
+
+.avatar-page .avatar-inventory-panel {
+  container-type: inline-size;
+  container-name: avatar-inventory;
+}
+
+.avatar-page [aria-labelledby="avatar-items-title"] {
+  scroll-margin-top: calc(var(--app-header-height) + 1rem);
+}
+
+.avatar-page {
+  width: 100%;
+  min-width: 0;
+  color: var(--app-text);
+}
+
+.avatar-page .avatar-panel {
+  min-width: 0;
+  background-color: var(--app-surface);
+  border-color: var(--app-border) !important;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.avatar-page .avatar-slot,
+.avatar-page .avatar-owned-item {
+  background-color: var(--app-surface);
+  border-color: var(--app-border) !important;
+}
+
+.avatar-page .avatar-muted {
+  color: var(--app-muted);
+}
+
+.avatar-page .avatar-preview {
+  background-color: var(--app-background);
+  border: 1px dashed var(--app-border);
+}
+
+.avatar-page .avatar-preview > p {
+  white-space: normal;
+  font-size: clamp(0.7rem, 0.8vw, 0.875rem);
+}
+
+.avatar-page .avatar-preview > p > span {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.avatar-page .avatar-preview__stage {
+  position: relative;
+  width: min(100%, 320px);
+  aspect-ratio: 1;
+  flex-shrink: 0;
+  isolation: isolate;
+}
+
+.avatar-page .avatar-preview__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.avatar-page .avatar-filter {
+  color: var(--app-text);
+  background-color: var(--app-surface);
+  border-color: var(--app-border);
+}
+
+.avatar-page .avatar-filter:disabled {
+  color: var(--app-muted);
+  background-color: var(--app-background);
+  opacity: 1;
+}
+
+.avatar-page .avatar-filter:focus {
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--app-primary) 20%, transparent);
+}
+
+.avatar-page .avatar-item-status {
+  flex-shrink: 0;
+  color: var(--app-primary);
+  background-color: var(--app-background);
+  border: 1px solid var(--app-border);
+  font-weight: 500;
+}
+
+.avatar-page .avatar-action {
+  color: var(--app-primary);
+  background-color: var(--app-surface);
+  border: 1px solid var(--app-border);
+}
+
+.avatar-page .avatar-action:hover:not(:disabled) {
+  color: var(--app-on-primary);
+  background-color: var(--app-primary);
+  border-color: var(--app-primary);
+}
+
+.avatar-page .avatar-action:focus-visible {
+  box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--app-primary) 25%, transparent);
+}
+
+.avatar-page .avatar-action:disabled {
+  color: var(--app-muted);
+  background-color: var(--app-background);
+  border-color: var(--app-border);
+  opacity: 1;
+}
+
+.avatar-page .avatar-owned-item__info {
+  min-width: 0;
+}
+
+.avatar-page .avatar-owned-item__info h3 {
+  overflow-wrap: anywhere;
+}
+
+.avatar-page .avatar-owned-item__thumbnail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  padding: 6px;
+  overflow: hidden;
+  background-color: var(--app-background);
+}
+
+.avatar-page .avatar-owned-item button[data-action] {
+  width: 56px;
+}
+
+.avatar-page .avatar-owned-item__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.avatar-page .avatar-status-button {
+  color: var(--app-text);
+  background-color: var(--app-surface);
+  border: 1px solid var(--app-border);
+}
+
+.avatar-page .avatar-status-button[aria-pressed='true'] {
+  color: var(--app-text);
+  background-color: var(--app-secondary);
+  border-color: var(--app-primary);
+}
+
+.avatar-page .avatar-status-button:hover {
+  border-color: var(--app-primary);
+}
+
+.avatar-page .avatar-status-button:focus-visible {
+  box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--app-primary) 25%, transparent);
+}
+
+.avatar-page #avatar-slot-filter {
+  min-width: 0;
+  width: auto;
+}
+
+.avatar-page #avatar-feedback:empty,
+.avatar-page #avatar-items-feedback:empty {
+  display: none;
+}
+
+.avatar-page .avatar-panel > * {
+  flex-shrink: 0;
+}
+
+.avatar-page #avatar-slot-list {
+  overflow: visible;
+}
+
+.avatar-page #avatar-owned-list {
+  display: grid !important;
+  grid-template-rows: repeat(4, minmax(130px, 1fr));
+  gap: 0.75rem !important;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+.avatar-page #avatar-owned-list > li {
+  display: grid;
+  grid-template-rows: auto auto;
+  align-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+  min-height: 0;
+  padding: 0.75rem !important;
+}
+
+.avatar-page #avatar-owned-list > li > div:last-child {
+  margin-top: 0 !important;
+}
+
+.avatar-page .avatar-slot h3 {
+  margin-bottom: 1rem !important;
+}
+
+.avatar-result-modal {
+  color: var(--app-text);
+  background-color: var(--app-surface);
+  border-color: var(--app-border);
+}
+
+.avatar-result-modal .modal-header,
+.avatar-result-modal .modal-footer {
+  border: 0;
+}
+
+.avatar-result-modal .modal-title {
+  font-weight: 700;
+}
+
+.avatar-result-modal #avatar-result-message {
+  white-space: pre-line;
+}
+
+.avatar-result-modal .modal-footer .avatar-action {
+  border: 1px solid var(--app-primary);
+  color: var(--app-primary);
+  background-color: var(--app-surface);
+}
+
+.avatar-result-modal .modal-footer .avatar-action:focus {
+  color: var(--app-on-primary);
+  background-color: var(--app-primary);
+  outline: none;
+  box-shadow: none;
+}
+
+.avatar-page #avatar-items-feedback:not(:empty) {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  margin: 0;
+  padding: 1rem;
+}
+
+.avatar-page #avatar-items-feedback:not(:empty) + #avatar-owned-list {
+  display: none !important;
+}
+
+.avatar-page #avatar-equipment-layers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.avatar-page .avatar-preview__equipment {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
 }

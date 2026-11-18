@@ -1,16 +1,16 @@
 // @ts-check
-import { getActiveCreatureSpecies, getCreatureHome } from '../features/creature/api.js';
+import { getActiveCreatureSpecies } from '../features/creature/api.js';
 import { renderCreatureGrowth } from '../features/creature/render.js';
 import { getCurrentSeason } from '../features/season/api.js';
 import { ApiError } from '../api/client.js';
 import { getShopItem } from '../features/shop/api.js';
 import { createAvatarField } from '../features/creature/avatar-field.js';
 import { creatureAccessErrorRoute } from '../features/creature/access-error-policy.js';
-import { createGroupLiveClient } from '../realtime/group-live-client.js';
-import { createSnapshotSync } from '../realtime/snapshot-sync.js';
+import { groupLiveManager } from '../realtime/group-live-manager.js';
 
 import creatureLv0 from '../../assets/creature/lv0.png';
 import { createAppShell } from '../components/app-shell.js';
+
 /**
  * 크리처 홈 페이지 마운트 및 렌더링합니다.
  * @param {{ navigate: (path: string) => void }} context
@@ -56,7 +56,6 @@ export function creaturePage(context) {
                 <div class="d-flex justify-content-between align-items-center mb-2">
                   <h2 class="h5 card-title mb-0 fw-bold text-app" id="creature-title-name">시즌 크리처 - ???</h2>
                   <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
-                    <span class="small text-app-muted" id="live-status" role="status" aria-live="polite">실시간 연결 준비 중</span>
                     <span class="badge rounded-pill py-2 px-3 online-count-badge" id="online-count">접속 0명</span>
                   </div>
                 </div>
@@ -172,7 +171,6 @@ export function creaturePage(context) {
     const loadErrorDetails = element.querySelector('#creature-load-error-details');
     const retryButton = element.querySelector('#creature-error-retry');
     const loginButton = element.querySelector('#creature-error-login');
-    const liveStatus = element.querySelector('#live-status');
 
     // API 오류를 사용자 안내 문구로 변환 및 재시도 가능 여부 판단
     function getApiErrorMessage(error) {
@@ -466,15 +464,18 @@ export function creaturePage(context) {
             if (!isMounted) return;
 
             try {
-                const [creatureRes, seasonRes, speciesRes] = await Promise.all([
-                    getCreatureHome(),
+                const [refreshed, seasonRes, speciesRes] = await Promise.all([
+                    groupLiveManager.refresh(),
                     getCurrentSeason(),
                     getActiveCreatureSpecies()
                 ]);
 
                 if (!isMounted) return;
 
-                const creatureData = creatureRes.data || creatureRes;
+                const creatureData = groupLiveManager.getSnapshot();
+                if (!refreshed || !creatureData) {
+                    throw new Error('크리처 상태를 불러오지 못했습니다.');
+                }
                 const refreshedSeasonData = seasonRes.data || seasonRes;
                 const speciesList = speciesRes.data || speciesRes;
 
@@ -628,33 +629,12 @@ export function creaturePage(context) {
     let currentCreatureData = null;
     let currentSeasonData = null;
     let currentSpeciesList = [];
-    let snapshotSync = null;
-    let liveClient = null;
-
-    function stopForAccessError(error) {
-        const route = creatureAccessErrorRoute(error);
-        if (!route) return false;
-
-        snapshotSync?.dispose();
-        void liveClient?.disconnect();
-        context.navigate(route);
-        return true;
-    }
+    let unsubscribeSnapshots = null;
+    let unsubscribeSyncErrors = null;
 
     function handleSnapshotError(error) {
-        if (!stopForAccessError(error)) showLoadError(error);
-    }
-
-    function setLiveStatus(status) {
-        if (!liveStatus) return;
-        const labels = {
-            connecting: '실시간 연결 중',
-            live: '실시간 연결됨',
-            polling: '30초 동기화 중',
-            error: '연결 복구 중',
-        };
-        liveStatus.textContent = labels[status] ?? '연결 상태 확인 중';
-        liveStatus.dataset.liveStatus = status;
+        // 인증·권한 오류의 이동은 공통 라우터가 처리합니다.
+        if (!creatureAccessErrorRoute(error)) showLoadError(error);
     }
 
     function applySnapshot(snapshot) {
@@ -678,87 +658,6 @@ export function creaturePage(context) {
         );
     }
 
-    function applyLiveEvent(event) {
-        if (
-            !currentCreatureData
-            || String(event.groupId) !== String(currentCreatureData.groupId)
-        ) {
-            return;
-        }
-
-        const payload = event.payload || {};
-        const members = currentCreatureData.onlineMembers ?? [];
-        const memberIndex = members.findIndex((member) =>
-            String(member.userId) === String(payload.userId));
-        let requiresSnapshot = false;
-
-        switch (event.eventType) {
-            case 'PRESENCE_JOINED': {
-                const joinedMember = {
-                    userId: payload.userId,
-                    nickname: payload.nickname,
-                    rank: payload.rank,
-                    contributionScore: payload.contributionScore,
-                    avatar: { equipments: payload.equipments },
-                };
-                if (memberIndex === -1) members.push(joinedMember);
-                else members[memberIndex] = joinedMember;
-                break;
-            }
-            case 'PRESENCE_LEFT':
-                if (memberIndex !== -1) members.splice(memberIndex, 1);
-                break;
-            case 'AVATAR_EQUIPMENT_CHANGED':
-                if (memberIndex !== -1) {
-                    const equipments = members[memberIndex].avatar?.equipments;
-                    if (equipments) equipments[payload.slot] = payload.equippedItem;
-                }
-                break;
-            case 'CREATURE_UPDATED':
-                requiresSnapshot =
-                    currentCreatureData.creature?.growthStage !== payload.growthStage
-                    || currentCreatureData.creature?.creatureSpeciesId
-                        !== payload.creatureSpeciesId;
-                currentCreatureData.creature = {
-                    ...currentCreatureData.creature,
-                    groupCreatureId: payload.groupCreatureId,
-                    totalExperience: payload.totalExperience,
-                    growthStage: payload.growthStage,
-                    creatureSpeciesId: payload.creatureSpeciesId,
-                };
-                break;
-            case 'CONTRIBUTION_UPDATED': {
-                requiresSnapshot = true;
-                if (memberIndex !== -1) {
-                    members[memberIndex].contributionScore = payload.contributionScore;
-                }
-                currentCreatureData.todayExperience =
-                    (currentCreatureData.todayExperience ?? 0)
-                    + (payload.creatureExperienceDelta ?? 0);
-                currentCreatureData.recentContributions = [
-                    {
-                        userId: payload.userId,
-                        nickname: payload.nickname,
-                        amount: payload.creatureExperienceDelta,
-                        occurredAt: event.occurredAt,
-                    },
-                    ...(currentCreatureData.recentContributions ?? []),
-                ].slice(0, 10);
-                break;
-            }
-            default:
-                return;
-        }
-
-        updateUI(
-            currentCreatureData,
-            currentSeasonData,
-            currentSpeciesList,
-            { renderGrowth: event.eventType === 'CREATURE_UPDATED' },
-        );
-        return { refresh: requiresSnapshot };
-    }
-
     async function initializeCreaturePage() {
         if (retryButton instanceof HTMLButtonElement) retryButton.disabled = true;
         const authenticatedUser = context.currentUser?.data || context.currentUser;
@@ -779,46 +678,24 @@ export function creaturePage(context) {
 
         if (!isMounted || !groupId) return;
 
-        snapshotSync = createSnapshotSync({
-            loadSnapshot: async () => {
-                const snapshot = await getCreatureHome();
-                return snapshot?.data || snapshot;
-            },
-            applySnapshot,
-            applyEvent: applyLiveEvent,
-            onStatusChange: setLiveStatus,
-            onError: handleSnapshotError,
+        unsubscribeSnapshots = groupLiveManager.subscribeSnapshots((snapshot) => {
+            if (!isMounted || String(snapshot.groupId) !== String(groupId)) return;
+            applySnapshot(snapshot);
+        });
+        unsubscribeSyncErrors = groupLiveManager.subscribeErrors((error) => {
+            if (isMounted) handleSnapshotError(error);
         });
 
-        liveClient = createGroupLiveClient({
-            groupId,
-            onEvent: (event) => snapshotSync?.handleEvent(event),
-            onSubscribed: () => snapshotSync?.recoverRealtime(),
-            onDisconnected: () => snapshotSync?.startPolling(),
-            onError: (code, error) => {
-                if (stopForAccessError({ code })) return;
-                if (['CSRF_INVALID', 'INVALID_REQUEST'].includes(code)) {
-                    showLoadError(new ApiError(403, {
-                        code,
-                        message: '실시간 연결 요청을 승인할 수 없습니다. 페이지를 새로고침해 주세요.',
-                    }));
-                    setLiveStatus('error');
-                    return;
-                }
-                if (code !== 'CONNECTION_ERROR') console.error(error);
-                setLiveStatus('error');
-            },
-        });
-        liveClient.connect();
+        // 화면 재진입 시에도 조회를 요청하며 중복 조회는 공통 모듈에서 합칩니다.
+        void groupLiveManager.refresh();
         if (retryButton instanceof HTMLButtonElement) retryButton.disabled = false;
     }
 
     const onRetryLoad = () => {
         if (retryButton instanceof HTMLButtonElement) retryButton.disabled = true;
-        setLiveStatus('connecting');
         void Promise.allSettled([
-            snapshotSync?.refresh(),
-            liveClient?.reconnect(),
+            groupLiveManager.refresh(),
+            groupLiveManager.reconnect(),
         ]).finally(() => {
             if (isMounted && retryButton instanceof HTMLButtonElement) {
                 retryButton.disabled = false;
@@ -847,8 +724,8 @@ export function creaturePage(context) {
             btnToggleMovement?.removeEventListener('focus', onMovementFocus);
             btnToggleMovement?.removeEventListener('blur', onMovementBlur);
             avatarField.dispose();
-            snapshotSync?.dispose();
-            void liveClient?.disconnect();
+            unsubscribeSnapshots?.();
+            unsubscribeSyncErrors?.();
         },
     };
 }

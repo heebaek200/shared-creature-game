@@ -7,3 +7,4 @@ import './group-live-client.test.js';
 import './payment-policy.test.js';
 import './mock-payment-state.test.js';
 import './admin-refunds-page.test.js';
+import './group-live-manager.test.js';

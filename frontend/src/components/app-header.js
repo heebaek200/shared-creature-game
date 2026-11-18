@@ -4,7 +4,7 @@ import titleIconDark from '../../assets/ui/header-title-icon-dark.png';
 import { logout } from '../features/auth/api.js';
 import {stopSeasonTracker} from '../features/season/season-tracker.js';
 
-export function createAppHeader({ currentUser = null, navigate, showGroupBadge = true, showSeasonInfo = true } = {}) {
+export function createAppHeader({ currentUser = null, navigate, showGroupBadge = true, showSeasonInfo = true, showConnectionStatus = true } = {}) {
     const header = document.createElement('header');
     const isAuthenticated =
         currentUser?.authenticationState === 'AUTHENTICATED';
@@ -27,12 +27,12 @@ export function createAppHeader({ currentUser = null, navigate, showGroupBadge =
             </span>
           ` : ''}
         
-          <span class="badge rounded-pill text-nowrap ms-auto me-2 px-3 py-2 app-header__connection-status"
-            data-header-connection-status data-connection-state="pending" role="status"
+          ${showConnectionStatus ? `<span class="badge rounded-pill text-nowrap ms-auto me-2 px-3 py-2 app-header__connection-status"
+            data-header-connection-status data-connection-state="pending" role="status" aria-live="polite" aria-atomic="true"
             aria-label="실시간 연결 상태: 연결 확인 중" title="실시간 연결 상태: 연결 확인 중">
             <span class="me-2 app-header__connection-dot" aria-hidden="true">●</span>
             <span class="connection-status-label">연결 확인 중</span>
-          </span>
+          </span>` : ''}
         </div>        
         <div class="app-header__actions d-flex align-items-center gap-2" data-header-actions>
             ${isAuthenticated
@@ -78,4 +78,46 @@ export function createAppHeader({ currentUser = null, navigate, showGroupBadge =
     header.className =
         'app-header position-fixed top-0 start-0 w-100 border-bottom px-4 py-3 d-flex justify-content-between align-items-center z-3';
     return header;
+}
+
+export function updateHeaderConnectionStatus(root, status) {
+    const badge = root.querySelector('[data-header-connection-status]');
+
+    if (!badge) return;
+
+    const states = {
+        connecting: {
+            label: '실시간 연결 중',
+            state: 'pending',
+        },
+        live: {
+            label: '실시간 연결됨',
+            state: 'connected',
+        },
+        polling: {
+            label: '30초 동기화 중',
+            state: 'polling',
+        },
+        error: {
+            label: '연결 복구 중',
+            state: 'error',
+        },
+    };
+
+    const current = states[status] ?? {
+        label: '연결 상태 확인',
+        state: 'disconnected',
+    };
+
+    const label = badge.querySelector('.connection-status-label');
+
+    if (label) {
+        label.textContent = current.label;
+    }
+
+    badge.dataset.connectionState = current.state;
+
+    const description = `실시간 연결 상태: ${current.label}`;
+    badge.setAttribute('aria-label', description);
+    badge.setAttribute('title', description);
 }

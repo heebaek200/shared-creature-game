@@ -21,6 +21,7 @@ export function createSnapshotSync(options) {
     let snapshotInFlight = null;
     let refreshPending = false;
     let pollingTimer = null;
+    let realtimeAvailable = false;
     let connectionGeneration = 0;
     let streamInstanceId = null;
     let sequence = null;
@@ -57,10 +58,23 @@ export function createSnapshotSync(options) {
         }
 
         snapshotInFlight = loadUntilStable()
+            .then((recovered) => {
+                if (recovered && !disposed && pollingTimer !== null) {
+                    if (realtimeAvailable) {
+                        globalThis.clearInterval(pollingTimer);
+                        pollingTimer = null;
+                        options.onStatusChange?.('live');
+                    } else {
+                        options.onStatusChange?.('polling');
+                    }
+                }
+                return recovered;
+            })
             .catch((error) => {
                 if (!disposed) {
                     options.onStatusChange?.('error');
                     options.onError?.(error);
+                    if (!disposed) ensurePollingTimer();
                 }
                 return false;
             })
@@ -69,6 +83,14 @@ export function createSnapshotSync(options) {
             });
 
         return snapshotInFlight;
+    }
+
+    function ensurePollingTimer() {
+        if (pollingTimer !== null) return;
+        pollingTimer = globalThis.setInterval(
+            () => void refreshSnapshot(),
+            options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS,
+        );
     }
 
     return {
@@ -80,6 +102,7 @@ export function createSnapshotSync(options) {
         /** 구독 완료 후 Snapshot을 복구하고 Polling을 중단합니다. */
         async recoverRealtime() {
             if (disposed) return false;
+            realtimeAvailable = true;
             const recoveryGeneration = ++connectionGeneration;
             options.onStatusChange?.('connecting');
             const recovered = await refreshSnapshot();
@@ -100,15 +123,13 @@ export function createSnapshotSync(options) {
         /** 연결 장애 중 즉시 Snapshot을 복구하고 이후 30초 Polling을 수행합니다. */
         startPolling() {
             if (disposed) return;
+            realtimeAvailable = false;
             connectionGeneration += 1;
+            // 반복되는 연결 종료 이벤트가 조회 오류 표시를 덮어쓰지 않습니다.
+            if (pollingTimer !== null) return;
             options.onStatusChange?.('polling');
             void refreshSnapshot();
-            if (pollingTimer === null) {
-                pollingTimer = globalThis.setInterval(
-                    () => void refreshSnapshot(),
-                    options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS,
-                );
-            }
+            ensurePollingTimer();
         },
 
         /** 이벤트의 중복·누락·Stream 변경을 검사하고 적용합니다. */
