@@ -1,6 +1,7 @@
 // @ts-check
 import { ApiError } from '../api/client.js';
 import { mockCreatureHomeData } from './mock-creature-page.js';
+import { completeMockRefund, reconcileMockRefundState } from './mock-payment-state.js';
 
 const MOCK_STATE_KEY = 'shared-creature-mock-state';
 
@@ -757,8 +758,9 @@ export const mockApi = {
   async approveRefund(requestId, decisionReason) {
     const refund = allMockRefunds().find((item) => item.refundRequestId === Number(requestId));
     if (!refund || refund.status !== 'REQUESTED') throw new ApiError(409, { code: 'CONCURRENT_MODIFICATION', message: '이미 처리된 요청입니다.' });
-    refund.status = 'COMPLETED'; refund.decisionReason = decisionReason.trim(); refund.reviewedAt = new Date().toISOString(); refund.completedAt = refund.reviewedAt;
-    const purchase = findMockPurchase(refund.purchaseId); purchase.status = 'CANCELLED'; purchase.ownedItemStatus = 'REVOKED'; purchase.latestRefundStatus = 'COMPLETED';
+    refund.decisionReason = decisionReason.trim(); refund.reviewedAt = new Date().toISOString();
+    const purchase = findMockPurchase(refund.purchaseId);
+    completeMockRefund(purchase, refund, refund.reviewedAt);
     return this.getAdminRefundRequest(requestId);
   },
 
@@ -773,8 +775,8 @@ export const mockApi = {
   async reconcileRefund(requestId) {
     const refund = allMockRefunds().find((item) => item.refundRequestId === Number(requestId));
     if (!refund || !['CANCEL_PENDING', 'CANCEL_UNKNOWN'].includes(refund.status)) throw new ApiError(409, { code: 'CONCURRENT_MODIFICATION', message: '복구할 수 없는 상태입니다.' });
-    refund.status = 'COMPLETED'; refund.completedAt = new Date().toISOString();
-    const purchase = findMockPurchase(refund.purchaseId); purchase.status = 'CANCELLED'; purchase.ownedItemStatus = 'REVOKED'; purchase.latestRefundStatus = 'COMPLETED';
+    const purchase = findMockPurchase(refund.purchaseId);
+    reconcileMockRefundState(purchase, refund);
     return this.getAdminRefundRequest(requestId);
   },
 };

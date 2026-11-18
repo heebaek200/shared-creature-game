@@ -3,7 +3,12 @@ import { createAppShell } from '../components/app-shell.js';
 import { getShopItemImage } from '../features/avatar/render.js';
 import { getShopItem, listShopItems } from '../features/shop/api.js';
 import { createPurchase, verifyPurchasePayment } from '../features/payment/api.js';
-import { parseShopItemId } from '../features/payment/payment-policy.js';
+import {
+  checkoutRecoveryPath,
+  isCurrentRequest,
+  isDefinitivePurchaseStatus,
+  parseShopItemId,
+} from '../features/payment/payment-policy.js';
 import { clearCheckoutContext, requestCheckout, saveCheckoutContext } from '../features/payment/portone-checkout.js';
 
 const PAGE_SIZE = 12;
@@ -61,6 +66,7 @@ export function shopPage({ navigate, currentUser }) {
   let purchasing = false;
   let mounted = true;
   let loadVersion = 0;
+  let detailVersion = 0;
 
   /** 결제 처리 중에는 공통 화면 조작을 막고 진행 상태를 표시합니다. */
   function renderPurchasingState() {
@@ -187,15 +193,16 @@ export function shopPage({ navigate, currentUser }) {
    * @param {boolean} [moveToDetail=false] 조회 후 상세 카드로 이동할지 여부
    */
   async function selectItem(itemId, sync = true, moveToDetail = false) {
+    const version = ++detailVersion;
     try {
       const item = await getShopItem(itemId);
-      if (!mounted) return;
+      if (!isCurrentRequest(version, detailVersion, mounted)) return;
       selected = item;
       if (sync) syncItemQuery(item.shopItemId);
       renderList(); renderDetail();
       if (moveToDetail) moveToDetailCard();
     } catch (error) {
-      if (!mounted) return;
+      if (!isCurrentRequest(version, detailVersion, mounted)) return;
       selected = null; syncItemQuery(null); renderList(); renderDetail();
       if (error?.status !== 404) showFeedback(error?.message ?? '상품 상세를 불러오지 못했습니다.');
     }
@@ -224,31 +231,54 @@ export function shopPage({ navigate, currentUser }) {
     if (!selected || purchasing) return;
     if (!window.confirm(`${selected.name}을(를) ${Number(selected.priceKrw).toLocaleString('ko-KR')}원에 결제할까요?`)) return;
     purchasing = true; renderDetail(); renderPurchasingState();
+    let order;
     try {
-      const order = await createPurchase(selected.shopItemId);
+      order = await createPurchase(selected.shopItemId);
+    } catch (error) {
+      if (mounted) showFeedback(error?.message ?? '결제 주문을 생성하지 못했습니다.');
+      purchasing = false; renderDetail(); renderPurchasingState();
+      return;
+    }
+
+    try {
       if (!mounted) return;
       saveCheckoutContext(order);
+      const recoveryPath = checkoutRecoveryPath(order);
       const returnUrl = new URL('/payments', location.origin);
       returnUrl.searchParams.set('purchaseId', String(order.purchaseId));
       const response = await requestCheckout(order, returnUrl.toString());
+      // 모바일 REDIRECTION은 현재 문서를 벗어나므로 응답 없이 종료될 수 있습니다.
       if (!response || !mounted) return;
-      if (response.paymentId !== order.payment.paymentId) throw new Error('결제 응답의 주문 정보가 일치하지 않습니다.');
+      if (response.paymentId !== order.payment.paymentId) {
+        showFeedback('결제창 응답을 신뢰할 수 없어 서버에서 기존 주문 상태를 확인합니다.', 'warning');
+        navigate(recoveryPath);
+        return;
+      }
       try {
-        await verifyPurchasePayment(order.purchaseId, response.paymentId);
-        clearCheckoutContext();
-        navigate('/payments');
-      } catch (error) {
-        if (['PAYMENT_PENDING', 'PAYMENT_RESULT_UNKNOWN'].includes(error?.code)) {
-          showFeedback('결제 결과를 확인 중입니다. 결제 내역에서 다시 확인해 주세요.', 'warning');
-          navigate(`/payments?purchaseId=${order.purchaseId}&paymentId=${encodeURIComponent(response.paymentId)}`);
-        } else {
+        const result = await verifyPurchasePayment(order.purchaseId, response.paymentId);
+        if (!mounted) return;
+        if (isDefinitivePurchaseStatus(result?.status)) {
           clearCheckoutContext();
-          throw error;
+          navigate('/payments');
+        } else {
+          showFeedback('결제 결과를 확인 중입니다. 결제 내역에서 다시 확인해 주세요.', 'warning');
+          navigate(recoveryPath);
         }
+      } catch (error) {
+        if (!mounted) return;
+        const uncertain = ['PAYMENT_PENDING', 'PAYMENT_RESULT_UNKNOWN'].includes(error?.code);
+        showFeedback(
+          uncertain
+            ? '결제 결과를 확인 중입니다. 결제 내역에서 다시 확인해 주세요.'
+            : '결제 결과를 확정하지 못했습니다. 기존 주문 상태를 결제 내역에서 확인해 주세요.',
+          'warning',
+        );
+        navigate(recoveryPath);
       }
     } catch (error) {
       if (!mounted) return;
-      showFeedback(error?.message ?? '결제를 시작하지 못했습니다.');
+      showFeedback('결제창 결과를 확인하지 못했습니다. 기존 주문 상태를 결제 내역에서 확인해 주세요.', 'warning');
+      navigate(checkoutRecoveryPath(order));
     } finally {
       purchasing = false; renderDetail(); renderPurchasingState();
     }
@@ -278,7 +308,7 @@ export function shopPage({ navigate, currentUser }) {
   if (directItemId) void selectItem(directItemId, false);
   else if (new URLSearchParams(location.search).has('itemId')) syncItemQuery(null);
 
-  return { element, cleanup: () => { mounted = false; loadVersion += 1; content.removeEventListener('click', onClick); } };
+  return { element, cleanup: () => { mounted = false; loadVersion += 1; detailVersion += 1; content.removeEventListener('click', onClick); } };
 }
 
 export { shopPage as adminPage };

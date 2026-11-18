@@ -7,7 +7,12 @@ import {
   listPurchases,
   verifyPurchasePayment,
 } from '../features/payment/api.js';
-import { canRequestRefund, parsePaymentReturn } from '../features/payment/payment-policy.js';
+import {
+  canRequestRefund,
+  isCurrentRequest,
+  isDefinitivePurchaseStatus,
+  parsePaymentReturn,
+} from '../features/payment/payment-policy.js';
 import { clearCheckoutContext, loadCheckoutContext } from '../features/payment/portone-checkout.js';
 
 const PAGE_SIZE = 10;
@@ -200,10 +205,10 @@ export function paymentsPage({ navigate, currentUser }) {
     if (detailNode instanceof HTMLElement) detailNode.innerHTML = '<div class="app-surface-card border border-app rounded-3 p-4 placeholder-glow"><span class="placeholder col-8"></span></div>';
     try {
       const purchase = await getPurchase(purchaseId);
-      if (!mounted || version !== detailVersion) return;
+      if (!isCurrentRequest(version, detailVersion, mounted)) return;
       selectedPurchase = purchase; renderDetail();
     } catch (error) {
-      if (!mounted || version !== detailVersion) return;
+      if (!isCurrentRequest(version, detailVersion, mounted)) return;
       showFeedback(error?.message ?? '구매 상세를 불러오지 못했습니다.'); selectedPurchase = null; renderDetail();
     }
   }
@@ -215,7 +220,7 @@ export function paymentsPage({ navigate, currentUser }) {
       if (!mounted) return;
       showFeedback(result.status === 'PAID' ? '서버 결제 검증이 완료되었습니다.' : '최신 결제 상태를 확인했습니다.', result.status === 'PAID' ? 'success' : 'warning');
       await loadRows(0); await loadDetail(purchaseId);
-      clearCheckoutContext();
+      if (isDefinitivePurchaseStatus(result.status)) clearCheckoutContext();
     } catch (error) {
       if (!mounted) return;
       const uncertain = ['PAYMENT_PENDING', 'PAYMENT_RESULT_UNKNOWN'].includes(error?.code);
@@ -273,7 +278,7 @@ export function paymentsPage({ navigate, currentUser }) {
     if (!(event.target instanceof Element)) return;
     const tabButton = event.target.closest('[data-tab]');
     if (tabButton instanceof HTMLButtonElement && !loading && !processing) {
-      tab = tabButton.dataset.tab ?? 'purchases'; page = 0; selectedPurchase = null; renderDetail();
+      detailVersion += 1; tab = tabButton.dataset.tab ?? 'purchases'; page = 0; selectedPurchase = null; renderDetail();
       content.querySelectorAll('[data-tab]').forEach((button) => button.classList.toggle('active', button === tabButton));
       await loadRows(0); return;
     }
@@ -285,8 +290,8 @@ export function paymentsPage({ navigate, currentUser }) {
     if (button.dataset.action === 'verify' && purchaseId) {
       const purchase = rows.find((row) => row.purchaseId === purchaseId); if (purchase) await verifyPurchase(purchaseId, purchase.orderNumber);
     }
-    if (button.dataset.action === 'prev' && page > 0) await loadRows(page - 1);
-    if (button.dataset.action === 'next' && page < totalPages - 1) await loadRows(page + 1);
+    if (button.dataset.action === 'prev' && page > 0) { detailVersion += 1; selectedPurchase = null; renderDetail(); await loadRows(page - 1); }
+    if (button.dataset.action === 'next' && page < totalPages - 1) { detailVersion += 1; selectedPurchase = null; renderDetail(); await loadRows(page + 1); }
     if (button.dataset.action === 'cancel-refund' && !processing) dialog?.close();
   }
 

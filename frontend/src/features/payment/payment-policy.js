@@ -6,6 +6,25 @@ export const REFUND_IN_PROGRESS = new Set([
   'CANCEL_UNKNOWN',
 ]);
 
+const DEFINITIVE_PURCHASE_STATUSES = new Set(['PAID', 'FAILED', 'CANCELLED']);
+
+/** 비동기 응답이 현재 화면의 가장 최근 요청 결과인지 판정합니다. */
+export function isCurrentRequest(requestVersion, currentVersion, active = true) {
+  return active && requestVersion === currentVersion;
+}
+
+/** 서버가 결제 결과를 확정한 상태에서만 저장된 주문 문맥을 제거합니다. */
+export function isDefinitivePurchaseStatus(status) {
+  return DEFINITIVE_PURCHASE_STATUSES.has(status);
+}
+
+/** 생성된 주문을 결제 내역에서 재검증할 수 있는 내부 경로를 만듭니다. */
+export function checkoutRecoveryPath(order) {
+  const purchaseId = encodeURIComponent(String(order.purchaseId));
+  const paymentId = encodeURIComponent(String(order.payment.paymentId));
+  return `/payments?purchaseId=${purchaseId}&paymentId=${paymentId}`;
+}
+
 /** 구매 요약을 기준으로 환불 요청 버튼을 노출할 수 있는지 판정합니다. */
 export function canRequestRefund(purchase) {
   return purchase?.status === 'PAID'
@@ -20,6 +39,18 @@ export function adminRefundActions(status) {
     return ['reconcile'];
   }
   return [];
+}
+
+/** 서버가 반환한 환불 상태를 관리자 알림 문구와 수준으로 변환합니다. */
+export function adminRefundFeedback(status) {
+  switch (status) {
+    case 'COMPLETED': return { message: '환불이 완료되었습니다.', type: 'success' };
+    case 'CANCEL_PENDING': return { message: 'PG 취소를 처리하고 있습니다.', type: 'warning' };
+    case 'CANCEL_UNKNOWN': return { message: 'PG 취소 결과를 확인해야 합니다.', type: 'warning' };
+    case 'FAILED': return { message: '환불 처리에 실패했습니다.', type: 'danger' };
+    case 'REJECTED': return { message: '환불 거절 처리가 완료되었습니다.', type: 'success' };
+    default: return { message: '최신 환불 상태를 확인했습니다.', type: 'warning' };
+  }
 }
 
 const PG_CANCELLATION_LABELS = {

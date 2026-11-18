@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   adminRefundActions,
+  adminRefundFeedback,
   canRequestRefund,
+  checkoutRecoveryPath,
+  isCurrentRequest,
+  isDefinitivePurchaseStatus,
   parsePaymentReturn,
   parseShopItemId,
   pgCancellationPresentation,
@@ -20,6 +24,50 @@ test('관리자 환불 동작은 서버 상태에 따라 제한한다', () => {
   assert.deepEqual(adminRefundActions('CANCEL_PENDING'), ['reconcile']);
   assert.deepEqual(adminRefundActions('CANCEL_UNKNOWN'), ['reconcile']);
   assert.deepEqual(adminRefundActions('COMPLETED'), []);
+});
+
+test('관리자 환불 알림은 HTTP 성공 여부가 아니라 환불 상태를 따른다', () => {
+  assert.deepEqual(adminRefundFeedback('COMPLETED'), { message: '환불이 완료되었습니다.', type: 'success' });
+  assert.deepEqual(adminRefundFeedback('CANCEL_PENDING'), { message: 'PG 취소를 처리하고 있습니다.', type: 'warning' });
+  assert.deepEqual(adminRefundFeedback('CANCEL_UNKNOWN'), { message: 'PG 취소 결과를 확인해야 합니다.', type: 'warning' });
+  assert.deepEqual(adminRefundFeedback('FAILED'), { message: '환불 처리에 실패했습니다.', type: 'danger' });
+  assert.deepEqual(adminRefundFeedback('REJECTED'), { message: '환불 거절 처리가 완료되었습니다.', type: 'success' });
+});
+
+test('생성된 주문 문맥은 서버의 확정 상태에서만 제거한다', () => {
+  assert.equal(isDefinitivePurchaseStatus('PAID'), true);
+  assert.equal(isDefinitivePurchaseStatus('FAILED'), true);
+  assert.equal(isDefinitivePurchaseStatus('CANCELLED'), true);
+  assert.equal(isDefinitivePurchaseStatus('READY'), false);
+  assert.equal(isDefinitivePurchaseStatus(undefined), false);
+  assert.equal(
+      checkoutRecoveryPath({ purchaseId: 12, payment: { paymentId: 'pay/12' } }),
+      '/payments?purchaseId=12&paymentId=pay%2F12',
+  );
+});
+
+test('비동기 응답은 가장 최근 요청이고 화면이 활성 상태일 때만 반영한다', async () => {
+  let currentVersion = 0;
+  const applied = [];
+  let resolveFirst;
+  let resolveSecond;
+  const first = new Promise((resolve) => { resolveFirst = resolve; });
+  const second = new Promise((resolve) => { resolveSecond = resolve; });
+
+  const apply = async (promise) => {
+    const version = ++currentVersion;
+    const value = await promise;
+    if (isCurrentRequest(version, currentVersion, true)) applied.push(value);
+  };
+  const firstTask = apply(first);
+  const secondTask = apply(second);
+  resolveSecond('B');
+  await secondTask;
+  resolveFirst('A');
+  await firstTask;
+
+  assert.deepEqual(applied, ['B']);
+  assert.equal(isCurrentRequest(currentVersion, currentVersion, false), false);
 });
 
 test('PG 취소 상태는 미실행 사유와 자동 점검 안내를 구분한다', () => {

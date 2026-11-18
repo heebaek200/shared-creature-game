@@ -8,6 +8,8 @@ import {
 } from '../features/payment/api.js';
 import {
   adminRefundActions,
+  adminRefundFeedback,
+  isCurrentRequest,
   pgCancellationPresentation,
 } from '../features/payment/payment-policy.js';
 
@@ -200,9 +202,9 @@ export function adminRefundsPage({ navigate } = {}) {
     if (detailNode instanceof HTMLElement) detailNode.innerHTML = '<h2 class="h5">선택 환불 상세</h2><p class="text-body-secondary mb-0">환불 상세를 조회하는 중입니다.</p>';
     try {
       const result = await getAdminRefundRequest(requestId);
-      if (disposed || version !== detailVersion) return;
+      if (!isCurrentRequest(version, detailVersion, !disposed)) return;
       detail = result; renderList(); renderDetail();
-    } catch (error) { if (!disposed && version === detailVersion) { detail = null; renderDetail(); handleError(error, '환불 상세를 불러오지 못했습니다.'); } }
+    } catch (error) { if (isCurrentRequest(version, detailVersion, !disposed)) { detail = null; renderDetail(); handleError(error, '환불 상세를 불러오지 못했습니다.'); } }
   }
 
   function openDialog(kind) {
@@ -219,12 +221,24 @@ export function adminRefundsPage({ navigate } = {}) {
     if (!reason || reason.length > 500) { reasonInput.classList.add('is-invalid'); return; }
     processing = true; reasonInput.disabled = true; renderList(); renderDetail();
     try {
-      const result = actionKind === 'approve' ? await approveRefund(detail.refundRequestId, reason) : await rejectRefund(detail.refundRequestId, reason);
+      const requestId = detail.refundRequestId;
+      const result = actionKind === 'approve' ? await approveRefund(requestId, reason) : await rejectRefund(requestId, reason);
       if (disposed) return;
-      detail = result; dialog?.close(); showFeedback(actionKind === 'approve' ? '환불 승인 결과를 확인했습니다.' : '환불 요청을 거절했습니다.', 'success');
-      await loadList(page); renderDetail();
+      const feedbackResult = adminRefundFeedback(result.status);
+      detail = result; dialog?.close();
+      await loadList(page);
+      if (!disposed) await loadDetail(requestId);
+      if (!disposed) showFeedback(feedbackResult.message, feedbackResult.type);
     } catch (error) {
-      if (!disposed) { handleError(error, '환불 요청을 처리하지 못했습니다.'); if (error?.status === 409) { await loadList(page); await loadDetail(detail.refundRequestId); } }
+      if (!disposed) {
+        const requestId = detail.refundRequestId;
+        const unknown = error?.code === 'PG_CANCEL_RESULT_UNKNOWN';
+        if (error?.status === 409) { await loadList(page); await loadDetail(requestId); }
+        if (!disposed) {
+          if (unknown) showFeedback('PG 취소 결과가 아직 확정되지 않았습니다.', 'warning');
+          else handleError(error, '환불 요청을 처리하지 못했습니다.');
+        }
+      }
     } finally { processing = false; reasonInput.disabled = false; renderList(); renderDetail(); renderPagination(); }
   }
 
@@ -249,12 +263,12 @@ export function adminRefundsPage({ navigate } = {}) {
     if (action === 'approve' || action === 'reject') openDialog(action);
     if (action === 'reconcile') await runReconcile();
     if (action === 'reload') await loadList(page);
-    if (action === 'prev' && page > 0) { detail = null; renderDetail(); await loadList(page - 1); }
-    if (action === 'next' && page < totalPages - 1) { detail = null; renderDetail(); await loadList(page + 1); }
+    if (action === 'prev' && page > 0) { detailVersion += 1; detail = null; renderDetail(); await loadList(page - 1); }
+    if (action === 'next' && page < totalPages - 1) { detailVersion += 1; detail = null; renderDetail(); await loadList(page + 1); }
     if (action === 'cancel' && !processing) dialog?.close();
   }
 
-  function onFilter(event) { event.preventDefault(); if (!loading && !processing && statusInput instanceof HTMLSelectElement) { detail = null; renderDetail(); void loadList(0, statusInput.value); } }
+  function onFilter(event) { event.preventDefault(); if (!loading && !processing && statusInput instanceof HTMLSelectElement) { detailVersion += 1; detail = null; renderDetail(); void loadList(0, statusInput.value); } }
 
   element.addEventListener('click', onClick); filterForm?.addEventListener('submit', onFilter); actionForm?.addEventListener('submit', submitAction);
   renderDetail(); renderPagination(); void loadList();
