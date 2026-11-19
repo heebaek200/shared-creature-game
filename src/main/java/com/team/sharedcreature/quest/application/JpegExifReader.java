@@ -5,6 +5,7 @@ import com.drew.imaging.ImageProcessingException;
 import com.drew.metadata.Metadata;
 import com.drew.metadata.exif.ExifSubIFDDirectory;
 import com.drew.metadata.exif.GpsDirectory;
+import com.drew.lang.GeoLocation;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import org.springframework.stereotype.Component;
@@ -158,13 +159,13 @@ public class JpegExifReader {
         GpsDirectory gpsDirectory =
                 metadata.getFirstDirectoryOfType(GpsDirectory.class);
 
-        if (gpsDirectory != null && gpsDirectory.getGeoLocation() != null) {
-            latitude = BigDecimal.valueOf(
-                    gpsDirectory.getGeoLocation().getLatitude()
-            );
-            longitude = BigDecimal.valueOf(
-                    gpsDirectory.getGeoLocation().getLongitude()
-            );
+        GeoLocation location = gpsDirectory == null ? null : gpsDirectory.getGeoLocation();
+        if (location != null) {
+            if (!Double.isFinite(location.getLatitude()) || !Double.isFinite(location.getLongitude())) {
+                throw new InvalidGpsException();
+            }
+            latitude = BigDecimal.valueOf(location.getLatitude());
+            longitude = BigDecimal.valueOf(location.getLongitude());
         }
 
         String capturedAtRaw = null;
@@ -224,6 +225,13 @@ public class JpegExifReader {
      */
     private int unsignedByte(byte value) {
         return value & 0xFF;
+    }
+
+    /** 유한한 숫자로 변환할 수 없는 GPS 메타데이터를 나타냅니다. */
+    public static class InvalidGpsException extends ImageProcessingException {
+        public InvalidGpsException() {
+            super("GPS 좌표가 유효한 숫자가 아닙니다.");
+        }
     }
 
     /**

@@ -16,6 +16,7 @@ import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.quest.domain.QuestAssignment;
 import com.team.sharedcreature.quest.domain.QuestCompletion;
+import com.team.sharedcreature.quest.domain.PhotoSubmission;
 import com.team.sharedcreature.quest.domain.QuestPeriod;
 import com.team.sharedcreature.quest.domain.QuestRewardLedger;
 import com.team.sharedcreature.quest.domain.QuestRewardType;
@@ -55,6 +56,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -156,6 +158,34 @@ class QuestCompletionServiceTest {
                 .findCurrentBySeasonAndType(21L, QuestPeriodType.DAILY, NOW);
         verify(periodRepository, times(filter == null || filter == QuestPeriodType.WEEKLY ? 1 : 0))
                 .findCurrentBySeasonAndType(21L, QuestPeriodType.WEEKLY, NOW);
+    }
+
+    @Test
+    void photoCompletionRejectsAnAssignmentCompletedWhileParsing() {
+        PhotoSubmission submission = mock(PhotoSubmission.class);
+        when(user.getId()).thenReturn(7L);
+        when(userRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(user));
+        when(membershipRepository.findActiveWithGroupByUserId(7L)).thenReturn(Optional.of(membership));
+        when(membership.getId()).thenReturn(41L);
+        when(assignmentRepository.findWithSnapshotById(11L)).thenReturn(Optional.of(assignment));
+        when(assignment.getId()).thenReturn(11L);
+        when(assignment.getVerificationTypeSnapshot()).thenReturn(QuestVerificationType.PHOTO_EXIF);
+        when(photoSubmissionRepository.findForVerificationUpdate(91L)).thenReturn(Optional.of(submission));
+        when(submission.getUser()).thenReturn(user);
+        when(submission.getQuestAssignment()).thenReturn(assignment);
+        when(completionRepository.findAllByUserIdAndQuestAssignmentIdIn(7L, List.of(11L)))
+                .thenReturn(List.of(completion));
+        when(completion.getQuestAssignment()).thenReturn(assignment);
+        when(completion.getMembership()).thenReturn(membership);
+
+        assertThatThrownBy(() -> service.completePhotoExifAssignment(
+                7L, 11L, 91L, NOW, BigDecimal.ONE, BigDecimal.ONE))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.QUEST_ALREADY_COMPLETED));
+
+        verify(submission, never()).markValid(any(), any(), any(), any());
+        verifyNoInteractions(rewardLedgerRepository, creatureExperienceLedgerRepository);
+        verify(completionRepository, never()).save(any());
     }
 
     @ParameterizedTest

@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -39,6 +41,54 @@ class JpegExifReaderTest {
         assertThat(result.longitude()).isNull();
         assertThat(result.capturedAtRaw()).isNull();
         assertThat(result.offsetTimeOriginalRaw()).isNull();
+    }
+
+    @Test
+    void gpsWithZeroDenominatorIsRejectedBeforeDecimalConversion() throws Exception {
+        byte[] jpegBytes = jpegWithGps(1, 0);
+        reader.validateJpegAndExifSize(jpegBytes);
+
+        assertThatThrownBy(() -> reader.readExif(jpegBytes))
+                .isInstanceOf(JpegExifReader.InvalidGpsException.class);
+    }
+
+    @Test
+    void validGpsCoordinatesArePreserved() throws Exception {
+        JpegExifReader.ExifData data = reader.readExif(jpegWithGps(37, 1));
+
+        assertThat(data.latitude()).isEqualByComparingTo("37");
+        assertThat(data.longitude()).isEqualByComparingTo("127");
+    }
+
+    /** 작은 JPEG에 GPS 디렉터리가 있는 EXIF APP1을 붙입니다. */
+    private byte[] jpegWithGps(int latitudeNumerator, int latitudeDenominator) throws Exception {
+        ByteBuffer tiff = ByteBuffer.allocate(128).order(ByteOrder.LITTLE_ENDIAN);
+        tiff.put((byte) 'I').put((byte) 'I').putShort((short) 42).putInt(8);
+        // IFD0에서 GPS IFD(offset 26)를 참조합니다.
+        tiff.putShort((short) 1);
+        tiff.putShort((short) 0x8825).putShort((short) 4).putInt(1).putInt(26).putInt(0);
+        tiff.putShort((short) 4);
+        tiff.putShort((short) 1).putShort((short) 2).putInt(2).putInt('N');
+        tiff.putShort((short) 2).putShort((short) 5).putInt(3).putInt(80);
+        tiff.putShort((short) 3).putShort((short) 2).putInt(2).putInt('E');
+        tiff.putShort((short) 4).putShort((short) 5).putInt(3).putInt(104);
+        tiff.putInt(0);
+        tiff.putInt(latitudeNumerator).putInt(latitudeDenominator);
+        tiff.putInt(0).putInt(1).putInt(0).putInt(1);
+        tiff.putInt(127).putInt(1).putInt(0).putInt(1).putInt(0).putInt(1);
+
+        byte[] jpeg = createJpegWithoutExif();
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        output.write(jpeg, 0, 2);
+        output.write(0xff);
+        output.write(0xe1);
+        int segmentLength = 2 + 6 + tiff.capacity();
+        output.write(segmentLength >> 8);
+        output.write(segmentLength & 0xff);
+        output.writeBytes(new byte[] {'E', 'x', 'i', 'f', 0, 0});
+        output.writeBytes(tiff.array());
+        output.write(jpeg, 2, jpeg.length - 2);
+        return output.toByteArray();
     }
 
     @Test

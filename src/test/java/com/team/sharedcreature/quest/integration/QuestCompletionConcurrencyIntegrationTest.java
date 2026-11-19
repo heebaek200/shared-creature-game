@@ -3,6 +3,9 @@ package com.team.sharedcreature.quest.integration;
 import com.team.sharedcreature.quest.api.CurrentQuestResponse;
 import com.team.sharedcreature.quest.api.QuestCompletionResponse;
 import com.team.sharedcreature.quest.api.QuestCompletionService;
+import com.team.sharedcreature.quest.infrastructure.PhotoSubmissionRepository;
+import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature._core.exception.ErrorCode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +35,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** 실제 MySQL에서 퀘스트 완료와 보상 트랜잭션의 동시 처리를 검증합니다. */
 @SpringBootTest
@@ -41,6 +45,7 @@ class QuestCompletionConcurrencyIntegrationTest {
 
     @Autowired private QuestCompletionService questCompletionService;
     @Autowired private JdbcTemplate jdbcTemplate;
+    @Autowired private PhotoSubmissionRepository photoSubmissionRepository;
 
     private final List<Long> userIds = new ArrayList<>();
     private final List<Long> membershipIds = new ArrayList<>();
@@ -272,6 +277,32 @@ class QuestCompletionConcurrencyIntegrationTest {
             assertThat(quest.getProgress().getCurrent()).isEqualTo(1);
             assertThat(quest.getProgress().getTarget()).isEqualTo(2);
         });
+    }
+
+    @Test
+    void completedPhotoAssignmentRejectsAnotherPendingSubmissionWithoutAnotherReward() {
+        configurePhotoAssignment("D-X-01", "DAILY", 1);
+        Long firstId = insertPhotoSubmission(userIds.get(0), 1);
+        Long secondId = insertPhotoSubmission(userIds.get(0), 2);
+        completePhoto(userIds.get(0), firstId, Instant.now());
+
+        assertThatThrownBy(() -> completePhoto(userIds.get(0), secondId, Instant.now()))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.QUEST_ALREADY_COMPLETED));
+        assertThat(photoStatus(secondId)).isEqualTo("PENDING");
+        assertThat(completionCount()).isEqualTo(1);
+        assertThat(creatureExperience()).isEqualTo(300L);
+
+        // 사진 제출 서비스가 완료 경합 거절을 확정했을 때 적용하는 상태입니다.
+        jdbcTemplate.update("UPDATE photo_submissions SET verification_status = 'INVALID', "
+                + "failure_reason = 'QUEST_ALREADY_COMPLETED' WHERE id = ?", secondId);
+        assertThat(photoSubmissionRepository.countByUser_IdAndQuestAssignment_Id(userIds.get(0), assignmentId))
+                .isEqualTo(1);
+
+        // 일반적인 검증 실패는 계속 제출 횟수에 포함됩니다.
+        jdbcTemplate.update("UPDATE photo_submissions SET failure_reason = 'EXIF_GPS_MISSING' WHERE id = ?", secondId);
+        assertThat(photoSubmissionRepository.countByUser_IdAndQuestAssignment_Id(userIds.get(0), assignmentId))
+                .isEqualTo(2);
     }
 
     private Future<Optional<QuestCompletionResponse>> submitPhotoCompletion(

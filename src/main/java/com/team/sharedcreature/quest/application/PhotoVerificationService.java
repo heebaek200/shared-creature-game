@@ -36,6 +36,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.time.format.ResolverStyle;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
@@ -58,7 +60,8 @@ public class PhotoVerificationService {
 
     /** EXIF DateTimeOriginal 형식 */
     private static final DateTimeFormatter EXIF_DATE_TIME_FORMAT =
-            DateTimeFormatter.ofPattern("yyyy:MM:dd HH:mm:ss");
+            DateTimeFormatter.ofPattern("uuuu:MM:dd HH:mm:ss")
+                    .withResolverStyle(ResolverStyle.STRICT);
 
     private final PhotoSubmissionRepository photoSubmissionRepository;
     private final QuestAssignmentRepository questAssignmentRepository;
@@ -142,11 +145,13 @@ public class PhotoVerificationService {
                         null
                 );
             } catch (PhotoProcessingLimiter.ExifTaskExecutionException exception) {
-                // EXIF 파서가 데이터를 읽지 못하면 필수 촬영 시각을 추출하지 못한 실패로 기록합니다.
+                // 손상된 GPS는 좌표 오류로, 나머지 파싱 실패는 기존 시각 누락으로 기록합니다.
                 return markInvalidAndRespond(
                         pending,
                         assignmentId,
-                        PhotoFailureReason.EXIF_CAPTURED_AT_MISSING,
+                        exception.getCause() instanceof JpegExifReader.InvalidGpsException
+                                ? PhotoFailureReason.EXIF_GPS_OUT_OF_RANGE
+                                : PhotoFailureReason.EXIF_CAPTURED_AT_MISSING,
                         null,
                         null,
                         null
@@ -174,8 +179,8 @@ public class PhotoVerificationService {
                         assignmentId,
                         PhotoFailureReason.EXIF_GPS_OUT_OF_RANGE,
                         null,
-                        latitude,
-                        longitude
+                        null,
+                        null
                 );
             }
 
@@ -227,6 +232,14 @@ public class PhotoVerificationService {
                         longitude
                 );
             } catch (BusinessException exception) {
+                if (exception.errorCode() == ErrorCode.QUEST_ALREADY_COMPLETED) {
+                    // 접수 후 다른 요청이 먼저 완료한 경우 이력을 남기고 제출 횟수에서는 제외합니다.
+                    markInvalidAndRespond(
+                            pending, assignmentId, PhotoFailureReason.QUEST_ALREADY_COMPLETED,
+                            capturedAt, latitude, longitude
+                    );
+                    throw exception;
+                }
                 if (exception.errorCode() == ErrorCode.QUEST_PERIOD_ENDED) {
                     return markInvalidAndRespond(
                             pending,
@@ -347,6 +360,12 @@ public class PhotoVerificationService {
                 throw new BusinessException(ErrorCode.QUEST_PERIOD_ENDED);
             }
 
+            // 사용자 잠금 안에서 완료 여부를 확인해 재제출이 횟수를 소모하지 않게 합니다.
+            if (questCompletionService.findCompletionsByAssignmentId(userId, List.of(assignment))
+                    .containsKey(assignmentId)) {
+                throw new BusinessException(ErrorCode.QUEST_ALREADY_COMPLETED);
+            }
+
             // 실패 이력도 포함해 사용자·배정별 최대 5회인지 검사합니다.
             long attemptCount =
                     photoSubmissionRepository
@@ -403,7 +422,7 @@ public class PhotoVerificationService {
      *
      * Offset이 없으면 KST로 해석합니다. 누락되었거나 형식이 잘못된 시각은 null을 반환합니다.
      */
-    private Instant parseCapturedAt(String capturedAtRaw, String offsetRaw) {
+    static Instant parseCapturedAt(String capturedAtRaw, String offsetRaw) {
         if (capturedAtRaw == null || capturedAtRaw.isBlank()) {
             return null;
         }
