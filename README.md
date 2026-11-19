@@ -4,6 +4,21 @@
 - [GitHub Projects 보기](https://github.com/heebaek200/shared-creature-game/projects)
 - [팀 프로젝트 일일 리포트 보기](https://github.com/heebaek200/shared-creature-game/discussions)
 
+## 프로젝트 정보
+
+### 팀 구성 및 역할
+
+- **개발 인원:** 4명
+
+| 이름 | GitHub | 주요 담당 역할 |
+|---|---|---|
+| **이희백** | [heebaek200](https://github.com/heebaek200) | **프로젝트 관리:** GitHub Projects 운영, 설계 문서 관리 및 보완<br>**백엔드:** 프로젝트 기반 구현, Scheduler, WebSocket, 그룹, 관리자 등<br>**프론트엔드:** 퀘스트, WebSocket 연동, 상점·결제, 관리자 등 |
+| **이수현** | [is-hyun](https://github.com/is-hyun) | **기술 검증:** 그래픽 리소스 확보 및 활용 가능성 검토<br>**프론트엔드:** 크리처 홈, 공통 레이아웃·테마, 아바타 화면 등 |
+| **양현재** | [a67286268-oss](https://github.com/a67286268-oss) | **기술 검증:** JPEG EXIF 기반 사진 인증<br>**백엔드:** 퀘스트, EXIF 인증, 아바타·아이템, 랭킹, 환불, 리팩터링 등 |
+| **김희성** | [asd27429697-design](https://github.com/asd27429697-design) | **기술 검증:** 크리처·아바타의 브라우저 표현 방식<br>**백엔드:** Naver OAuth, Gemini AI 교정<br>**프론트엔드:** 회원가입·그룹 관리, Naver OAuth, Gemini AI 교정 등 |
+
+※ 담당 역할은 주요 구현 및 기여 영역을 중심으로 요약했습니다.
+
 ## 주요 기술 스택
 
 | 분류 | 기술 | 프로젝트에서의 역할 |
