@@ -12,7 +12,11 @@ import java.time.LocalDate;
 /** 일별 인증 활동을 멤버십 범위별로 멱등 기록합니다. */
 public interface UserDailyActivityRepository extends JpaRepository<UserDailyActivity, Long> {
 
-    /** 같은 사용자·날짜·멤버십 활동을 한 행으로 upsert합니다. */
+    /**
+     * 같은 사용자·날짜·멤버십의 활동을 한 SQL 문장에서 기록합니다.
+     * 생성 컬럼을 포함한 유일 키와 MySQL의 ON DUPLICATE KEY UPDATE를 사용합니다.
+     * 중복 요청에서는 최초 활동 시각을 보존하고, 최종 활동·수정 시각은 더 늦은 값으로 갱신합니다.
+     */
     @Modifying
     @Query(value = """
             INSERT INTO user_daily_activities (
