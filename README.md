@@ -647,3 +647,142 @@ Webhook 수신 시 서버는 원본 요청 본문과 서명 Header를 검증합�
 - [PortOne V2 결제 연동 준비](https://developers.portone.io/opi/ko/integration/ready/readme?v=v2)
 - [카카오페이 V2 개발 가이드](https://developers.portone.io/opi/ko/integration/pg/v2/kakaopay?v=v2)
 - [PortOne V2 Webhook 연동](https://developers.portone.io/opi/ko/integration/webhook/readme-v2)
+
+
+### 9. Gemini API 그룹 소개 교정 설정
+
+이 프로젝트는 **Google Gemini API**를 이용하여 그룹 소개 문장의 맞춤법과 문법을 교정합니다.
+
+사용자가 그룹 생성 화면에서 직접 교정을 요청하면 Backend가 Gemini API를 호출하고, 교정 결과를 제안합니다. 사용자가 적용을 선택하기 전까지 원문은 변경되지 않습니다.
+
+현재 사용 모델은 `gemini-3.5-flash-lite`이며, API 호출은 Backend에서 처리합니다.
+
+#### 9.1. 준비물
+
+- [Google AI Studio](https://aistudio.google.com/)에 로그인할 Google 계정
+- Gemini API Key
+- Spring Boot와 Vite가 실행되는 로컬 개발 환경
+- Google 또는 Naver 로그인 테스트 계정
+
+Gemini API는 무료 사용 범위를 제공하지만, 모델별 호출 한도와 요금 정책이 다를 수 있습니다. API 사용 전에 [공식 요금 안내](https://ai.google.dev/gemini-api/docs/pricing)를 확인합니다.
+
+#### 9.2. Gemini API Key 발급
+
+1. [Google AI Studio](https://aistudio.google.com/)에 접속하여 Google 계정으로 로그인합니다.
+2. **API Keys** 메뉴로 이동합니다.
+3. 기존 API Key를 사용하거나 **Create API key**를 선택하여 새로운 키를 발급합니다.
+4. 필요한 경우 API Key를 연결할 Google Cloud 프로젝트를 선택하거나 생성합니다.
+5. 발급된 API Key를 복사하여 안전하게 보관합니다.
+
+API Key는 외부에 노출되면 다른 사람이 API를 호출하는 데 악용할 수 있으므로 GitHub, Discord 등에 공유하지 않습니다.
+
+공식 안내: [Gemini API Key 관리](https://ai.google.dev/gemini-api/docs/api-key)
+
+#### 9.3. 로컬 환경변수 설정
+
+프로젝트 루트의 `.env.example`을 참고하여 `.env` 파일에 발급받은 API Key를 설정합니다.
+
+```dotenv
+GEMINI_API_KEY=your_gemini_api_key
+```
+
+`your_gemini_api_key`를 실제 발급받은 값으로 변경합니다.
+
+Backend의 `application.yaml`에는 다음 설정이 이미 정의되어 있습니다.
+
+```yaml
+gemini:
+  api-key: ${GEMINI_API_KEY:}
+```
+
+따라서 별도로 Java 코드나 YAML 파일을 수정할 필요는 없습니다.
+
+API Key는 Backend에서만 사용합니다. `frontend/.env.local`이나 `VITE_`로 시작하는 환경변수에 등록하지 않습니다.
+
+`.env` 파일은 `.gitignore`에 포함되어 있으며 Git 저장소에 커밋하지 않습니다.
+
+#### 9.4. Backend 및 Frontend 실행
+
+환경변수 설정을 완료한 뒤 프로젝트 루트에서 Backend를 실행합니다.
+
+```powershell
+.\gradlew.bat bootRun
+```
+
+다른 터미널에서 Frontend를 실행합니다.
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+환경변수를 변경했다면 Backend를 재시작해야 합니다.
+
+`frontend/.env.local`에 `VITE_USE_MOCK_API=true`가 설정되어 있다면 제거하거나 `false`로 변경합니다.
+
+**실제 Gemini 연동 검증은 Mock API가 아닌 Backend API를 사용해야 합니다.**
+
+#### 9.5. 그룹 소개 문장 교정 테스트
+
+1. 브라우저에서 `http://localhost:5173`에 접속합니다.
+2. Google 또는 Naver 계정으로 로그인합니다.
+3. `/groups/select` 화면으로 이동합니다.
+4. **+ 새 그룹 생성** 버튼을 클릭합니다.
+5. 그룹 소개 입력란에 교정할 문장을 입력합니다.
+
+   예시: `우리 그룹은 매일 같이 성장하는것을 목표로 합니다.`
+
+6. **AI 맞춤형 교정** 버튼을 클릭합니다.
+7. AI 교정 제안 영역에 원문과 교정 결과가 각각 표시되는지 확인합니다.
+8. **교정 결과 적용** 버튼을 클릭하여 그룹 소개 입력란에 교정 문장이 반영되는지 확인합니다.
+
+교정 결과는 Gemini 응답에 따라 달라질 수 있습니다. 특정 문장으로 정확히 변경되는지보다는 원문과 제안이 구분되어 표시되고 선택 적용이 가능한지 확인합니다.
+
+교정 API의 주요 규칙은 다음과 같습니다.
+
+| 항목 | 조건 |
+|---|---|
+| API Endpoint | `POST /api/v1/ai/proofreads` |
+| 요청 데이터 | `{"text":"교정할 문장"}` |
+| 인증 | 로그인 세션 필요 |
+| 입력 길이 | 공백 제거 후 1~500자 |
+| 사용자별 요청 제한 | 분당 5회, KST 기준 하루 30회 |
+| 서버 전체 동시 요청 | 최대 2건 |
+| 외부 API Timeout | 10초 |
+
+교정 결과는 자동으로 그룹 소개에 적용되거나 DB에 저장되지 않습니다.
+
+Gemini API를 사용할 수 없는 경우에도 사용자는 원문으로 그룹을 생성할 수 있습니다.
+
+#### 9.6. 자주 발생하는 문제
+
+| 증상 | 확인할 내용 |
+|---|---|
+| AI 교정 서비스를 사용할 수 없음 (503) | `GEMINI_API_KEY` 설정 여부, API Key 유효성, 모델 접근 권한, Backend 로그 |
+| 호출 제한 오류 (429) | 사용자별 분당·일일 제한, 서버 동시 처리 제한, 공급자 호출 한도 |
+| 인증 오류 (401) | 로그인 여부 및 세션 만료 |
+| CSRF 오류 (403) | 로그인 세션과 CSRF 토큰 상태 |
+| 입력값 오류 (400) | 그룹 소개가 비어 있거나 500자를 초과하지 않았는지 |
+| 교정 요청이 오래 걸리거나 실패함 | 인터넷 연결, Gemini API 상태, 10초 Timeout |
+
+Gemini API 호출 실패 시 Backend는 `AI_PROVIDER_UNAVAILABLE` 오류를 반환할 수 있습니다.
+
+API Key가 비어 있거나 잘못 설정된 경우에도 같은 오류가 발생할 수 있으므로 `.env` 설정을 먼저 확인합니다.
+
+#### 9.7. 테스트 종료 및 주의사항
+
+- 각 개발자는 가능하면 자신의 Gemini API Key를 발급받아 사용합니다.
+- API Key는 Backend에서만 사용하며 브라우저나 GitHub 저장소에 공개하지 않습니다.
+- 실제 개인정보나 비밀 정보가 포함된 문장을 테스트용으로 전송하지 않습니다.
+- 교정 요청에는 사용자가 입력한 그룹 소개 문장이 외부 Gemini API로 전송됩니다.
+- API 이용량과 요금은 Google AI Studio에서 확인합니다.
+- 무료 사용 범위 또는 외부 API 장애가 그룹 생성 기능의 가용성에 영향을 주지 않도록 교정 기능을 선택적으로 사용합니다.
+
+공식 문서:
+
+- [Google AI Studio](https://aistudio.google.com/)
+- [Gemini API 시작하기](https://ai.google.dev/gemini-api/docs/get-started)
+- [Gemini API Key 관리](https://ai.google.dev/gemini-api/docs/api-key)
+- [Gemini API 요금 및 무료 사용 범위](https://ai.google.dev/gemini-api/docs/pricing)
+
