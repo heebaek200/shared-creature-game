@@ -45,6 +45,7 @@ public enum ErrorCode {
     // OAuth Callback은 JSON 오류가 아닌 내부 CSR 경로로 이동하지만 같은 예외 기반을 사용합니다.
     OAUTH_ID_TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "OAuth 인증 정보를 확인할 수 없습니다."),
     OAUTH_PROVIDER_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "OAuth 공급자에 연결할 수 없습니다."),
+    AI_PROVIDER_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "AI 교정 서비스를 일시적으로 사용할 수 없습니다."),
     OAUTH_STATE_INVALID(HttpStatus.CONFLICT, "유효하지 않은 로그인 요청입니다."),
     OAUTH_SESSION_EXPIRED(HttpStatus.CONFLICT, "OAuth 인증 세션이 만료됐습니다."),
     OAUTH_SESSION_MISMATCH(HttpStatus.CONFLICT, "로그인을 시작한 세션과 일치하지 않습니다."),

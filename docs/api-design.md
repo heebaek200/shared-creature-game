@@ -65,7 +65,7 @@
 |---|---|
 | 200 | 일반 조회·수정·삭제 성공 |
 | 201 | OAuth 시도·회원가입·그룹 생성·그룹 가입·구매 생성·환불 요청·신고 생성 |
-| 202 | PortOne Webhook 정상 수신/무시/중복 수신 |
+| 200 | PortOne Webhook 정상 수신/무시/중복 수신 |
 | 302 | OAuth Callback CSR 이동 |
 | 400 | 요청 포맷·필드 검증 실패 |
 | 401 | 인증 필요/세션 만료 |
@@ -1951,8 +1951,8 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 
 ### receivePortOneWebhook — `POST /api/v1/payments/webhooks/portone`
 
-- **Operation ID:** `receivePortOneWebhook` · **요구사항:** `REQ-PAY-001, REQ-PAY-002` · **인증·권한:** `PORTONE_SIGNATURE` · **성공 HTTP:** `202`
-- **엔드포인트 조건:** 서명 검증은 JSON 파싱 전 원본 바이트 기준. 외부 공급자는 미지의 필드를 추가할 수 있으므로 이 Operation만 미지 필드 허용. 서명 오류는 400 빈 Body; 성공은 202 data={}. 공식 문서 https://developers.portone.io/opi/ko/integration/webhook/readme-v2?v=v2
+- **Operation ID:** `receivePortOneWebhook` · **요구사항:** `REQ-PAY-001, REQ-PAY-002` · **인증·권한:** `PORTONE_SIGNATURE` · **성공 HTTP:** `200`
+- **엔드포인트 조건:** 서명 검증은 JSON 파싱 전 원본 바이트 기준. 외부 공급자는 미지의 필드를 추가할 수 있으므로 이 Operation만 미지 필드 허용. 서명 오류는 400 빈 Body; 성공은 200 data={}. 공식 문서 https://developers.portone.io/opi/ko/integration/webhook/readme-v2?v=v2
 
 **요청 필드**
 
@@ -1975,7 +1975,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
 
-서명 실패 및 변조된 전송은 `400` **빈 응답 본문**. 검증 후 알 수 없는 `type`과 재수신은 업무를 반복하지 않고 `202` + `{"data":{}}`를 반환합니다. 미등록 주문도 같은 응답을 반환하되 공급자 이벤트·결제 식별자를 보존하고 복구 대상으로 유지합니다. 검증된 이벤트의 결제 상태는 포트원 최신 조회 후 반영합니다. 공급자 서버 오류 시 `5xx` 가능.
+서명 실패 및 변조된 전송은 `400` **빈 응답 본문**. 검증 후 알 수 없는 `type`과 재수신은 업무를 반복하지 않고 `200` + `{"data":{}}`를 반환합니다. 미등록 주문도 같은 응답을 반환하되 공급자 이벤트·결제 식별자를 보존하고 복구 대상으로 유지합니다. 검증된 이벤트의 결제 상태는 포트원 최신 조회 후 반영합니다. 공급자 서버 오류 시 `5xx` 가능.
 
 ### createRefundRequest — `POST /api/v1/purchases/{purchaseId}/refund-requests`
 

@@ -1,6 +1,10 @@
 // @ts-check
 import { getCurrentUser } from '../features/auth/api.js';
 import { statusPage } from '../pages/status-page.js';
+import { linkNavigationTarget } from './link-navigation.js';
+import { groupLiveManager } from '../realtime/group-live-manager.js';
+import { updateHeaderConnectionStatus } from '../components/app-header.js';
+import { creatureAccessErrorRoute } from '../features/creature/access-error-policy.js';
 
 /** @typedef {{ path: string, access: string, page: (context: {navigate: (path: string) => void, currentUser: object | null}) => {element: HTMLElement, cleanup?: () => void} }} Route */
 
@@ -12,6 +16,52 @@ import { statusPage } from '../pages/status-page.js';
 export function createRouter(root, routes) {
   let cleanup = () => {};
   let renderVersion = 0;
+
+  // 어느 화면에서든 공통 조회의 인증·권한 오류를 동일하게 처리합니다.
+  groupLiveManager.subscribeErrors((error) => {
+    const target = creatureAccessErrorRoute(error);
+    if (!target) return;
+
+    // 권한이 없거나 세션이 만료된 그룹 연결을 종료합니다.
+    void groupLiveManager.stop().catch((stopError) => {
+      console.error('그룹 실시간 연결 종료 실패:', stopError);
+    });
+
+    const currentRoute = routes.find(
+        (candidate) => candidate.path === location.pathname
+    );
+
+    const isGroupProtectedPage =
+        currentRoute?.access === 'GROUP_MEMBER' ||
+        currentRoute?.access === 'GROUP_ADMIN';
+
+    // 그룹 권한 오류로 일반 로그인 사용자용 화면을 벗어나지 않습니다.
+    if (target === '/403' && !isGroupProtectedPage) {
+      return;
+    }
+
+    // 세션 만료는 현재 화면과 관계없이 로그인 흐름으로 이동합니다.
+    if (location.pathname !== target) {
+      replace(target);
+    }
+  });
+
+  function syncGroupLiveConnection(me) {
+    const authenticated =
+        me?.authenticationState === 'AUTHENTICATED';
+
+    const userId = me?.user?.userId;
+    const groupId = me?.membership?.groupId;
+
+    const operation =
+        authenticated && userId != null && groupId != null
+            ? groupLiveManager.start({ userId, groupId })
+            : groupLiveManager.stop();
+
+    void operation.catch((error) => {
+      console.error('그룹 실시간 연결 관리 실패:', error);
+    });
+  }
 
   async function render() {
     const currentRenderVersion = ++renderVersion;
@@ -35,8 +85,11 @@ export function createRouter(root, routes) {
     try {
       me = await getCurrentUser();
       if (currentRenderVersion !== renderVersion) return;
+      syncGroupLiveConnection(me);
     } catch (error) {
       if (currentRenderVersion !== renderVersion) return;
+
+      syncGroupLiveConnection(null);
 
       if (requiresUserInfo) {
         console.error('사용자 정보 조회 실패:', error);
@@ -46,9 +99,10 @@ export function createRouter(root, routes) {
             '사용자 정보를 확인하지 못했습니다. 잠시 후 페이지를 새로고침해 주세요.'
         );
 
-        const mounted = errorPage({ navigate });
+        const mounted = errorPage({navigate});
         root.replaceChildren(mounted.element);
-        cleanup = mounted.cleanup ?? (() => {});
+        cleanup = mounted.cleanup ?? (() => {
+        });
         return;
       }
 
@@ -122,7 +176,18 @@ export function createRouter(root, routes) {
       currentUser: me,
     });
     root.replaceChildren(mounted.element);
-    cleanup = mounted.cleanup ?? (() => {});
+
+    const unsubscribeConnectionStatus =
+        groupLiveManager.subscribeDisplayStatus(({status}) => {
+          if (currentRenderVersion !== renderVersion) return;
+
+          updateHeaderConnectionStatus(mounted.element, status);
+        });
+
+    cleanup = () => {
+      unsubscribeConnectionStatus();
+      mounted.cleanup?.();
+    }
   }
 
 
@@ -140,7 +205,7 @@ export function createRouter(root, routes) {
     const target = event.target instanceof Element ? event.target.closest('[data-link]') : null;
     if (!(target instanceof HTMLAnchorElement)) return;
     event.preventDefault();
-    navigate(target.pathname);
+    navigate(linkNavigationTarget(target));
   }
 
   return {

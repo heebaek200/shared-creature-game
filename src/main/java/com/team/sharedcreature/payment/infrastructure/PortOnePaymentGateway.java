@@ -4,6 +4,7 @@ import tools.jackson.databind.JsonNode;
 import com.team.sharedcreature.payment.application.PaymentGateway;
 import com.team.sharedcreature.payment.application.PaymentGatewayException;
 import com.team.sharedcreature.payment.application.PaymentSnapshot;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.http.HttpHeaders;
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Spring RestClient로 PortOne V2 결제 단건 조회를 수행합니다. */
+@Slf4j
 @Component
 @EnableConfigurationProperties(PortOneProperties.class)
 public class PortOnePaymentGateway implements PaymentGateway {
@@ -45,6 +47,7 @@ public class PortOnePaymentGateway implements PaymentGateway {
                     .retrieve()
                     .body(JsonNode.class);
             if (body == null || body.isNull()) {
+                log.warn("PortOne 결제 조회 응답이 비어 있습니다.");
                 throw new PaymentGatewayException(
                         PaymentGatewayException.Kind.INVALID_RESPONSE,
                         "PortOne 결제 응답이 비어 있습니다.",
@@ -56,8 +59,17 @@ public class PortOnePaymentGateway implements PaymentGateway {
             PaymentGatewayException.Kind kind = exception.getStatusCode().value() == 404
                     ? PaymentGatewayException.Kind.NOT_FOUND
                     : PaymentGatewayException.Kind.UNAVAILABLE;
+            log.warn(
+                    "PortOne 결제 조회 HTTP 오류: httpStatus={}, kind={}",
+                    exception.getStatusCode().value(),
+                    kind
+            );
             throw new PaymentGatewayException(kind, "PortOne 결제 조회에 실패했습니다.", exception);
         } catch (RestClientException exception) {
+            log.warn(
+                    "PortOne 결제 조회 통신 오류: exceptionType={}",
+                    exception.getClass().getSimpleName()
+            );
             throw new PaymentGatewayException(
                     PaymentGatewayException.Kind.UNAVAILABLE,
                     "PortOne 결제 조회 결과를 확인할 수 없습니다.",
@@ -79,7 +91,7 @@ public class PortOnePaymentGateway implements PaymentGateway {
                 status(text(body, "status")),
                 body.path("amount").path("total").asLong(-1),
                 text(body, "currency"),
-                text(method, "type"),
+                payMethod(text(method, "type")),
                 text(method, "provider"),
                 text(channel, "type"),
                 instant(body, "paidAt"),
@@ -111,6 +123,14 @@ public class PortOnePaymentGateway implements PaymentGateway {
         } catch (IllegalArgumentException exception) {
             return PaymentSnapshot.Status.UNKNOWN;
         }
+    }
+
+    /** PortOne V2의 결제수단 판별자를 애플리케이션 내부 표준값으로 변환합니다. */
+    private String payMethod(String value) {
+        if ("PaymentMethodEasyPay".equals(value)) {
+            return "EASY_PAY";
+        }
+        return value;
     }
 
     private String text(JsonNode node, String field) {

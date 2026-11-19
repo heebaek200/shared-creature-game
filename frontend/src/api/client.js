@@ -16,7 +16,7 @@ export class ApiError extends Error {
 /**
  * Cookie, CSRF, JSON·Multipart와 공통 Envelope를 한 경계에서 처리합니다.
  * @param {string} path API 경로
- * @param {{method?: string, body?: unknown, multipart?: FormData}} options 요청 옵션
+ * @param {{method?: string, body?: unknown, multipart?: FormData, headers?: Record<string, string>}} options 요청 옵션
  */
 export async function apiRequest(path, options = {}) {
   return executeRequest(path, options, true);
@@ -33,6 +33,9 @@ export async function apiRequestWithMeta(path, options = {}) {
 async function executeRequest(path, options, allowCsrfRetry, includeMeta = false) {
   const method = options.method ?? 'GET';
   const headers = new Headers({ Accept: 'application/json' });
+  for (const [name, value] of Object.entries(options.headers ?? {})) {
+    headers.set(name, value);
+  }
   let body;
   if (options.multipart) body = options.multipart;
   else if (options.body !== undefined) {

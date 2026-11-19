@@ -84,6 +84,7 @@ export function loginPage({ currentUser, navigate }) {
     navigate,
     showGroupBadge: false,
     showSeasonInfo: false,
+    showConnectionStatus: false,
   });
 
   // 공급자별 버튼과 공통 오류 표시 요소를 찾습니다.

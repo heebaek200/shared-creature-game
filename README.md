@@ -383,3 +383,267 @@ ngrok을 통해 로컬 개발 서버를 외부에 공개하는 동안에는 테�
 테스트를 마치면 ngrok을 종료하고, 필요하지 않은 외부 접속을 차단합니다.
 
 개인 GPS 좌표가 포함된 원본 사진과 OAuth 인증 정보는 GitHub 저장소에 업로드하지 않습니다.
+
+### 8. PortOne V2 카카오페이 테스트 결제 설정
+
+이 프로젝트는 **PortOne V2와 카카오페이 테스트 채널**을 이용하여 아바타 아이템 구매·환불 기능을 구현합니다.
+
+각 개발자는 자신의 로컬 환경에서 PortOne 테스트 채널과 API 인증 정보를 설정한 후, 실제 Backend API와 로컬 MySQL을 사용하여 결제 기능을 검증할 수 있습니다.
+
+이 절에서는 PortOne 계정 준비부터 카카오페이 테스트 결제 성공 확인까지 안내합니다.
+
+#### 8.1. 준비물
+
+- [PortOne 관리자 콘솔](https://admin.portone.io/) 계정
+- Spring Boot와 Vite가 실행되는 로컬 개발 환경
+- MySQL 8 및 프로젝트 데이터베이스
+- Google 또는 Naver 로그인 테스트 계정
+
+#### 8.2. PortOne 계정 및 테스트 채널 생성
+
+1. [PortOne 관리자 콘솔](https://admin.portone.io/)에 접속하여 회원가입 및 로그인을 진행합니다.
+2. 테스트에 사용할 상점을 준비합니다. 사업자 정보가 없다면 개발 연동 테스트 옵션을 이용합니다.
+3. **결제 연동 → 연동 관리 → 채널 관리**에서 새로운 결제 채널을 추가합니다.
+4. 카카오페이 테스트 채널을 다음과 같이 설정합니다.
+
+| 항목 | 설정값 |
+|---|---|
+| 결제대행사 | 카카오페이 |
+| 연동 모드 | 테스트 |
+| 결제 모듈 | 결제창 일반/정기결제 |
+| 채널 이름 | 임의의 식별 가능한 이름 |
+| PG 상점아이디(CID) | `TC0ONETIME` |
+
+설정을 저장한 후 생성된 **채널 키(Channel Key)**를 확인합니다.
+
+`TC0ONETIME`은 카카오페이 일반결제 테스트용 CID입니다. PortOne의 Store ID 및 Channel Key와는 서로 다른 식별자이므로 혼동하지 않습니다.
+
+콘솔 화면의 세부 명칭은 변경될 수 있습니다.
+
+공식 안내: [카카오페이 연동 가이드](https://developers.portone.io/opi/ko/integration/pg/v2/kakaopay?v=v2)
+
+#### 8.3. Store ID 및 V2 API Secret 발급
+
+PortOne 관리자 콘솔에서 다음 정보를 확보합니다.
+
+1. **결제 연동 → 연동 관리**에서 Store ID를 확인합니다.
+2. **식별코드·API Keys** 메뉴로 이동합니다.
+3. V2 API Secret을 발급합니다.
+4. 발급받은 API Secret을 안전하게 보관합니다.
+
+| 정보 | 사용 목적 |
+|---|---|
+| Store ID | 결제가 발생하는 PortOne 상점 식별 |
+| Channel Key | 카카오페이 테스트 결제 채널 식별 |
+| V2 API Secret | Backend의 결제 조회·취소 API 인증 |
+| Webhook Secret | 수신한 Webhook의 서명 검증 |
+
+V2 API Secret은 발급 시점에만 전체 값을 확인할 수 있으므로 분실하지 않도록 주의합니다.
+
+API Secret과 Webhook Secret은 서버에서만 사용하며, 브라우저 또는 GitHub 저장소에 공개하지 않습니다.
+
+또한 **PortOne V1 API Key와 V2 API Secret은 서로 다른 인증 정보**입니다. 반드시 V2용 정보를 사용합니다.
+
+#### 8.4. 로컬 환경변수 설정
+
+프로젝트 루트의 `.env.example`을 참고하여 `.env` 파일에 다음 정보를 설정합니다.
+
+```dotenv
+# PortOne V2 공개 결제 설정
+PORTONE_STORE_ID=your_portone_store_id
+PORTONE_CHANNEL_KEY=your_portone_channel_key
+
+# 서버의 PortOne V2 REST API 인증
+PORTONE_API_SECRET=your_portone_api_secret
+
+# Webhook 서명 검증용 (8.7절에서 사용)
+PORTONE_WEBHOOK_SECRET=your_portone_webhook_secret
+
+# PortOne V2 REST API Endpoint
+PORTONE_API_BASE_URL=https://api.portone.io
+```
+
+각 값을 앞서 자신의 PortOne 관리자 콘솔에서 확인한 정보로 변경합니다.
+
+결제창에 필요한 Store ID와 Channel Key는 Backend의 주문 생성 API 응답을 통해 전달됩니다.
+
+따라서 프론트엔드 `.env.local`에 PortOne 인증 정보를 별도로 등록할 필요는 없습니다.
+
+`.env` 파일은 `.gitignore`에 포함되어 있으며 Git 저장소에 커밋하지 않습니다.
+
+#### 8.5. Backend 및 Frontend 실행
+
+설정을 완료한 후 Backend와 Frontend를 실행합니다.
+
+프로젝트 루트에서 Backend를 실행합니다.
+
+```powershell
+.\gradlew.bat bootRun
+```
+
+다른 터미널에서 Frontend를 실행합니다.
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+기본 실행 주소는 다음과 같습니다.
+
+| 구분 | 주소 |
+|---|---|
+| Spring Boot | `http://localhost:8080` |
+| Vite | `http://localhost:5173` |
+| 상점 화면 | `http://localhost:5173/shop` |
+| 결제·환불 내역 | `http://localhost:5173/payments` |
+| 관리자 환불 관리 | `http://localhost:5173/admin/refunds` |
+
+Vite는 `/api` 요청을 Spring Boot로 프록시합니다.
+
+`frontend/.env.local`에 다음 설정이 존재한다면 제거하거나 `false`로 변경합니다.
+
+```dotenv
+VITE_USE_MOCK_API=false
+```
+
+환경변수를 변경했다면 개발 서버를 재시작합니다.
+
+**실제 결제 검증은 Mock API가 아닌 Backend와 MySQL을 사용해야 합니다.**
+
+#### 8.6. 카카오페이 테스트 결제 진행
+
+Backend와 Frontend가 정상 실행되었다면 브라우저에서 테스트 결제를 진행합니다.
+
+1. `http://localhost:5173`에 접속합니다.
+2. Google 또는 Naver 계정으로 로그인합니다.
+3. `/shop` 화면으로 이동합니다.
+4. 판매 중인 상품을 선택합니다.
+5. 상품명과 가격을 확인한 뒤 **카카오페이로 결제** 버튼을 클릭합니다.
+6. 결제 확인창에서 진행을 선택합니다.
+7. 카카오페이 테스트 결제창에서 결제를 완료합니다.
+8. `/payments` 화면으로 이동하여 구매 내역을 확인합니다.
+
+PC와 모바일의 결제창 호출 방식은 다음과 같습니다.
+
+| 환경 | PortOne 결제창 방식 |
+|---|---|
+| PC | `IFRAME` |
+| 모바일 | `REDIRECTION` |
+
+프로젝트는 결제창 결과만으로 결제를 성공 처리하지 않습니다.
+
+정상 결제 과정에서 다음 REST API가 호출됩니다.
+
+| API | 목적 |
+|---|---|
+| `POST /api/v1/purchases` | 결제 대기 주문 생성 |
+| `POST /api/v1/purchases/{purchaseId}/payment-verifications` | PortOne 최신 결제 상태 검증 |
+| `GET /api/v1/purchases` | 구매 내역 조회 |
+| `GET /api/v1/purchases/{purchaseId}` | 구매 상세 및 거래 이력 조회 |
+
+결제 완료 후 서버가 PortOne에서 결제 정보를 조회하고, 금액·통화·주문 정보 등을 검증합니다.
+
+정상적으로 검증된 주문만 `PAID` 상태로 확정하고 아이템을 지급합니다.
+
+테스트 결과는 다음 항목을 확인합니다.
+
+- 결제 금액이 DB에 저장된 상품 가격과 일치하는지
+- 결제 요청의 `paymentId`와 서버 주문번호가 일치하는지
+- 서버 검증 이후에만 구매 완료로 표시되는지
+- 구매 내역에 `PAID` 상태가 표시되는지
+- `owned_items`에 구매한 아이템이 한 번만 지급되는지
+- 취소 또는 실패한 결제를 구매 완료로 표시하지 않는지
+
+**주의:** #93의 로컬 테스트 시드에 포함된 가상 PG 거래는 PortOne에 실제로 존재하는 결제가 아닙니다. 해당 주문을 실제 PG 검증 대상으로 사용하지 않습니다.
+
+#### 8.7. Webhook 설정 (선택, 통합테스트용)
+
+PortOne Webhook은 결제 이벤트를 서버에 전달하는 기능입니다.
+
+결제창을 통한 기본 구매·검증 테스트에는 필수 설정이 아니지만, Webhook 기반 자동 처리와 결과 복구를 검증하려면 추가 설정이 필요합니다.
+
+PortOne 서버에서는 개발자의 `localhost`에 직접 접근할 수 없으므로 외부에서 접근 가능한 HTTPS 주소를 준비합니다.
+
+앞서 [Android 실기기 테스트](#7-android-실기기-실행-및-사진-exif-인증-테스트)에서 사용한 ngrok을 재사용할 수 있습니다.
+
+터미널에서 다음 명령을 실행합니다.
+
+```powershell
+ngrok http 5173
+```
+
+실행 후 발급받은 HTTPS 주소를 확인합니다.
+
+```text
+https://example.ngrok-free.dev
+```
+
+이 주소는 예시이므로 실제 발급받은 주소로 변경해야 합니다.
+
+PortOne 관리자 콘솔의 **결제알림(Webhook) 관리**에서 테스트 환경의 Webhook Endpoint를 설정합니다.
+
+1. 상단에서 **V2 테스트** 탭을 선택합니다.
+2. **V2 테스트 웹훅 URL**에 ngrok HTTPS 주소와 프로젝트 수신 경로를 합친 Endpoint URL을 입력합니다.
+3. Content Type은 `application/json`, 버전은 `2024-04-25`를 선택하고 **저장**을 누릅니다.
+
+| 항목 | 설정값 |
+|---|---|
+| 결제모듈 | V2 |
+| Webhook 버전 | `2024-04-25` |
+| 연동 환경 | 테스트 |
+| Content-Type | `application/json` |
+| Endpoint URL | `https://example.ngrok-free.dev/api/v1/payments/webhooks/portone` |
+
+프로젝트의 실제 Webhook 수신 경로는 다음과 같습니다.
+
+```text
+POST /api/v1/payments/webhooks/portone
+```
+
+Vite의 `/api` 프록시가 Spring Boot의 `8080` 포트로 요청을 전달하므로, ngrok은 `5173` 포트에 연결할 수 있습니다.
+
+같은 화면의 **V2 테스트 웹훅 시크릿** 영역에서 다음 순서로 발급합니다.
+
+1. **+ 웹훅 시크릿 발급**을 누릅니다.
+2. 로컬 테스트용임을 구분할 수 있는 이름을 입력하고 발급합니다.
+3. 표시된 Secret을 복사하여 프로젝트 루트 `.env`의 `PORTONE_WEBHOOK_SECRET`에 설정합니다.
+4. Secret을 적용하도록 Backend를 재시작합니다.
+
+Endpoint 설정을 저장한 뒤 **호출 테스트**를 실행하여 서버가 `200 OK`를 반환하는지 확인합니다. 저장하지 않은 Endpoint 변경사항은 호출 테스트에 반영되지 않습니다.
+
+Webhook 수신 시 서버는 원본 요청 본문과 서명 Header를 검증합니다.
+
+#### 8.8. 자주 발생하는 문제
+
+| 증상 | 확인할 내용 |
+|---|---|
+| 결제창이 열리지 않음 | Store ID, Channel Key, 테스트 채널 설정, 브라우저 콘솔 오류 |
+| 결제 금액 오류 | 서버의 상품 가격 및 주문 Snapshot |
+| PortOne API 인증 오류 | V2 API Secret 및 서버 환경변수 |
+| 결제 후 `READY` 유지 | 서버 결제 검증 결과, PortOne 결제 상태, Backend 로그 |
+| 결제 후 아이템 미지급 | `PAID` 확정 여부, `owned_items` 테이블 및 서버 오류 |
+| 결제 내역이 표시되지 않음 | 로그인 계정, 실제 API 사용 여부, 구매 목록 응답 |
+| 모바일 결제 후 복귀 실패 | 복귀 URL, 세션 유지, 동일한 브라우저 및 도메인 |
+| Webhook 수신 실패 | ngrok 실행 상태, Endpoint URL, Vite Proxy, 서버 로그 |
+| Webhook 서명 오류 | Webhook Secret, 테스트 환경, 원본 요청 및 서명 Header |
+
+테스트 결제 오류가 발생했을 때는 브라우저 개발자 도구의 Network 탭과 Spring Boot 서버 로그를 함께 확인합니다.
+
+결제창에서 성공했다고 표시되더라도 서버 상태가 `PAID`로 확정되지 않았다면 결제가 정상 완료되었다고 판단하지 않습니다.
+
+#### 8.9. 테스트 종료 및 주의사항
+
+- 각 개발자는 가능하면 독립된 PortOne 테스트 상점을 사용합니다.
+- 하나의 상점을 공유한다면 결제 내역과 Webhook 설정이 서로 영향을 줄 수 있습니다.
+- 테스트 채널과 운영 채널을 혼동하지 않습니다.
+- 실제 API Secret과 Webhook Secret을 GitHub, Discord 등에 공개하지 않습니다.
+- 테스트용 주문 및 환불은 로컬 DB의 업무 상태를 실제로 변경합니다.
+- 결제 승인과 환불 취소 결과는 브라우저 표시뿐 아니라 서버 응답과 DB에서도 확인합니다.
+- ngrok을 이용한 테스트가 끝나면 터널을 종료합니다.
+
+공식 문서:
+
+- [PortOne V2 결제 연동 준비](https://developers.portone.io/opi/ko/integration/ready/readme?v=v2)
+- [카카오페이 V2 개발 가이드](https://developers.portone.io/opi/ko/integration/pg/v2/kakaopay?v=v2)
+- [PortOne V2 Webhook 연동](https://developers.portone.io/opi/ko/integration/webhook/readme-v2)
