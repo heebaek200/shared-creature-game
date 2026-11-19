@@ -97,7 +97,7 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
             value = """
                 SELECT g
                   FROM Group g
-                 WHERE g.status = 'ACTIVE'
+                 WHERE g.status = com.team.sharedcreature.group.domain.GroupStatus.ACTIVE
                    AND (
                        :query = ''
                        OR g.normalizedName LIKE CONCAT('%', :query, '%') ESCAPE '\\'
@@ -107,7 +107,7 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
             countQuery = """
                 SELECT COUNT(g.id)
                   FROM Group g
-                 WHERE g.status = 'ACTIVE'
+                 WHERE g.status = com.team.sharedcreature.group.domain.GroupStatus.ACTIVE
                    AND (
                        :query = ''
                        OR g.normalizedName LIKE CONCAT('%', :query, '%') ESCAPE '\\'

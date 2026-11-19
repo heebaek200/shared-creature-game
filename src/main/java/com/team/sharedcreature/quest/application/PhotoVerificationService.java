@@ -16,6 +16,7 @@ import com.team.sharedcreature.quest.api.QuestCompletionResponse;
 import com.team.sharedcreature.quest.api.QuestCompletionService;
 import com.team.sharedcreature.quest.domain.PhotoFailureReason;
 import com.team.sharedcreature.quest.domain.PhotoSubmission;
+import com.team.sharedcreature.quest.domain.PhotoVerificationStatus;
 import com.team.sharedcreature.quest.domain.QuestAssignment;
 import com.team.sharedcreature.quest.infrastructure.PhotoFileStorage;
 import com.team.sharedcreature.quest.infrastructure.PhotoSubmissionRepository;
@@ -196,7 +197,7 @@ public class PhotoVerificationService {
             }
 
             // 9. 서버 접수·현재 멤버십·배정 기간을 기준으로 촬영 시각을 검증합니다.
-            String capturedAtFailureReason = capturedAtFailureReason(
+            PhotoFailureReason capturedAtFailureReason = capturedAtFailureReason(
                     capturedAt,
                     pending.uploadedAt(),
                     pending.membershipJoinedAt(),
@@ -207,7 +208,7 @@ public class PhotoVerificationService {
                 return markInvalidAndRespond(
                         pending,
                         assignmentId,
-                        PhotoFailureReason.PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD,
+                        capturedAtFailureReason,
                         capturedAt,
                         latitude,
                         longitude
@@ -259,7 +260,7 @@ public class PhotoVerificationService {
                     pending.photoSubmissionId(),
                     assignmentId,
                     pending.attemptNumber(),
-                    PhotoSubmission.STATUS_VALID,
+                    PhotoVerificationStatus.VALID,
                     null,
                     pending.uploadedAt(),
                     capturedAt,
@@ -429,7 +430,7 @@ public class PhotoVerificationService {
      *
      * @return 실패 사유, 모든 조건을 만족하면 {@code null}
      */
-    static String capturedAtFailureReason(
+    static PhotoFailureReason capturedAtFailureReason(
             Instant capturedAt,
             Instant uploadedAt,
             Instant membershipJoinedAt,
@@ -437,14 +438,14 @@ public class PhotoVerificationService {
             Instant assignmentEndAt
     ) {
         if (capturedAt.isAfter(uploadedAt)) {
-            return "PHOTO_CAPTURED_AFTER_UPLOAD";
+            return PhotoFailureReason.PHOTO_CAPTURED_AFTER_UPLOAD;
         }
         if (capturedAt.isBefore(membershipJoinedAt)) {
-            return "PHOTO_CAPTURED_BEFORE_MEMBERSHIP";
+            return PhotoFailureReason.PHOTO_CAPTURED_BEFORE_MEMBERSHIP;
         }
         if (capturedAt.isBefore(assignmentStartAt)
                 || !capturedAt.isBefore(assignmentEndAt)) {
-            return "PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD";
+            return PhotoFailureReason.PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD;
         }
         return null;
     }

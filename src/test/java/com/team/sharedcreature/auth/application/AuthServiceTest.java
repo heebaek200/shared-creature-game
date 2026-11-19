@@ -15,6 +15,7 @@ import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
 import com.team.sharedcreature.group.infrastructure.GroupJoinRestrictionRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.transaction.support.TransactionCallback;
@@ -86,7 +87,7 @@ class AuthServiceTest {
                 mock(GroupJoinRestrictionRepository.class),
                 mock(GroupMembershipService.class),
                 List.of(mock(SocialLoginClient.class)),
-                mock(InitialSuperAdminProperties.class),
+                new InitialSuperAdminProperties(null, null),
                 mock(TransactionTemplate.class),
                 mock(Clock.class),
                 mock(FindByIndexNameSessionRepository.class)
@@ -99,26 +100,60 @@ class AuthServiceTest {
         assertThat(session.getAttribute(AuthService.ONBOARDING_REASON)).isNull();
     }
 
-    @SuppressWarnings("unchecked")
+    @Test
+    void naverLoginKeepsProviderFromAttemptThroughSignup() {
+        Instant now = Instant.parse("2026-11-10T00:00:00Z");
+        var session = new MockHttpSession();
+        var attempts = mock(OauthLoginAttemptRepository.class);
+        var accounts = mock(SocialAccountRepository.class);
+        var client = mock(SocialLoginClient.class);
+        when(client.provider()).thenReturn("NAVER");
+        when(client.authorizationUrl(any(), any())).thenAnswer(call -> call.getArgument(0));
+        when(client.exchange(eq("code"), any(), any())).thenReturn(
+                new SocialLoginClient.SocialProfile("naver-user", "member@example.com", true, "member"));
+        AuthService service = callbackService(attempts, accounts, client, now);
+
+        String state = service.createOAuthAttempt("NAVER", "DEFAULT", session).authorizationUrl();
+        var savedAttempt = ArgumentCaptor.forClass(OauthLoginAttempt.class);
+        verify(attempts).save(savedAttempt.capture());
+        OauthLoginAttempt attempt = savedAttempt.getValue();
+        assertThat(attempt.getProvider()).isEqualTo(SocialProvider.NAVER);
+        String stateHash = Hashing.sha256(state);
+        when(attempts.findByStateHash(stateHash)).thenReturn(java.util.Optional.of(attempt));
+        when(attempts.findByStateHashForUpdate(stateHash)).thenReturn(java.util.Optional.of(attempt));
+
+        assertThat(service.handleCallback(state, "code", session)).isEqualTo("/");
+
+        verify(accounts).findByProviderAndProviderUserId(SocialProvider.NAVER, "naver-user");
+        assertThat(session.getAttribute(AuthService.PENDING_SIGNUP)).isInstanceOfSatisfying(
+                PendingSignup.class, pending -> assertThat(pending.provider()).isEqualTo("NAVER"));
+    }
+
     private AuthService callbackService(OauthLoginAttempt attempt, Instant now) {
         OauthLoginAttemptRepository attemptRepository = mock(OauthLoginAttemptRepository.class);
-        TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
         when(attemptRepository.findByStateHash(Hashing.sha256("state"))).thenReturn(java.util.Optional.of(attempt));
+        return callbackService(attemptRepository, mock(SocialAccountRepository.class), mock(SocialLoginClient.class), now);
+    }
+
+    @SuppressWarnings("unchecked")
+    private AuthService callbackService(OauthLoginAttemptRepository attemptRepository,
+                                        SocialAccountRepository accountRepository, SocialLoginClient client, Instant now) {
+        TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
         doAnswer(invocation -> {
             TransactionCallback<?> action = invocation.getArgument(0);
             return action.doInTransaction(mock(TransactionStatus.class));
         }).when(transactionTemplate).execute(any(TransactionCallback.class));
         return new AuthService(
                 attemptRepository,
-                mock(SocialAccountRepository.class),
+                accountRepository,
                 mock(UserRepository.class),
                 mock(UserProfileRepository.class),
                 mock(GroupMembershipRepository.class),
                 mock(GroupInviteLinkRepository.class),
                 mock(GroupJoinRestrictionRepository.class),
                 mock(GroupMembershipService.class),
-                List.of(mock(SocialLoginClient.class)),
-                mock(InitialSuperAdminProperties.class),
+                List.of(client),
+                new InitialSuperAdminProperties(null, null),
                 transactionTemplate,
                 Clock.fixed(now, ZoneOffset.UTC),
                 mock(FindByIndexNameSessionRepository.class)

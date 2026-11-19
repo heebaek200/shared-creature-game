@@ -2,6 +2,7 @@ package com.team.sharedcreature.season.api;
 
 import com.team.sharedcreature._core.api.ApiResponse;
 import com.team.sharedcreature.season.application.SeasonQueryService;
+import com.team.sharedcreature.season.domain.SeasonStatus;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -22,7 +23,7 @@ class SeasonControllerTest {
         List<SeasonResponse> seasons = List.of(new SeasonResponse(
                 2L,
                 2,
-                "ACTIVE",
+                SeasonStatus.ACTIVE,
                 Instant.parse("2026-11-02T15:00:00Z"),
                 Instant.parse("2026-11-30T15:00:00Z")
         ));

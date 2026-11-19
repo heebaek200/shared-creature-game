@@ -57,17 +57,17 @@ class SeasonQueryServiceTest {
         Season expiredActive = mock(Season.class);
         Season ended = mock(Season.class);
 
-        when(active.getStatus()).thenReturn("ACTIVE");
+        when(active.getStatus()).thenReturn(SeasonStatus.ACTIVE);
         when(active.isActiveAt(NOW)).thenReturn(true);
         when(active.getId()).thenReturn(3L);
         when(active.getSeasonNumber()).thenReturn(3);
         when(active.getStartAt()).thenReturn(NOW.minusSeconds(60));
         when(active.getEndAt()).thenReturn(NOW.plusSeconds(60));
 
-        when(expiredActive.getStatus()).thenReturn("ACTIVE");
+        when(expiredActive.getStatus()).thenReturn(SeasonStatus.ACTIVE);
         when(expiredActive.isActiveAt(NOW)).thenReturn(false);
 
-        when(ended.getStatus()).thenReturn("ENDED");
+        when(ended.getStatus()).thenReturn(SeasonStatus.ENDED);
         when(ended.getId()).thenReturn(1L);
         when(ended.getSeasonNumber()).thenReturn(1);
         when(ended.getStartAt()).thenReturn(NOW.minusSeconds(180));

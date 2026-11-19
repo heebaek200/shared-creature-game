@@ -29,8 +29,9 @@ public interface SeasonRepository extends JpaRepository<Season, Long> {
     @Query("""
             SELECT season
               FROM Season season
-             WHERE season.status = 'ACTIVE'
-                OR (season.status = 'ENDED' AND season.closingFromStatus = 'ACTIVE')
+             WHERE season.status = com.team.sharedcreature.season.domain.SeasonStatus.ACTIVE
+                OR (season.status = com.team.sharedcreature.season.domain.SeasonStatus.ENDED
+                    AND season.closingFromStatus = com.team.sharedcreature.season.domain.SeasonStatus.ACTIVE)
              ORDER BY season.seasonNumber DESC
             """)
     List<Season> findAllRankableOrderBySeasonNumberDesc();

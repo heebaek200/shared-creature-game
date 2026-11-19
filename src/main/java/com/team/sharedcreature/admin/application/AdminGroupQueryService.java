@@ -6,6 +6,7 @@ import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.admin.api.AdminGroupSearchResponse;
 import com.team.sharedcreature.group.api.GroupMemberResponse;
 import com.team.sharedcreature.group.domain.Group;
+import com.team.sharedcreature.group.domain.GroupStatus;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
 import org.springframework.data.domain.Page;
@@ -74,7 +75,7 @@ public class AdminGroupQueryService {
         return groups.map(group -> new AdminGroupSearchResponse(
                 group.getId(),
                 group.getName(),
-                group.getVisibility(),
+                group.getVisibility().name(),
                 group.getCurrentMemberCount(),
                 group.getCapacity()
         ));
@@ -102,7 +103,7 @@ public class AdminGroupQueryService {
                         ErrorCode.RESOURCE_NOT_FOUND
                 ));
 
-        if (!"ACTIVE".equals(group.getStatus())) {
+        if (group.getStatus() != GroupStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 

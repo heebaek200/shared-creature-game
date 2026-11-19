@@ -51,7 +51,7 @@ public class SeasonQueryService {
         return seasonRepository
                 .findAllRankableOrderBySeasonNumberDesc()
                 .stream()
-                .filter(season -> "ENDED".equals(season.getStatus()) || season.isActiveAt(now))
+                .filter(season -> season.getStatus() == SeasonStatus.ENDED || season.isActiveAt(now))
                 .map(SeasonResponse::from)
                 .toList();
     }

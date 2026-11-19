@@ -20,6 +20,7 @@ import com.team.sharedcreature.quest.domain.QuestPeriod;
 import com.team.sharedcreature.quest.domain.QuestRewardLedger;
 import com.team.sharedcreature.quest.domain.QuestRewardType;
 import com.team.sharedcreature.quest.domain.QuestVerificationType;
+import com.team.sharedcreature.quest.infrastructure.PhotoSubmissionRepository;
 import com.team.sharedcreature.quest.infrastructure.QuestAssignmentRepository;
 import com.team.sharedcreature.quest.infrastructure.QuestCompletionRepository;
 import com.team.sharedcreature.quest.infrastructure.QuestPeriodRepository;

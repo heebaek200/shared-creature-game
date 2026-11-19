@@ -280,7 +280,13 @@ public class QuestCompletionService {
                 ));
 
         /**퀘스트 할당과 완료 이력 조회*/
-        List<QuestAssignment> assignments = findCurrentAssignments(periodType);
+        QuestPeriodType filter;
+        try {
+            filter = periodType == null ? null : QuestPeriodType.valueOf(periodType);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE, "기간 유형이 올바르지 않습니다.");
+        }
+        List<QuestAssignment> assignments = findCurrentAssignments(filter);
         Map<Long, QuestCompletion> completionsByAssignmentId =
                 findCompletionsByAssignmentId(userId, assignments);
 
@@ -417,7 +423,7 @@ public class QuestCompletionService {
             // 성공·실패·처리 중인 제출 기록 모두 최대 5회 제한에 포함합니다.
             Integer photoAttemptsRemaining = null;
 
-            if ("PHOTO_EXIF".equals(assignment.getVerificationTypeSnapshot())) {
+        if (assignment.getVerificationTypeSnapshot() == QuestVerificationType.PHOTO_EXIF) {
                 long attemptCount = photoSubmissionRepository
                         .countByUser_IdAndQuestAssignment_Id(userId, assignment.getId());
 
@@ -488,7 +494,7 @@ public class QuestCompletionService {
                 .equals(currentSeasonId);
 
         /**활성 기간 확인*/
-        boolean activePeriod = "ACTIVE".equals(assignment.getQuestPeriod().getStatus())
+        boolean activePeriod = assignment.getQuestPeriod().getStatus() == QuestPeriodStatus.ACTIVE
                 && !now.isBefore(assignment.getQuestPeriod().getStartAt())
                 && now.isBefore(assignment.getQuestPeriod().getEndAt());
 
@@ -501,7 +507,7 @@ public class QuestCompletionService {
         }
 
         /**409  QUEST_COMPLETION_NOT_ALLOWED  해당 판정 유형 직접 완료 불가*/
-        if (!verificationType.equals(assignment.getVerificationTypeSnapshot())) {
+        if (verificationType != assignment.getVerificationTypeSnapshot()) {
             throw new BusinessException(
                     ErrorCode.QUEST_COMPLETION_NOT_ALLOWED,
                     "이 퀘스트는 직접 완료할 수 없습니다."
@@ -690,7 +696,7 @@ public class QuestCompletionService {
                         ErrorCode.RESOURCE_NOT_FOUND, "그룹 시즌을 찾을 수 없습니다."));
 
         /**409	QUEST_PERIOD_ENDED	퀘스트 유효 기간 밖*/
-        if (!"ACTIVE".equals(groupSeason.getStatus())) {
+        if (groupSeason.getStatus() != GroupSeasonStatus.ACTIVE) {
             throw new BusinessException(
                     ErrorCode.QUEST_PERIOD_ENDED, "그룹 시즌이 활성 상태가 아닙니다.");
         }
