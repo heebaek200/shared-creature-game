@@ -42,16 +42,16 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * @return 실제 변경된 행 수(0 또는 1)
      */
     @Modifying
-    @Query(value = """
-        UPDATE users
-        SET last_active_at = :now
-          , updated_at     = :now
-          , version        = version + 1
-        WHERE id = :userId
-          AND status = 'ACTIVE'
-          AND last_active_at <= :threshold
-          AND last_active_at < :now
-        """, nativeQuery = true)
+    @Query("""
+        UPDATE User u
+           SET u.lastActiveAt = :now,
+               u.updatedAt = :now,
+               u.version = u.version + 1
+         WHERE u.id = :userId
+           AND u.status = com.team.sharedcreature.auth.domain.UserStatus.ACTIVE
+           AND u.lastActiveAt <= :threshold
+           AND u.lastActiveAt < :now
+        """)
     int updateLastActiveAtIfDue(
             @Param("userId") Long userId,
             @Param("now") Instant now,
