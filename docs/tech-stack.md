@@ -2,10 +2,7 @@
 
 이 문서는 프로젝트에 사용한 기술을 나열하는 대신, **어떤 문제를 해결하려고 선택했는지**, **요청이 실제로 어느 계층을 지나가는지**, **동시 요청이나 외부 장애가 발생하면 어떻게 일관성을 지키는지**를 설명합니다. 기술을 처음 접하는 팀원은 각 절의 “핵심 개념 → 프로젝트 적용 → 주의사항 → 예상 질문” 순서로 읽으면 됩니다.
 
-설명 근거는 두 종류입니다.
-
-- **코드 근거:** 현재 저장소에서 클래스·설정·테스트로 확인한 내용입니다.
-- **확정 설계:** 기능 이슈와 `requirements.md`, `business-rules.md`, `api-design.md`, `class-diagram.md`에 확정된 최종 구조입니다. 통합 전 영역은 발표·배포 전에 코드와 테스트 결과를 다시 대조해야 합니다.
+설명은 현재 저장소의 코드·설정·테스트를 기준으로 하며, `requirements.md`, `business-rules.md`, `api-design.md`, `class-diagram.md`의 업무 계약을 함께 연결합니다. 코드 예시는 전체 메서드를 복사하기보다 기술 선택과 처리 경계가 드러나는 부분을 발췌했습니다.
 
 ## 1. 전체 아키텍처와 기술 선택 개요
 
@@ -169,11 +166,9 @@ proxy: {
 
 브라우저 코드는 백엔드 주소를 하드코딩하지 않고 `/api`처럼 상대 경로를 사용합니다. Vite가 개발 중에만 이를 8080 포트로 전달합니다. `/ws`는 HTTP 요청과 달리 연결을 Upgrade해야 하므로 `ws: true`가 필요합니다.
 
-### 2.5 `spring_blog`와의 전환
+### 2.5 강의 내용에서 확장한 프론트엔드 구조
 
-비교 기준은 `spring_blog` 저장소 `main`의 `b83b0662d8c753f3e0404b05b62b3ec07bc53af9`입니다.
-
-| 수업 예제 | 이 프로젝트 | 변경 이유 |
+| 강의 내용 | 이 프로젝트 | 변경 이유 |
 |---|---|---|
 | Mustache Template을 Controller가 반환 | Vite + Vanilla JS Page가 DOM 구성 | 화면과 REST 서버를 분리하고 SPA 이동을 구현 |
 | `Model`에 데이터를 넣어 HTML 렌더링 | Fetch로 JSON Envelope 조회 | 동일 API를 여러 화면·클라이언트에서 재사용 |
@@ -319,9 +314,9 @@ public String handleCallback(String state, String code, HttpSession session) {
 
 첫 트랜잭션은 `state`와 시작 세션을 짧게 확인합니다. 그 뒤 Google과 통신하는 동안에는 DB 트랜잭션을 열어 두지 않습니다. 응답을 받은 다음 새 트랜잭션에서 같은 OAuth 시도를 `PESSIMISTIC_WRITE`로 잠그고 다시 검사한 뒤 일회성으로 소비합니다. 외부 통신 전 검사만 믿지 않고 마지막 Commit 직전에 재검사하는 것이 핵심입니다.
 
-### 3.5 `spring_blog`와의 전환
+### 3.5 강의 내용에서 확장한 인증·인가
 
-| 수업 예제 | 이 프로젝트 | 차이의 의미 |
+| 강의 내용 | 이 프로젝트 | 차이의 의미 |
 |---|---|---|
 | `LoginInterceptor`가 세션 속성 존재 검사 | Security Filter Chain이 경로별 인증·역할 규칙 적용 | 보안 규칙을 중앙에서 선언하고 401/403을 일관되게 처리 |
 | `AdminInterceptor`가 `isAdmin()` 직접 검사 | `ROLE_SUPER_ADMIN`, 그룹 역할 기반 인가 | 전체 관리자와 그룹 역할의 권한 경계를 분리 |
@@ -381,50 +376,55 @@ REST 명령 → DB 변경 → Commit 성공 → 그룹 Event 발행
 
 이 설계가 중요한 이유는 WebSocket이 신뢰 가능한 영구 Queue가 아니기 때문입니다. 브라우저가 잠시 잠들거나 네트워크가 끊기면 이벤트를 놓칠 수 있습니다. 화면의 정답은 언제나 REST Snapshot과 DB입니다.
 
-#### 확정 설계 의사 코드: Commit 뒤 STOMP 발행
+#### 실제 코드 흐름: Commit 뒤 STOMP 발행
 
-아래 코드는 현재 통합 소스의 인용이 아니라 `business-rules.md`와 `class-diagram.md`의 확정 흐름을 Java 형태로 줄인 **설계 의사 코드**입니다. 실제 통합 후 클래스명과 API를 다시 대조해야 합니다.
+퀘스트 완료 서비스는 보상·기여도·크리처 경험치를 같은 트랜잭션에서 확정하고, `publishAfterCommit()`으로 실시간 이벤트 발행을 예약합니다. `AfterCommitContributionUpdateEventPublisher`와 `AfterCommitCreatureUpdateEventPublisher`는 Spring의 `TransactionSynchronization`을 사용해 Commit 성공 뒤에만 내부 이벤트를 발행합니다.
 
 ```java
-@Transactional
-public void completeQuest(Long assignmentId, Long userId) {
-    // 행 잠금, 조건 재검사, 보상과 경험치 반영
-    QuestCompleted event = completeAndCreateEvent(assignmentId, userId);
-    applicationEventPublisher.publishEvent(event);
-}
+creatureUpdateEventPublisher.publishAfterCommit(CreatureUpdatedEvent.from(creature, now));
+contributionUpdateEventPublisher.publishAfterCommit(new ContributionUpdatedEvent(
+        groupId,
+        userId,
+        contributionAmount,
+        contributionScore,
+        creatureExperienceDelta,
+        groupScore
+));
 
-@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-public void publish(QuestCompleted event) {
-    stompPublisher.publish(
-        "/topic/groups/" + event.groupId() + "/live",
-        GroupLiveEvent.from(event)
-    );
-}
+TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+    @Override
+    public void afterCommit() {
+        eventPublisher.publishEvent(event);
+    }
+});
 ```
 
-첫 메서드의 `publishEvent()`는 트랜잭션 중 호출되지만, Listener의 실제 STOMP 발행은 `AFTER_COMMIT`에서만 실행됩니다. Rollback되면 Listener가 발행하지 않으므로 다른 브라우저가 실패한 변경을 성공으로 오해하지 않습니다.
+`DomainGroupLiveEventListener`는 Commit 이후 전달된 내부 이벤트를 `CREATURE_UPDATED`, `CONTRIBUTION_UPDATED`, `AVATAR_EQUIPMENT_CHANGED` Payload로 바꾸고 `GroupLiveEventPublisher`에 전달합니다. Rollback되면 `afterCommit()`이 호출되지 않으므로 다른 브라우저가 실패한 변경을 성공으로 오해하지 않습니다.
 
-#### 확정 설계 의사 코드: sequence 누락 복구
+#### 실제 코드 흐름: sequence 누락 복구
 
 ```javascript
-function onGroupEvent(event) {
-  if (seenEventIds.has(event.eventId)) return;
+if (event.eventId && seenEventIds.has(event.eventId)) return;
 
-  const streamChanged = event.streamInstanceId !== currentStreamInstanceId;
-  const sequenceMissing = event.sequence !== lastSequence + 1;
-
-  if (streamChanged || sequenceMissing) {
-    void reloadCreatureHomeSnapshot();
+if (event.streamInstanceId !== streamInstanceId) {
+    rememberEvent(event.eventId);
+    void refreshSnapshot();
     return;
-  }
-
-  applyEvent(event);
-  seenEventIds.add(event.eventId);
-  lastSequence = event.sequence;
 }
+
+if (!Number.isSafeInteger(event.sequence) || event.sequence !== sequence + 1) {
+    rememberEvent(event.eventId);
+    void refreshSnapshot();
+    return;
+}
+
+rememberEvent(event.eventId);
+sequence = event.sequence;
+const result = options.applyEvent(event);
+if (result?.refresh) void refreshSnapshot();
 ```
 
-중복은 버리고, 순번이 하나라도 건너뛰거나 서버 Stream이 바뀌면 부분 이벤트를 억지로 적용하지 않고 전체 Snapshot을 다시 받습니다. 이것이 “WebSocket은 힌트, REST Snapshot은 정답”이라는 원칙의 코드 형태입니다.
+`frontend/src/realtime/snapshot-sync.js`는 최근 `eventId`를 최대 500개 기억해 중복을 버립니다. 순번이 하나라도 건너뛰거나 서버 Stream이 바뀌면 부분 이벤트를 억지로 적용하지 않고 전체 Snapshot을 다시 받습니다. 이것이 “WebSocket은 힌트, REST Snapshot은 정답”이라는 원칙의 코드 형태입니다.
 
 ### 4.5 Presence와 다중 탭
 
@@ -621,7 +621,7 @@ Trigger(Cron / 기동 / 5분 점검)
 
 ### 6.4 재기동 정상화
 
-서버가 중단됐다고 과거 4주 시즌과 모든 퀘스트를 소급 생성하면 사용자가 참여하지 않은 보상이 생깁니다. 확정 설계는 다음 원칙을 사용합니다.
+서버가 중단됐다고 과거 4주 시즌과 모든 퀘스트를 소급 생성하면 사용자가 참여하지 않은 보상이 생깁니다. 현재 정상화 구현은 다음 원칙을 사용합니다.
 
 - 마지막 시즌을 정상 종료하되, 지나간 중간 시즌·퀘스트·보상은 소급 생성하지 않음
 - 현재 4주 구간의 시즌 하나만 생성
@@ -633,7 +633,7 @@ Trigger(Cron / 기동 / 5분 점검)
 
 ### 6.5 사진 정리 Scheduler
 
-현재 코드의 `PhotoSubmissionCleanupScheduler`는 기본 5분 간격으로 최대 100건씩 처리합니다.
+`PhotoRetentionScheduler`는 서버 기동 시 한 번, 이후 UTC 5분 경계마다 `PhotoRetentionNormalizationService`를 호출합니다. 정상화 서비스가 `SchedulerJobRunner`로 실행권과 3분 Lease를 확보한 뒤 `PhotoSubmissionCleanupWork`가 최대 100건씩 처리합니다.
 
 - 1시간 넘은 미확정 `PENDING` → `PHOTO_PROCESSING_FAILED`
 - 실패 사진·좌표 → 24시간 후 삭제
@@ -644,42 +644,44 @@ Trigger(Cron / 기동 / 5분 점검)
 #### 실제 코드: 5분 간격 사진 정리
 
 ```java
-@Scheduled(fixedDelayString = "${app.photo.cleanup-interval-ms:300000}")
-@Transactional
-public void cleanupPhotoSubmissions() {
-    Instant now = Instant.now(clock);
+@EventListener(ApplicationReadyEvent.class)
+public void onApplicationReady() {
+    runSafely("APPLICATION_READY");
+}
 
-    List<PhotoSubmission> stalePending =
-            photoSubmissionRepository.findStalePendingSubmissions(
-                    now.minusSeconds(PENDING_TIMEOUT_HOURS * 60 * 60),
-                    PageRequest.of(0, BATCH_SIZE)
-            );
+@Scheduled(cron = "0 */5 * * * *", zone = "UTC")
+public void onEveryFiveMinutes() {
+    runSafely("FIVE_MINUTES");
+}
 
-    for (PhotoSubmission submission : stalePending) {
-        submission.markPendingTimedOut(now);
-    }
-
-    // 이어서 INVALID 24시간, VALID 시즌 종료 30일 보존 기한을 정리합니다.
+private void runSafely(String trigger) {
+    PhotoRetentionNormalizationService.Result result = normalizer.normalize();
+    // 실패는 기록하고 다음 기동·5분 점검에서 다시 시도합니다.
 }
 ```
 
-`fixedDelay`는 이전 실행이 끝난 뒤 5분을 기다립니다. `PageRequest.of(0, 100)`으로 한 번에 읽는 양을 제한해 데이터가 많아도 한 트랜잭션이 무한히 커지지 않게 합니다. `Clock`을 사용하므로 테스트에서는 한 시간을 실제로 기다리지 않고 고정 시각을 주입할 수 있습니다.
+Cron은 모든 인스턴스에 호출 기회를 주지만 `(job_type, scheduled_for)` 실행권과 Lease가 실제 작업자를 하나로 제한합니다. 정리 구현은 파일 I/O 중 DB 트랜잭션을 유지하지 않고, 항목별 짧은 트랜잭션으로 상태를 확정합니다. `Clock`을 사용하므로 테스트에서는 한 시간을 실제로 기다리지 않고 고정 시각을 주입할 수 있습니다.
 
-#### 확정 설계 의사 코드: 여러 Trigger가 같은 정상화 Service 호출
+#### 실제 코드 흐름: 여러 Trigger가 같은 정상화 Service 호출
 
 ```java
-@Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
-public void runDailyBoundary() {
-    normalizationService.normalize(clock.instant());
+@EventListener(ApplicationReadyEvent.class)
+public void onApplicationReady() {
+    runSafely("APPLICATION_READY");
 }
 
-@EventListener(ApplicationReadyEvent.class)
-public void recoverAfterRestart() {
-    normalizationService.normalize(clock.instant());
+@Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
+public void onKstMidnight() {
+    runSafely("KST_MIDNIGHT");
+}
+
+@Scheduled(cron = "0 */5 * * * *", zone = "Asia/Seoul")
+public void onEveryFiveMinutes() {
+    runSafely("FIVE_MINUTES");
 }
 ```
 
-이 코드는 최종 Scheduler 설계를 설명하는 의사 코드입니다. Cron과 서버 기동이 서로 다른 업무 로직을 갖지 않고 같은 정상화 Service로 들어갑니다. Service가 DB 상태와 `scheduled_for`를 검사하므로 두 Trigger가 가까이 실행되어도 중복 기간을 만들지 않습니다.
+`SeasonCloseScheduler`의 세 Trigger는 모두 `runSafely()`를 거쳐 `SeasonLifecycleNormalizationService`로 들어갑니다. ACTIVE 시즌이 확정된 뒤에는 퀘스트 배정과 크리처 부화 정상화를 각각 호출합니다. 각 서비스가 DB 상태와 `scheduled_for`를 다시 검사하므로 Trigger가 가까이 실행되어도 시즌·배정·부화를 중복 생성하지 않습니다.
 
 ### 6.6 예상 질문
 
@@ -799,11 +801,11 @@ PG 조회나 취소 중 DB 잠금을 계속 잡으면 느린 네트워크 동안
 
 고착된 `CANCEL_PENDING`, Webhook `PENDING/FAILED`는 5분 기준으로 PortOne 최신 상태부터 조회하고 동일한 정합화 Service를 재사용합니다. 별도 복구 코드가 다른 판정을 만들지 않게 하는 것이 핵심입니다.
 
-### 7.5 `spring_blog`와의 차이
+### 7.5 강의 내용에서 확장한 결제 정합성
 
-수업 예제도 PortOne 서버 조회와 DB 트랜잭션 분리를 사용하므로 “결제를 처음 도입했다”가 차이는 아닙니다. 이 프로젝트는 다음 수준을 추가합니다.
+강의 내용에서도 PortOne 서버 조회와 DB 트랜잭션 분리를 다뤘습니다. 이 프로젝트는 그 기반에 다음 정합성·복구 범위를 추가했습니다.
 
-| 수업 예제 | 이 프로젝트 |
+| 강의 내용 | 이 프로젝트 |
 |---|---|
 | 사용자 입력 금액으로 결제 준비 | 상품과 가격을 서버 Snapshot으로 확정 |
 | 브라우저 완료 요청 중심 | 브라우저 확인과 서명 Webhook을 동일 Service로 정합화 |
@@ -961,49 +963,57 @@ Controller → TextProofreadingService → TextProofreader Port
 
 외부 장애, 429, Timeout, 형식 오류가 발생하면 원문 입력을 그대로 유지하고 일반 그룹 생성은 계속 가능해야 합니다. AI 기능은 핵심 저장 기능의 가용성을 낮추지 않는 **선택적 보조 기능**입니다.
 
-#### 확정 설계 의사 코드: Port와 Adapter로 Gemini 격리
-
-Gemini 영역은 아직 통합 코드가 아니므로 아래는 이슈 #26과 클래스 설계에 따른 **의사 코드**입니다.
+#### 실제 코드: Port와 Adapter로 Gemini 격리
 
 ```java
 public interface TextProofreader {
-    String proofread(String originalText);
+    String proofread(String text);
 }
 
 @Service
 public class TextProofreadingService {
     private final TextProofreader textProofreader;
+    private final RequestRateLimiter requestRateLimiter;
 
-    public ProofreadingResult proofread(Long userId, String originalText) {
-        rateLimiter.acquire(userId);
-        String suggested = textProofreader.proofread(originalText);
-        validateSuggestedText(suggested);
-        return new ProofreadingResult(
-                originalText,
-                suggested,
-                !originalText.equals(suggested)
-        );
+    public ProofreadingResult proofread(Long userId, String text) {
+        String normalizedText = text.trim();
+        RequestRateLimiter.LimitResult limitResult = requestRateLimiter.acquire(userId);
+        if (limitResult != RequestRateLimiter.LimitResult.ACQUIRED) {
+            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED);
+        }
+        try {
+            String suggestedText = textProofreader.proofread(normalizedText);
+            return new ProofreadingResult(
+                    normalizedText,
+                    suggestedText,
+                    !normalizedText.equals(suggestedText)
+            );
+        } finally {
+            requestRateLimiter.release();
+        }
     }
 }
 ```
 
-Service는 Gemini SDK나 HTTP 형식을 알지 못하고 `TextProofreader`만 호출합니다. 실제 Adapter는 API Key, 10초 Timeout, 구조화 JSON 변환을 담당하고 테스트에서는 Fake를 넣습니다. `validateSuggestedText()`가 모델 출력도 일반 사용자 입력과 똑같이 불신하고 검사합니다.
+Service는 Gemini HTTP 형식을 알지 못하고 `TextProofreader`만 호출합니다. `GeminiTextProofreader` Adapter는 API Key, 연결·응답 10초 Timeout, 구조화 JSON 변환과 `correctedText`의 길이·제어 문자 검증을 담당합니다. 테스트에서는 Port 경계에 Fake를 넣어 외부 네트워크 없이 성공과 실패 분기를 확인합니다.
 
-#### 확정 설계 의사 코드: 실패해도 원문 유지
+#### 실제 코드: 실패해도 원문 유지
 
 ```javascript
-async function requestProofreading(originalText) {
-  try {
-    const result = await proofreadGroupDescription(originalText);
-    showSuggestion(result.originalText, result.suggestedText);
-  } catch (error) {
-    showProofreadingError(error);
-    descriptionInput.value = originalText;
-  }
+const originalText = groupDescriptionInput.value;
+const result = await proofreadGroupDescription(originalText.trim());
+
+if (groupDescriptionInput.value !== originalText) {
+    return;
 }
+
+suggestedDescription = result.suggestedText;
+aiOriginalText.textContent = result.originalText ?? originalText;
+aiSuggestedText.textContent = suggestedDescription;
+aiProofreadResult.classList.remove('d-none');
 ```
 
-응답을 받았다고 입력창을 자동 변경하지 않고 별도 제안으로 보여 줍니다. 실패 분기에서도 원문을 다시 넣어 그룹 생성 흐름과 AI 장애를 분리합니다.
+응답을 받았다고 입력창을 자동 변경하지 않고 별도 제안으로 보여 줍니다. 요청 중 사용자가 원문을 수정했다면 오래된 응답을 버리고, 실패 시에도 입력창을 변경하지 않아 그룹 생성 흐름과 AI 장애를 분리합니다. 사용자가 `교정 결과 적용` 버튼을 눌렀을 때만 제안문을 입력값에 반영합니다.
 
 ### 9.4 예상 질문
 
@@ -1106,7 +1116,7 @@ Mockito 단위 테스트만으로 DB 잠금이 실제로 직렬화되는지는 �
 
 ### 10.5 현재 검증 자료를 읽는 법
 
-`docs/test-results/QA-01`부터 `QA-06`은 수동·통합 검증 결과를 기록하는 책임 문서입니다. 체크되지 않은 항목이나 빈 요약을 성공으로 해석하지 않습니다. 이 해설서의 확정 설계와 실제 발표 문구는 최종 통합 뒤 해당 QA 결과와 다시 대조해야 합니다.
+`docs/test-results/QA-01`부터 `QA-06`은 브라우저·실기기·외부 Sandbox를 포함한 수동·통합 검증 결과의 책임 문서입니다. 자동 테스트는 코드 수준의 상태 전이·권한·동시성 경계를 확인하고, QA 문서는 실제 환경에서 확인한 범위와 발견한 결함을 기록합니다. 체크되지 않은 항목이나 빈 요약은 검증 결과로 간주하지 않습니다.
 
 ### 10.6 운영상 제약
 
@@ -1128,7 +1138,7 @@ A. 상태 분기와 외부 실패는 빠른 단위 테스트로, MySQL의 잠금
 **Q. Request ID는 어떤 문제를 해결하나요?**  
 A. 사용자가 받은 오류의 `traceId`와 서버 로그를 연결해 여러 동시 요청 중 같은 요청의 처리 흐름을 추적하게 합니다.
 
-## 11. 발표 전에 기억할 핵심 요약
+## 11. 핵심 아키텍처 요약
 
 1. **로그인은 세션 기반입니다.** OIDC ID Token을 검증하지만 내부 JWT 무상태 인증은 사용하지 않습니다.
 2. **DB Commit이 정답입니다.** WebSocket은 결과 전달과 갱신 신호이며 누락 시 REST Snapshot으로 복구합니다.
@@ -1162,7 +1172,7 @@ A. 사용자가 받은 오류의 `traceId`와 서버 로그를 연결해 여러 
 - `src/main/java/com/team/sharedcreature/quest/application/`
 - `src/main/resources/db/special-schema.sql`
 
-### 기능 이슈와 비교 자료
+### 기능 이슈
 
 - [#21 PG 결제·검증·Webhook](https://github.com/heebaek200/shared-creature-game/issues/21)
 - [#22 환불 승인·취소·상태 복구](https://github.com/heebaek200/shared-creature-game/issues/22)
@@ -1170,4 +1180,3 @@ A. 사용자가 받은 오류의 `traceId`와 서버 로그를 연결해 여러 
 - [#24 시즌·퀘스트 Scheduler](https://github.com/heebaek200/shared-creature-game/issues/24)
 - [#26 Gemini 그룹 소개 교정](https://github.com/heebaek200/shared-creature-game/issues/26)
 - [#38 WebSocket 세션·동기화 검증](https://github.com/heebaek200/shared-creature-game/issues/38)
-- [`spring_blog` 비교 저장소](https://github.com/heebaek200/spring_blog/tree/b83b0662d8c753f3e0404b05b62b3ec07bc53af9)
