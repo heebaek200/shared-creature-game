@@ -46,6 +46,7 @@ import { createSnapshotSync } from './snapshot-sync.js';
  * @property {(listener: (snapshot: GroupLiveSnapshot) => void) => (() => void)} subscribeSnapshots
  * @property {(listener: (error: GroupLiveError) => void) => (() => void)} subscribeErrors
  * @property {(listener: (event: GroupLiveEvent) => void) => (() => void)} subscribeEvents
+ * @property {(listener: (message: Record<string, any>) => void) => (() => void)} subscribeChatMessages
  */
 
 /** @returns {Promise<GroupLiveSnapshot>} */
@@ -77,6 +78,8 @@ export function createGroupLiveManager({
     const statusListeners = new Set();
     /** @type {Set<(event: GroupLiveEvent) => void>} */
     const eventListeners = new Set();
+    /** @type {Set<(message: Record<string, any>) => void>} */
+    const chatMessageListeners = new Set();
     /** @type {Set<(snapshot: GroupLiveSnapshot) => void>} */
     const snapshotListeners = new Set();
     /** @type {Set<(error: GroupLiveError) => void>} */
@@ -107,14 +110,19 @@ export function createGroupLiveManager({
         }
     }
 
-    /** @param {GroupLiveStatus} status @param {string|null} [errorCode] @param {string|null} [message] */
+    /**
+     * @param {GroupLiveStatus} status @param {string|null} [errorCode] @param {string|null} [message]
+     * @param errorCode
+     * @param message
+     */
     function setStatus(status, errorCode = null, message = null) {
         state = Object.freeze({ status, userId: identity?.userId ?? null,
             groupId: identity?.groupId ?? null, errorCode, message });
         notify(statusListeners, state);
     }
 
-    /** @param {() => Promise<void>} operation @returns {Promise<void>} */
+    /**
+     *  @param {() => Promise<void>} operation @returns {Promise<void>} */
     function enqueue(operation) {
         const pending = operations.then(operation);
         operations = pending.catch(() => {});
@@ -277,6 +285,10 @@ export function createGroupLiveManager({
                         sync?.handleEvent(event);
                         notify(eventListeners, /** @type {GroupLiveEvent} */ (event));
                     },
+                    onChatMessage(message) {
+                        if (!active() || String(message.groupId) !== String(groupId)) return;
+                        notify(chatMessageListeners, message);
+                    },
                     onSubscribed() {
                         if (active()) void sync?.recoverRealtime();
                     },
@@ -350,6 +362,11 @@ export function createGroupLiveManager({
         subscribeEvents(listener) {
             eventListeners.add(listener);
             return () => eventListeners.delete(listener);
+        },
+        /** @param {(message: Record<string, any>) => void} listener @returns {() => void} */
+        subscribeChatMessages(listener) {
+            chatMessageListeners.add(listener);
+            return () => chatMessageListeners.delete(listener);
         },
     };
 }

@@ -19,6 +19,7 @@ public record AdminReportResponse(
         String reportedUserNickname,
         String reporterNickname,
         Long handledByUserId,
-        String resolution
+        String resolution,
+        AdminReportChatEvidenceResponse chatEvidence
 ) {
 }

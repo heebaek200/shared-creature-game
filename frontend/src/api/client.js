@@ -4,12 +4,13 @@ let csrfToken = '';
 
 /** 서버 오류 code와 필드 오류를 보존합니다. */
 export class ApiError extends Error {
-  constructor(status, body) {
+  constructor(status, body, retryAfter = null) {
     super(body?.message ?? '요청을 처리하지 못했습니다.');
     this.status = status;
     this.code = body?.code ?? 'UNKNOWN_ERROR';
     this.fieldErrors = body?.fieldErrors ?? [];
     this.traceId = body?.traceId ?? null;
+    this.retryAfter = retryAfter;
   }
 }
 
@@ -51,7 +52,13 @@ async function executeRequest(path, options, allowCsrfRetry, includeMeta = false
     clearCsrfToken();
     return executeRequest(path, options, false, includeMeta);
   }
-  if (!response.ok) throw new ApiError(response.status, payload);
+  if (!response.ok) {
+    const retryAfterValue = Number(response.headers.get('Retry-After'));
+    const retryAfter = Number.isFinite(retryAfterValue) && retryAfterValue >= 1
+      ? Math.ceil(retryAfterValue)
+      : null;
+    throw new ApiError(response.status, payload, retryAfter);
+  }
   return includeMeta ? {
     data: payload.data, meta: payload.meta
   } : payload?.data;

@@ -111,6 +111,19 @@ export function removeReportedMember(reportId, reason) {
 }
 
 /**
+ * 이미 그룹을 떠난 신고 대상을 추가 강퇴 없이 처리 완료합니다.
+ * @param {number} reportId 신고 ID
+ * @param {string} reason 처리 사유
+ * @returns {Promise<any>} 처리 결과
+ */
+export function resolveInactiveReportedMember(reportId, reason) {
+    return apiRequest(`${ADMIN_API}/reports/${reportId}/resolutions`, {
+        method: 'POST',
+        body: {reason},
+    });
+}
+
+/**
  * 해결되지 않은 운영 경고 목록을 조회하는 API
  * 유형별 필터와 페이지 조건을 서버에 전달한다.
  * 반환값에 현재 유효한 경고와 페이지 정보가 포함된다.

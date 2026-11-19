@@ -1,5 +1,5 @@
 // @ts-check
-import { getActiveCreatureSpecies } from '../features/creature/api.js';
+import { createGroupChatMessage, getActiveCreatureSpecies } from '../features/creature/api.js';
 import { renderCreatureGrowth } from '../features/creature/render.js';
 import { getCurrentSeason } from '../features/season/api.js';
 import { ApiError } from '../api/client.js';
@@ -7,6 +7,7 @@ import { getShopItem } from '../features/shop/api.js';
 import { createAvatarField } from '../features/creature/avatar-field.js';
 import { creatureAccessErrorRoute } from '../features/creature/access-error-policy.js';
 import { groupLiveManager } from '../realtime/group-live-manager.js';
+import { createUserReport } from '../features/group/api.js';
 
 import creatureLv0 from '../../assets/creature/lv0.png';
 import { createAppShell } from '../components/app-shell.js';
@@ -74,6 +75,17 @@ export function creaturePage(context) {
                     <span class="small text-app-muted" id="hatch-countdown" aria-live="polite"></span>
                   </div>
                 </div>
+
+                <form class="d-flex gap-2 mt-2" data-chat-form>
+                  <label class="visually-hidden" for="creature-chat-content">말풍선 메시지</label>
+                  <input id="creature-chat-content" class="form-control" type="text"
+                         autocomplete="off" placeholder="말풍선 메시지 (최대 80자)"
+                         data-chat-content disabled>
+                  <button type="submit" class="btn btn-primary text-nowrap" data-chat-submit disabled>전송</button>
+                </form>
+                <p class="small mb-0 mt-1 text-app-muted" role="status" aria-live="polite" data-chat-status>
+                  실시간 연결 후 메시지를 보낼 수 있습니다.
+                </p>
                 
                 <!-- 알 상태에서 주·부 관리자에게만 보여주는 종 선택 안내 -->
                 <div class="alert alert-info d-none mt-3 mb-2"
@@ -170,7 +182,10 @@ export function creaturePage(context) {
                   </table>
                 </div>
                 <div class="card-footer bg-transparent border-0 pt-0 pb-3 text-center">
-                  <button type="button" class="btn btn-sm px-3 fw-bold w-100 py-1.5 text-app-primary bg-app-background border-app" id="btn-goto-shop" disabled>판매 상품 보기</button>
+                  <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-sm px-3 fw-bold py-1.5 text-app-primary bg-app-background border-app" id="btn-goto-shop" disabled>판매 상품 보기</button>
+                    <button type="button" class="btn btn-sm btn-outline-danger d-none" data-report-chat>현재 말풍선 신고</button>
+                  </div>
                 </div>
               </div>
         
@@ -179,6 +194,29 @@ export function creaturePage(context) {
         </div>
 
     </div>
+
+    <dialog class="border-0 rounded-4 shadow p-0" data-chat-report-dialog>
+      <form class="p-4" style="width:min(90vw,440px)" data-chat-report-form>
+        <h2 class="h5 fw-bold">말풍선 신고</h2>
+        <p class="small text-app-muted" data-chat-report-target></p>
+        <label class="form-label" for="chat-report-category">신고 분류</label>
+        <select id="chat-report-category" class="form-select mb-3" required data-chat-report-category>
+          <option value="">선택해 주세요</option>
+          <option value="HARASSMENT">괴롭힘</option>
+          <option value="SPAM">스팸</option>
+          <option value="INAPPROPRIATE_CONTENT">부적절한 콘텐츠</option>
+          <option value="OTHER">기타</option>
+        </select>
+        <label class="form-label" for="chat-report-content">신고 내용</label>
+        <textarea id="chat-report-content" class="form-control" rows="4" maxlength="1000"
+                  required data-chat-report-content></textarea>
+        <p class="small text-danger mt-2 mb-0" role="alert" data-chat-report-error></p>
+        <div class="d-flex justify-content-end gap-2 mt-3">
+          <button type="button" class="btn btn-outline-secondary" data-chat-report-cancel>취소</button>
+          <button type="submit" class="btn btn-danger" data-chat-report-submit>신고 접수</button>
+        </div>
+      </form>
+    </dialog>
     `;
 
     const element = createAppShell({
@@ -196,6 +234,19 @@ export function creaturePage(context) {
     const btnGotoShop = element.querySelector('#btn-goto-shop');
     const btnToggleMovement = element.querySelector('#btn-toggle-movement');
     const avatarContainer = element.querySelector('#avatar-container');
+    const chatForm = /** @type {HTMLFormElement} */ (element.querySelector('[data-chat-form]'));
+    const chatContent = /** @type {HTMLInputElement} */ (element.querySelector('[data-chat-content]'));
+    const chatSubmit = /** @type {HTMLButtonElement} */ (element.querySelector('[data-chat-submit]'));
+    const chatStatus = /** @type {HTMLElement} */ (element.querySelector('[data-chat-status]'));
+    const reportChatButton = /** @type {HTMLButtonElement} */ (element.querySelector('[data-report-chat]'));
+    const reportDialog = /** @type {HTMLDialogElement} */ (element.querySelector('[data-chat-report-dialog]'));
+    const reportForm = /** @type {HTMLFormElement} */ (element.querySelector('[data-chat-report-form]'));
+    const reportTarget = /** @type {HTMLElement} */ (element.querySelector('[data-chat-report-target]'));
+    const reportCategory = /** @type {HTMLSelectElement} */ (element.querySelector('[data-chat-report-category]'));
+    const reportContent = /** @type {HTMLTextAreaElement} */ (element.querySelector('[data-chat-report-content]'));
+    const reportError = /** @type {HTMLElement} */ (element.querySelector('[data-chat-report-error]'));
+    const reportCancel = /** @type {HTMLButtonElement} */ (element.querySelector('[data-chat-report-cancel]'));
+    const reportSubmit = /** @type {HTMLButtonElement} */ (element.querySelector('[data-chat-report-submit]'));
 
     // 종 선택 진입 안내의 DOM 요소입니다.
     const creatureGuide = element.querySelector('[data-creature-selection-guide]');
@@ -313,6 +364,7 @@ export function creaturePage(context) {
 
     const shopAvailabilityCache = new Map();
     let selectedAvatarUserId = null;
+    let selectedChatMessage = null;
     let selectedShopItemId = null;
     let avatarSelectionVersion = 0;
 
@@ -357,8 +409,9 @@ export function creaturePage(context) {
         }
     }
 
-    function selectAvatar(member, scrollToDetails = false) {
+    function selectAvatar(member, scrollToDetails = false, chatMessage = null) {
         selectedAvatarUserId = member.userId;
+        selectedChatMessage = chatMessage;
         selectedShopItemId = null;
         avatarSelectionVersion += 1;
         const selectionVersion = avatarSelectionVersion;
@@ -376,6 +429,10 @@ export function creaturePage(context) {
         if (btnGotoShop instanceof HTMLButtonElement) {
             btnGotoShop.disabled = true;
         }
+        reportChatButton.classList.toggle(
+            'd-none',
+            !chatMessage || String(member.userId) === String(currentUserId),
+        );
 
         void renderEquipmentCell(element.querySelector('#slot-head'), equipment.HEAD, selectionVersion);
         void renderEquipmentCell(element.querySelector('#slot-face'), equipment.FACE, selectionVersion);
@@ -399,13 +456,162 @@ export function creaturePage(context) {
     }
     const avatarField = createAvatarField({
         container: avatarContainer,
-        onSelect: (member) => selectAvatar(member, true),
+        onSelect: (member, chatMessage) => selectAvatar(member, true, chatMessage),
+        onMessageExpired: (message) => {
+            if (selectedChatMessage?.messageId !== message.messageId) return;
+            selectedChatMessage = null;
+            reportChatButton.classList.add('d-none');
+        },
     });
     avatarField.setMovementEnabled(isAvatarMoving);
 
     // 3. API 조회, 크리처 성장 렌더링 및 마감 감시 로직
     let isMounted = true;
     let currentUserId = null;
+    const receivedMessageIds = new Set();
+    const pendingChatMessages = new Map();
+    let sendingChat = false;
+    let reportingChat = false;
+    let reportMessage = null;
+    let chatRetryTimer = null;
+    let unsubscribeChatMessages = null;
+    let unsubscribeLiveStatus = null;
+
+    function syncSelectedChatMessage(message) {
+        if (String(selectedAvatarUserId) !== String(message.senderUserId)
+                || String(currentUserId) === String(message.senderUserId)) return;
+        selectedChatMessage = message;
+        reportChatButton.classList.remove('d-none');
+    }
+
+    function displayChatMessage(message) {
+        if (!message?.messageId || receivedMessageIds.has(message.messageId)) return;
+        receivedMessageIds.add(message.messageId);
+        if (!avatarField.showMessage(message)) {
+            pendingChatMessages.set(message.messageId, {
+                message,
+                expiresAt: Date.now() + 5000,
+            });
+        } else syncSelectedChatMessage(message);
+    }
+
+    function flushPendingChatMessages() {
+        const now = Date.now();
+        for (const [messageId, pending] of pendingChatMessages) {
+            if (pending.expiresAt <= now) {
+                pendingChatMessages.delete(messageId);
+            } else if (avatarField.showMessage(pending.message)) {
+                pendingChatMessages.delete(messageId);
+                syncSelectedChatMessage(pending.message);
+            }
+        }
+    }
+
+    function updateChatAvailability(state = groupLiveManager.getState()) {
+        const available = state.status === 'live' && !sendingChat && chatRetryTimer === null;
+        chatContent.disabled = !available;
+        chatSubmit.disabled = !available;
+        if (!sendingChat && chatRetryTimer === null) {
+            chatStatus.textContent = available
+                ? '메시지는 5초 동안 아바타 위에 표시됩니다.'
+                : '실시간 연결 후 메시지를 보낼 수 있습니다.';
+        }
+    }
+
+    async function submitChat(event) {
+        event.preventDefault();
+        if (sendingChat || groupLiveManager.getState().status !== 'live') return;
+        const contentText = chatContent.value.trim();
+        if (!contentText || [...contentText].length > 80) {
+            chatStatus.textContent = '메시지는 공백 제외 1~80자로 입력해 주세요.';
+            return;
+        }
+        sendingChat = true;
+        updateChatAvailability();
+        chatStatus.textContent = '메시지를 보내는 중입니다.';
+        try {
+            const message = await createGroupChatMessage(contentText);
+            if (!isMounted) return;
+            displayChatMessage(message);
+            chatContent.value = '';
+            chatStatus.textContent = '메시지를 보냈습니다.';
+        } catch (error) {
+            if (!isMounted) return;
+            if (error instanceof ApiError && error.status === 429) {
+                const retryAfter = error.retryAfter ?? 1;
+                chatStatus.textContent = `${retryAfter}초 후 다시 보낼 수 있습니다.`;
+                if (chatRetryTimer !== null) window.clearTimeout(chatRetryTimer);
+                chatRetryTimer = window.setTimeout(() => {
+                    chatRetryTimer = null;
+                    if (isMounted) updateChatAvailability();
+                }, retryAfter * 1000);
+            } else {
+                chatStatus.textContent = getApiErrorMessage(error);
+            }
+        } finally {
+            sendingChat = false;
+            if (isMounted && chatRetryTimer === null) updateChatAvailability();
+        }
+    }
+
+    function openChatReport() {
+        if (!selectedChatMessage || reportingChat) return;
+        reportMessage = selectedChatMessage;
+        reportForm.reset();
+        reportError.textContent = '';
+        reportTarget.textContent = `${selectedChatMessage.senderNickname}: ${selectedChatMessage.content}`;
+        reportDialog.showModal();
+        reportCategory.focus();
+    }
+
+    async function submitChatReport(event) {
+        event.preventDefault();
+        if (!reportMessage || reportingChat) return;
+        const contentText = reportContent.value.trim();
+        if (!reportCategory.value || !contentText) {
+            reportError.textContent = '신고 분류와 내용을 입력해 주세요.';
+            return;
+        }
+        reportingChat = true;
+        reportSubmit.disabled = true;
+        reportCancel.disabled = true;
+        reportError.textContent = '';
+        try {
+            const result = await createUserReport({
+                reportedUserId: reportMessage.senderUserId,
+                category: reportCategory.value,
+                content: contentText,
+                chatMessageId: reportMessage.messageId,
+            });
+            if (!isMounted) return;
+            reportDialog.close();
+            chatStatus.textContent = `신고가 접수되었습니다. (접수 번호: ${result.reportId})`;
+        } catch (error) {
+            if (isMounted) {
+                reportError.textContent = error instanceof ApiError && error.status === 404
+                    ? '신고할 메시지가 만료되었거나 더 이상 확인할 수 없습니다.'
+                    : getApiErrorMessage(error);
+            }
+        } finally {
+            reportingChat = false;
+            if (isMounted) {
+                reportSubmit.disabled = false;
+                reportCancel.disabled = false;
+            }
+        }
+    }
+
+    chatForm.addEventListener('submit', submitChat);
+    reportChatButton.addEventListener('click', openChatReport);
+    reportForm.addEventListener('submit', submitChatReport);
+    const onChatReportCancel = () => {
+        if (!reportingChat) reportDialog.close();
+    };
+    const onChatReportDialogCancel = (event) => {
+        if (reportingChat) event.preventDefault();
+    };
+    reportCancel.addEventListener('click', onChatReportCancel);
+    reportDialog.addEventListener('cancel', onChatReportDialogCancel);
 
     // 마지막으로 수신한 서버 Snapshot을 안내 표시용으로 보관합니다.
     let latestCreatureGuideData = null;
@@ -801,11 +1007,12 @@ export function creaturePage(context) {
         }
 
         avatarField.render(onlineMembers, currentUserId);
+        flushPendingChatMessages();
 
         if (selectedAvatarUserId !== null) {
             const selectedMember = onlineMembers.find((member) =>
                 String(member.userId) === String(selectedAvatarUserId));
-            if (selectedMember) selectAvatar(selectedMember);
+            if (selectedMember) selectAvatar(selectedMember, false, selectedChatMessage);
             else {
                 selectedAvatarUserId = null;
                 avatarInfoCard?.classList.add('d-none');
@@ -872,6 +1079,10 @@ export function creaturePage(context) {
         unsubscribeSyncErrors = groupLiveManager.subscribeErrors((error) => {
             if (isMounted) handleSnapshotError(error);
         });
+        unsubscribeChatMessages = groupLiveManager.subscribeChatMessages((message) => {
+            if (isMounted) displayChatMessage(message);
+        });
+        unsubscribeLiveStatus = groupLiveManager.subscribeStatus(updateChatAvailability);
 
         // 화면 재진입 시에도 조회를 요청하며 중복 조회는 공통 모듈에서 합칩니다.
         void groupLiveManager.refresh();
@@ -913,6 +1124,7 @@ export function creaturePage(context) {
             isMounted = false;
             if (countdownIntervalId !== null) clearInterval(countdownIntervalId);
             if (deadlineTimeoutId !== null) clearTimeout(deadlineTimeoutId);
+            if (chatRetryTimer !== null) clearTimeout(chatRetryTimer);
             growthAnimationTimeoutIds.forEach(timeoutId => clearTimeout(timeoutId));
             growthAnimationTimeoutIds.clear();
             retryButton?.removeEventListener('click', onRetryLoad);
@@ -940,6 +1152,14 @@ export function creaturePage(context) {
             avatarField.dispose();
             unsubscribeSnapshots?.();
             unsubscribeSyncErrors?.();
+            unsubscribeChatMessages?.();
+            unsubscribeLiveStatus?.();
+            chatForm.removeEventListener('submit', submitChat);
+            reportChatButton.removeEventListener('click', openChatReport);
+            reportForm.removeEventListener('submit', submitChatReport);
+            reportCancel.removeEventListener('click', onChatReportCancel);
+            reportDialog.removeEventListener('cancel', onChatReportDialogCancel);
+            if (reportDialog.open) reportDialog.close();
         },
     };
 }

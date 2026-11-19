@@ -345,6 +345,40 @@ body {
   white-space: nowrap;
 }
 
+.avatar-chat-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.35rem);
+  z-index: 2;
+  width: max-content;
+  max-width: min(220px, 65vw);
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.75rem;
+  color: var(--app-text);
+  background: var(--app-surface);
+  box-shadow: 0 0.25rem 0.75rem color-mix(in srgb, #000 18%, transparent);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-align: left;
+  transform: translateX(-50%);
+  white-space: normal;
+}
+
+.avatar-chat-bubble::after {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-right: 1px solid var(--app-border);
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-surface);
+  content: '';
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
 .avatar-spot.is-current-user,
 .avatar-spot.is-current-user.is-moving {
   z-index: 5;

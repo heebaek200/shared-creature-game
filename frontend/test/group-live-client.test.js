@@ -110,7 +110,10 @@ function createClientHarness(overrides = {}) {
 }
 
 test('CSRF 조회 성공 후 STOMP WebSocket 연결을 시작한다', async () => {
-    const harness = createClientHarness();
+    const chatMessages = [];
+    const harness = createClientHarness({
+        options: {onChatMessage: (message) => chatMessages.push(message)},
+    });
 
     harness.client.connect();
     await nextTurn();
@@ -121,6 +124,14 @@ test('CSRF 조회 성공 후 STOMP WebSocket 연결을 시작한다', async () =
     });
     harness.stompClient.emitConnect();
     assert.equal(harness.subscribedCount(), 1);
+    assert.deepEqual(
+        harness.stompClient.subscriptions.map(({destination}) => destination),
+        ['/topic/groups/1/live', '/topic/groups/1/chat'],
+    );
+    harness.stompClient.subscriptions[1].callback({
+        body: JSON.stringify({messageId: 'message-1', groupId: 1, content: '안녕'}),
+    });
+    assert.equal(chatMessages[0].messageId, 'message-1');
     await harness.client.disconnect();
 });
 

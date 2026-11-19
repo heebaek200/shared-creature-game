@@ -121,6 +121,23 @@ public class AdminModerationCommandExecutor {
         ));
     }
 
+    /** 대상이 현재 활성 회원이 아닐 때 신고만 처리 완료하고 감사를 남깁니다. */
+    @Transactional
+    public void resolveInactive(Long actorId, Long reportId, String reason) {
+        UserReport report = requireReceivedReport(reportId);
+        User actor = requireSuperAdmin(actorId);
+        Long groupId = report.getGroup().getId();
+        Long targetId = report.getReportedUser().getId();
+        if (membershipRepository.findActiveMembershipId(groupId, targetId).isPresent()) {
+            throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
+        }
+        Instant now = clock.instant();
+        report.resolve(actor, reason, now);
+        auditLogRepository.save(AdminAuditLog.create(
+                actor, AdminAuditActionType.RESOLVE_REPORT, AdminAuditTargetType.USER_REPORT,
+                reportId, report.getGroup(), AdminAuditResult.SUCCEEDED, reason, "{}", now));
+    }
+
     private UserReport requireReceivedReport(Long reportId) {
         UserReport report = reportRepository.findByIdForUpdate(reportId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));

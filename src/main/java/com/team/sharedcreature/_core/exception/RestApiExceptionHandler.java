@@ -7,8 +7,10 @@ import com.team.sharedcreature.avatar.api.AvatarController;
 import com.team.sharedcreature.avatar.api.ShopController;
 import com.team.sharedcreature.payment.api.AdminRefundController;
 import com.team.sharedcreature.payment.api.RefundController;
+import com.team.sharedcreature.group.application.ChatRateLimitException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -34,10 +36,10 @@ import java.util.List;
 /**
  * Controller 예외를 공통 JSON 오류 계약으로 변환합니다.
  */
+@Slf4j
 @RestControllerAdvice
 public class RestApiExceptionHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(RestApiExceptionHandler.class);
     private static final List<Class<?>> FIELD_VALUE_BODY_CONTROLLERS = List.of(
             AvatarController.class, ShopController.class, RefundController.class, AdminRefundController.class);
     private final ErrorResponseFactory responseFactory;
@@ -59,6 +61,23 @@ public class RestApiExceptionHandler {
             code = ErrorCode.INVALID_FIELD_VALUE;
         }
         return response(code, exception.getMessage(), List.of(), request);
+    }
+
+    /** 채팅 전송 제한 응답에 지연 초 Header를 추가합니다. */
+    @ExceptionHandler(ChatRateLimitException.class)
+    public ResponseEntity<ErrorResponse> handleChatRateLimit(
+            ChatRateLimitException exception,
+            HttpServletRequest request
+    ) {
+        ErrorResponse body = responseFactory.create(
+                ErrorCode.RATE_LIMIT_EXCEEDED,
+                exception.getMessage(),
+                List.of(),
+                ErrorResponseFactory.requestTraceId(request)
+        );
+        return ResponseEntity.status(ErrorCode.RATE_LIMIT_EXCEEDED.status())
+                .header("Retry-After", Long.toString(exception.retryAfterSeconds()))
+                .body(body);
     }
 
     /** 목록 API의 Query 오류 코드는 Context Path를 제외한 기존 API 경로로 구분합니다. */

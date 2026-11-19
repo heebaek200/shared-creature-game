@@ -38,6 +38,7 @@ const MAX_CONCURRENT_MOVERS = 3;
 const MAX_MOVE_DISTANCE = 32;
 const IDLE_WAIT_MIN_MS = 12_000;
 const IDLE_WAIT_MAX_MS = 26_000;
+const CHAT_BUBBLE_DURATION_MS = 5000;
 
 /**
  * 최대 20명의 그룹원 아바타를 10개 Zone에 배치하고 브라우저 안에서 이동시킵니다.
@@ -45,7 +46,8 @@ const IDLE_WAIT_MAX_MS = 26_000;
  *
  * @param {{
  *   container: HTMLElement,
- *   onSelect: (member: Record<string, any>) => void
+ *   onSelect: (member: Record<string, any>, chatMessage: Record<string, any>|null) => void,
+ *   onMessageExpired?: (message: Record<string, any>) => void
  * }} options
  */
 export function createAvatarField(options) {
@@ -132,6 +134,46 @@ export function createAvatarField(options) {
             window.clearTimeout(actor.frameTimer);
             actor.frameTimer = null;
         }
+    }
+
+    function clearBubbleTimer(actor) {
+        if (actor.bubbleTimer !== null) {
+            window.clearTimeout(actor.bubbleTimer);
+            actor.bubbleTimer = null;
+        }
+    }
+
+    function hideBubble(actor) {
+        const expiredMessage = actor.chatMessage;
+        clearBubbleTimer(actor);
+        actor.chatMessage = null;
+        actor.bubble.classList.add('d-none');
+        actor.bubble.textContent = '';
+        if (expiredMessage) options.onMessageExpired?.(expiredMessage);
+    }
+
+    function startBubbleTimer(actor) {
+        clearBubbleTimer(actor);
+        actor.bubbleStartedAt = Date.now();
+        actor.bubbleTimer = window.setTimeout(
+            () => hideBubble(actor),
+            actor.bubbleRemainingMs,
+        );
+    }
+
+    function pauseBubble(actor) {
+        if (actor.bubbleTimer === null) return;
+        actor.bubbleRemainingMs = Math.max(
+            0,
+            actor.bubbleRemainingMs - (Date.now() - actor.bubbleStartedAt),
+        );
+        clearBubbleTimer(actor);
+    }
+
+    function resumeBubble(actor) {
+        if (!actor.chatMessage || actor.bubbleTimer !== null) return;
+        if (actor.bubbleRemainingMs <= 0) hideBubble(actor);
+        else startBubbleTimer(actor);
     }
 
     function scheduleNextFrame(actor) {
@@ -273,7 +315,10 @@ export function createAvatarField(options) {
         });
         const name = document.createElement('span');
         name.className = 'avatar-spot__name';
-        button.append(visual, name);
+        const bubble = document.createElement('span');
+        bubble.className = 'avatar-chat-bubble d-none';
+        bubble.setAttribute('aria-live', 'polite');
+        button.append(bubble, visual, name);
 
         const areaIndex = index % movementAreas.length;
         const initialPosition = randomPosition(areaIndex);
@@ -281,6 +326,7 @@ export function createAvatarField(options) {
             button,
             visual,
             name,
+            bubble,
             member,
             x: initialPosition.x,
             y: initialPosition.y,
@@ -290,16 +336,28 @@ export function createAvatarField(options) {
             frame: Math.random() < 0.5 ? 1 : 2,
             timer: null,
             frameTimer: null,
+            chatMessage: null,
+            bubbleTimer: null,
+            bubbleStartedAt: 0,
+            bubbleRemainingMs: CHAT_BUBBLE_DURATION_MS,
         };
         updateActorMember(actor, member, currentUserId);
         button.style.left = `${actor.x}%`;
         button.style.top = `${actor.y}%`;
-        button.addEventListener('click', () => options.onSelect(actor.member));
-        button.addEventListener('focus', () => stopActor(actor));
+        button.addEventListener('click', () => options.onSelect(actor.member, actor.chatMessage));
+        button.addEventListener('focus', () => {
+            stopActor(actor);
+            pauseBubble(actor);
+        });
         button.addEventListener('blur', () => {
+            resumeBubble(actor);
             if (movementEnabled && !reducedMotion.matches) {
                 scheduleMove(actor, 400);
             }
+        });
+        button.addEventListener('mouseenter', () => pauseBubble(actor));
+        button.addEventListener('mouseleave', () => {
+            if (!button.matches(':focus')) resumeBubble(actor);
         });
         fieldLayer.appendChild(button);
         actors.set(String(member.userId), actor);
@@ -325,6 +383,7 @@ export function createAvatarField(options) {
             for (const [userId, actor] of actors) {
                 if (nextUserIds.has(userId)) continue;
                 clearActorTimer(actor);
+                clearBubbleTimer(actor);
                 actor.button.remove();
                 actors.delete(userId);
             }
@@ -354,11 +413,25 @@ export function createAvatarField(options) {
             else stopAllActors();
         },
 
+        /** 같은 사용자의 기존 말풍선을 교체하고 5초 표시 Timer를 시작합니다. */
+        showMessage(message) {
+            const actor = actors.get(String(message.senderUserId));
+            if (!actor) return false;
+            clearBubbleTimer(actor);
+            actor.chatMessage = message;
+            actor.bubbleRemainingMs = CHAT_BUBBLE_DURATION_MS;
+            actor.bubble.textContent = message.content;
+            actor.bubble.classList.remove('d-none');
+            startBubbleTimer(actor);
+            return true;
+        },
+
         /** 아바타 이동·프레임 Timer와 미디어 쿼리 Listener를 정리합니다. */
         dispose() {
             if (disposed) return;
             disposed = true;
             stopAllActors();
+            for (const actor of actors.values()) clearBubbleTimer(actor);
             actors.clear();
             fieldLayer.remove();
             reducedMotion.removeEventListener('change', handleReducedMotionChange);

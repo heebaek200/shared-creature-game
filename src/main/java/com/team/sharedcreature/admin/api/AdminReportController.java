@@ -42,7 +42,7 @@ public class AdminReportController {
 
     /** 상태 필터로 신고 목록을 조회합니다. */
     @GetMapping
-    public ApiResponse<List<AdminReportResponse>> list(
+    public ApiResponse<List<AdminReportListItemResponse>> list(
             @RequestParam(required = false)
             @Pattern(regexp = "RECEIVED|RESOLVED|REJECTED") String status,
             @RequestParam(defaultValue = "0") @Min(0) int page,
@@ -76,5 +76,16 @@ public class AdminReportController {
             @Valid @RequestBody AdminReasonRequest request
     ) {
         return ApiResponse.success(moderationService.remove(loginUser.id(), reportId, request.reason()));
+    }
+
+    /** 이미 그룹을 떠난 신고 대상을 추가 강퇴 없이 처리 완료합니다. */
+    @PostMapping("/{reportId}/resolutions")
+    public ApiResponse<AdminReportResponse> resolveInactive(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @PathVariable @Positive Long reportId,
+            @Valid @RequestBody AdminReasonRequest request
+    ) {
+        return ApiResponse.success(
+                moderationService.resolveInactive(loginUser.id(), reportId, request.reason()));
     }
 }

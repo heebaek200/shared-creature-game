@@ -4,13 +4,18 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.domain.GroupMembership;
+import com.team.sharedcreature.group.domain.ChatMessage;
+import com.team.sharedcreature.group.domain.UserReportChatEvidence;
 import com.team.sharedcreature.group.domain.UserReportCategory;
 import com.team.sharedcreature.group.domain.UserReportStatus;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
+import com.team.sharedcreature.group.infrastructure.ChatMessageRepository;
+import com.team.sharedcreature.group.infrastructure.UserReportChatEvidenceRepository;
 import com.team.sharedcreature.group.infrastructure.UserReportRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
@@ -23,7 +28,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-
 class UserReportServiceTest {
 
     @ParameterizedTest
@@ -45,6 +49,8 @@ class UserReportServiceTest {
         UserReportService service = new UserReportService(
                 membershipRepository,
                 reportRepository,
+                mock(ChatMessageRepository.class),
+                mock(UserReportChatEvidenceRepository.class),
                 Clock.fixed(Instant.parse("2026-11-10T00:00:00Z"), ZoneOffset.UTC)
         );
 
@@ -76,12 +82,56 @@ class UserReportServiceTest {
         when(membershipRepository.findActiveWithGroupByUserId(2L))
                 .thenReturn(Optional.of(secondMembership));
         UserReportService service = new UserReportService(
-                membershipRepository, reportRepository, Clock.systemUTC()
+                membershipRepository,
+                reportRepository,
+                mock(ChatMessageRepository.class),
+                mock(UserReportChatEvidenceRepository.class),
+                Clock.systemUTC()
         );
 
         assertThatThrownBy(() -> service.create(
                 1L, 2L, UserReportCategory.OTHER, "내용"
         )).isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void 만료_전_채팅은_발신자의_활성_멤버십이_없어도_증거로_보존한다() {
+        GroupMembershipRepository membershipRepository = mock(GroupMembershipRepository.class);
+        UserReportRepository reportRepository = mock(UserReportRepository.class);
+        ChatMessageRepository chatRepository = mock(ChatMessageRepository.class);
+        UserReportChatEvidenceRepository evidenceRepository =
+                mock(UserReportChatEvidenceRepository.class);
+        Group group = mock(Group.class);
+        User reporter = mock(User.class);
+        User sender = mock(User.class);
+        Instant now = Instant.parse("2026-11-10T00:00:00Z");
+        GroupMembership reporterMembership = membership(1L, reporter, group);
+        when(group.getId()).thenReturn(10L);
+        when(reporter.getId()).thenReturn(1L);
+        when(sender.getId()).thenReturn(2L);
+        when(membershipRepository.findActiveWithGroupByUserId(1L))
+                .thenReturn(Optional.of(reporterMembership));
+        ChatMessage message = ChatMessage.create(group, sender, "발신자", "증거 메시지", now);
+        when(chatRepository.findByMessageIdForUpdate(message.getMessageId()))
+                .thenReturn(Optional.of(message));
+        when(reportRepository.save(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        UserReportService service = new UserReportService(
+                membershipRepository,
+                reportRepository,
+                chatRepository,
+                evidenceRepository,
+                Clock.fixed(now.plusSeconds(10), ZoneOffset.UTC));
+
+        service.create(1L, 2L, UserReportCategory.HARASSMENT,
+                "채팅 신고", message.getMessageId());
+
+        ArgumentCaptor<UserReportChatEvidence> evidence =
+                ArgumentCaptor.forClass(UserReportChatEvidence.class);
+        verify(evidenceRepository).save(evidence.capture());
+        assertThat(evidence.getValue().getChatMessageId()).isEqualTo(message.getMessageId());
+        assertThat(evidence.getValue().getSenderNickname()).isEqualTo("발신자");
+        assertThat(evidence.getValue().getContent()).isEqualTo("증거 메시지");
     }
 
     private GroupMembership membership(Long id, User user, Group group) {
