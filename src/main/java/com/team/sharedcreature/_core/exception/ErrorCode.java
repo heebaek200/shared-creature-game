@@ -27,6 +27,7 @@ public enum ErrorCode {
     CREATURE_SELECTION_CLOSED(HttpStatus.CONFLICT, "크리처 선택 시간이 종료됐습니다."),
     QUEST_PERIOD_ENDED(HttpStatus.CONFLICT, "퀘스트 유효 기간이 종료됐습니다."),
     QUEST_COMPLETION_NOT_ALLOWED(HttpStatus.CONFLICT, "직접 완료할 수 없는 퀘스트입니다."),
+    QUEST_ALREADY_COMPLETED(HttpStatus.CONFLICT, "이미 완료한 퀘스트입니다."),
     PHOTO_ATTEMPT_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "사진 제출 가능 횟수를 초과했습니다."),
     FIRST_USE_CONFIRMATION_REQUIRED(HttpStatus.CONFLICT, "최초 장착 동의가 필요합니다."),
     PAYMENT_AMOUNT_MISMATCH(HttpStatus.CONFLICT, "결제 금액이 일치하지 않습니다."),

@@ -854,7 +854,7 @@ public class QuestCompletionService {
             );
         }
 
-        // 이미 완료된 배정은 기존 완료를 반환하는 정책을 유지하면서 사진만 VALID로 확정합니다.
+        // 파싱 중 다른 요청이 먼저 완료했으면 새 사진을 성공 처리하지 않습니다.
         QuestCompletion existing = findCompletionsByAssignmentId(
                 userId,
                 List.of(requestedAssignment)
@@ -871,13 +871,7 @@ public class QuestCompletionService {
                 );
             }
 
-            submission.markValid(
-                    capturedAt,
-                    latitude,
-                    longitude,
-                    Instant.now(clock)
-            );
-            return Optional.of(buildExistingCompletionResponse(existing));
+            throw new BusinessException(ErrorCode.QUEST_ALREADY_COMPLETED);
         }
 
         // 촬영·접수 이후 판정 확정 시점에도 배정 기간과 현재 시즌을 재검증합니다.
