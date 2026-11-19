@@ -29,6 +29,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,7 +48,9 @@ import static org.mockito.Mockito.*;
 class GroupInvitationManagementServiceTest {
 
     private static final Instant NOW =
-            Instant.parse("2026-11-05T06:00:00Z");
+            Instant.parse("2026-11-05T06:00:00.123456789Z");
+    private static final Instant DB_PRECISION_NOW =
+            NOW.truncatedTo(ChronoUnit.MICROS);
 
     @Mock UserRepository userRepository;
     @Mock GroupRepository groupRepository;
@@ -96,8 +99,9 @@ class GroupInvitationManagementServiceTest {
 
         // 기존 링크와 반환 URL이 올바른지 확인합니다.
         assertThat(f.previous().getStatus()).isEqualTo(GroupInviteLinkStatus.INVALIDATED);
-        assertThat(f.previous().getInvalidatedAt()).isEqualTo(NOW);
+        assertThat(f.previous().getInvalidatedAt()).isEqualTo(DB_PRECISION_NOW);
         assertThat(response.groupId()).isEqualTo(10L);
+        assertThat(response.issuedAt()).isEqualTo(DB_PRECISION_NOW);
         assertThat(response.issuedByUserId()).isEqualTo(1L);
         assertThat(response.unlimitedUses()).isTrue();
         assertThat(response.expiresAt()).isNull();
@@ -116,6 +120,7 @@ class GroupInvitationManagementServiceTest {
                 .isEqualTo(Hashing.sha256(token));
         assertThat(captor.getValue().getStatus()).isEqualTo(GroupInviteLinkStatus.ACTIVE);
         assertThat(captor.getValue().getIssuedByUser()).isSameAs(f.actor());
+        assertThat(captor.getValue().getIssuedAt()).isEqualTo(DB_PRECISION_NOW);
 
         // 기존 링크 UPDATE가 신규 INSERT보다 먼저 수행돼야 합니다.
         InOrder order = inOrder(entityManager, inviteLinkRepository);

@@ -20,9 +20,12 @@ function updateActiveNavigation(nav, currentPath) {
  */
 export function createAppNavigation(currentPath, currentUser = null) {
     const nav = document.createElement('nav');
-    const roles = Array.isArray(currentUser?.roles) ? currentUser.roles : [];
+
+    // 세션의 역할 배열 대신 현재 활성 그룹 멤버십 역할을 사용합니다.
+    const groupRole = currentUser?.membership?.role;
+
     const canManageGroup =
-        roles.includes('PRIMARY') || roles.includes('DEPUTY');
+        groupRole === 'PRIMARY' || groupRole === 'DEPUTY';
 
     nav.innerHTML =
         `
@@ -122,9 +125,11 @@ function createMobileNavigation(currentPath, label, items) {
 }
 
 export function createAppMobileNavigation(currentPath, currentUser = null) {
-    const roles = Array.isArray(currentUser?.roles) ? currentUser.roles : [];
+    // 세션의 역할 배열 대신 현재 활성 그룹 멤버십 역할을 사용합니다.
+    const groupRole = currentUser?.membership?.role;
+
     const canManageGroup =
-        roles.includes('PRIMARY') || roles.includes('DEPUTY');
+        groupRole === 'PRIMARY' || groupRole === 'DEPUTY';
 
     const morePaths = ['/shop', '/avatar', '/payments'];
     if (canManageGroup) morePaths.push('/group-admin');

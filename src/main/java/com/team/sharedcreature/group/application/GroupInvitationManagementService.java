@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 
 /**
@@ -174,7 +175,9 @@ public class GroupInvitationManagementService {
         }
 
         validatePrimary(group, membership, actorId);
-        Instant now = Instant.now(clock);
+        // MySQL DATETIME(6)에 저장한 뒤에도 POST와 GET의 발급 시각이 같도록 맞춥니다.
+        // DB가 나노초를 반올림하기 전에 마이크로초 단위로 절삭합니다.
+        Instant now = Instant.now(clock).truncatedTo(ChronoUnit.MICROS);
 
         // 7. 기존 활성 링크를 INVALIDATED로 변경합니다.
         previousInvitation.invalidate(now);
