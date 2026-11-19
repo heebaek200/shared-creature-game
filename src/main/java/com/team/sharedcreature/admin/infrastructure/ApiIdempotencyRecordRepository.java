@@ -14,6 +14,11 @@ import java.util.Optional;
  */
 public interface ApiIdempotencyRecordRepository extends JpaRepository<ApiIdempotencyRecord, Long> {
 
+
+    /**
+     * 복합 유일 키를 기준으로 신규 요청의 처리권을 원자적으로 확보합니다.
+     * 호출부는 INSERT IGNORE의 갱신 행 수로 신규 삽입(1)과 기존 키(0)를 구분합니다.
+     */
     @Modifying
     @Query(value = """
             INSERT IGNORE INTO api_idempotency_records (

@@ -38,16 +38,16 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
 
     /** 정원이 남은 활성 공개 그룹의 카운터를 조건부로 한 명 증가시킵니다. */
     @Modifying(flushAutomatically = true)
-    @Query(value = """
-            UPDATE game_groups
-               SET current_member_count = current_member_count + 1
-                 , updated_at = :now
-                 , version = version + 1
-             WHERE id = :groupId
-               AND status = 'ACTIVE'
-               AND visibility = 'PUBLIC'
-               AND current_member_count < capacity
-            """, nativeQuery = true)
+    @Query("""
+            UPDATE Group g
+               SET g.currentMemberCount = g.currentMemberCount + 1,
+                   g.updatedAt = :now,
+                   g.version = g.version + 1
+             WHERE g.id = :groupId
+               AND g.status = com.team.sharedcreature.group.domain.GroupStatus.ACTIVE
+               AND g.visibility = com.team.sharedcreature.group.domain.GroupVisibility.PUBLIC
+               AND g.currentMemberCount < g.capacity
+            """)
     int incrementMemberCountIfAvailable(@Param("groupId") Long groupId, @Param("now") java.time.Instant now);
 
     /**

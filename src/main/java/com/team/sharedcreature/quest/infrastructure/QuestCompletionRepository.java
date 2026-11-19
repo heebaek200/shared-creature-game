@@ -150,25 +150,20 @@ public interface QuestCompletionRepository extends JpaRepository<QuestCompletion
             @Param("endDateExclusive") LocalDate endDateExclusive
     );
 
-    @Query(value = """
-            SELECT COUNT(*)
-            FROM (
-              SELECT p.period_date
-              FROM quest_completions c
-              JOIN quest_assignments a
-              ON a.id = c.quest_assignment_id
-              JOIN quest_periods p
-              ON p.id = a.quest_period_id
-              WHERE c.user_id = :userId
-              AND c.membership_id = :membershipId
-              AND c.group_season_id = :groupSeasonId
-              AND p.period_type = 'DAILY'
-              AND p.period_date >= :startDate
-              AND p.period_date < :endDateExclusive
-              GROUP BY p.id, p.period_date
-              HAVING COUNT(c.id) = 3
-              ) d
-            """, nativeQuery = true)
+    @Query("""
+            SELECT COUNT(p.id)
+              FROM QuestPeriod p
+             WHERE p.periodType = com.team.sharedcreature.quest.domain.QuestPeriodType.DAILY
+               AND p.periodDate >= :startDate
+               AND p.periodDate < :endDateExclusive
+               AND (SELECT COUNT(c.id)
+                      FROM QuestCompletion c
+                      JOIN c.questAssignment a
+                     WHERE a.questPeriod = p
+                       AND c.user.id = :userId
+                       AND c.membership.id = :membershipId
+                       AND c.groupSeason.id = :groupSeasonId) = 3
+            """)
     long countFullyCompletedDailyQuestDaysInDateRange(
             @Param("userId") Long userId,
             @Param("membershipId") Long membershipId,
