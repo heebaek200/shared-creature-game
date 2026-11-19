@@ -2,6 +2,7 @@ package com.team.sharedcreature.admin.api;
 
 import com.team.sharedcreature._core.api.ApiResponse;
 import com.team.sharedcreature.admin.application.OperationalWarningService;
+import com.team.sharedcreature.admin.domain.OperationalWarningType;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
@@ -35,6 +36,7 @@ public class AdminOperationsController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size
     ) {
-        return ApiResponse.page(warningService.list(type, page, size));
+        OperationalWarningType filter = type == null ? null : OperationalWarningType.valueOf(type);
+        return ApiResponse.page(warningService.list(filter, page, size));
     }
 }

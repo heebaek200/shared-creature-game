@@ -4,6 +4,7 @@ import com.team.sharedcreature._core.api.ApiResponse;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.avatar.application.ShopQueryService;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import org.springframework.data.domain.Page;
@@ -62,7 +63,7 @@ public class ShopController {
         int pageSize = parseInteger(size, 20, 1, 50, "size");
 
         Page<ShopItemResponse> result =
-                shopQueryService.list(pageNumber, pageSize, slot);
+                shopQueryService.list(pageNumber, pageSize, slot == null ? null : AvatarSlot.valueOf(slot));
 
         // 기존 공통 응답을 사용해 data 배열과 meta 페이지 정보를 구성합니다.
         return ApiResponse.page(result);

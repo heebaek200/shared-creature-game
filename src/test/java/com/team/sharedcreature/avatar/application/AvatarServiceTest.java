@@ -18,9 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.mockito.ArgumentCaptor;
@@ -78,7 +76,7 @@ class AvatarServiceTest {
                 .thenAnswer(invocation -> List.of(savedSlot.get()));
         when(membershipRepository.findActiveGroupIdByUserId(1L)).thenReturn(Optional.of(7L));
 
-        var response = service.equipAvatarItem(1L, "HEAD", 10L, true);
+        var response = service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true);
 
         assertThat(item.getStatus()).isEqualTo(OwnedItemStatus.OWNED_USED);
         assertThat(item.getUsedAt()).isEqualTo(NOW);
@@ -111,7 +109,7 @@ class AvatarServiceTest {
         when(equipmentRepository.findByUserIdAndSlotCodeForUpdate(1L, AvatarSlot.HEAD))
                 .thenReturn(Optional.empty());
 
-        assertBusinessError(() -> service.equipAvatarItem(1L, "HEAD", 10L, false),
+        assertBusinessError(() -> service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, false),
                 ErrorCode.FIRST_USE_CONFIRMATION_REQUIRED);
 
         assertThat(item.getUsedAt()).isNull();
@@ -127,7 +125,7 @@ class AvatarServiceTest {
         when(refund.getStatus()).thenReturn(status);
         stubLockedItem(item, List.of(refund));
 
-        assertBusinessError(() -> service.equipAvatarItem(1L, "HEAD", 10L, true),
+        assertBusinessError(() -> service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true),
                 ErrorCode.CONCURRENT_MODIFICATION);
 
         assertThat(item.getStatus()).isEqualTo(OwnedItemStatus.OWNED_UNUSED);
@@ -140,7 +138,7 @@ class AvatarServiceTest {
         when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user(1L)));
         when(ownedItemRepository.findPurchaseIdByIdAndUserId(10L, 1L)).thenReturn(Optional.empty());
 
-        assertBusinessError(() -> service.equipAvatarItem(1L, "HEAD", 10L, true),
+        assertBusinessError(() -> service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true),
                 ErrorCode.RESOURCE_NOT_FOUND);
 
         verifyNoInteractions(purchaseRepository, refundRepository, equipmentRepository, eventPublisher);
@@ -153,7 +151,7 @@ class AvatarServiceTest {
         ReflectionTestUtils.setField(item, "revokedAt", NOW);
         stubLockedItem(item, List.of());
 
-        assertBusinessError(() -> service.equipAvatarItem(1L, "HEAD", 10L, true),
+        assertBusinessError(() -> service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true),
                 ErrorCode.RESOURCE_NOT_FOUND);
 
         verifyNoInteractions(equipmentRepository, eventPublisher);
@@ -164,7 +162,7 @@ class AvatarServiceTest {
         OwnedItem item = unusedItem(10L, 1L, "FACE");
         stubLockedItem(item, List.of());
 
-        assertBusinessError(() -> service.equipAvatarItem(1L, "HEAD", 10L, true),
+        assertBusinessError(() -> service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true),
                 ErrorCode.SLOT_MISMATCH);
 
         assertThat(item.getUsedAt()).isNull();
@@ -179,7 +177,7 @@ class AvatarServiceTest {
         stubLockedItem(item, List.of());
         stubExistingSlot(equipment);
 
-        var response = service.equipAvatarItem(1L, "HEAD", 10L, false);
+        var response = service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, false);
 
         assertThat(response.equipments().HEAD().ownedItemId()).isEqualTo(10L);
         assertThat(item.getUsedAt()).isEqualTo(CREATED_AT);
@@ -195,7 +193,7 @@ class AvatarServiceTest {
         stubExistingSlot(equipment);
         when(membershipRepository.findActiveGroupIdByUserId(1L)).thenReturn(Optional.empty());
 
-        var response = service.equipAvatarItem(1L, "HEAD", 10L, true);
+        var response = service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true);
 
         assertThat(response.equipments().HEAD().ownedItemId()).isEqualTo(10L);
         assertThat(item.getStatus()).isEqualTo(OwnedItemStatus.OWNED_USED);
@@ -211,7 +209,7 @@ class AvatarServiceTest {
         stubExistingSlot(equipment);
         when(membershipRepository.findActiveGroupIdByUserId(1L)).thenReturn(Optional.of(7L));
 
-        var response = service.unequipAvatarItem(1L, "HEAD");
+        var response = service.unequipAvatarItem(1L, AvatarSlot.HEAD);
 
         assertThat(response.equipments().HEAD()).isNull();
         assertThat(item.getStatus()).isEqualTo(OwnedItemStatus.OWNED_USED);
@@ -231,7 +229,7 @@ class AvatarServiceTest {
                 .thenReturn(Optional.empty());
         when(equipmentRepository.findAllByUserId(1L)).thenReturn(List.of());
 
-        var response = service.unequipAvatarItem(1L, "HEAD");
+        var response = service.unequipAvatarItem(1L, AvatarSlot.HEAD);
 
         assertThat(response.equipments().HEAD()).isNull();
         assertThat(response.equipments().FACE()).isNull();
@@ -283,7 +281,7 @@ class AvatarServiceTest {
                 .thenReturn(new PageImpl<>(List.of(item)));
         when(equipmentRepository.findAllByUserId(1L)).thenReturn(List.of());
 
-        var response = service.listOwnedItems(1L, 0, 20, "HEAD", status);
+        var response = service.listOwnedItems(1L, 0, 20, AvatarSlot.HEAD, status);
 
         assertThat(response.getContent().getFirst().slot()).isEqualTo(AvatarSlot.HEAD);
         assertThat(response.getContent().getFirst().status()).isEqualTo(status);
@@ -299,21 +297,11 @@ class AvatarServiceTest {
         assertThat(service.listOwnedItems(1L, 0, 20, null, null)).isEmpty();
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"head", " HEAD", "", "HAT"})
-    void 잘못된_목록슬롯은_조회전에_필드오류로_거절한다(String slot) {
-        assertBusinessError(() -> service.listOwnedItems(1L, 0, 20, slot, null),
+    @Test
+    void rejectsMissingEquipmentSlotBeforeDatabaseAccess() {
+        assertBusinessError(() -> service.equipAvatarItem(1L, null, 10L, true),
                 ErrorCode.INVALID_FIELD_VALUE);
-        verifyNoInteractions(ownedItemRepository, equipmentRepository);
-    }
-
-    @ParameterizedTest
-    @NullAndEmptySource
-    @ValueSource(strings = {"head", "HEAD ", "HAT"})
-    void 장착과_해제는_필수슬롯이_없거나_잘못되면_잠금전에_거절한다(String slot) {
-        assertBusinessError(() -> service.equipAvatarItem(1L, slot, 10L, true),
-                ErrorCode.INVALID_FIELD_VALUE);
-        assertBusinessError(() -> service.unequipAvatarItem(1L, slot),
+        assertBusinessError(() -> service.unequipAvatarItem(1L, null),
                 ErrorCode.INVALID_FIELD_VALUE);
         verifyNoInteractions(userRepository, purchaseRepository, ownedItemRepository,
                 refundRepository, equipmentRepository, eventPublisher);

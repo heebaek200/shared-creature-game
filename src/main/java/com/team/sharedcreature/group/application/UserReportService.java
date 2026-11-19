@@ -2,7 +2,6 @@ package com.team.sharedcreature.group.application;
 
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
-import com.team.sharedcreature.group.api.CreateUserReportRequest;
 import com.team.sharedcreature.group.api.UserReportResponse;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.domain.UserReport;
@@ -35,26 +34,24 @@ public class UserReportService {
 
     /** 신고자와 대상의 현재 활성 소속을 확인하고 반복 가능한 신고를 저장합니다. */
     @Transactional
-    public UserReportResponse create(Long reporterUserId, CreateUserReportRequest request) {
-        if (reporterUserId.equals(request.reportedUserId())) {
+    public UserReportResponse create(
+            Long reporterUserId,
+            Long reportedUserId,
+            UserReportCategory category,
+            String content
+    ) {
+        if (reporterUserId.equals(reportedUserId)) {
             throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE);
         }
         GroupMembership reporter = membershipRepository.findActiveWithGroupByUserId(reporterUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ROLE_FORBIDDEN));
-        GroupMembership reported = membershipRepository.findActiveWithGroupByUserId(request.reportedUserId())
+        GroupMembership reported = membershipRepository.findActiveWithGroupByUserId(reportedUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         if (!reporter.getGroup().getId().equals(reported.getGroup().getId())) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
-        // 요청 검증을 통과한 문자열은 도메인 경계에서 신고 분류로 변환합니다.
-        if (request.category() == null) {
-            throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE);
-        }
-        UserReportCategory category;
-        try {
-            category = UserReportCategory.valueOf(request.category());
-        } catch (IllegalArgumentException exception) {
+        if (category == null) {
             throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE);
         }
         UserReport report = reportRepository.save(UserReport.receive(
@@ -62,7 +59,7 @@ public class UserReportService {
                 reported.getUser(),
                 reporter.getGroup(),
                 category,
-                request.content().trim(),
+                content.trim(),
                 clock.instant()
         ));
         return toResponse(report);

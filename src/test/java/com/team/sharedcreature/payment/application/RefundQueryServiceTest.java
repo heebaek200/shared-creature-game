@@ -18,7 +18,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -68,8 +67,8 @@ class RefundQueryServiceTest {
         when(refunds.findAdminRefunds(eq(status), any()))
                 .thenReturn(new PageImpl<>(List.of(refund)));
 
-        var mine = service.listMyRefunds(1L, 0, 20, status.name());
-        var admin = service.listAdminRefunds(0, 20, status.name());
+        var mine = service.listMyRefunds(1L, 0, 20, status);
+        var admin = service.listAdminRefunds(0, 20, status);
 
         assertThat(mine.getContent().getFirst().status()).isEqualTo(status);
         assertThat(mine.getContent().getFirst().requestedByUserId()).isEqualTo(1L);
@@ -85,14 +84,6 @@ class RefundQueryServiceTest {
 
         assertThat(service.listMyRefunds(1L, 0, 20, null)).isEmpty();
         assertThat(service.listAdminRefunds(0, 20, null)).isEmpty();
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"", "requested", " REQUESTED", "FAILED ", "PAID", "OWNED_UNUSED"})
-    void 잘못된_환불필터를_보정하지_않고_기존_필드오류로_거절한다(String status) {
-        assertFieldError(() -> service.listMyRefunds(1L, 0, 20, status));
-        assertFieldError(() -> service.listAdminRefunds(0, 20, status));
-        verifyNoInteractions(refunds, items, transactions);
     }
 
     @ParameterizedTest

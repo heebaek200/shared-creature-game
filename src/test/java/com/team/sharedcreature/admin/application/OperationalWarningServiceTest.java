@@ -29,8 +29,9 @@ class OperationalWarningServiceTest {
                 OperationalWarningSeverity.CRITICAL, "SEASON", 2L, "season warning", Instant.EPOCH.plusSeconds(1));
         doReturn(List.of(photoWarning, seasonWarning)).when(service).currentWarnings();
 
-        assertThat(service.list("PHOTO_DELETION_FAILED", 0, 20).getContent()).containsExactly(photoWarning);
-        assertThat(service.list("photo_deletion_failed", 0, 20)).isEmpty();
+        assertThat(service.list(OperationalWarningType.PHOTO_DELETION_FAILED, 0, 20).getContent())
+                .containsExactly(photoWarning);
+        assertThat(service.list(OperationalWarningType.REFUND_UNCERTAIN, 0, 20)).isEmpty();
         assertThat(service.list(null, 0, 20).getContent()).containsExactly(seasonWarning, photoWarning);
     }
 }

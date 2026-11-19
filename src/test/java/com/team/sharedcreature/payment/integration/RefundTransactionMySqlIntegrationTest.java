@@ -389,10 +389,10 @@ class RefundTransactionMySqlIntegrationTest {
 
         assertThat(jdbc.queryForObject("SELECT status FROM refund_requests WHERE id = ?",
                 String.class, fixture.refundId())).isEqualTo(status.name());
-        var mine = refundQueries.listMyRefunds(fixture.ownerId(), 0, 20, status.name());
+        var mine = refundQueries.listMyRefunds(fixture.ownerId(), 0, 20, status);
         assertThat(mine.getTotalElements()).isEqualTo(1);
         assertThat(mine.getContent().getFirst().status()).isEqualTo(status);
-        assertThat(refundQueries.listMyRefunds(fixture.adminId(), 0, 20, status.name())).isEmpty();
+        assertThat(refundQueries.listMyRefunds(fixture.adminId(), 0, 20, status)).isEmpty();
 
         var purchase = purchaseQueries.get(fixture.ownerId(), fixture.purchaseId());
         assertThat(purchase.latestRefundStatus()).isEqualTo(status);
@@ -501,7 +501,7 @@ class RefundTransactionMySqlIntegrationTest {
         jdbc.update("DELETE FROM refund_requests WHERE id = ?", fixture.refundId());
         var outcomes = race(
                 () -> refunds.createRefundRequest(fixture.ownerId(), fixture.purchaseId(), "동시 환불", UUID.randomUUID().toString()),
-                () -> avatars.equipAvatarItem(fixture.ownerId(), "HEAD", fixture.itemId(), true));
+                () -> avatars.equipAvatarItem(fixture.ownerId(), AvatarSlot.HEAD, fixture.itemId(), true));
         assertThat(outcomes.stream().filter(value -> value instanceof ErrorCode).count()).isEqualTo(1);
         Timestamp usedAt = jdbc.queryForObject("SELECT used_at FROM owned_items WHERE id = ?", Timestamp.class, fixture.itemId());
         int refundCount = jdbc.queryForObject("SELECT COUNT(*) FROM refund_requests WHERE purchase_id = ? AND status = 'REQUESTED'",

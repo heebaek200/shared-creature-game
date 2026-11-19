@@ -5,6 +5,7 @@ import com.team.sharedcreature.payment.domain.PaymentWebhookEvent;
 import com.team.sharedcreature.payment.domain.WebhookProcessingStatus;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
 import com.team.sharedcreature.payment.domain.Purchase;
+import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
 import com.team.sharedcreature.payment.infrastructure.PaymentWebhookEventRepository;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
@@ -154,7 +155,7 @@ class PaymentWebhookServiceTest {
             return event;
         });
         when(reconciliationService.reconcileByPaymentId("payment-21"))
-                .thenReturn(new PaymentReconciliationService.ReconciliationResult(10L, 20L, "PAID"));
+                .thenReturn(new PaymentReconciliationService.ReconciliationResult(10L, 20L, PurchaseStatus.PAID));
         when(eventRepository.findByIdForUpdate(1L)).thenAnswer(invocation -> Optional.of(saved.get()));
         when(purchaseRepository.findById(10L)).thenReturn(Optional.of(purchase));
         when(transactionRepository.findById(20L)).thenReturn(Optional.of(transaction));
@@ -230,7 +231,7 @@ class PaymentWebhookServiceTest {
         PaymentTransaction transaction = mock(PaymentTransaction.class);
         when(eventRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
         when(reconciliationService.reconcileByPaymentId("payment-21"))
-                .thenReturn(new PaymentReconciliationService.ReconciliationResult(10L, 20L, "PAID"));
+                .thenReturn(new PaymentReconciliationService.ReconciliationResult(10L, 20L, PurchaseStatus.PAID));
         when(purchaseRepository.findById(10L)).thenReturn(Optional.of(purchase));
         when(transactionRepository.findById(20L)).thenReturn(Optional.of(transaction));
         executeTransactionsImmediately();
@@ -258,7 +259,7 @@ class PaymentWebhookServiceTest {
         event.fail("PURCHASE_NOT_FOUND", Instant.parse("2026-11-09T07:50:01Z"));
         when(eventRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
         when(reconciliationService.reconcileByPaymentId("payment-21"))
-                .thenReturn(new PaymentReconciliationService.ReconciliationResult(10L, 20L, "PAID"));
+                .thenReturn(new PaymentReconciliationService.ReconciliationResult(10L, 20L, PurchaseStatus.PAID));
         when(purchaseRepository.findById(10L)).thenReturn(Optional.empty());
         executeTransactionsImmediately();
 

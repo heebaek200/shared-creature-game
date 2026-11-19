@@ -34,7 +34,7 @@ public class GroupPresenceLifecycleListener {
                 .filter(GroupPresenceService.Removal::lastSession)
                 .ifPresent(removal -> eventPublisher.publish(
                         removal.groupId(),
-                        "PRESENCE_LEFT",
+                        GroupLiveEventType.PRESENCE_LEFT,
                         Instant.now(),
                         new GroupLivePayloads.PresenceLeft(removal.userId())
                 ));

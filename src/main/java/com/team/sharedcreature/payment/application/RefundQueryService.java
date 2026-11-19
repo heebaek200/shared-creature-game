@@ -41,14 +41,13 @@ public class RefundQueryService {
             Long userId,
             int page,
             int size,
-            String status
+            RefundStatus status
     ) {
         PageRequest pageable = pageRequest(page, size);
-        RefundStatus refundStatus = parseStatus(status);
 
         // 조회자 ID를 조건에 포함하여 다른 사용자의 요청을 제외합니다.
         return refundRequestRepository
-                .findMyRefunds(userId, refundStatus, pageable)
+                .findMyRefunds(userId, status, pageable)
                 .map(RefundResponse::from);
     }
 
@@ -63,13 +62,12 @@ public class RefundQueryService {
     public Page<RefundResponse> listAdminRefunds(
             int page,
             int size,
-            String status
+            RefundStatus status
     ) {
         PageRequest pageable = pageRequest(page, size);
-        RefundStatus refundStatus = parseStatus(status);
 
         return refundRequestRepository
-                .findAdminRefunds(refundStatus, pageable)
+                .findAdminRefunds(status, pageable)
                 .map(RefundResponse::from);
     }
 
@@ -121,28 +119,5 @@ public class RefundQueryService {
         }
 
         return PageRequest.of(page, size);
-    }
-
-    /**
-     * 선택적인 환불 상태 필터를 도메인 타입으로 변환합니다.
-     *
-     * @param status 요청 환불 상태, 미지정이면 null
-     * @return 환불 상태, 미지정이면 null
-     * @throws BusinessException 허용되지 않은 환불 상태인 경우
-     */
-    private RefundStatus parseStatus(String status) {
-        if (status == null) {
-            return null;
-        }
-
-        try {
-            // 대소문자와 공백을 보정하지 않고 기존 허용값을 유지합니다.
-            return RefundStatus.valueOf(status);
-        } catch (IllegalArgumentException exception) {
-            throw new BusinessException(
-                    ErrorCode.INVALID_FIELD_VALUE,
-                    "지원하지 않는 환불 상태입니다."
-            );
-        }
     }
 }

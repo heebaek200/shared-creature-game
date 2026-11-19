@@ -10,7 +10,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -42,7 +41,7 @@ class ShopQueryServiceTest {
         when(repository.findAllByStatusAndSlotCode(eq(ShopItemStatus.ACTIVE), eq(slot), any()))
                 .thenReturn(new PageImpl<>(List.of(shop)));
 
-        var result = service.list(0, 20, slot.name()).getContent().getFirst();
+        var result = service.list(0, 20, slot).getContent().getFirst();
 
         assertThat(result.slot()).isEqualTo(slot);
         assertThat(result.status()).isEqualTo(ShopItemStatus.ACTIVE);
@@ -54,15 +53,6 @@ class ShopQueryServiceTest {
 
         assertThat(service.list(0, 20, null)).isEmpty();
         verify(repository, never()).findAllByStatusAndSlotCode(any(), any(), any());
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"head", " HEAD", "HEAD ", "", "HAT"})
-    void 허용값과_정확히_일치하지_않는_슬롯은_거절한다(String slot) {
-        assertThatThrownBy(() -> service.list(0, 20, slot))
-                .isInstanceOfSatisfying(BusinessException.class, exception ->
-                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.INVALID_FIELD_VALUE));
-        verifyNoInteractions(repository);
     }
 
     @Test

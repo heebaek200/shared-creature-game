@@ -28,7 +28,7 @@ public class StompGroupLiveEventPublisher implements GroupLiveEventPublisher {
 
     /** 전송 실패가 이미 Commit된 업무 결과를 되돌리지 않도록 실패를 기록하고 종료합니다. */
     @Override
-    public void publish(Long groupId, String eventType, Instant occurredAt, Object payload) {
+    public void publish(Long groupId, GroupLiveEventType eventType, Instant occurredAt, Object payload) {
         long sequence = streamService.nextSequence(groupId);
         GroupLiveEvent event = new GroupLiveEvent(
                 UUID.randomUUID(),

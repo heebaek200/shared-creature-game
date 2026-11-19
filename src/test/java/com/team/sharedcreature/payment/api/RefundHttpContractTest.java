@@ -18,6 +18,8 @@ import com.team.sharedcreature.payment.domain.RefundStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -91,6 +93,41 @@ class RefundHttpContractTest {
     }
 
     @ParameterizedTest
+    @EnumSource(RefundStatus.class)
+    @NullSource
+    void passesRefundStatusToBothListQueries(RefundStatus filter) throws Exception {
+        when(queries.listMyRefunds(1L, 0, 20, filter)).thenReturn(Page.empty());
+        when(queries.listAdminRefunds(0, 20, filter)).thenReturn(Page.empty());
+
+        var myRequest = get("/api/v1/refund-requests").session(session(1));
+        var adminRequest = get("/api/v1/admin/refund-requests").session(session(9));
+        if (filter != null) {
+            myRequest.queryParam("status", filter.name());
+            adminRequest.queryParam("status", filter.name());
+        }
+        mvc.perform(myRequest).andExpect(status().isOk());
+        mvc.perform(adminRequest).andExpect(status().isOk());
+
+        verify(queries).listMyRefunds(1L, 0, 20, filter);
+        verify(queries).listAdminRefunds(0, 20, filter);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "requested", " REQUESTED", "FAILED ", "PAID", "OWNED_UNUSED", "WRONG"})
+    void rejectsInvalidRefundStatusForBothListQueries(String filter) throws Exception {
+        mvc.perform(get("/api/v1/refund-requests").session(session(1)).queryParam("status", filter))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_FIELD_VALUE"))
+                .andExpect(jsonPath("$.fieldErrors").isEmpty());
+        mvc.perform(get("/api/v1/admin/refund-requests").session(session(9)).queryParam("status", filter))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_FIELD_VALUE"))
+                .andExpect(jsonPath("$.fieldErrors").isEmpty());
+
+        verifyNoInteractions(queries);
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"/api/v1/refund-requests", "/api/v1/admin/refund-requests"})
     void 세션이_없으면_인증_오류를_반환한다(String path) throws Exception {
         mvc.perform(get(path)).andExpect(status().isUnauthorized())
@@ -118,13 +155,8 @@ class RefundHttpContractTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"?page=1&page=2", "?unknown=x", "?page=", "?size=51", "?status=WRONG"})
+    @ValueSource(strings = {"?page=1&page=2", "?unknown=x", "?page=", "?size=51"})
     void 중복_미등록_잘못된_목록Query는_400이다(String query) throws Exception {
-        // 업무 Service도 상태를 검사하므로 이 사례의 잘못된 상태만 동일하게 재현합니다.
-        if (query.contains("WRONG")) {
-            when(queries.listMyRefunds(anyLong(), anyInt(), anyInt(), eq("WRONG")))
-                    .thenThrow(new com.team.sharedcreature._core.exception.BusinessException(ErrorCode.INVALID_FIELD_VALUE));
-        }
         mvc.perform(get("/api/v1/refund-requests" + query).session(session(1)))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_FIELD_VALUE"));
     }

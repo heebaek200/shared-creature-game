@@ -52,9 +52,9 @@ public class OperationalWarningService {
     }
 
     /** 유형 필터와 페이지 조건에 맞는 현재 경고를 반환합니다. */
-    public Page<OperationalWarningResponse> list(String type, int page, int size) {
+    public Page<OperationalWarningResponse> list(OperationalWarningType type, int page, int size) {
         List<OperationalWarningResponse> warnings = currentWarnings().stream()
-                .filter(warning -> type == null || type.equals(warning.type().name()))
+                .filter(warning -> type == null || type == warning.type())
                 .sorted(Comparator.comparing(OperationalWarningResponse::detectedAt).reversed()
                         .thenComparing(OperationalWarningResponse::warningKey))
                 .toList();

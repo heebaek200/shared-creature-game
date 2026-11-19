@@ -85,7 +85,7 @@ class GroupStompAuthorizationInterceptorTest {
         assertThat(interceptor.preSend(subscribe, channel)).isSameAs(subscribe);
 
         assertThat(presenceService.activeUserIds(20L)).containsExactly(10L);
-        verify(eventPublisher).publish(eq(20L), eq("PRESENCE_JOINED"), any(), eq(payload));
+        verify(eventPublisher).publish(eq(20L), eq(GroupLiveEventType.PRESENCE_JOINED), any(), eq(payload));
     }
 
     @Test
@@ -114,7 +114,7 @@ class GroupStompAuthorizationInterceptorTest {
         assertThat(presenceService.activeUserIds(20L)).isEmpty();
         verify(eventPublisher).publish(
                 eq(20L),
-                eq("PRESENCE_LEFT"),
+                eq(GroupLiveEventType.PRESENCE_LEFT),
                 any(),
                 eq(new GroupLivePayloads.PresenceLeft(10L))
         );

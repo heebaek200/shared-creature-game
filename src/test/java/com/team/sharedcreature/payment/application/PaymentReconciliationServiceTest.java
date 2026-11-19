@@ -5,6 +5,7 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.avatar.domain.ShopItem;
 import com.team.sharedcreature.avatar.domain.AvatarSlot;
 import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
@@ -92,7 +93,7 @@ class PaymentReconciliationServiceTest {
     @Test
     void 검증된_카카오페이_테스트_결제만_PAID와_아이템_지급으로_확정한다() {
         PaymentSnapshot snapshot = paidSnapshot(1000L, "EASY_PAY", "KAKAOPAY", "TEST");
-        PurchaseResponse expected = mock(PurchaseResponse.class);
+        PurchaseResponse expected = paidResponse();
         when(purchaseRepository.findByIdAndUserId(10L, 7L)).thenReturn(Optional.of(purchase));
         when(purchaseRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(purchase));
         when(paymentGateway.getPayment(PAYMENT_ID)).thenReturn(snapshot);
@@ -225,7 +226,7 @@ class PaymentReconciliationServiceTest {
         );
         ReflectionTestUtils.setField(transaction, "id", 20L);
         OwnedItem ownedItem = OwnedItem.grant(purchase, NOW.minusSeconds(30));
-        PurchaseResponse expected = mock(PurchaseResponse.class);
+        PurchaseResponse expected = paidResponse();
         when(purchaseRepository.findByIdAndUserId(10L, 7L)).thenReturn(Optional.of(purchase));
         when(purchaseRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(purchase));
         when(paymentGateway.getPayment(PAYMENT_ID)).thenReturn(paidSnapshot(1000L, "EASY_PAY", "KAKAOPAY", "TEST"));
@@ -297,6 +298,30 @@ class PaymentReconciliationServiceTest {
                 NOW,
                 List.of()
         );
+    }
+
+    @Test
+    void returnsPurchaseStatusInReconciliationResult() {
+        when(purchaseRepository.findByOrderNumber(PAYMENT_ID)).thenReturn(Optional.of(purchase));
+        when(purchaseRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(purchase));
+        when(paymentGateway.getPayment(PAYMENT_ID)).thenReturn(failedSnapshot());
+        when(transactionRepository.save(any(PaymentTransaction.class))).thenAnswer(invocation -> {
+            PaymentTransaction transaction = invocation.getArgument(0);
+            ReflectionTestUtils.setField(transaction, "id", 20L);
+            return transaction;
+        });
+        executeTransactionsImmediately();
+
+        var result = service.reconcileByPaymentId(PAYMENT_ID);
+
+        assertThat(result).isEqualTo(
+                new PaymentReconciliationService.ReconciliationResult(10L, 20L, PurchaseStatus.FAILED));
+        assertThat(purchase.getStatus()).isEqualTo(PurchaseStatus.FAILED);
+    }
+
+    private PurchaseResponse paidResponse() {
+        return new PurchaseResponse(10L, PAYMENT_ID, "test item", 1000L, "KRW", PurchaseStatus.PAID,
+                NOW.minusSeconds(60), OwnedItemStatus.OWNED_UNUSED, null, 101L, List.of(), List.of());
     }
 
     private PaymentSnapshot failedSnapshot() {

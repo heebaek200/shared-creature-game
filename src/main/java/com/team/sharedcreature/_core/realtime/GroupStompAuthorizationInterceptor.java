@@ -79,7 +79,7 @@ public class GroupStompAuthorizationInterceptor implements ChannelInterceptor {
                 .filter(GroupPresenceService.Removal::lastSession)
                 .ifPresent(removal -> eventPublisher.publish(
                         removal.groupId(),
-                        "PRESENCE_LEFT",
+                        GroupLiveEventType.PRESENCE_LEFT,
                         Instant.now(),
                         new GroupLivePayloads.PresenceLeft(removal.userId())
                 ));
@@ -132,7 +132,7 @@ public class GroupStompAuthorizationInterceptor implements ChannelInterceptor {
             try {
                 GroupLivePayloads.PresenceJoined payload =
                         payloadProvider.getPresenceJoined(groupId, loginUser.id());
-                eventPublisher.publish(groupId, "PRESENCE_JOINED", Instant.now(), payload);
+                eventPublisher.publish(groupId, GroupLiveEventType.PRESENCE_JOINED, Instant.now(), payload);
             } catch (RuntimeException exception) {
                 presenceService.removeSession(webSocketSessionId);
                 throw exception;
@@ -156,7 +156,7 @@ public class GroupStompAuthorizationInterceptor implements ChannelInterceptor {
                     .filter(GroupPresenceService.Removal::lastSession)
                     .ifPresent(removal -> eventPublisher.publish(
                             removal.groupId(),
-                            "PRESENCE_LEFT",
+                            GroupLiveEventType.PRESENCE_LEFT,
                             Instant.now(),
                             new GroupLivePayloads.PresenceLeft(removal.userId())
                     ));

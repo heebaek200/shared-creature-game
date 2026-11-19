@@ -96,7 +96,7 @@ public class AvatarService {
             Long userId,
             int page,
             int size,
-            String slot,
+            AvatarSlot slot,
             OwnedItemStatus status
     ) {
         PageRequest pageable = PageRequest.of(
@@ -107,7 +107,7 @@ public class AvatarService {
 
         Page<OwnedItem> items = ownedItemRepository.findAllForUser(
                 userId,
-                parseSlot(slot),
+                slot,
                 status,
                 pageable
         );
@@ -178,7 +178,7 @@ public class AvatarService {
      * 사용 확정과 슬롯 변경은 하나의 트랜잭션으로 처리합니다.
      *
      * @param userId          로그인한 사용자 ID
-     * @param slot            장착할 슬롯
+     * @param avatarSlot            장착할 슬롯
      * @param ownedItemId     장착할 보유 아이템 ID
      * @param confirmFirstUse 최초 사용 동의 여부
      * @return 변경된 아바타의 전체 슬롯 정보
@@ -188,11 +188,11 @@ public class AvatarService {
     @Transactional
     public AvatarResponse equipAvatarItem(
             Long userId,
-            String slot,
+            AvatarSlot avatarSlot,
             Long ownedItemId,
             boolean confirmFirstUse
     ) {
-        AvatarSlot avatarSlot = parseRequiredSlot(slot);
+        validateRequiredSlot(avatarSlot);
 
         // 같은 사용자의 장착·해제를 직렬화하고 최초 슬롯 생성 경합을 막습니다.
         User user = userRepository.findByIdForUpdate(userId)
@@ -300,14 +300,8 @@ public class AvatarService {
         return getAvatar(userId);
     }
 
-    /**
-     * 장착·해제에 필요한 슬롯을 검증하고 도메인 타입으로 변환합니다.
-     *
-     * @param slot 요청 슬롯 코드
-     * @return 검증된 장착 슬롯
-     * @throws BusinessException 슬롯이 없거나 허용되지 않은 값인 경우
-     */
-    private AvatarSlot parseRequiredSlot(String slot) {
+    /** 장착·해제에 필수인 슬롯의 누락을 확인합니다. */
+    private void validateRequiredSlot(AvatarSlot slot) {
         // 목록 필터와 달리 장착·해제에서는 슬롯 생략을 허용하지 않습니다.
         if (slot == null) {
             throw new BusinessException(
@@ -315,8 +309,6 @@ public class AvatarService {
                     "슬롯은 HEAD, FACE, BODY, ACCESSORY 중 하나여야 합니다."
             );
         }
-
-        return parseSlot(slot);
     }
 
     /**
@@ -325,13 +317,13 @@ public class AvatarService {
      * 보유 아이템의 사용 상태와 최초 사용 시각은 변경하지 않습니다.
      *
      * @param userId 로그인한 사용자 ID
-     * @param slot   해제할 슬롯
+     * @param avatarSlot   해제할 슬롯
      * @return 변경된 아바타의 전체 슬롯 정보
      * @throws BusinessException 허용되지 않은 슬롯이거나 사용자가 없는 경우
      */
     @Transactional
-    public AvatarResponse unequipAvatarItem(Long userId, String slot) {
-        AvatarSlot avatarSlot = parseRequiredSlot(slot);
+    public AvatarResponse unequipAvatarItem(Long userId, AvatarSlot avatarSlot) {
+        validateRequiredSlot(avatarSlot);
 
         // 장착과 같은 사용자 잠금을 먼저 획득해 동시 변경을 순서대로 처리합니다.
         userRepository.findByIdForUpdate(userId)
@@ -391,28 +383,5 @@ public class AvatarService {
                                 )
                         )
                 );
-    }
-
-    /**
-     * 선택적인 슬롯 필터를 도메인 타입으로 변환합니다.
-     *
-     * @param slot 요청 슬롯, 미지정이면 null
-     * @return 장착 슬롯, 미지정이면 null
-     * @throws BusinessException 허용되지 않은 슬롯인 경우
-     */
-    private AvatarSlot parseSlot(String slot) {
-        if (slot == null) {
-            return null;
-        }
-
-        try {
-            // 대소문자와 공백을 보정하지 않고 기존 허용값을 유지합니다.
-            return AvatarSlot.valueOf(slot);
-        } catch (IllegalArgumentException exception) {
-            throw new BusinessException(
-                    ErrorCode.INVALID_FIELD_VALUE,
-                    "슬롯은 HEAD, FACE, BODY, ACCESSORY 중 하나여야 합니다."
-            );
-        }
     }
 }

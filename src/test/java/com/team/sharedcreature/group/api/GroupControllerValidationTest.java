@@ -8,8 +8,11 @@ import com.team.sharedcreature.group.application.GroupInvitationManagementServic
 import com.team.sharedcreature.group.application.GroupMembershipService;
 import com.team.sharedcreature.group.application.GroupQueryService;
 import com.team.sharedcreature.group.application.GroupRemovalService;
+import com.team.sharedcreature.group.application.UserReportService;
 import com.team.sharedcreature.group.domain.GroupMembershipStatus;
 import com.team.sharedcreature.group.domain.GroupRole;
+import com.team.sharedcreature.group.domain.UserReportCategory;
+import com.team.sharedcreature.group.domain.UserReportStatus;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,6 +38,7 @@ import java.util.Set;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -49,6 +53,7 @@ class GroupControllerValidationTest {
     private MockMvc mockMvc;
     private GroupQueryService groupQueryService;
     private GroupAdminService groupAdminService;
+    private UserReportService reportService;
     private LocalValidatorFactoryBean validator;
 
     /**
@@ -61,6 +66,7 @@ class GroupControllerValidationTest {
     void setUp() {
         groupQueryService = mock(GroupQueryService.class);
         groupAdminService = mock(GroupAdminService.class);
+        reportService = mock(UserReportService.class);
         validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
 
@@ -74,7 +80,8 @@ class GroupControllerValidationTest {
         mockMvc = MockMvcBuilders.standaloneSetup(
                         new GroupController(mock(GroupMembershipService.class), groupQueryService),
                         new GroupAdminController(groupAdminService, mock(GroupRemovalService.class),
-                                mock(GroupInvitationManagementService.class))
+                                mock(GroupInvitationManagementService.class)),
+                        new ReportController(reportService)
                 )
                 .setValidator(validator)
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
@@ -170,5 +177,37 @@ class GroupControllerValidationTest {
                 .andExpect(jsonPath("$.fieldErrors[0].field").value("request"));
 
         verifyNoInteractions(groupAdminService);
+    }
+
+    @ParameterizedTest
+    @EnumSource(UserReportCategory.class)
+    void passesReportCategoryToService(UserReportCategory category) throws Exception {
+        when(reportService.create(1L, 2L, category, "report content")).thenReturn(
+                new UserReportResponse(3L, 4L, 1L, 2L, category, "report content",
+                        UserReportStatus.RECEIVED, Instant.EPOCH, null));
+        mockMvc.perform(post("/api/v1/reports")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reportedUserId":2,"category":"%s","content":"report content"}
+                                """.formatted(category.name())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.category").value(category.name()));
+
+        verify(reportService).create(1L, 2L, category, "report content");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"\"spam\"", "\" SPAM \"", "\"UNKNOWN\"", "\"\"", "null"})
+    void rejectsInvalidReportCategory(String categoryJson) throws Exception {
+        mockMvc.perform(post("/api/v1/reports")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reportedUserId":2,"category":%s,"content":"report content"}
+                                """.formatted(categoryJson)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_FIELD_VALUE"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("category"));
+
+        verifyNoInteractions(reportService);
     }
 }

@@ -2,6 +2,7 @@ package com.team.sharedcreature.season.application;
 
 import com.team.sharedcreature.quest.domain.QuestCompletion;
 import com.team.sharedcreature.season.domain.CreatureExperienceLedger;
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
 import com.team.sharedcreature.season.domain.GroupCreature;
 import com.team.sharedcreature.season.infrastructure.CreatureExperienceLedgerRepository;
 import org.springframework.stereotype.Service;
@@ -62,13 +63,13 @@ public class CreatureGrowthService {
     }
 
     /** 보상 호출자에게 반영 후 단계·잔액과 중복 여부를 전달합니다. */
-    public record GrowthResult(String stage, long totalExperience, boolean duplicate) {
+    public record GrowthResult(CreatureGrowthStage stage, long totalExperience, boolean duplicate) {
         private static GrowthResult applied(GroupCreature creature) {
-            return new GrowthResult(creature.getGrowthStage().name(), creature.getTotalExperience(), false);
+            return new GrowthResult(creature.getGrowthStage(), creature.getTotalExperience(), false);
         }
 
         private static GrowthResult duplicate(GroupCreature creature) {
-            return new GrowthResult(creature.getGrowthStage().name(), creature.getTotalExperience(), true);
+            return new GrowthResult(creature.getGrowthStage(), creature.getTotalExperience(), true);
         }
     }
 }

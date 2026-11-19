@@ -239,7 +239,7 @@ public class PaymentReconciliationService {
         return new ReconciliationResult(
                 purchase.getId(),
                 transaction.getId(),
-                purchase.getStatus().name()
+                purchase.getStatus()
         );
     }
 
@@ -269,6 +269,6 @@ public class PaymentReconciliationService {
     }
 
     /** 정합화된 구매와 승인 거래 식별자입니다. */
-    public record ReconciliationResult(Long purchaseId, Long transactionId, String purchaseStatus) {
+    public record ReconciliationResult(Long purchaseId, Long transactionId, PurchaseStatus purchaseStatus) {
     }
 }

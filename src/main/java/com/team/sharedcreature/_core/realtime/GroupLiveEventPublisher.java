@@ -6,5 +6,5 @@ import java.time.Instant;
 public interface GroupLiveEventPublisher {
 
     /** 지정 그룹에 계약된 이벤트를 발행합니다. */
-    void publish(Long groupId, String eventType, Instant occurredAt, Object payload);
+    void publish(Long groupId, GroupLiveEventType eventType, Instant occurredAt, Object payload);
 }

@@ -41,7 +41,7 @@ public class ShopQueryService {
      * @param slot 검증된 슬롯 코드, null이면 전체 슬롯
      * @return 상품 정보와 페이지 정보를 포함한 조회 결과
      */
-    public Page<ShopItemResponse> list(int page, int size, String slot) {
+    public Page<ShopItemResponse> list(int page, int size, AvatarSlot slot) {
         // 상품 ID 순으로 정렬해 페이지 조회 순서를 일정하게 유지합니다.
         PageRequest pageable = PageRequest.of(
                 page,
@@ -49,18 +49,15 @@ public class ShopQueryService {
                 Sort.by(Sort.Direction.ASC, "id")
         );
 
-        // 요청 문자열을 도메인 타입으로 변환하며, 미지정은 전체 조회로 유지합니다.
-        AvatarSlot avatarSlot = parseSlot(slot);
-
         // 클라이언트가 판매 상태를 지정하지 못하도록 ACTIVE로 고정합니다.
-        Page<ShopItem> items = avatarSlot == null
+        Page<ShopItem> items = slot == null
                 ? shopItemRepository.findAllByStatus(
                 ShopItemStatus.ACTIVE,
                 pageable
         )
                 : shopItemRepository.findAllByStatusAndSlotCode(
                 ShopItemStatus.ACTIVE,
-                avatarSlot,
+                slot,
                 pageable
         );
 
@@ -83,28 +80,5 @@ public class ShopQueryService {
                 );
 
         return ShopItemResponse.from(shopItem);
-    }
-
-    /**
-     * 요청 슬롯 문자열을 도메인 슬롯으로 변환합니다.
-     *
-     * @param slot 요청 슬롯, 미지정이면 null
-     * @return 장착 슬롯, 미지정이면 null
-     * @throws BusinessException 허용되지 않은 슬롯 문자열인 경우
-     */
-    private AvatarSlot parseSlot(String slot) {
-        if (slot == null) {
-            return null;
-        }
-
-        try {
-            // 대소문자나 공백을 임의로 보정하지 않고 기존 허용값을 유지합니다.
-            return AvatarSlot.valueOf(slot);
-        } catch (IllegalArgumentException exception) {
-            throw new BusinessException(
-                    ErrorCode.INVALID_FIELD_VALUE,
-                    "슬롯은 HEAD, FACE, BODY, ACCESSORY 중 하나여야 합니다."
-            );
-        }
     }
 }

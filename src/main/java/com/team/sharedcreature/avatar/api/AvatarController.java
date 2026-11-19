@@ -6,6 +6,7 @@ import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.avatar.application.AvatarService;
 import com.team.sharedcreature.avatar.application.AvatarCommandRetryService;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
 import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.Valid;
@@ -70,7 +71,7 @@ public class AvatarController {
         // DB 동시성 오류가 발생하면 별도 트랜잭션으로 제한적으로 재시도합니다.
         AvatarResponse response = avatarCommandRetryService.equipAvatarItem(
                 loginUser.id(),
-                slot,
+                AvatarSlot.valueOf(slot),
                 request.ownedItemId(),
                 request.confirmFirstUse()
         );
@@ -98,7 +99,7 @@ public class AvatarController {
         // 장착과 동일한 재시도 정책으로 해제 요청을 처리합니다.
         AvatarResponse response = avatarCommandRetryService.unequipAvatarItem(
                 loginUser.id(),
-                slot
+                AvatarSlot.valueOf(slot)
         );
 
         return ApiResponse.success(response);
@@ -142,7 +143,7 @@ public class AvatarController {
                 loginUser.id(),
                 pageNumber,
                 pageSize,
-                slot,
+                slot == null ? null : AvatarSlot.valueOf(slot),
                 status == null ? null : OwnedItemStatus.valueOf(status)
         );
 
