@@ -2,8 +2,13 @@ package com.team.sharedcreature.group.integration;
 
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.security.Hashing;
+import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.application.GroupInvitationManagementService;
 import com.team.sharedcreature.group.application.GroupInvitationService;
+import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
+import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
+import com.team.sharedcreature.group.infrastructure.GroupRepository;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.PreparedStatement;
 import java.sql.Statement;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
@@ -41,6 +49,11 @@ class GroupInvitationRotationIntegrationTest {
     @Autowired private GroupInvitationManagementService managementService;
     @Autowired private GroupInvitationService invitationService;
     @Autowired private JdbcTemplate jdbcTemplate;
+    @Autowired private UserRepository userRepository;
+    @Autowired private GroupRepository groupRepository;
+    @Autowired private GroupMembershipRepository membershipRepository;
+    @Autowired private GroupInviteLinkRepository inviteLinkRepository;
+    @Autowired private EntityManager entityManager;
 
     /**
      * 연속 재발급이 실제 MySQL의 활성 링크 제약을 지키는지 검사합니다.
@@ -106,6 +119,48 @@ class GroupInvitationRotationIntegrationTest {
         assertThat(result.unlimitedUses()).isTrue();
         assertThat(result.expiresAt()).isNull();
         assertThat(activeCount(fixture.groupId())).isEqualTo(1);
+    }
+
+    /**
+     * 재발급 POST가 반환한 발급 시각이 DB 왕복 후 GET에서도 동일한지 검사합니다.
+     * MySQL DATETIME(6)보다 높은 나노초를 사용해 정밀도 손실을 재현합니다.
+     */
+    @Test
+    void 재발급_POST와_DB_후속_GET의_발급시각은_동일하다() {
+        Fixture fixture = createFixture();
+        Instant nanosecondInstant =
+                Instant.parse("2026-11-19T00:00:00.123456789Z");
+
+        Integer datetimePrecision = jdbcTemplate.queryForObject("""
+                SELECT datetime_precision
+                  FROM information_schema.columns
+                 WHERE table_schema = DATABASE()
+                   AND table_name = 'group_invite_links'
+                   AND column_name = 'issued_at'
+                """, Integer.class);
+
+        assertThat(datetimePrecision).isEqualTo(6);
+
+        GroupInvitationManagementService preciseClockService =
+                new GroupInvitationManagementService(
+                        userRepository,
+                        groupRepository,
+                        membershipRepository,
+                        inviteLinkRepository,
+                        entityManager,
+                        Clock.fixed(nanosecondInstant, ZoneOffset.UTC),
+                        "http://localhost:5173"
+                );
+
+        var rotated = preciseClockService.rotateInvitation(fixture.userId());
+
+        // 영속성 컨텍스트의 원본 Instant가 아니라 실제 MySQL 저장값을 다시 읽습니다.
+        entityManager.flush();
+        entityManager.clear();
+
+        var reloaded = managementService.getInvitationManagement(fixture.userId());
+
+        assertThat(reloaded.issuedAt()).isEqualTo(rotated.issuedAt());
     }
 
     /**
