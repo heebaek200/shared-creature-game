@@ -7,6 +7,7 @@ import { getShopItem } from '../features/shop/api.js';
 import { createAvatarField } from '../features/creature/avatar-field.js';
 import { creatureAccessErrorRoute } from '../features/creature/access-error-policy.js';
 import { groupLiveManager } from '../realtime/group-live-manager.js';
+import { createRecentMessageIdRegistry } from '../realtime/recent-message-ids.js';
 import { createUserReport } from '../features/group/api.js';
 
 import creatureLv0 from '../../assets/creature/lv0.png';
@@ -468,7 +469,7 @@ export function creaturePage(context) {
     // 3. API 조회, 크리처 성장 렌더링 및 마감 감시 로직
     let isMounted = true;
     let currentUserId = null;
-    const receivedMessageIds = new Set();
+    const receivedMessageIds = createRecentMessageIdRegistry();
     const pendingChatMessages = new Map();
     let sendingChat = false;
     let reportingChat = false;
@@ -485,8 +486,7 @@ export function creaturePage(context) {
     }
 
     function displayChatMessage(message) {
-        if (!message?.messageId || receivedMessageIds.has(message.messageId)) return;
-        receivedMessageIds.add(message.messageId);
+        if (!message?.messageId || !receivedMessageIds.remember(message.messageId)) return;
         if (!avatarField.showMessage(message)) {
             pendingChatMessages.set(message.messageId, {
                 message,
@@ -1148,6 +1148,8 @@ export function creaturePage(context) {
             // 이전 페이지의 안내용 Snapshot을 정리합니다.
             latestCreatureGuideData = null;
             latestGuideSpeciesList = [];
+            receivedMessageIds.clear();
+            pendingChatMessages.clear();
 
             avatarField.dispose();
             unsubscribeSnapshots?.();

@@ -7,6 +7,10 @@ import {
     calculateIdleWaitScale,
     calculateRenderedPosition,
 } from './avatar-movement-policy.js';
+import {
+    calculateBubbleHorizontalShift,
+    shouldRunBubbleTimer,
+} from './avatar-bubble-policy.js';
 
 const movementAreas = [
     { minX: 8, maxX: 28, minY: 5, maxY: 20 },
@@ -143,9 +147,44 @@ export function createAvatarField(options) {
         }
     }
 
+    function clearBubblePositionFrame(actor) {
+        if (actor.bubblePositionFrame !== null) {
+            window.cancelAnimationFrame(actor.bubblePositionFrame);
+            actor.bubblePositionFrame = null;
+        }
+    }
+
+    function correctBubblePosition(actor) {
+        if (disposed || !actor.chatMessage) {
+            clearBubblePositionFrame(actor);
+            return;
+        }
+        const fieldBounds = fieldLayer.getBoundingClientRect();
+        actor.bubble.style.maxWidth = `${Math.max(1, Math.min(
+            220,
+            window.innerWidth * 0.65,
+            fieldBounds.width - 16,
+        ))}px`;
+        const bubbleBounds = actor.bubble.getBoundingClientRect();
+        actor.bubbleShiftX = calculateBubbleHorizontalShift({
+            fieldLeft: fieldBounds.left + 8,
+            fieldRight: fieldBounds.right - 8,
+            bubbleLeft: bubbleBounds.left,
+            bubbleRight: bubbleBounds.right,
+            currentShift: actor.bubbleShiftX,
+        });
+        actor.bubble.style.setProperty(
+            '--avatar-bubble-shift-x', `${actor.bubbleShiftX}px`,
+        );
+        actor.bubblePositionFrame = window.requestAnimationFrame(
+            () => correctBubblePosition(actor),
+        );
+    }
+
     function hideBubble(actor) {
         const expiredMessage = actor.chatMessage;
         clearBubbleTimer(actor);
+        clearBubblePositionFrame(actor);
         actor.chatMessage = null;
         actor.bubble.classList.add('d-none');
         actor.bubble.textContent = '';
@@ -171,7 +210,14 @@ export function createAvatarField(options) {
     }
 
     function resumeBubble(actor) {
-        if (!actor.chatMessage || actor.bubbleTimer !== null) return;
+        if (
+            !actor.chatMessage
+            || actor.bubbleTimer !== null
+            || !shouldRunBubbleTimer({
+                hovered: actor.bubbleHovered,
+                focused: actor.bubbleFocused,
+            })
+        ) return;
         if (actor.bubbleRemainingMs <= 0) hideBubble(actor);
         else startBubbleTimer(actor);
     }
@@ -340,24 +386,34 @@ export function createAvatarField(options) {
             bubbleTimer: null,
             bubbleStartedAt: 0,
             bubbleRemainingMs: CHAT_BUBBLE_DURATION_MS,
+            bubbleHovered: false,
+            bubbleFocused: false,
+            bubbleShiftX: 0,
+            bubblePositionFrame: null,
         };
         updateActorMember(actor, member, currentUserId);
         button.style.left = `${actor.x}%`;
         button.style.top = `${actor.y}%`;
         button.addEventListener('click', () => options.onSelect(actor.member, actor.chatMessage));
         button.addEventListener('focus', () => {
+            actor.bubbleFocused = true;
             stopActor(actor);
             pauseBubble(actor);
         });
         button.addEventListener('blur', () => {
+            actor.bubbleFocused = false;
             resumeBubble(actor);
             if (movementEnabled && !reducedMotion.matches) {
                 scheduleMove(actor, 400);
             }
         });
-        button.addEventListener('mouseenter', () => pauseBubble(actor));
+        button.addEventListener('mouseenter', () => {
+            actor.bubbleHovered = true;
+            pauseBubble(actor);
+        });
         button.addEventListener('mouseleave', () => {
-            if (!button.matches(':focus')) resumeBubble(actor);
+            actor.bubbleHovered = false;
+            resumeBubble(actor);
         });
         fieldLayer.appendChild(button);
         actors.set(String(member.userId), actor);
@@ -384,6 +440,7 @@ export function createAvatarField(options) {
                 if (nextUserIds.has(userId)) continue;
                 clearActorTimer(actor);
                 clearBubbleTimer(actor);
+                clearBubblePositionFrame(actor);
                 actor.button.remove();
                 actors.delete(userId);
             }
@@ -420,9 +477,15 @@ export function createAvatarField(options) {
             clearBubbleTimer(actor);
             actor.chatMessage = message;
             actor.bubbleRemainingMs = CHAT_BUBBLE_DURATION_MS;
+            actor.bubbleShiftX = 0;
+            actor.bubble.style.setProperty('--avatar-bubble-shift-x', '0px');
             actor.bubble.textContent = message.content;
             actor.bubble.classList.remove('d-none');
-            startBubbleTimer(actor);
+            clearBubblePositionFrame(actor);
+            actor.bubblePositionFrame = window.requestAnimationFrame(
+                () => correctBubblePosition(actor),
+            );
+            resumeBubble(actor);
             return true;
         },
 
@@ -431,7 +494,10 @@ export function createAvatarField(options) {
             if (disposed) return;
             disposed = true;
             stopAllActors();
-            for (const actor of actors.values()) clearBubbleTimer(actor);
+            for (const actor of actors.values()) {
+                clearBubbleTimer(actor);
+                clearBubblePositionFrame(actor);
+            }
             actors.clear();
             fieldLayer.remove();
             reducedMotion.removeEventListener('change', handleReducedMotionChange);

@@ -362,7 +362,7 @@ body {
   line-height: 1.35;
   overflow-wrap: anywhere;
   text-align: left;
-  transform: translateX(-50%);
+  transform: translateX(calc(-50% + var(--avatar-bubble-shift-x, 0px)));
   white-space: normal;
 }
 

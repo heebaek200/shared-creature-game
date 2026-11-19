@@ -2484,6 +2484,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.handledAt | string(date-time) | Y | Y | 미처리 null | 처리 시각 |
 | data.reportedUserNickname | string | Y | N | 2~20자 | 피신고자 닉네임 |
 | data.reporterNickname | string | Y | N | 2~20자 | 신고자 닉네임 |
+| data.reportedUserActive | boolean | Y | N | true \| false | 신고 그룹의 현재 활성 멤버십 여부 |
 | data.handledByUserId | integer(int64) | Y | Y | 미처리 null | 처리 관리자 ID |
 | data.resolution | string | Y | Y | 미처리 null / 처리 사유 1~1000자 | 신고 처리 결과 |
 | data.chatEvidence | object | Y | Y | 일반 신고 null | 서버 검증 채팅 증거 |
@@ -2534,6 +2535,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.handledAt | string(date-time) | Y | Y | 미처리 null | 처리 시각 |
 | data.reportedUserNickname | string | Y | N | 2~20자 | 피신고자 닉네임 |
 | data.reporterNickname | string | Y | N | 2~20자 | 신고자 닉네임 |
+| data.reportedUserActive | boolean | Y | N | true \| false | 신고 그룹의 현재 활성 멤버십 여부 |
 | data.handledByUserId | integer(int64) | Y | Y | 미처리 null | 처리 관리자 ID |
 | data.resolution | string | Y | Y | 미처리 null / 처리 사유 1~1000자 | 신고 처리 결과 |
 | data.chatEvidence | object | Y | Y | 일반 신고 null | 서버 검증 채팅 증거 |
@@ -2587,6 +2589,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.handledAt | string(date-time) | Y | Y | 미처리 null | 처리 시각 |
 | data.reportedUserNickname | string | Y | N | 2~20자 | 피신고자 닉네임 |
 | data.reporterNickname | string | Y | N | 2~20자 | 신고자 닉네임 |
+| data.reportedUserActive | boolean | Y | N | true \| false | 신고 그룹의 현재 활성 멤버십 여부 |
 | data.handledByUserId | integer(int64) | Y | Y | 미처리 null | 처리 관리자 ID |
 | data.resolution | string | Y | Y | 미처리 null / 처리 사유 1~1000자 | 신고 처리 결과 |
 | data.chatEvidence | object | Y | Y | 일반 신고 null | 서버 검증 채팅 증거 |
@@ -2640,6 +2643,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.handledAt | string(date-time) | Y | N | UTC ISO 8601 | 처리 시각 |
 | data.reportedUserNickname | string | Y | N | 2~20자 | 피신고자 닉네임 |
 | data.reporterNickname | string | Y | N | 2~20자 | 신고자 닉네임 |
+| data.reportedUserActive | boolean | Y | N | true \| false | 신고 그룹의 현재 활성 멤버십 여부 |
 | data.handledByUserId | integer(int64) | Y | N | 1 이상 | 처리 관리자 ID |
 | data.resolution | string | Y | N | 1~1000자 | 신고 처리 결과 |
 | data.chatEvidence | object | Y | Y | 일반 신고 null | 서버 검증 채팅 증거 |

@@ -7,12 +7,13 @@ import {
     resolveInactiveReportedMember,
 } from "../features/admin/api.js";
 import {ApiError} from "../api/client.js";
+import {reportActionAvailability} from "../features/admin/report-action-policy.js";
 
 const PAGE_SIZE = 10;
 const STATUS_LABELS = {
     RECEIVED: '미처리',
     REJECTED: '기각',
-    RESOLVED: '강퇴 처리'
+    RESOLVED: '처리 완료'
 };
 const CATEGORY_LABELS = {
     HARASSMENT: '괴롭힘',
@@ -86,7 +87,7 @@ export function adminReportsPage() {
             <select id="report-status" class="form-select" data-status-filter>
               <option value="">전체</option>
               <option value="RECEIVED">미처리</option>
-              <option value="RESOLVED">강퇴 처리</option>
+              <option value="RESOLVED">처리 완료</option>
               <option value="REJECTED">기각</option>
             </select>
           </div>
@@ -249,6 +250,7 @@ export function adminReportsPage() {
      * @returns {void}
      */
     function updateControls() {
+        const available = reportActionAvailability(selectedReport);
         // 목록 조회 중에는 현재 페이지를 확정할 때까지 이동을 제한합니다.
         prevButton.disabled = processing || loading || page <= 0;
         nextButton.disabled =
@@ -257,12 +259,9 @@ export function adminReportsPage() {
 
         // 상태 변경 또는 목록 조회 중에는 필터 변경을 차단합니다.
         statusInput.disabled = processing || loading;
-        dismissButton.disabled =
-            processing || selectedReport?.status !== 'RECEIVED';
-        removeButton.disabled =
-            processing || selectedReport?.status !== 'RECEIVED';
-        resolveButton.disabled =
-            processing || selectedReport?.status !== 'RECEIVED';
+        dismissButton.disabled = processing || !available.dismiss;
+        removeButton.disabled = processing || !available.remove;
+        resolveButton.disabled = processing || !available.resolve;
         confirmButton.disabled = processing;
         cancelButton.disabled = processing;
     }
@@ -325,7 +324,14 @@ export function adminReportsPage() {
             detailFields.append(dt, dd);
         }
 
-        actions.classList.toggle('d-none', report.status !== 'RECEIVED');
+        const available = reportActionAvailability(report);
+        dismissButton.classList.toggle('d-none', !available.dismiss);
+        removeButton.classList.toggle('d-none', !available.remove);
+        resolveButton.classList.toggle('d-none', !available.resolve);
+        actions.classList.toggle(
+            'd-none',
+            !available.dismiss && !available.remove && !available.resolve,
+        );
         updateControls();
     }
 

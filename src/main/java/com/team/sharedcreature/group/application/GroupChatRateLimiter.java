@@ -36,7 +36,9 @@ public class GroupChatRateLimiter {
             }
             state.inFlight = true;
             state.reservedAt = now;
-            return new Permit(userId, state);
+            Permit permit = new Permit(state);
+            state.activePermit = permit;
+            return permit;
         }
     }
 
@@ -44,7 +46,7 @@ public class GroupChatRateLimiter {
     public void finish(Permit permit, boolean committed) {
         State state = permit.state;
         synchronized (state) {
-            if (!state.inFlight) {
+            if (!state.inFlight || state.activePermit != permit) {
                 return;
             }
             if (committed) {
@@ -52,19 +54,15 @@ public class GroupChatRateLimiter {
             }
             state.inFlight = false;
             state.reservedAt = null;
-            if (!committed && state.lastSuccess == null) {
-                states.remove(permit.userId, state);
-            }
+            state.activePermit = null;
         }
     }
 
     /** 한 사용자 요청의 메모리 선점 표식입니다. */
     public static final class Permit {
-        private final Long userId;
         private final State state;
 
-        private Permit(Long userId, State state) {
-            this.userId = userId;
+        private Permit(State state) {
             this.state = state;
         }
     }
@@ -73,5 +71,6 @@ public class GroupChatRateLimiter {
         private Instant lastSuccess;
         private Instant reservedAt;
         private boolean inFlight;
+        private Permit activePermit;
     }
 }
