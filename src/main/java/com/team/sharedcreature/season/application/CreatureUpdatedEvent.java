@@ -1,7 +1,9 @@
 package com.team.sharedcreature.season.application;
 
 import com.team.sharedcreature.season.domain.CreatureGrowthStage;
+import com.team.sharedcreature.season.domain.CreatureSpecies;
 import com.team.sharedcreature.season.domain.GroupCreature;
+import com.team.sharedcreature.season.domain.GroupSeason;
 
 import java.time.Instant;
 
@@ -20,8 +22,8 @@ public record CreatureUpdatedEvent(
             GroupCreature creature,
             Instant occurredAt
     ) {
-        var groupSeason = creature.getGroupSeason();
-        var visibleSpecies = creature.getSpecies() != null
+        GroupSeason groupSeason = creature.getGroupSeason();
+        CreatureSpecies visibleSpecies = creature.getSpecies() != null
                 ? creature.getSpecies()
                 : groupSeason.getSelectedSpecies();
         return new CreatureUpdatedEvent(

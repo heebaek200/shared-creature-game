@@ -2,6 +2,7 @@ package com.team.sharedcreature.payment.application;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.mockito.MockedStatic;
 
 import java.time.Instant;
 import java.util.List;
@@ -35,8 +36,8 @@ class RefundReconciliationServiceTest {
     @Test
     void 대상이_없으면_영건으로_반환하고_PG를_호출하지_않는다() {
         when(preparation.findScheduledCandidates()).thenReturn(List.of());
-        var heartbeat = mock(Runnable.class);
-        var summary = service.recoverStaleRefunds(heartbeat);
+        Runnable heartbeat = mock(Runnable.class);
+        RefundRecoveryWork.RecoverySummary summary = service.recoverStaleRefunds(heartbeat);
         assertThat(summary).isEqualTo(new RefundRecoveryWork.RecoverySummary(0, 0, 0, 0, 0, 0, 0));
         verify(heartbeat).run();
         verifyNoInteractions(lookup, results);
@@ -55,7 +56,7 @@ class RefundReconciliationServiceTest {
         when(lookup.getPayment("payment-7")).thenThrow(new PaymentGatewayException(
                 PaymentGatewayException.Kind.UNAVAILABLE, "Timeout", null));
         when(results.applyRecovery(any(), nullable(PaymentSnapshot.class))).thenAnswer(call -> {
-            var cmd = (RefundRecoveryPreparationService.RecoveryCommand) call.getArgument(0);
+            RefundRecoveryPreparationService.RecoveryCommand cmd = (RefundRecoveryPreparationService.RecoveryCommand) call.getArgument(0);
             return switch (cmd.refundRequestId().intValue()) {
                 case 1 -> Optional.of(RefundGateway.Outcome.SUCCESS);
                 case 2 -> Optional.of(RefundGateway.Outcome.DEFINITIVE_FAILURE);
@@ -65,7 +66,7 @@ class RefundReconciliationServiceTest {
                 default -> throw new AssertionError("예상하지 않은 대상");
             };
         });
-        var summary = service.recoverStaleRefunds(() -> {});
+        RefundRecoveryWork.RecoverySummary summary = service.recoverStaleRefunds(() -> {});
         assertThat(summary).isEqualTo(new RefundRecoveryWork.RecoverySummary(8, 1, 1, 1, 1, 2, 2));
         // PG 통신 오류도 미확정 상태 저장을 시도하며 실패로 확정하지 않습니다.
         verify(results).applyRecovery(command(7), null);
@@ -75,7 +76,7 @@ class RefundReconciliationServiceTest {
 
     @Test
     void 최초_Heartbeat가_실패하면_후보조회도_시작하지_않는다() {
-        var failure = new IllegalStateException("실행권 상실");
+        IllegalStateException failure = new IllegalStateException("실행권 상실");
         assertThatThrownBy(() -> service.recoverStaleRefunds(() -> { throw failure; }))
                 .isSameAs(failure);
         verifyNoInteractions(preparation, lookup, results);
@@ -83,9 +84,9 @@ class RefundReconciliationServiceTest {
 
     @Test
     void 작업중_Heartbeat가_실패하면_결과저장을_막고_예외를_전달한다() {
-        var executor = mock(ScheduledExecutorService.class);
+        ScheduledExecutorService executor = mock(ScheduledExecutorService.class);
         ScheduledFuture<?> future = mock(ScheduledFuture.class);
-        var callback = new AtomicReference<Runnable>();
+        AtomicReference<Runnable> callback = new AtomicReference<>();
         // 실패 시점을 직접 제어하여 스레드 실행 순서에 의존하지 않습니다.
         doAnswer(call -> {
             callback.set(call.getArgument(0));
@@ -97,9 +98,9 @@ class RefundReconciliationServiceTest {
             callback.get().run();
             return null;
         });
-        var calls = new AtomicInteger();
-        var failure = new IllegalStateException("Lease 갱신 실패");
-        try (var mockedExecutors = mockStatic(Executors.class)) {
+        AtomicInteger calls = new AtomicInteger();
+        IllegalStateException failure = new IllegalStateException("Lease 갱신 실패");
+        try (MockedStatic<Executors> mockedExecutors = mockStatic(Executors.class)) {
             mockedExecutors.when(Executors::newSingleThreadScheduledExecutor).thenReturn(executor);
             assertThatThrownBy(() -> service.recoverStaleRefunds(() -> {
                 if (calls.incrementAndGet() > 1) {
@@ -117,15 +118,15 @@ class RefundReconciliationServiceTest {
     void 실제_30초_주기로_PG대기중에도_Heartbeat를_호출한다() {
         when(preparation.findScheduledCandidates()).thenReturn(List.of(1L));
         when(preparation.prepareScheduled(1L)).thenReturn(Optional.of(command(1)));
-        var renewed = new CountDownLatch(1);
-        var calls = new AtomicInteger();
+        CountDownLatch renewed = new CountDownLatch(1);
+        AtomicInteger calls = new AtomicInteger();
         when(lookup.getPayment("payment-1")).thenAnswer(call -> {
             // 호출 건수가 늘지 않는 PG 대기 상황을 재현합니다.
             assertThat(renewed.await(35, TimeUnit.SECONDS)).isTrue();
             return null;
         });
         when(results.applyRecovery(command(1), null)).thenReturn(Optional.of(RefundGateway.Outcome.UNKNOWN));
-        var summary = service.recoverStaleRefunds(() -> {
+        RefundRecoveryWork.RecoverySummary summary = service.recoverStaleRefunds(() -> {
             if (calls.incrementAndGet() > 1) {
                 renewed.countDown();
             }

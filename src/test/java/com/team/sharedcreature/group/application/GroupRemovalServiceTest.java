@@ -1,6 +1,7 @@
 
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.group.api.LeaveMyGroupResponse;
 import com.team.sharedcreature.group.domain.GroupMembershipExitReason;
 import com.team.sharedcreature.group.domain.GroupMembershipStatus;
 
@@ -103,7 +104,7 @@ class GroupRemovalServiceTest {
         when(restrictionRepository.findByUserIdForUpdate(2L))
                 .thenReturn(Optional.empty());
 
-        var result = service.removeInactiveMember(
+        LeaveMyGroupResponse result = service.removeInactiveMember(
                 1L, 2L, "장기간 미접속"
         );
 
@@ -146,7 +147,7 @@ class GroupRemovalServiceTest {
         when(restrictionRepository.findByUserIdForUpdate(2L))
                 .thenReturn(Optional.empty());
 
-        var result = service.removeInactiveMember(1L, 2L, "기준 도달");
+        LeaveMyGroupResponse result = service.removeInactiveMember(1L, 2L, "기준 도달");
 
         // 경계 시각과 같아도 성공해야 합니다.
         assertThat(result.endedAt()).isEqualTo(NOW);

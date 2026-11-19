@@ -1,10 +1,13 @@
 package com.team.sharedcreature.payment.api;
 
+import com.team.sharedcreature._core.api.ApiResponse;
 import com.team.sharedcreature.payment.application.PaymentWebhookService;
 import com.team.sharedcreature.payment.application.PortOneWebhookVerifier;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.ResponseEntity;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -17,7 +20,7 @@ class PortOneWebhookControllerTest {
         PortOneWebhookController controller = new PortOneWebhookController(service);
         byte[] body = "{}".getBytes(StandardCharsets.UTF_8);
 
-        var response = controller.receivePortOneWebhook("event-1", "100", "signature", body);
+        ResponseEntity<ApiResponse<Map<String, Object>>> response = controller.receivePortOneWebhook("event-1", "100", "signature", body);
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
         assertThat(response.getBody()).isNotNull();
@@ -33,7 +36,7 @@ class PortOneWebhookControllerTest {
         doThrow(exception).when(service).receive(anyString(), anyString(), anyString(), anyString());
         PortOneWebhookController controller = new PortOneWebhookController(service);
 
-        var response = controller.receivePortOneWebhook(
+        ResponseEntity<ApiResponse<Map<String, Object>>> response = controller.receivePortOneWebhook(
                 "event-1",
                 "100",
                 "bad-signature",

@@ -54,7 +54,7 @@ class ApiIdempotencyServiceTest {
         when(repository.findByActorUserIdAndOperationAndIdempotencyKey(7L, "CREATE_PURCHASE", "key-1"))
                 .thenReturn(Optional.of(record));
 
-        var claim = service.claim(7L, "CREATE_PURCHASE", "key-1", "shopItemId=101", Replay.class);
+        ApiIdempotencyService.Claim<ApiIdempotencyServiceTest.Replay> claim = service.claim(7L, "CREATE_PURCHASE", "key-1", "shopItemId=101", Replay.class);
 
         assertThat(claim.replayed()).isFalse();
         assertThat(claim.record()).isSameAs(record);
@@ -72,7 +72,7 @@ class ApiIdempotencyServiceTest {
         when(record.getStatus()).thenReturn(ApiIdempotencyStatus.COMPLETED);
         when(record.getResponseSnapshot()).thenReturn("{\"purchaseId\":21}");
 
-        var claim = service.claim(7L, "CREATE_PURCHASE", "key-1", "shopItemId=101", Replay.class);
+        ApiIdempotencyService.Claim<ApiIdempotencyServiceTest.Replay> claim = service.claim(7L, "CREATE_PURCHASE", "key-1", "shopItemId=101", Replay.class);
 
         assertThat(claim.replayed()).isTrue();
         assertThat(claim.response().purchaseId()).isEqualTo(21L);

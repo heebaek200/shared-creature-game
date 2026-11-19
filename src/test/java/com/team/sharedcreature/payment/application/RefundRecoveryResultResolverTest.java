@@ -34,7 +34,7 @@ class RefundRecoveryResultResolverTest {
 
     @Test
     void 취소ID를_받지_못한_Timeout도_단일_전액취소_성공이면_복구한다() {
-        var result = resolver.resolve(command, payment(PaymentSnapshot.Status.CANCELLED,
+        RefundGateway.CancellationResult result = resolver.resolve(command, payment(PaymentSnapshot.Status.CANCELLED,
                 cancellation("cancel-1", "SUCCEEDED", 1000, NOW)), null);
         assertThat(result.outcome()).isEqualTo(RefundGateway.Outcome.SUCCESS);
         assertThat(result.providerTransactionId()).isEqualTo("cancel-1");
@@ -44,7 +44,7 @@ class RefundRecoveryResultResolverTest {
     @ParameterizedTest
     @ValueSource(strings = {"FAILED", "REQUESTED"})
     void 저장된_취소ID와_일치하는_실패와_대기를_구분한다(String status) {
-        var result = resolver.resolve(command, payment(PaymentSnapshot.Status.PAID,
+        RefundGateway.CancellationResult result = resolver.resolve(command, payment(PaymentSnapshot.Status.PAID,
                 cancellation("cancel-1", status, 1000, null)), "cancel-1");
         assertThat(result.outcome()).isEqualTo("FAILED".equals(status)
                 ? RefundGateway.Outcome.DEFINITIVE_FAILURE : RefundGateway.Outcome.PENDING);
@@ -61,7 +61,7 @@ class RefundRecoveryResultResolverTest {
     @ParameterizedTest
     @ValueSource(strings = {"payment", "store", "amount", "currency"})
     void 결제_상점_금액_통화가_다르면_성공을_확정하지_않는다(String mismatch) {
-        var snapshot = payment("payment".equals(mismatch) ? "other" : "payment-1",
+        PaymentSnapshot snapshot = payment("payment".equals(mismatch) ? "other" : "payment-1",
                 "store".equals(mismatch) ? "other" : "store-1",
                 "amount".equals(mismatch) ? 999 : 1000,
                 "currency".equals(mismatch) ? "USD" : "KRW",
@@ -73,9 +73,9 @@ class RefundRecoveryResultResolverTest {
     @ParameterizedTest
     @ValueSource(strings = {"partial", "time", "state", "id", "duplicate"})
     void 취소_성공의_근거가_부족하거나_모순되면_미확정이다(String reason) {
-        var entry = cancellation("cancel-1", "SUCCEEDED", "partial".equals(reason) ? 500 : 1000,
+        PaymentSnapshot.CancellationSnapshot entry = cancellation("cancel-1", "SUCCEEDED", "partial".equals(reason) ? 500 : 1000,
                 "time".equals(reason) ? null : NOW);
-        var snapshot = payment("state".equals(reason) ? PaymentSnapshot.Status.PAID : PaymentSnapshot.Status.CANCELLED,
+        PaymentSnapshot snapshot = payment("state".equals(reason) ? PaymentSnapshot.Status.PAID : PaymentSnapshot.Status.CANCELLED,
                 "duplicate".equals(reason) ? new PaymentSnapshot.CancellationSnapshot[]{entry, entry}
                         : new PaymentSnapshot.CancellationSnapshot[]{entry});
         assertUnknown(snapshot, "id".equals(reason) ? "other-cancel" : "cancel-1");
@@ -95,7 +95,7 @@ class RefundRecoveryResultResolverTest {
     }
 
     private void assertUnknown(PaymentSnapshot snapshot, String id) {
-        var result = resolver.resolve(command, snapshot, id);
+        RefundGateway.CancellationResult result = resolver.resolve(command, snapshot, id);
         assertThat(result.outcome()).isEqualTo(RefundGateway.Outcome.UNKNOWN);
         assertThat(result.processedAt()).isNull();
         assertThat(result.paymentId()).isEqualTo("payment-1");

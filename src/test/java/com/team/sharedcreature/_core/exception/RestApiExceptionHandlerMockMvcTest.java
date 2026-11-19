@@ -52,7 +52,7 @@ class RestApiExceptionHandlerMockMvcTest {
 
     @BeforeEach
     void setUp() {
-        var handler = new RestApiExceptionHandler(new ErrorResponseFactory(Clock.systemUTC()));
+        RestApiExceptionHandler handler = new RestApiExceptionHandler(new ErrorResponseFactory(Clock.systemUTC()));
         JsonMapper objectMapper = JsonMapper.builder()
                 .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                 .build();

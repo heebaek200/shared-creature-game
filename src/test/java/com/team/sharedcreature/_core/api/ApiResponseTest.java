@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import tools.jackson.databind.ObjectMapper;
@@ -22,7 +23,7 @@ class ApiResponseTest {
 
     @Test
     void page_응답은_설계된_네_가지_페이지_메타만_제공한다() throws Exception {
-        var page = new PageImpl<>(List.of("item"), PageRequest.of(1, 20), 21);
+        Page<String> page = new PageImpl<>(List.of("item"), PageRequest.of(1, 20), 21);
 
         String json = new ObjectMapper().writeValueAsString(ApiResponse.page(page));
 

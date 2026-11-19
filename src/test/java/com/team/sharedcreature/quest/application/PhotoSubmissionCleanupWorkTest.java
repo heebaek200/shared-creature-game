@@ -94,7 +94,7 @@ class PhotoSubmissionCleanupWorkTest {
                 .thenReturn(List.of(7L));
         when(transactions.expirePending(7L, NOW)).thenReturn(true);
 
-        var result = work.cleanup(NOW);
+        PhotoRetentionWork.Summary result = work.cleanup(NOW);
         assertEquals(1, result.pendingInvalidated());
         assertEquals(0, result.failedCount());
         verifyNoInteractions(storage);
@@ -116,7 +116,7 @@ class PhotoSubmissionCleanupWorkTest {
                 eq("invalid-key.jpg"), anyString(), eq(NOW), eq(NOW)))
                 .thenReturn(true);
 
-        var result = work.cleanup(NOW);
+        PhotoRetentionWork.Summary result = work.cleanup(NOW);
         assertEquals(1, result.invalidFilesDeleted());
         verify(storage).delete("invalid-key.jpg");
         verify(transactions).confirmFileDeletion(eq(11L), eq(RetentionKind.INVALID),
@@ -140,7 +140,7 @@ class PhotoSubmissionCleanupWorkTest {
                 eq("valid-key.jpg"), anyString(), eq(NOW), eq(NOW)))
                 .thenReturn(true);
 
-        var result = work.cleanup(NOW);
+        PhotoRetentionWork.Summary result = work.cleanup(NOW);
         assertEquals(1, result.validFilesDeleted());
         verify(storage).delete("valid-key.jpg");
     }
@@ -159,7 +159,7 @@ class PhotoSubmissionCleanupWorkTest {
                 .thenReturn(Optional.of(new FileCandidate(17L, "broken-key.jpg", "claim")));
         doThrow(new IOException("locked file")).when(storage).delete("broken-key.jpg");
 
-        var result = work.cleanup(NOW);
+        PhotoRetentionWork.Summary result = work.cleanup(NOW);
         assertEquals(1, result.failedCount());
         verify(transactions, never()).confirmFileDeletion(
                 anyLong(), any(), any(), anyString(), any(), any());
@@ -179,7 +179,7 @@ class PhotoSubmissionCleanupWorkTest {
                 eq(NOW), eq(NOW), eq(NOW.plus(Duration.ofMinutes(10)))))
                 .thenReturn(Optional.empty());
 
-        var result = work.cleanup(NOW);
+        PhotoRetentionWork.Summary result = work.cleanup(NOW);
         assertEquals(0, result.invalidFilesDeleted());
         assertEquals(0, result.failedCount());
         verifyNoInteractions(storage);
@@ -197,7 +197,7 @@ class PhotoSubmissionCleanupWorkTest {
                 NOW.minus(Duration.ofHours(1)), NOW, PageRequest.of(0, 101)))
                 .thenReturn(ids);
 
-        var result = work.cleanup(NOW);
+        PhotoRetentionWork.Summary result = work.cleanup(NOW);
         assertTrue(result.moreMayRemain());
         verify(transactions, times(100)).expirePending(anyLong(), eq(NOW));
         verify(transactions, never()).expirePending(101L, NOW);
@@ -216,7 +216,7 @@ class PhotoSubmissionCleanupWorkTest {
         when(repository.findRetryStalePendingIds(
                 NOW.minus(Duration.ofHours(1)), NOW, PageRequest.of(0, 101))).thenReturn(retry);
 
-        var result = work.cleanup(NOW);
+        PhotoRetentionWork.Summary result = work.cleanup(NOW);
 
         assertTrue(result.moreMayRemain());
         verify(transactions, times(100)).expirePending(anyLong(), eq(NOW));
@@ -233,7 +233,7 @@ class PhotoSubmissionCleanupWorkTest {
                 NOW.minus(Duration.ofHours(1)), NOW, PageRequest.of(0, 101))).thenReturn(List.of(9L));
         when(transactions.expirePending(9L, NOW)).thenThrow(new IllegalStateException("row failure"));
 
-        var result = work.cleanup(NOW);
+        PhotoRetentionWork.Summary result = work.cleanup(NOW);
 
         assertEquals(1, result.failedCount());
         verify(transactions).deferPendingCleanup(9L, NOW.plus(Duration.ofMinutes(5)));
@@ -251,7 +251,7 @@ class PhotoSubmissionCleanupWorkTest {
                 eq(NOW), eq(NOW), eq(NOW.plus(Duration.ofMinutes(5)))))
                 .thenReturn(PhotoSubmissionCleanupTransactionService.ClaimFailureResolution.DEFERRED);
 
-        var result = work.cleanup(NOW);
+        PhotoRetentionWork.Summary result = work.cleanup(NOW);
 
         assertEquals(1, result.failedCount());
         verify(transactions).deferAfterClaimFailure(eq(41L), eq(RetentionKind.INVALID), anyString(),
@@ -271,7 +271,7 @@ class PhotoSubmissionCleanupWorkTest {
                 eq(NOW), eq(NOW), eq(NOW.plus(Duration.ofMinutes(5)))))
                 .thenThrow(recordingFailure);
 
-        var result = work.cleanup(NOW);
+        PhotoRetentionWork.Summary result = work.cleanup(NOW);
 
         assertEquals(1, result.failedCount());
         assertArrayEquals(new Throwable[]{recordingFailure}, claimFailure.getSuppressed());
@@ -306,7 +306,7 @@ class PhotoSubmissionCleanupWorkTest {
                 44L, RetentionKind.INVALID, "long.jpg", "claim",
                 NOW, NOW.plus(Duration.ofMinutes(11)))).thenReturn(true);
 
-        var result = work.cleanup(NOW);
+        PhotoRetentionWork.Summary result = work.cleanup(NOW);
 
         assertEquals(1, result.invalidFilesDeleted());
         verify(transactions).renewFileCleanupClaim(
@@ -398,7 +398,7 @@ class PhotoSubmissionCleanupWorkTest {
                 46L, RetentionKind.INVALID, "second.jpg", "second-claim", NOW, later))
                 .thenReturn(true);
 
-        var result = work.cleanup(NOW);
+        PhotoRetentionWork.Summary result = work.cleanup(NOW);
 
         assertEquals(2, result.invalidFilesDeleted());
         verify(transactions).claimEligibleFile(eq(46L), eq(RetentionKind.INVALID), anyString(),
@@ -473,7 +473,7 @@ class PhotoSubmissionCleanupWorkTest {
                 .thenReturn(ids);
         java.util.concurrent.atomic.AtomicInteger heartbeats = new java.util.concurrent.atomic.AtomicInteger();
 
-        var result = work.cleanup(NOW, heartbeats::incrementAndGet);
+        PhotoRetentionWork.Summary result = work.cleanup(NOW, heartbeats::incrementAndGet);
         assertEquals(2, heartbeats.get());
         assertEquals(0, result.failedCount());
         verify(transactions, times(21)).expirePending(anyLong(), eq(NOW));

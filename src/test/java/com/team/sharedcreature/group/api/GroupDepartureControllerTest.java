@@ -1,5 +1,6 @@
 package com.team.sharedcreature.group.api;
 
+import com.team.sharedcreature._core.api.ApiResponse;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.LoginUser;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.mock.web.MockHttpSession;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
@@ -47,7 +49,7 @@ class GroupDepartureControllerTest {
         when(service.leaveMyGroup(1L)).thenReturn(expected);
 
         // Service의 정상 결과 뒤에만 세션 역할을 갱신합니다.
-        var response = controller.leaveMyGroup(loginUser, session);
+        ApiResponse<LeaveMyGroupResponse> response = controller.leaveMyGroup(loginUser, session);
         LoginUser refreshed = (LoginUser) session.getAttribute(
                 SessionAuthenticationFilter.LOGIN_USER);
         assertThat(response.data()).isSameAs(expected);
@@ -101,11 +103,11 @@ class GroupDepartureControllerTest {
     @ParameterizedTest
     @CsvSource({"SELF,SELF", "INACTIVE,INACTIVE", "REPORT,REPORTED"})
     void exitReasonKeepsApiAndDatabaseCodes(String apiCode, String databaseCode) {
-        var converter = new GroupMembershipExitReason.JpaConverter();
-        var reason = converter.convertToEntityAttribute(databaseCode);
-        var response = new LeaveMyGroupResponse(10L, 1L, NOW, reason, NOW.plusSeconds(86_400), false);
-        var mapper = new ObjectMapper();
-        var value = mapper.readTree(mapper.writeValueAsString(response)).get("exitReason");
+        GroupMembershipExitReason.JpaConverter converter = new GroupMembershipExitReason.JpaConverter();
+        GroupMembershipExitReason reason = converter.convertToEntityAttribute(databaseCode);
+        LeaveMyGroupResponse response = new LeaveMyGroupResponse(10L, 1L, NOW, reason, NOW.plusSeconds(86_400), false);
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode value = mapper.readTree(mapper.writeValueAsString(response)).get("exitReason");
 
         assertThat(value.isString()).isTrue();
         assertThat(value.asString()).isEqualTo(apiCode);

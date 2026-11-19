@@ -1,6 +1,7 @@
 
 package com.team.sharedcreature.admin.integration;
 
+import com.team.sharedcreature.admin.application.SchedulerClaimTicket;
 import com.team.sharedcreature.admin.application.SchedulerExecutionService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,9 +15,12 @@ import org.springframework.test.context.ActiveProfiles;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -78,12 +82,12 @@ class SchedulerClaimIntegrationTest {
      */
     @Test
     void duplicateClaimReturnsSingleOwner() {
-        var first = service.tryClaim(
+        Optional<SchedulerClaimTicket> first = service.tryClaim(
                 jobType, SCHEDULED_FOR, "server-a", LEASE
         );
 
         // 이미 실행권이 유효하므로 두 번째 요청은 거절됩니다.
-        var second = service.tryClaim(
+        Optional<SchedulerClaimTicket> second = service.tryClaim(
                 jobType, SCHEDULED_FOR, "server-b", LEASE
         );
 
@@ -102,11 +106,11 @@ class SchedulerClaimIntegrationTest {
      */
     @Test
     void concurrentClaimAllowsOnlyOneOwner() throws Exception {
-        var executor = Executors.newFixedThreadPool(2);
-        var start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
 
         try {
-            var first = executor.submit(() -> {
+            Future<Boolean> first = executor.submit(() -> {
                 start.await();
 
                 // 첫 번째 실행자가 동시에 선점을 시도합니다.
@@ -115,7 +119,7 @@ class SchedulerClaimIntegrationTest {
                 ).isPresent();
             });
 
-            var second = executor.submit(() -> {
+            Future<Boolean> second = executor.submit(() -> {
                 start.await();
 
                 // 두 번째 실행자도 같은 UNIQUE 키를 요청합니다.
@@ -159,7 +163,7 @@ class SchedulerClaimIntegrationTest {
                  WHERE job_type = ?
                 """, jobType);
 
-        var reclaimed = service.tryClaim(
+        SchedulerClaimTicket reclaimed = service.tryClaim(
                 jobType, SCHEDULED_FOR, "server-b", LEASE
         ).orElseThrow();
 
@@ -190,7 +194,7 @@ class SchedulerClaimIntegrationTest {
                 jobType
         );
 
-        var reclaimed = service.tryClaim(
+        SchedulerClaimTicket reclaimed = service.tryClaim(
                 jobType, SCHEDULED_FOR, "server-b", LEASE
         ).orElseThrow();
 

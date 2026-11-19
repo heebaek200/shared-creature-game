@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -49,7 +50,7 @@ public class RefundController {
             @Valid @RequestBody CreateRefundRequest request
     ) {
         // 사용자 ID는 요청 본문이 아닌 인증 정보에서 가져옵니다.
-        var response = refundService.createRefundRequest(
+        RefundResponse response = refundService.createRefundRequest(
                 loginUser.id(),
                 purchaseId,
                 request.reason(),
@@ -77,7 +78,7 @@ public class RefundController {
         );
         int pageSize = parseInteger(size, 20, 1, 50, "size");
 
-        var result = refundQueryService.listMyRefunds(
+        Page<RefundResponse> result = refundQueryService.listMyRefunds(
                 loginUser.id(),
                 pageNumber,
                 pageSize,

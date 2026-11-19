@@ -80,7 +80,7 @@ class PhotoSubmissionCleanupTransactionServiceTest {
         when(submission.getStorageKey()).thenReturn("photo-key.jpg");
         when(submission.getCleanupClaimToken()).thenReturn(null, CLAIM);
 
-        var candidate = service.claimEligibleFile(
+        PhotoSubmissionCleanupTransactionService.FileCandidate candidate = service.claimEligibleFile(
                 3L, RetentionKind.INVALID, CLAIM, NOW, NOW,
                 NOW.plus(Duration.ofMinutes(10))).orElseThrow();
         assertEquals("photo-key.jpg", candidate.storageKey());
@@ -178,7 +178,7 @@ class PhotoSubmissionCleanupTransactionServiceTest {
         when(repository.findForCleanupUpdate(9L)).thenReturn(Optional.of(submission));
         when(submission.getVerificationStatus()).thenReturn(PhotoVerificationStatus.INVALID);
 
-        var result = service.deferAfterClaimFailure(
+        PhotoSubmissionCleanupTransactionService.ClaimFailureResolution result = service.deferAfterClaimFailure(
                 9L,
                 RetentionKind.INVALID,
                 CLAIM,
@@ -200,7 +200,7 @@ class PhotoSubmissionCleanupTransactionServiceTest {
         when(submission.getCleanupClaimToken()).thenReturn("other-token");
         when(submission.getCleanupClaimExpiresAt()).thenReturn(NOW.plus(Duration.ofMinutes(1)));
 
-        var result = service.deferAfterClaimFailure(
+        PhotoSubmissionCleanupTransactionService.ClaimFailureResolution result = service.deferAfterClaimFailure(
                 10L,
                 RetentionKind.INVALID,
                 CLAIM,

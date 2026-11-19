@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
@@ -67,7 +68,7 @@ class AdminGroupQueryServiceTest {
     @Test
     void 관리자_그룹_검색은_정규화된_조건과_페이지를_사용한다() {
         Group group = mock(Group.class);
-        var pageable = PageRequest.of(0, 20);
+        PageRequest pageable = PageRequest.of(0, 20);
 
         // 비공개 그룹을 검색 결과에 포함시켜 DTO 변환을 확인합니다.
         when(group.getId()).thenReturn(10L);
@@ -84,7 +85,7 @@ class AdminGroupQueryServiceTest {
                 new PageImpl<>(List.of(group), pageable, 1)
         );
 
-        var result = service.searchGroups("  ＴｅＳｔ_％  ", 0, 20);
+        Page<AdminGroupSearchResponse> result = service.searchGroups("  ＴｅＳｔ_％  ", 0, 20);
 
         // 관리자 선택 UI에 필요한 필드만 반환합니다.
         assertThat(result.getTotalElements()).isEqualTo(1);
@@ -109,7 +110,7 @@ class AdminGroupQueryServiceTest {
     @Test
     void 활성_그룹의_구성원을_페이지_조회한다() {
         Group group = mock(Group.class);
-        var pageable = PageRequest.of(0, 20);
+        PageRequest pageable = PageRequest.of(0, 20);
         Instant joinedAt = Instant.parse("2026-11-01T00:00:00Z");
 
         GroupMemberResponse member = new GroupMemberResponse(
@@ -134,7 +135,7 @@ class AdminGroupQueryServiceTest {
                 new PageImpl<>(List.of(member), pageable, 1)
         );
 
-        var result = service.listMembers(10L, 0, 20);
+        Page<GroupMemberResponse> result = service.listMembers(10L, 0, 20);
 
         assertThat(result.getContent()).containsExactly(member);
         assertThat(result.getTotalElements()).isEqualTo(1);

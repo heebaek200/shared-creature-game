@@ -207,7 +207,7 @@ class PaymentWebhookServiceTest {
         when(eventRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
         executeTransactionsImmediately();
 
-        var outcome = service.recover(1L, Instant.parse("2026-11-09T07:55:00Z"));
+        PaymentWebhookService.RecoveryOutcome outcome = service.recover(1L, Instant.parse("2026-11-09T07:55:00Z"));
 
         assertThat(outcome).isEqualTo(PaymentWebhookService.RecoveryOutcome.SKIPPED);
         assertThat(event.getProcessingStatus()).isEqualTo(WebhookProcessingStatus.IGNORED);
@@ -236,7 +236,7 @@ class PaymentWebhookServiceTest {
         when(transactionRepository.findById(20L)).thenReturn(Optional.of(transaction));
         executeTransactionsImmediately();
 
-        var outcome = service.recover(1L, Instant.parse("2026-11-09T07:55:00Z"));
+        PaymentWebhookService.RecoveryOutcome outcome = service.recover(1L, Instant.parse("2026-11-09T07:55:00Z"));
 
         assertThat(outcome).isEqualTo(PaymentWebhookService.RecoveryOutcome.PROCESSED);
         assertThat(event.getProcessingStatus()).isEqualTo(WebhookProcessingStatus.PROCESSED);
@@ -263,7 +263,7 @@ class PaymentWebhookServiceTest {
         when(purchaseRepository.findById(10L)).thenReturn(Optional.empty());
         executeTransactionsImmediately();
 
-        var outcome = service.recover(1L, Instant.parse("2026-11-09T07:55:00Z"));
+        PaymentWebhookService.RecoveryOutcome outcome = service.recover(1L, Instant.parse("2026-11-09T07:55:00Z"));
 
         assertThat(outcome).isEqualTo(PaymentWebhookService.RecoveryOutcome.FAILED);
         assertThat(event.getProcessingStatus()).isEqualTo(WebhookProcessingStatus.FAILED);

@@ -115,19 +115,19 @@ class QuestPeriodAssignmentIntegrationTest {
     void createsDailyAndWeeklyAssignmentsExactlyOnce() {
         seedCatalog("DAILY", 5, 4, 3);
         seedCatalog("WEEKLY", 6, 4, 4);
-        var daily = window(QuestPeriodType.DAILY);
-        var weekly = window(QuestPeriodType.WEEKLY);
+        QuestPeriodCalendar.PeriodWindow daily = window(QuestPeriodType.DAILY);
+        QuestPeriodCalendar.PeriodWindow weekly = window(QuestPeriodType.WEEKLY);
 
-        var firstDaily = assignmentService.assign(daily);
-        var firstWeekly = assignmentService.assign(weekly);
+        QuestPeriodAssignmentService.Result firstDaily = assignmentService.assign(daily);
+        QuestPeriodAssignmentService.Result firstWeekly = assignmentService.assign(weekly);
         assertEquals(QuestPeriodAssignmentService.Outcome.CREATED, firstDaily.outcome());
         assertEquals(QuestPeriodAssignmentService.Outcome.CREATED, firstWeekly.outcome());
         assertEquals(3L, firstDaily.assignmentCount());
         assertEquals(7L, firstWeekly.assignmentCount());
 
         // 재실행은 UNIQUE 기간 한 건을 재사용하며 Snapshot을 추가하지 않습니다.
-        var secondDaily = assignmentService.assign(daily);
-        var secondWeekly = assignmentService.assign(weekly);
+        QuestPeriodAssignmentService.Result secondDaily = assignmentService.assign(daily);
+        QuestPeriodAssignmentService.Result secondWeekly = assignmentService.assign(weekly);
         assertEquals(QuestPeriodAssignmentService.Outcome.ALREADY_ACTIVE, secondDaily.outcome());
         assertEquals(QuestPeriodAssignmentService.Outcome.ALREADY_ACTIVE, secondWeekly.outcome());
         assertEquals(firstDaily.periodId(), secondDaily.periodId());
@@ -149,8 +149,8 @@ class QuestPeriodAssignmentIntegrationTest {
     @Test
     void failedPeriodCanRecoverWithoutPartialAssignments() {
         seedCatalog("DAILY", 2, 4, 3);
-        var window = window(QuestPeriodType.DAILY);
-        var failed = assignmentService.assign(window);
+        QuestPeriodCalendar.PeriodWindow window = window(QuestPeriodType.DAILY);
+        QuestPeriodAssignmentService.Result failed = assignmentService.assign(window);
         assertEquals(QuestPeriodAssignmentService.Outcome.FAILED, failed.outcome());
         assertEquals(0L, count("SELECT COUNT(*) FROM quest_assignments"));
         assertEquals("FAILED", text("SELECT status FROM quest_periods WHERE id = ?", failed.periodId()));
@@ -159,7 +159,7 @@ class QuestPeriodAssignmentIntegrationTest {
 
         // 빠진 LOW 3개를 추가해 최소 활성 5개를 충족시킵니다.
         for (int i = 3; i <= 5; i++) seedTemplate("DAILY", "LOW", i);
-        var retried = assignmentService.assign(window);
+        QuestPeriodAssignmentService.Result retried = assignmentService.assign(window);
         assertEquals(QuestPeriodAssignmentService.Outcome.CREATED, retried.outcome());
         assertEquals(failed.periodId(), retried.periodId());
         assertEquals(3L, count("SELECT COUNT(*) FROM quest_assignments"));
@@ -179,7 +179,7 @@ class QuestPeriodAssignmentIntegrationTest {
         Long templateId = Objects.requireNonNull(jdbc.queryForObject(
                 "SELECT id FROM quest_templates WHERE code = 'F3-D-L-2'", Long.class));
         jdbc.update("DELETE FROM quest_template_versions WHERE quest_template_id = ?", templateId);
-        var failed = assignmentService.assign(window(QuestPeriodType.DAILY));
+        QuestPeriodAssignmentService.Result failed = assignmentService.assign(window(QuestPeriodType.DAILY));
         assertEquals(QuestPeriodAssignmentService.Outcome.FAILED, failed.outcome());
         assertEquals("MISSING_TEMPLATE_VERSION",
                 text("SELECT failure_code FROM quest_periods WHERE id = ?", failed.periodId()));
@@ -199,7 +199,7 @@ class QuestPeriodAssignmentIntegrationTest {
                   , created_at
                 ) VALUES (?, 1, '복구한 제목', 'new', 'SELF_CHECK', '{}', 15, 6, UTC_TIMESTAMP(6))
                 """, templateId);
-        var recovered = assignmentService.assign(window(QuestPeriodType.DAILY));
+        QuestPeriodAssignmentService.Result recovered = assignmentService.assign(window(QuestPeriodType.DAILY));
         assertEquals(QuestPeriodAssignmentService.Outcome.CREATED, recovered.outcome());
         assertEquals(failed.periodId(), recovered.periodId());
         assertEquals(3L, count("SELECT COUNT(*) FROM quest_assignments"));
@@ -213,7 +213,7 @@ class QuestPeriodAssignmentIntegrationTest {
     @Test
     void doesNotBackfillExpiredDay() {
         seedCatalog("DAILY", 5, 4, 3);
-        var expiredWindow = window(QuestPeriodType.DAILY);
+        QuestPeriodCalendar.PeriodWindow expiredWindow = window(QuestPeriodType.DAILY);
         clock.set(NOW.plus(Duration.ofDays(1)));
         assertEquals(QuestPeriodAssignmentService.Outcome.NOT_READY,
                 assignmentService.assign(expiredWindow).outcome());
@@ -231,7 +231,7 @@ class QuestPeriodAssignmentIntegrationTest {
     @Test
     void preservesSnapshotWhenNewTemplateVersionIsAdded() {
         seedCatalog("DAILY", 5, 4, 3);
-        var first = assignmentService.assign(window(QuestPeriodType.DAILY));
+        QuestPeriodAssignmentService.Result first = assignmentService.assign(window(QuestPeriodType.DAILY));
         Long templateId = Objects.requireNonNull(jdbc.queryForObject("""
                 SELECT quest_template_id FROM quest_assignments
                  WHERE quest_period_id = ? AND slot_number = 1

@@ -20,6 +20,7 @@ import com.team.sharedcreature.group.domain.GroupMembership;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -86,7 +87,7 @@ class PurchaseServiceTest {
         assertThat(response.payment().channelKey()).isEqualTo("channel-test");
         assertThat(response.payment().easyPay().easyPayProvider()).isEqualTo("KAKAOPAY");
         assertThat(response.payment().paymentId()).isEqualTo(response.orderNumber());
-        var purchaseCaptor = org.mockito.ArgumentCaptor.forClass(Purchase.class);
+        ArgumentCaptor<Purchase> purchaseCaptor = org.mockito.ArgumentCaptor.forClass(Purchase.class);
         verify(purchaseRepository).save(purchaseCaptor.capture());
         assertThat(purchaseCaptor.getValue().getGroupSnapshot()).isSameAs(group);
         // 상품의 Enum 슬롯이 구매 당시 Snapshot에도 동일하게 보존됩니다.

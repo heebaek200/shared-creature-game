@@ -4,6 +4,7 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.TestComponent;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,8 +22,8 @@ class SessionCookieClientTest {
 
     @Test
     void 서버가_세션을_재발급하면_다음_요청에는_새_Cookie를_보낸다() throws Exception {
-        var mvc = MockMvcBuilders.standaloneSetup(new CookieController()).build();
-        var browser = new SessionCookieClient(mvc, new Cookie("SESSION", encode("first-session")));
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new CookieController()).build();
+        SessionCookieClient browser = new SessionCookieClient(mvc, new Cookie("SESSION", encode("first-session")));
 
         browser.perform(get("/rotate")).andExpect(status().isOk());
         browser.perform(get("/check"))
@@ -33,8 +34,8 @@ class SessionCookieClientTest {
 
     @Test
     void 세션_삭제_Cookie를_받으면_다음_요청에_이전_Cookie를_다시_보내지_않는다() throws Exception {
-        var mvc = MockMvcBuilders.standaloneSetup(new CookieController()).build();
-        var browser = new SessionCookieClient(mvc, new Cookie("SESSION", encode("first-session")));
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new CookieController()).build();
+        SessionCookieClient browser = new SessionCookieClient(mvc, new Cookie("SESSION", encode("first-session")));
 
         browser.perform(get("/expire")).andExpect(status().isOk());
         browser.perform(get("/check"))

@@ -65,7 +65,7 @@ class AvatarCommandRetryServiceTest {
 
     @Test
     void 환불_진행_같은_업무_충돌은_같은_오류_코드여도_재시도하지_않는다() {
-        var failure = new BusinessException(ErrorCode.CONCURRENT_MODIFICATION, "환불 진행 중");
+        BusinessException failure = new BusinessException(ErrorCode.CONCURRENT_MODIFICATION, "환불 진행 중");
         when(avatarService.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true)).thenThrow(failure);
 
         assertThatThrownBy(() -> service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true))
@@ -76,7 +76,7 @@ class AvatarCommandRetryServiceTest {
 
     @Test
     void 최초_사용_동의_누락은_재시도하지_않는다() {
-        var failure = new BusinessException(ErrorCode.FIRST_USE_CONFIRMATION_REQUIRED);
+        BusinessException failure = new BusinessException(ErrorCode.FIRST_USE_CONFIRMATION_REQUIRED);
         when(avatarService.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, false)).thenThrow(failure);
 
         assertThatThrownBy(() -> service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, false))

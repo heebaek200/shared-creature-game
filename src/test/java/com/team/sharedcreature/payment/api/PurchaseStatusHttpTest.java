@@ -43,15 +43,15 @@ class PurchaseStatusHttpTest {
     @BeforeEach
     void setUp() {
         queries = mock(PurchaseQueryService.class);
-        var controller = new PaymentController(
+        PaymentController controller = new PaymentController(
                 mock(PurchaseService.class), queries, mock(PaymentReconciliationService.class));
         validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
-        var methodValidation = new MethodValidationPostProcessor();
+        MethodValidationPostProcessor methodValidation = new MethodValidationPostProcessor();
         methodValidation.setValidator(validator);
         methodValidation.afterPropertiesSet();
 
-        var login = new LoginUser(7L, "member", Set.of("MEMBER"));
+        LoginUser login = new LoginUser(7L, "member", Set.of("MEMBER"));
         SecurityContextHolder.getContext().setAuthentication(
                 UsernamePasswordAuthenticationToken.unauthenticated(login, null));
         mvc = MockMvcBuilders.standaloneSetup(

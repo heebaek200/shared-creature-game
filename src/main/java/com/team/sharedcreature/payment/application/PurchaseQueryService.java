@@ -21,6 +21,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 /** 인증 사용자의 구매·거래·환불 Snapshot을 조회합니다. */
 @Service
 @Transactional(readOnly = true)
@@ -90,17 +92,17 @@ public class PurchaseQueryService {
         OwnedItemStatus ownedStatus = ownedItemRepository.findByPurchaseId(purchase.getId())
                 .map(OwnedItem::getStatus)
                 .orElse(null);
-        var refunds = refundRequestRepository.findByPurchaseIdOrderByRequestedAtAsc(purchase.getId());
+        List<RefundRequest> refunds = refundRequestRepository.findByPurchaseIdOrderByRequestedAtAsc(purchase.getId());
         // 환불 요청이 없으면 기존처럼 null을 반환합니다.
         RefundStatus latestRefundStatus = refunds.isEmpty()
                 ? null
                 : refunds.get(refunds.size() - 1).getStatus();
-        var transactions = includeDetails
+        List<PurchaseResponse.Transaction> transactions = includeDetails
                 ? transactionRepository.findByPurchaseIdOrderByCreatedAtAsc(purchase.getId()).stream()
                         .map(this::transaction)
                         .toList()
                 : java.util.List.<PurchaseResponse.Transaction>of();
-        var refundResponses = includeDetails
+        List<PurchaseResponse.Refund> refundResponses = includeDetails
                 ? refunds.stream().map(this::refund).toList()
                 : java.util.List.<PurchaseResponse.Refund>of();
         return new PurchaseResponse(

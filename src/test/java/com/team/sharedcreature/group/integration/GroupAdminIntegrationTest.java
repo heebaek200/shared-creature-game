@@ -1,6 +1,7 @@
 package com.team.sharedcreature.group.integration;
 
 import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature.group.api.GroupMemberResponse;
 import com.team.sharedcreature.group.api.MyGroupResponse;
 import com.team.sharedcreature.group.application.GroupAdminService;
 import com.team.sharedcreature.group.domain.GroupRole;
@@ -50,7 +51,7 @@ class GroupAdminIntegrationTest {
         Fixture fixture = createFixture();
 
         // MEMBER를 DEPUTY로 변경하고 변경 기록을 검사합니다.
-        var granted = groupAdminService.changeMemberRole(fixture.actorId(), fixture.targetId(), GroupRole.DEPUTY);
+        GroupMemberResponse granted = groupAdminService.changeMemberRole(fixture.actorId(), fixture.targetId(), GroupRole.DEPUTY);
         entityManager.flush();  // Dirty Checking을 JDBC 직접 조회 전에 반영합니다.
         assertThat(granted.userId()).isEqualTo(fixture.targetId());
         assertThat(granted.role()).isEqualTo(GroupRole.DEPUTY);
@@ -59,12 +60,12 @@ class GroupAdminIntegrationTest {
         assertAudit(fixture, "GRANT_DEPUTY", "MEMBER", "DEPUTY");
 
         // 역할이 같으면 감사 이력은 새로 생성되지 않습니다.
-        var repeated = groupAdminService.changeMemberRole(fixture.actorId(), fixture.targetId(), GroupRole.DEPUTY);
+        GroupMemberResponse repeated = groupAdminService.changeMemberRole(fixture.actorId(), fixture.targetId(), GroupRole.DEPUTY);
         assertThat(repeated.role()).isEqualTo(GroupRole.DEPUTY);
         assertThat(changeCount(fixture.groupId())).isEqualTo(1);
 
         // 역할 회수 후에는 MEMBER와 회수 이력이 남아야 합니다.
-        var revoked = groupAdminService.changeMemberRole(fixture.actorId(), fixture.targetId(), GroupRole.MEMBER);
+        GroupMemberResponse revoked = groupAdminService.changeMemberRole(fixture.actorId(), fixture.targetId(), GroupRole.MEMBER);
         entityManager.flush();  // JDBC에서 실제 변경된 ROLE을 확인하도록 Flush합니다.
         assertThat(revoked.role()).isEqualTo(GroupRole.MEMBER);
         assertThat(membershipRole(fixture.targetId())).isEqualTo("MEMBER");
@@ -114,7 +115,7 @@ class GroupAdminIntegrationTest {
                 """, fixture.groupId(), fixture.targetId());
 
         // 새 관리자는 유일한 PRIMARY여야 합니다.
-        var result = groupAdminService.transferPrimaryAdmin(fixture.actorId(), fixture.targetId());
+        MyGroupResponse result = groupAdminService.transferPrimaryAdmin(fixture.actorId(), fixture.targetId());
         assertThat(result.primaryAdmin().userId()).isEqualTo(fixture.targetId());
         assertThat(membershipRole(fixture.actorId())).isEqualTo("MEMBER");
         assertThat(membershipRole(fixture.targetId())).isEqualTo("PRIMARY");

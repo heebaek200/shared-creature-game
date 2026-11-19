@@ -59,6 +59,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -271,9 +272,9 @@ class QuestCompletionServiceTest {
 
     /** 저장된 다섯 단계와 과거 미기록 데이터의 부화 전·후 복원 경로를 검증합니다. */
     private static java.util.stream.Stream<Arguments> savedAndLegacyGrowthStages() {
-        var saved = java.util.Arrays.stream(CreatureGrowthStage.values())
+        Stream<Arguments> saved = java.util.Arrays.stream(CreatureGrowthStage.values())
                 .map(stage -> Arguments.of(stage, null, stage));
-        var legacy = java.util.stream.Stream.of(
+        Stream<Arguments> legacy = java.util.stream.Stream.of(
                 Arguments.of(null, null, CreatureGrowthStage.EGG),
                 Arguments.of(null, NOW.minusSeconds(7_200), CreatureGrowthStage.HATCHLING),
                 Arguments.of(null, NOW.minusSeconds(1_800), CreatureGrowthStage.EGG)

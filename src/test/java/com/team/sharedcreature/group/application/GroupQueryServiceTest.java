@@ -12,6 +12,7 @@ import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.UserProfile;
 import com.team.sharedcreature.auth.infrastructure.UserProfileRepository;
 import com.team.sharedcreature.group.api.GroupMemberResponse;
+import com.team.sharedcreature.group.api.MyGroupResponse;
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
@@ -84,7 +86,7 @@ class GroupQueryServiceTest {
                 .thenReturn(Optional.of(profile));
         when(profile.getNickname()).thenReturn("그룹장");
 
-        var result = service.getMyGroup(1L);
+        MyGroupResponse result = service.getMyGroup(1L);
 
         // 그룹 상세와 관리자 및 본인 역할을 검증합니다.
         assertThat(result.group().name()).isEqualTo("새싹모임");
@@ -134,14 +136,14 @@ class GroupQueryServiceTest {
                 2L, "일반회원", 102L, GroupRole.MEMBER, GroupMembershipStatus.ACTIVE, now, now
         );
 
-        var pageable = PageRequest.of(0, 20);
+        PageRequest pageable = PageRequest.of(0, 20);
 
         // 그룹 10의 활성 구성원 조회 결과를 준비합니다.
         when(membershipRepository.findActiveMemberResponsesByGroupId(
                 10L, pageable
         )).thenReturn(new PageImpl<>(List.of(member), pageable, 1));
 
-        var result = service.listMyGroupMembers(1L, 0, 20);
+        Page<GroupMemberResponse> result = service.listMyGroupMembers(1L, 0, 20);
 
         // 요청한 그룹 ID와 페이지 조건을 확인합니다.
         assertThat(result.getContent()).containsExactly(member);

@@ -32,8 +32,8 @@ class QuestPeriodCalendarTest {
      */
     @Test
     void firstSeasonStartCreatesFirstDailyAndWeeklyWindows() {
-        var daily = calendar.currentWindow(FIRST_START, FIRST_START, QuestPeriodType.DAILY).orElseThrow();
-        var weekly = calendar.currentWindow(FIRST_START, FIRST_START, QuestPeriodType.WEEKLY).orElseThrow();
+        QuestPeriodCalendar.PeriodWindow daily = calendar.currentWindow(FIRST_START, FIRST_START, QuestPeriodType.DAILY).orElseThrow();
+        QuestPeriodCalendar.PeriodWindow weekly = calendar.currentWindow(FIRST_START, FIRST_START, QuestPeriodType.WEEKLY).orElseThrow();
 
         // 첫 시즌의 KST 월요일 자정이 두 기간의 공통 시작입니다.
         assertEquals(LocalDate.of(2026, 11, 2), daily.periodDate());
@@ -52,9 +52,9 @@ class QuestPeriodCalendarTest {
      */
     @Test
     void dailyWindowChangesAtKstMidnight() {
-        var before = calendar.currentWindow(
+        QuestPeriodCalendar.PeriodWindow before = calendar.currentWindow(
                 FIRST_START, kst(2026, 11, 3, 0, 0).minusNanos(1), QuestPeriodType.DAILY).orElseThrow();
-        var at = calendar.currentWindow(FIRST_START, kst(2026, 11, 3, 0, 0), QuestPeriodType.DAILY)
+        QuestPeriodCalendar.PeriodWindow at = calendar.currentWindow(FIRST_START, kst(2026, 11, 3, 0, 0), QuestPeriodType.DAILY)
                 .orElseThrow();
 
         // 1나노초 경계 차이로 전날/다음 날 기간을 분리합니다.
@@ -70,9 +70,9 @@ class QuestPeriodCalendarTest {
      */
     @Test
     void weeklyWindowChangesOnlyOnMondayMidnight() {
-        var before = calendar.currentWindow(
+        QuestPeriodCalendar.PeriodWindow before = calendar.currentWindow(
                 FIRST_START, kst(2026, 11, 9, 0, 0).minusNanos(1), QuestPeriodType.WEEKLY).orElseThrow();
-        var at = calendar.currentWindow(FIRST_START, kst(2026, 11, 9, 0, 0), QuestPeriodType.WEEKLY)
+        QuestPeriodCalendar.PeriodWindow at = calendar.currentWindow(FIRST_START, kst(2026, 11, 9, 0, 0), QuestPeriodType.WEEKLY)
                 .orElseThrow();
 
         // 월요일에 인덱스가 증가하고, 주간 날짜는 월요일이 됩니다.
@@ -90,8 +90,8 @@ class QuestPeriodCalendarTest {
     @Test
     void midweekInstantProducesDifferentDailyAndWeeklyIndices() {
         Instant now = kst(2026, 11, 11, 13, 40);
-        var daily = calendar.currentWindow(FIRST_START, now, QuestPeriodType.DAILY).orElseThrow();
-        var weekly = calendar.currentWindow(FIRST_START, now, QuestPeriodType.WEEKLY).orElseThrow();
+        QuestPeriodCalendar.PeriodWindow daily = calendar.currentWindow(FIRST_START, now, QuestPeriodType.DAILY).orElseThrow();
+        QuestPeriodCalendar.PeriodWindow weekly = calendar.currentWindow(FIRST_START, now, QuestPeriodType.WEEKLY).orElseThrow();
 
         // 일일은 최초 시즌 시작 후 9일, 주간은 한 주 경과 상태입니다.
         assertEquals(9L, daily.rotationIndex());
@@ -108,8 +108,8 @@ class QuestPeriodCalendarTest {
     @Test
     void rotationIndexContinuesAcrossSeasonBoundary() {
         Instant nextSeason = FIRST_START.plusSeconds(28L * 24 * 60 * 60);
-        var daily = calendar.currentWindow(FIRST_START, nextSeason, QuestPeriodType.DAILY).orElseThrow();
-        var weekly = calendar.currentWindow(FIRST_START, nextSeason, QuestPeriodType.WEEKLY).orElseThrow();
+        QuestPeriodCalendar.PeriodWindow daily = calendar.currentWindow(FIRST_START, nextSeason, QuestPeriodType.DAILY).orElseThrow();
+        QuestPeriodCalendar.PeriodWindow weekly = calendar.currentWindow(FIRST_START, nextSeason, QuestPeriodType.WEEKLY).orElseThrow();
 
         // 시즌 번호와 무관하게 최초 시즌 기준 인덱스를 유지합니다.
         assertEquals(28L, daily.rotationIndex());

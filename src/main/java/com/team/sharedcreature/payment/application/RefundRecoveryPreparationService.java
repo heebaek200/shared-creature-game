@@ -2,6 +2,8 @@ package com.team.sharedcreature.payment.application;
 
 import com.team.sharedcreature.payment.domain.PgApiAttempt;
 import com.team.sharedcreature.payment.domain.PgApiOperation;
+import com.team.sharedcreature.payment.domain.Purchase;
+import com.team.sharedcreature.payment.domain.RefundRequest;
 import com.team.sharedcreature.payment.infrastructure.PgApiAttemptRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -87,12 +89,12 @@ public class RefundRecoveryPreparationService {
             boolean allowImmediateUnknown
     ) {
         // 기존 장착·환불 처리와 같은 순서로 잠급니다.
-        var locked = refundLockService.lock(requestId);
-        var refund = locked.refund();
-        var purchase = locked.purchase();
+        RefundLockService.LockedRefund locked = refundLockService.lock(requestId);
+        RefundRequest refund = locked.refund();
+        Purchase purchase = locked.purchase();
 
         // 환불 잠금 이후에 PG 취소·조회 이력을 잠급니다.
-        var history = pgApiAttemptRepository
+        List<PgApiAttempt> history = pgApiAttemptRepository
                 .findCancellationHistoryForUpdate(requestId);
 
         // 잠금 대기 시간을 포함하도록 잠금 획득 후 현재 시각을 읽습니다.
@@ -100,7 +102,7 @@ public class RefundRecoveryPreparationService {
 
         // 아직 끝나지 않은 최근 PG 호출이 있으면 새 조회를 선점하지 않습니다.
         if (!history.isEmpty()) {
-            var latest = history.getLast();
+            PgApiAttempt latest = history.getLast();
 
             if (latest.getStartedAt() == null) {
                 throw new IllegalStateException(
@@ -121,7 +123,7 @@ public class RefundRecoveryPreparationService {
             return Optional.empty();
         }
 
-        var cancellation = history.stream()
+        PgApiAttempt cancellation = history.stream()
                 .filter(attempt ->
                         attempt.getOperation() == PgApiOperation.CANCELLATION
                 )
@@ -149,7 +151,7 @@ public class RefundRecoveryPreparationService {
                 .orElseThrow();
 
         // 번호 계산과 저장을 구매 잠금이 유지되는 같은 트랜잭션에서 수행합니다.
-        var lookup = pgApiAttemptRepository.save(
+        PgApiAttempt lookup = pgApiAttemptRepository.save(
                 PgApiAttempt.prepareCancellationLookup(
                         refund,
                         cancellation,

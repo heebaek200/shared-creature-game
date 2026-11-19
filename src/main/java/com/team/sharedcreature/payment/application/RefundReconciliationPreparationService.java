@@ -11,6 +11,7 @@ import com.team.sharedcreature.payment.application
         .RefundApprovalTransactionService.CommandResponse;
 import com.team.sharedcreature.payment.application
         .RefundRecoveryPreparationService.RecoveryCommand;
+import com.team.sharedcreature.payment.api.AdminRefundResponse;
 import com.team.sharedcreature.payment.infrastructure.RefundIdempotencyRepository;
 import com.team.sharedcreature.payment.domain.RefundStatus;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 관리자 수동 복구의 권한·멱등 기록·조회 준비를 함께 확정합니다.
@@ -90,7 +92,7 @@ public class RefundReconciliationPreparationService {
             );
         }
 
-        var claim = idempotencyService.claim(
+        ApiIdempotencyService.Claim<CommandResponse> claim = idempotencyService.claim(
                 adminUserId,
                 "reconcileRefund",
                 idempotencyKey,
@@ -104,12 +106,12 @@ public class RefundReconciliationPreparationService {
         }
 
         // 멱등 기록과 복구 선점·조회 이력을 같은 트랜잭션에 저장합니다.
-        var prepared =
+        Optional<RecoveryCommand> prepared =
                 preparationService.prepareManualWithinTransaction(requestId);
 
         if (prepared.isEmpty()) {
             // 이미 확정됐거나 다른 호출이 진행 중이면 현재 상태를 반환합니다.
-            var data = refundQueryService.getAdminRefund(requestId);
+            AdminRefundResponse data = refundQueryService.getAdminRefund(requestId);
 
             CommandResponse response;
 

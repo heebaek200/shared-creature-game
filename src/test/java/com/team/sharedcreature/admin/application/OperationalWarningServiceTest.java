@@ -18,12 +18,12 @@ class OperationalWarningServiceTest {
 
     @Test
     void typeFilterUsesTheExistingApiCodes() {
-        var service = spy(new OperationalWarningService(mock(jakarta.persistence.EntityManager.class), Clock.systemUTC()));
-        var photoWarning = new OperationalWarningResponse(
+        OperationalWarningService service = spy(new OperationalWarningService(mock(jakarta.persistence.EntityManager.class), Clock.systemUTC()));
+        OperationalWarningResponse photoWarning = new OperationalWarningResponse(
                 "PHOTO_DELETION_FAILED:PHOTO_SUBMISSION:1",
                 OperationalWarningType.PHOTO_DELETION_FAILED,
                 OperationalWarningSeverity.WARNING, "PHOTO_SUBMISSION", 1L, "photo warning", Instant.EPOCH);
-        var seasonWarning = new OperationalWarningResponse(
+        OperationalWarningResponse seasonWarning = new OperationalWarningResponse(
                 "SEASON_STATE_INVALID:SEASON:2",
                 OperationalWarningType.SEASON_STATE_INVALID,
                 OperationalWarningSeverity.CRITICAL, "SEASON", 2L, "season warning", Instant.EPOCH.plusSeconds(1));

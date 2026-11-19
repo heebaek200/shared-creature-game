@@ -3,6 +3,7 @@ package com.team.sharedcreature.payment.infrastructure;
 import com.team.sharedcreature.payment.application.RefundGateway;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.client.RestClient;
@@ -66,7 +67,7 @@ public class PortOneRefundGateway implements RefundGateway {
 
         // amount를 생략하여 전체 취소를 요청합니다.
         try {
-            var response = restClient.post()
+            ResponseEntity<JsonNode> response = restClient.post()
                     .uri(uriBuilder -> uriBuilder
                             .path("/payments/{paymentId}/cancel")
                             .build(paymentId))

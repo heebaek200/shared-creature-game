@@ -5,6 +5,8 @@ import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
 
 import com.team.sharedcreature.quest.domain.QuestAssignment;
 import com.team.sharedcreature.quest.domain.QuestPeriod;
+import com.team.sharedcreature.quest.domain.QuestTemplate;
+import com.team.sharedcreature.quest.domain.QuestTemplateVersion;
 import com.team.sharedcreature.quest.infrastructure.QuestAssignmentRepository;
 import com.team.sharedcreature.quest.infrastructure.QuestPeriodRepository;
 import com.team.sharedcreature.quest.infrastructure.QuestTemplateRepository;
@@ -120,8 +122,8 @@ public class QuestPeriodPersistenceService {
         }
 
         for (QuestTemplateSelectionService.SelectedQuest selected : batch.slots()) {
-            var template = templateRepository.getReferenceById(selected.templateId());
-            var version = versionRepository.getReferenceById(selected.templateVersionId());
+            QuestTemplate template = templateRepository.getReferenceById(selected.templateId());
+            QuestTemplateVersion version = versionRepository.getReferenceById(selected.templateVersionId());
             // 원본 템플릿과 별개로 선택 당시의 제목·조건·보상을 영구 Snapshot으로 고정합니다.
             assignmentRepository.save(QuestAssignment.capture(
                     period, template, version, selected.slotNumber(),

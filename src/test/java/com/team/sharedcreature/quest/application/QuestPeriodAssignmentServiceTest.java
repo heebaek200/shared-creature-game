@@ -46,7 +46,7 @@ class QuestPeriodAssignmentServiceTest {
      */
     @Test
     void forwardsSuccessfulAssignment() {
-        var result = new QuestPeriodAssignmentService.Result(
+        QuestPeriodAssignmentService.Result result = new QuestPeriodAssignmentService.Result(
                 QuestPeriodAssignmentService.Outcome.CREATED, 10L, 3);
         when(persistence.assign(window)).thenReturn(result);
         assertSame(result, service.assign(window));
@@ -63,7 +63,7 @@ class QuestPeriodAssignmentServiceTest {
     void recordsSelectionFailure() {
         when(persistence.assign(window)).thenThrow(new QuestTemplateSelectionService.SelectionException(
                 QuestTemplateSelectionService.FailureCode.INSUFFICIENT_ACTIVE_TEMPLATES, "LOW 부족"));
-        var failed = new QuestPeriodAssignmentService.Result(
+        QuestPeriodAssignmentService.Result failed = new QuestPeriodAssignmentService.Result(
                 QuestPeriodAssignmentService.Outcome.FAILED, 20L, 0);
         when(persistence.recordSelectionFailure(window, "INSUFFICIENT_ACTIVE_TEMPLATES", "LOW 부족"))
                 .thenReturn(failed);
@@ -79,7 +79,7 @@ class QuestPeriodAssignmentServiceTest {
     @Test
     void resolvesUniqueConflictFromCommittedPeriod() {
         when(persistence.assign(window)).thenThrow(new DataIntegrityViolationException("unique conflict"));
-        var existing = new QuestPeriodAssignmentService.Result(
+        QuestPeriodAssignmentService.Result existing = new QuestPeriodAssignmentService.Result(
                 QuestPeriodAssignmentService.Outcome.ALREADY_ACTIVE, 42L, 3);
         when(persistence.readCommittedOutcome(window)).thenReturn(java.util.Optional.of(existing));
         assertSame(existing, service.assign(window));

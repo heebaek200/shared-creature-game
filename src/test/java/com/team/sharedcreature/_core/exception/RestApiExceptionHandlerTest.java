@@ -1,9 +1,11 @@
 package com.team.sharedcreature._core.exception;
 
+import com.team.sharedcreature._core.api.ErrorResponse;
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
@@ -25,7 +27,7 @@ class RestApiExceptionHandlerTest {
         HttpServletRequest request = mock(HttpServletRequest.class);
         when(request.getAttribute("requestId")).thenReturn("request-1");
 
-        var response = handler.handleUnreadableBody(
+        ResponseEntity<ErrorResponse> response = handler.handleUnreadableBody(
                 mock(HttpMessageNotReadableException.class), request);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -38,7 +40,7 @@ class RestApiExceptionHandlerTest {
     void 업무_예외는_오류_코드에_정의된_HTTP_상태로_응답한다() {
         HttpServletRequest request = request("request-2");
 
-        var response = handler.handleBusiness(
+        ResponseEntity<ErrorResponse> response = handler.handleBusiness(
                 new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED), request);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
@@ -49,7 +51,7 @@ class RestApiExceptionHandlerTest {
 
     @Test
     void Multipart_제한_초과는_413_FILE_TOO_LARGE로_응답한다() {
-        var response = handler.handleFileTooLarge(
+        ResponseEntity<ErrorResponse> response = handler.handleFileTooLarge(
                 new MaxUploadSizeExceededException(10L * 1024 * 1024), request("request-3"));
 
         assertThat(response.getStatusCode().value()).isEqualTo(413);
@@ -59,7 +61,7 @@ class RestApiExceptionHandlerTest {
 
     @Test
     void 예상하지_못한_예외는_내부_메시지를_숨긴다() {
-        var response = handler.handleUnexpected(
+        ResponseEntity<ErrorResponse> response = handler.handleUnexpected(
                 new IllegalStateException("database-password"), request("request-4"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);

@@ -35,9 +35,9 @@ class PaymentWebhookLeaseHeartbeatTest {
         CountDownLatch called = new CountDownLatch(1);
         doAnswer(invocation -> { called.countDown(); return null; })
                 .when(lifecycle).renewLease(eq(ticket), eq(Duration.ofMinutes(3)));
-        var helper = new PaymentWebhookLeaseHeartbeat(lifecycle, Duration.ofMillis(10));
+        PaymentWebhookLeaseHeartbeat helper = new PaymentWebhookLeaseHeartbeat(lifecycle, Duration.ofMillis(10));
 
-        try (var scope = helper.start(ticket, Duration.ofMinutes(3))) {
+        try (PaymentWebhookLeaseHeartbeat.Scope scope = helper.start(ticket, Duration.ofMinutes(3))) {
             assertTrue(called.await(2, TimeUnit.SECONDS));
             assertDoesNotThrow(scope::assertHealthy);
         }
@@ -57,8 +57,8 @@ class PaymentWebhookLeaseHeartbeatTest {
             failed.countDown();
             throw new IllegalStateException("database unavailable");
         }).when(lifecycle).renewLease(eq(ticket), eq(Duration.ofMinutes(3)));
-        var helper = new PaymentWebhookLeaseHeartbeat(lifecycle, Duration.ofMillis(10));
-        var scope = helper.start(ticket, Duration.ofMinutes(3));
+        PaymentWebhookLeaseHeartbeat helper = new PaymentWebhookLeaseHeartbeat(lifecycle, Duration.ofMillis(10));
+        PaymentWebhookLeaseHeartbeat.Scope scope = helper.start(ticket, Duration.ofMinutes(3));
 
         assertTrue(failed.await(2, TimeUnit.SECONDS));
         IllegalStateException error = assertThrows(IllegalStateException.class, scope::close);
@@ -73,8 +73,8 @@ class PaymentWebhookLeaseHeartbeatTest {
      */
     @Test
     void closeIsIdempotentAndRejectsNoWork() {
-        var helper = new PaymentWebhookLeaseHeartbeat(lifecycle, Duration.ofHours(1));
-        var scope = helper.start(ticket, Duration.ofHours(2));
+        PaymentWebhookLeaseHeartbeat helper = new PaymentWebhookLeaseHeartbeat(lifecycle, Duration.ofHours(1));
+        PaymentWebhookLeaseHeartbeat.Scope scope = helper.start(ticket, Duration.ofHours(2));
         assertDoesNotThrow(scope::close);
         assertDoesNotThrow(scope::close);
         verifyNoInteractions(lifecycle);
@@ -87,7 +87,7 @@ class PaymentWebhookLeaseHeartbeatTest {
      */
     @Test
     void rejectsIntervalNotShorterThanLease() {
-        var helper = new PaymentWebhookLeaseHeartbeat(lifecycle, Duration.ofSeconds(30));
+        PaymentWebhookLeaseHeartbeat helper = new PaymentWebhookLeaseHeartbeat(lifecycle, Duration.ofSeconds(30));
         assertThrows(IllegalArgumentException.class,
                 () -> helper.start(ticket, Duration.ofSeconds(30)));
         verifyNoInteractions(lifecycle);

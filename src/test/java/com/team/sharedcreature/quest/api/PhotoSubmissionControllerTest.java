@@ -18,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
@@ -60,11 +61,11 @@ class PhotoSubmissionControllerTest {
 
     @Test
     void uploadedFileReadFailurePreservesTheCause() throws Exception {
-        var file = mock(MultipartFile.class);
-        var cause = new IOException("internal upload path");
+        MultipartFile file = mock(MultipartFile.class);
+        IOException cause = new IOException("internal upload path");
         when(file.getBytes()).thenThrow(cause);
 
-        var loginUser = new LoginUser(7L, "member", Set.of("MEMBER"));
+        LoginUser loginUser = new LoginUser(7L, "member", Set.of("MEMBER"));
         assertThatThrownBy(() -> controller.submitPhoto(loginUser, 11L, file, request))
                 .isInstanceOf(InternalApiException.class)
                 .hasMessage("업로드된 사진을 읽지 못했습니다.")
@@ -115,8 +116,8 @@ class PhotoSubmissionControllerTest {
                 controller.submitPhoto(loginUser, 11L, file, request);
 
         assertThat(response.data()).isSameAs(expected);
-        var mapper = new ObjectMapper();
-        var verificationStatus = mapper.readTree(mapper.writeValueAsString(response)).at("/data/verificationStatus");
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode verificationStatus = mapper.readTree(mapper.writeValueAsString(response)).at("/data/verificationStatus");
         assertThat(verificationStatus.isString()).isTrue();
         assertThat(verificationStatus.asString()).isEqualTo(status.name());
 

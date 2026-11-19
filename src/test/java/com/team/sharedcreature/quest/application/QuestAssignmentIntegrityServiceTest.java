@@ -59,7 +59,7 @@ class QuestAssignmentIntegrityServiceTest {
     @Test
     void runningExecutionDoesNotReportFalseCorruption() {
         allowExecution(SchedulerExecutionStatus.RUNNING);
-        var audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
+        QuestAssignmentIntegrityService.ExecutionAudit audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
         assertEquals(QuestAssignmentIntegrityService.AuditOutcome.NOT_SUCCEEDED, audit.outcome());
         assertNull(audit.detail());
         verifyNoInteractions(periods, assignments);
@@ -73,7 +73,7 @@ class QuestAssignmentIntegrityServiceTest {
     @Test
     void failedExecutionIsNotConfirmed() {
         allowExecution(SchedulerExecutionStatus.FAILED);
-        var audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
+        QuestAssignmentIntegrityService.ExecutionAudit audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
         assertEquals(QuestAssignmentIntegrityService.AuditOutcome.NOT_SUCCEEDED, audit.outcome());
         verifyNoInteractions(periods, assignments);
     }
@@ -86,7 +86,7 @@ class QuestAssignmentIntegrityServiceTest {
     @Test
     void succeededExecutionWithMissingPeriodIsCorrupt() {
         allowExecution(SchedulerExecutionStatus.SUCCEEDED);
-        var audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
+        QuestAssignmentIntegrityService.ExecutionAudit audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
         assertEquals(QuestAssignmentIntegrityService.AuditOutcome.INCONSISTENT, audit.outcome());
         assertTrue(audit.detail().contains("PERIOD_MISSING"));
         verify(periods, never()).save(any());
@@ -103,7 +103,7 @@ class QuestAssignmentIntegrityServiceTest {
         QuestPeriod p = mock(QuestPeriod.class);
         when(p.getStatus()).thenReturn(QuestPeriodStatus.FAILED);
         when(periods.findByPeriodTypeAndStartAt(QuestPeriodType.DAILY, START)).thenReturn(Optional.of(p));
-        var audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
+        QuestAssignmentIntegrityService.ExecutionAudit audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
         assertEquals(QuestAssignmentIntegrityService.AuditOutcome.INCONSISTENT, audit.outcome());
         assertTrue(audit.detail().contains("PERIOD_NOT_ACTIVE"));
     }
@@ -118,7 +118,7 @@ class QuestAssignmentIntegrityServiceTest {
         allowExecution(SchedulerExecutionStatus.SUCCEEDED);
         allowActivePeriod(101L, SEASON_ID, WINDOW);
         when(assignments.findAllWithSnapshotByPeriodId(101L)).thenReturn(List.of(mock(QuestAssignment.class)));
-        var audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
+        QuestAssignmentIntegrityService.ExecutionAudit audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
         assertEquals(QuestAssignmentIntegrityService.AuditOutcome.INCONSISTENT, audit.outcome());
         assertTrue(audit.detail().contains("ASSIGNMENT_COUNT_MISMATCH"));
     }
@@ -134,7 +134,7 @@ class QuestAssignmentIntegrityServiceTest {
         allowActivePeriod(101L, SEASON_ID, WINDOW);
         List<QuestAssignment> valid = validAssignments(101L, "DAILY");
         when(assignments.findAllWithSnapshotByPeriodId(101L)).thenReturn(valid);
-        var audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
+        QuestAssignmentIntegrityService.ExecutionAudit audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
         assertEquals(QuestAssignmentIntegrityService.AuditOutcome.CONSISTENT, audit.outcome());
         assertNull(audit.detail());
         verify(assignments, never()).save(any());
@@ -152,7 +152,7 @@ class QuestAssignmentIntegrityServiceTest {
         List<QuestAssignment> valid = validAssignments(101L, "DAILY");
         when(valid.get(1).getSlotNumber()).thenReturn(4);
         when(assignments.findAllWithSnapshotByPeriodId(101L)).thenReturn(valid);
-        var audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
+        QuestAssignmentIntegrityService.ExecutionAudit audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
         assertTrue(audit.detail().contains("INVALID_SLOT"));
     }
 
@@ -165,7 +165,7 @@ class QuestAssignmentIntegrityServiceTest {
     void wrongSeasonIsCorrupt() {
         allowExecution(SchedulerExecutionStatus.SUCCEEDED);
         allowActivePeriod(101L, 999L, WINDOW);
-        var audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
+        QuestAssignmentIntegrityService.ExecutionAudit audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
         assertTrue(audit.detail().contains("SEASON_MISMATCH"));
     }
 
@@ -179,7 +179,7 @@ class QuestAssignmentIntegrityServiceTest {
         allowActivePeriod(101L, SEASON_ID, WINDOW);
         List<QuestAssignment> valid = validAssignments(101L, "DAILY");
         when(assignments.findAllWithSnapshotByPeriodId(101L)).thenReturn(valid);
-        var validation = service.verifyCommittedAssignment(WINDOW, SEASON_ID);
+        QuestAssignmentIntegrityService.Validation validation = service.verifyCommittedAssignment(WINDOW, SEASON_ID);
         assertTrue(validation.valid());
         verifyNoInteractions(executions);
     }
@@ -196,7 +196,7 @@ class QuestAssignmentIntegrityServiceTest {
         List<QuestAssignment> valid = validAssignments(101L, "DAILY");
         when(valid.get(1).getDifficultySnapshot()).thenReturn(QuestDifficulty.HIGH);
         when(assignments.findAllWithSnapshotByPeriodId(101L)).thenReturn(valid);
-        var audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
+        QuestAssignmentIntegrityService.ExecutionAudit audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
         assertEquals(QuestAssignmentIntegrityService.AuditOutcome.INCONSISTENT, audit.outcome());
         assertTrue(audit.detail().contains("DIFFICULTY_SLOT_MISMATCH"));
     }
@@ -216,7 +216,7 @@ class QuestAssignmentIntegrityServiceTest {
         when(other.getId()).thenReturn(999L);
         when(firstVersion.getQuestTemplate()).thenReturn(other);
         when(assignments.findAllWithSnapshotByPeriodId(101L)).thenReturn(valid);
-        var audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
+        QuestAssignmentIntegrityService.ExecutionAudit audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
         assertEquals(QuestAssignmentIntegrityService.AuditOutcome.INCONSISTENT, audit.outcome());
         assertTrue(audit.detail().contains("TEMPLATE_VERSION_MISMATCH"));
     }
@@ -231,7 +231,7 @@ class QuestAssignmentIntegrityServiceTest {
         allowActivePeriod(101L, SEASON_ID, WEEKLY_WINDOW);
         List<QuestAssignment> valid = validAssignments(101L, "WEEKLY");
         when(assignments.findAllWithSnapshotByPeriodId(101L)).thenReturn(valid);
-        var result = service.verifyCommittedAssignment(WEEKLY_WINDOW, SEASON_ID);
+        QuestAssignmentIntegrityService.Validation result = service.verifyCommittedAssignment(WEEKLY_WINDOW, SEASON_ID);
         assertTrue(result.valid());
     }
 
@@ -246,7 +246,7 @@ class QuestAssignmentIntegrityServiceTest {
         List<QuestAssignment> valid = validAssignments(101L, "WEEKLY");
         when(valid.get(3).getDifficultySnapshot()).thenReturn(QuestDifficulty.HIGH);
         when(assignments.findAllWithSnapshotByPeriodId(101L)).thenReturn(valid);
-        var result = service.verifyCommittedAssignment(WEEKLY_WINDOW, SEASON_ID);
+        QuestAssignmentIntegrityService.Validation result = service.verifyCommittedAssignment(WEEKLY_WINDOW, SEASON_ID);
         assertFalse(result.valid());
         assertTrue(result.reason().contains("DIFFICULTY_SLOT_MISMATCH"));
     }

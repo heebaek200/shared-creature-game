@@ -3,6 +3,7 @@ package com.team.sharedcreature.payment.integration;
 import com.team.sharedcreature.payment.application.PaymentGateway;
 import com.team.sharedcreature.payment.application.PaymentReconciliationService;
 import com.team.sharedcreature.payment.application.PaymentSnapshot;
+import com.team.sharedcreature.payment.domain.PaymentWebhookEvent;
 import com.team.sharedcreature.payment.infrastructure.PaymentWebhookEventRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,6 +20,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -105,7 +107,7 @@ class PaymentReconciliationConcurrencyIntegrationTest {
         insertWebhook("event-paid-" + UUID.randomUUID(), "Transaction.Paid", receivedAt);
         insertWebhook("event-cancel-" + UUID.randomUUID(), "Transaction.Cancelled", receivedAt);
 
-        var events = eventRepository.findRecoverable(
+        List<PaymentWebhookEvent> events = eventRepository.findRecoverable(
                 Set.of(
                         "Transaction.Ready",
                         "Transaction.Paid",
@@ -210,7 +212,7 @@ class PaymentReconciliationConcurrencyIntegrationTest {
     private Long insertAndGetId(String sql, Object... parameters) {
         GeneratedKeyHolder keyHolder = new GeneratedKeyHolder();
         jdbcTemplate.update(connection -> {
-            var statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+            PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
             for (int index = 0; index < parameters.length; index++) {
                 Object value = parameters[index];
                 statement.setObject(index + 1, value instanceof Instant instant ? Timestamp.from(instant) : value);

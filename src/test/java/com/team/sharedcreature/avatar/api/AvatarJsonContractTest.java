@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.exc.InvalidNullException;
 import tools.jackson.databind.exc.UnrecognizedPropertyException;
 import tools.jackson.databind.json.JsonMapper;
@@ -24,8 +25,8 @@ class AvatarJsonContractTest {
     @ParameterizedTest
     @EnumSource(AvatarSlot.class)
     void equipmentChangedPayloadSerializesSlotAsString(AvatarSlot slot) {
-        var payload = new GroupLivePayloads.AvatarEquipmentChanged(1L, slot, null);
-        var json = mapper.readTree(mapper.writeValueAsString(payload));
+        GroupLivePayloads.AvatarEquipmentChanged payload = new GroupLivePayloads.AvatarEquipmentChanged(1L, slot, null);
+        JsonNode json = mapper.readTree(mapper.writeValueAsString(payload));
 
         assertThat(json.get("slot").isString()).isTrue();
         assertThat(json.get("slot").asString()).isEqualTo(slot.name());
@@ -34,7 +35,7 @@ class AvatarJsonContractTest {
 
     @Test
     void 최초_사용_동의_생략은_false로_처리한다() {
-        var request = mapper.readValue("{\"ownedItemId\":10}", EquipAvatarItemRequest.class);
+        EquipAvatarItemRequest request = mapper.readValue("{\"ownedItemId\":10}", EquipAvatarItemRequest.class);
 
         assertThat(request.ownedItemId()).isEqualTo(10L);
         assertThat(request.confirmFirstUse()).isFalse();
@@ -42,7 +43,7 @@ class AvatarJsonContractTest {
 
     @Test
     void 명시적인_최초_사용_동의를_전달한다() {
-        var request = mapper.readValue(
+        EquipAvatarItemRequest request = mapper.readValue(
                 "{\"ownedItemId\":10,\"confirmFirstUse\":true}", EquipAvatarItemRequest.class);
 
         assertThat(request.confirmFirstUse()).isTrue();
@@ -64,9 +65,9 @@ class AvatarJsonContractTest {
 
     @Test
     void 미장착_네_슬롯을_대문자_키와_null로_모두_반환한다() {
-        var response = new AvatarResponse(1L, new AvatarResponse.Equipments(null, null, null, null));
+        AvatarResponse response = new AvatarResponse(1L, new AvatarResponse.Equipments(null, null, null, null));
 
-        var equipments = mapper.readTree(mapper.writeValueAsString(response)).get("equipments");
+        JsonNode equipments = mapper.readTree(mapper.writeValueAsString(response)).get("equipments");
 
         assertThat(equipments.size()).isEqualTo(4);
         for (String slot : new String[]{"HEAD", "FACE", "BODY", "ACCESSORY"}) {

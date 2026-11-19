@@ -16,6 +16,16 @@ import com.team.sharedcreature.avatar.application.AvatarService;
 import com.team.sharedcreature.admin.application.SchedulerJobRunner;
 import com.team.sharedcreature.admin.application.SchedulerExecutionLifecycleService;
 import com.team.sharedcreature.payment.application.*;
+import com.team.sharedcreature.payment.api.AdminRefundResponse;
+import com.team.sharedcreature.payment.api.PurchaseResponse;
+import com.team.sharedcreature.payment.api.PurchaseSummaryResponse;
+import com.team.sharedcreature.payment.api.RefundResponse;
+import com.team.sharedcreature.payment.application.PaymentSnapshot;
+import com.team.sharedcreature.payment.application.RefundApprovalTransactionService;
+import com.team.sharedcreature.payment.application.RefundLockService;
+import com.team.sharedcreature.payment.application.RefundReconciliationNormalizationService;
+import com.team.sharedcreature.payment.application.RefundRecoveryPreparationService;
+import com.team.sharedcreature.payment.application.RefundRecoveryWork;
 import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.domain.PgApiAttempt;
 import com.team.sharedcreature.payment.domain.PgApiOperation;
@@ -36,6 +46,7 @@ import com.team.sharedcreature.payment.domain.RefundStatus;
 import com.team.sharedcreature.payment.infrastructure.RefundRequestRepository;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
@@ -53,6 +64,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.net.URI;
@@ -65,7 +77,9 @@ import java.util.UUID;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.*;
@@ -113,11 +127,11 @@ class RefundTransactionMySqlIntegrationTest {
         // 테스트 전체에 트랜잭션을 걸지 않아 Service의 실제 Commit을 확인합니다.
         fixture = new TransactionTemplate(transactionManager).execute(status -> {
             Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-            var owner = User.register(GlobalRole.USER, now);
-            var admin = User.register(GlobalRole.SUPER_ADMIN, now);
+            User owner = User.register(GlobalRole.USER, now);
+            User admin = User.register(GlobalRole.SUPER_ADMIN, now);
             em.persist(owner);
             em.persist(admin);
-            var shop = BeanUtils.instantiateClass(ShopItem.class);
+            ShopItem shop = BeanUtils.instantiateClass(ShopItem.class);
             set(shop, "code", "refund-" + UUID.randomUUID());
             set(shop, "name", "환불 검증 상품");
             set(shop, "description", "이슈 22 테스트");
@@ -128,12 +142,12 @@ class RefundTransactionMySqlIntegrationTest {
             set(shop, "createdAt", now);
             set(shop, "updatedAt", now);
             em.persist(shop);
-            var purchase = Purchase.ready(UUID.randomUUID().toString(), owner, shop, now);
+            Purchase purchase = Purchase.ready(UUID.randomUUID().toString(), owner, shop, now);
             purchase.markPaid(now);
             em.persist(purchase);
-            var item = OwnedItem.grant(purchase, now);
+            OwnedItem item = OwnedItem.grant(purchase, now);
             em.persist(item);
-            var refund = RefundRequest.create(purchase, owner, "미사용 환불", now);
+            RefundRequest refund = RefundRequest.create(purchase, owner, "미사용 환불", now);
             em.persist(refund);
             em.flush();
             return new Fixture(owner.getId(), admin.getId(), shop.getId(), purchase.getId(),
@@ -179,8 +193,8 @@ class RefundTransactionMySqlIntegrationTest {
         jdbc.update("UPDATE shop_items SET slot_code = 'FACE', status = 'INACTIVE' WHERE id = ?",
                 fixture.shopId());
         new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
-            var shop = em.find(ShopItem.class, fixture.shopId());
-            var purchase = em.find(Purchase.class, fixture.purchaseId());
+            ShopItem shop = em.find(ShopItem.class, fixture.shopId());
+            Purchase purchase = em.find(Purchase.class, fixture.purchaseId());
             assertThat(shop.getSlotCode()).isEqualTo(AvatarSlot.FACE);
             assertThat(shop.getStatus()).isEqualTo(ShopItemStatus.INACTIVE);
             assertThat(purchase.getSlotCodeSnapshot()).isEqualTo(AvatarSlot.HEAD);
@@ -195,7 +209,7 @@ class RefundTransactionMySqlIntegrationTest {
         jdbc.update("UPDATE purchases SET status = 'READY' WHERE id = ?", fixture.purchaseId());
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
         new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
-            var purchase = em.find(Purchase.class, fixture.purchaseId());
+            Purchase purchase = em.find(Purchase.class, fixture.purchaseId());
             assertThat(purchase.getStatus()).isEqualTo(PurchaseStatus.READY);
             switch (status) {
                 case READY -> { }
@@ -210,7 +224,7 @@ class RefundTransactionMySqlIntegrationTest {
 
         assertThat(jdbc.queryForObject("SELECT status FROM purchases WHERE id = ?",
                 String.class, fixture.purchaseId())).isEqualTo(status.name());
-        var mine = purchaseRepository.findByUserIdAndStatus(
+        Page<Purchase> mine = purchaseRepository.findByUserIdAndStatus(
                 fixture.ownerId(), status, PageRequest.of(0, 20));
         assertThat(mine.getTotalElements()).isEqualTo(1);
         assertThat(mine.getContent().getFirst().getStatus()).isEqualTo(status);
@@ -227,10 +241,10 @@ class RefundTransactionMySqlIntegrationTest {
     void 거래는_문자열로_저장되고_승인과_취소를_구분하여_조회한다(PaymentTransactionStatus status) {
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
         Long cancellationId = new TransactionTemplate(transactionManager).execute(tx -> {
-            var purchase = em.find(Purchase.class, fixture.purchaseId());
-            var cancellation = PaymentTransaction.cancellationRequested(purchase, now);
+            Purchase purchase = em.find(Purchase.class, fixture.purchaseId());
+            PaymentTransaction cancellation = PaymentTransaction.cancellationRequested(purchase, now);
             if (status != PaymentTransactionStatus.REQUESTED) {
-                var processedAt = status == PaymentTransactionStatus.UNKNOWN ? null : now;
+                Instant processedAt = status == PaymentTransactionStatus.UNKNOWN ? null : now;
                 cancellation.applyCancellationResult(status, "cancel-" + fixture.refundId(), processedAt, "PG", now);
             }
             em.persist(cancellation);
@@ -247,18 +261,18 @@ class RefundTransactionMySqlIntegrationTest {
                 String.class, cancellationId)).isEqualTo(status.name());
         assertThat(jdbc.queryForObject("SELECT provider FROM payment_transactions WHERE id = ?",
                 String.class, cancellationId)).isEqualTo("PORTONE");
-        var approval = transactionRepository.findByProviderAndProviderTransactionId(
+        PaymentTransaction approval = transactionRepository.findByProviderAndProviderTransactionId(
                 PaymentProvider.PORTONE, "approval-" + fixture.purchaseId()).orElseThrow();
         assertThat(approval.getTransactionType()).isEqualTo(PaymentTransactionType.APPROVAL);
-        var cancellation = transactionRepository.findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
+        PaymentTransaction cancellation = transactionRepository.findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
                 fixture.purchaseId(), PaymentTransactionType.CANCELLATION).orElseThrow();
         assertThat(cancellation.getId()).isEqualTo(cancellationId);
         assertThat(cancellation.getStatus()).isEqualTo(status);
         assertThat(cancellation.getProvider()).isEqualTo(PaymentProvider.PORTONE);
         assertThat(refundQueries.getAdminRefund(fixture.refundId()).latestCancellation().status())
                 .isEqualTo(status);
-        var purchaseResponse = purchaseQueries.get(fixture.ownerId(), fixture.purchaseId());
-        var mapper = new ObjectMapper();
+        PurchaseResponse purchaseResponse = purchaseQueries.get(fixture.ownerId(), fixture.purchaseId());
+        ObjectMapper mapper = new ObjectMapper();
         assertThat(mapper.writeValueAsString(purchaseResponse)).contains("\"transactionType\":\"APPROVAL\"");
         assertThat(purchaseResponse.transactions())
                 .anySatisfy(transaction -> {
@@ -282,7 +296,7 @@ class RefundTransactionMySqlIntegrationTest {
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
         Instant startedAt = now.minusSeconds(600);
         enumWebhookId = new TransactionTemplate(transactionManager).execute(tx -> {
-            var event = PaymentWebhookEvent.received("enum-62-" + UUID.randomUUID(), null, null,
+            PaymentWebhookEvent event = PaymentWebhookEvent.received("enum-62-" + UUID.randomUUID(), null, null,
                     "Transaction.Paid", "a".repeat(64), "{}", startedAt);
             switch (status) {
                 case PENDING -> { }
@@ -299,15 +313,15 @@ class RefundTransactionMySqlIntegrationTest {
                 String.class, enumWebhookId)).isEqualTo(status.name());
         assertThat(jdbc.queryForObject("SELECT provider FROM payment_webhook_events WHERE id = ?",
                 String.class, enumWebhookId)).isEqualTo("PORTONE");
-        var storedEvent = webhookRepository.findById(enumWebhookId).orElseThrow();
+        PaymentWebhookEvent storedEvent = webhookRepository.findById(enumWebhookId).orElseThrow();
         assertThat(storedEvent.getProcessingStatus()).isEqualTo(status);
         assertThat(storedEvent.getProvider()).isEqualTo(PaymentProvider.PORTONE);
         assertThat(webhookRepository.existsByProviderAndProviderEventId(
                 PaymentProvider.PORTONE, storedEvent.getProviderEventId())).isTrue();
-        var duplicate = webhookRepository.findByProviderAndProviderEventId(
+        PaymentWebhookEvent duplicate = webhookRepository.findByProviderAndProviderEventId(
                 PaymentProvider.PORTONE, storedEvent.getProviderEventId()).orElseThrow();
         assertThat(duplicate.getId()).isEqualTo(enumWebhookId);
-        var candidates = webhookRepository.findRecoverable(List.of("Transaction.Paid"),
+        List<PaymentWebhookEvent> candidates = webhookRepository.findRecoverable(List.of("Transaction.Paid"),
                 now.minusSeconds(300), PageRequest.of(0, 1000));
         if (status == WebhookProcessingStatus.PENDING || status == WebhookProcessingStatus.FAILED) {
             assertThat(candidates).extracting(PaymentWebhookEvent::getId).contains(enumWebhookId);
@@ -326,13 +340,13 @@ class RefundTransactionMySqlIntegrationTest {
     @EnumSource(PgApiResultType.class)
     void PG이력은_기존문자열과_호환되고_취소와_조회작업을_구분한다(PgApiResultType result) {
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-        var ids = new TransactionTemplate(transactionManager).execute(tx -> {
-            var locked = refundLocks.lock(fixture.refundId());
+        List<Long> ids = new TransactionTemplate(transactionManager).execute(tx -> {
+            RefundLockService.LockedRefund locked = refundLocks.lock(fixture.refundId());
             locked.refund().claimCancellation(em.find(User.class, fixture.adminId()), "승인", now);
-            var cancellation = PgApiAttempt.prepareCancellation(locked.refund(), 1, now);
+            PgApiAttempt cancellation = PgApiAttempt.prepareCancellation(locked.refund(), 1, now);
             em.persist(cancellation);
             em.flush();
-            var lookup = PgApiAttempt.prepareCancellationLookup(locked.refund(), cancellation, 2, now);
+            PgApiAttempt lookup = PgApiAttempt.prepareCancellationLookup(locked.refund(), cancellation, 2, now);
             if (result != PgApiResultType.STARTED) {
                 lookup.complete(result, 200, "PG", "{}", null, now);
             }
@@ -351,9 +365,9 @@ class RefundTransactionMySqlIntegrationTest {
 
         new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
             refundLocks.lock(fixture.refundId());
-            var cancellations = pgAttempts.findCancellationAttemptsForUpdate(fixture.refundId());
+            List<PgApiAttempt> cancellations = pgAttempts.findCancellationAttemptsForUpdate(fixture.refundId());
             assertThat(cancellations).extracting(PgApiAttempt::getId).containsExactly(ids.getFirst());
-            var history = pgAttempts.findCancellationHistoryForUpdate(fixture.refundId());
+            List<PgApiAttempt> history = pgAttempts.findCancellationHistoryForUpdate(fixture.refundId());
             assertThat(history).extracting(PgApiAttempt::getId).containsExactlyElementsOf(ids);
             assertThat(history.getFirst().getOperation()).isEqualTo(PgApiOperation.CANCELLATION);
             assertThat(history.getLast().getOperation()).isEqualTo(PgApiOperation.CANCELLATION_LOOKUP);
@@ -372,8 +386,8 @@ class RefundTransactionMySqlIntegrationTest {
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
         Instant claimedAt = now.minusSeconds(600);
         new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
-            var refund = em.find(RefundRequest.class, fixture.refundId());
-            var admin = em.find(User.class, fixture.adminId());
+            RefundRequest refund = em.find(RefundRequest.class, fixture.refundId());
+            User admin = em.find(User.class, fixture.adminId());
             if (status == RefundStatus.REJECTED) {
                 refund.reject(admin, "거절", claimedAt);
             } else if (status != RefundStatus.REQUESTED) {
@@ -389,33 +403,33 @@ class RefundTransactionMySqlIntegrationTest {
 
         assertThat(jdbc.queryForObject("SELECT status FROM refund_requests WHERE id = ?",
                 String.class, fixture.refundId())).isEqualTo(status.name());
-        var mine = refundQueries.listMyRefunds(fixture.ownerId(), 0, 20, status);
+        Page<RefundResponse> mine = refundQueries.listMyRefunds(fixture.ownerId(), 0, 20, status);
         assertThat(mine.getTotalElements()).isEqualTo(1);
         assertThat(mine.getContent().getFirst().status()).isEqualTo(status);
         assertThat(refundQueries.listMyRefunds(fixture.adminId(), 0, 20, status)).isEmpty();
 
-        var purchase = purchaseQueries.get(fixture.ownerId(), fixture.purchaseId());
+        PurchaseResponse purchase = purchaseQueries.get(fixture.ownerId(), fixture.purchaseId());
         assertThat(purchase.latestRefundStatus()).isEqualTo(status);
         assertThat(purchase.refundRequests()).singleElement().satisfies(refund ->
                 assertThat(refund.status()).isEqualTo(status));
-        var summary = purchaseQueries.list(fixture.ownerId(), 0, 20, null).getContent().getFirst();
+        PurchaseSummaryResponse summary = purchaseQueries.list(fixture.ownerId(), 0, 20, null).getContent().getFirst();
         assertThat(summary.latestRefundStatus()).isEqualTo(status);
-        var mapper = new ObjectMapper();
-        var adminRefund = refundQueries.getAdminRefund(fixture.refundId());
+        ObjectMapper mapper = new ObjectMapper();
+        AdminRefundResponse adminRefund = refundQueries.getAdminRefund(fixture.refundId());
         assertThat(adminRefund.status()).isEqualTo(status);
         assertThat(mapper.writeValueAsString(adminRefund)).contains("\"status\":\"" + status.name() + "\"");
         assertThat(mapper.writeValueAsString(mine.getContent().getFirst()))
                 .contains("\"status\":\"" + status.name() + "\"");
-        var purchaseJson = mapper.readTree(mapper.writeValueAsString(purchase));
+        JsonNode purchaseJson = mapper.readTree(mapper.writeValueAsString(purchase));
         assertThat(purchaseJson.at("/latestRefundStatus").asString()).isEqualTo(status.name());
         assertThat(purchaseJson.at("/refundRequests/0/status").asString()).isEqualTo(status.name());
         assertThat(mapper.writeValueAsString(summary)).contains("\"latestRefundStatus\":\"" + status.name() + "\"");
 
         // 목록과 전체 건수 계산에 같은 Enum 상태 조건이 적용되는지 확인합니다.
-        var all = refundRepository.findAdminRefunds(status, PageRequest.of(0, 100));
+        Page<RefundRequest> all = refundRepository.findAdminRefunds(status, PageRequest.of(0, 100));
         assertThat(all.getContent()).allSatisfy(refund -> assertThat(refund.getStatus()).isEqualTo(status));
         assertThat(all.getTotalElements()).isGreaterThanOrEqualTo(1);
-        var stale = refundRepository.findStaleCancellationIds(now.minusSeconds(300), PageRequest.of(0, 100));
+        List<Long> stale = refundRepository.findStaleCancellationIds(now.minusSeconds(300), PageRequest.of(0, 100));
         if (status == RefundStatus.CANCEL_PENDING || status == RefundStatus.CANCEL_UNKNOWN) {
             assertThat(stale).contains(fixture.refundId());
         } else {
@@ -426,12 +440,12 @@ class RefundTransactionMySqlIntegrationTest {
     @Test
     void 성공이면_환불_구매_회수_멱등응답을_함께_Commit하고_재반영하지_않는다() {
         prepareApproval();
-        var response = results.apply(command, pgResult(RefundGateway.Outcome.SUCCESS), "first");
+        RefundApprovalTransactionService.CommandResponse response = results.apply(command, pgResult(RefundGateway.Outcome.SUCCESS), "first");
         assertThat(response.httpStatus()).isEqualTo(200);
         assertState("COMPLETED", "CANCELLED", "REVOKED", "COMPLETED");
         Timestamp revokedAt = jdbc.queryForObject("SELECT revoked_at FROM owned_items WHERE id = ?",
                 Timestamp.class, fixture.itemId());
-        var replay = results.apply(command, pgResult(RefundGateway.Outcome.UNKNOWN), "second");
+        RefundApprovalTransactionService.CommandResponse replay = results.apply(command, pgResult(RefundGateway.Outcome.UNKNOWN), "second");
         assertThat(replay.data().status()).isEqualTo(RefundStatus.COMPLETED);
         assertThat(jdbc.queryForObject("SELECT revoked_at FROM owned_items WHERE id = ?",
                 Timestamp.class, fixture.itemId())).isEqualTo(revokedAt);
@@ -442,7 +456,7 @@ class RefundTransactionMySqlIntegrationTest {
     @Test
     void 결과불명은_409와_UNKNOWN을_Commit하고_아이템을_유지한다() {
         prepareApproval();
-        var response = results.apply(command, pgResult(RefundGateway.Outcome.UNKNOWN), "first");
+        RefundApprovalTransactionService.CommandResponse response = results.apply(command, pgResult(RefundGateway.Outcome.UNKNOWN), "first");
         assertThat(response.httpStatus()).isEqualTo(409);
         assertThat(response.error().code()).isEqualTo("PG_CANCEL_RESULT_UNKNOWN");
         assertState("CANCEL_UNKNOWN", "PAID", "OWNED_UNUSED", "COMPLETED");
@@ -471,7 +485,7 @@ class RefundTransactionMySqlIntegrationTest {
     @RepeatedTest(3)
     void 서로다른_멱등키의_동시승인도_PG취소는_한번만_실행한다() throws Exception {
         stubSuccessfulCancellation();
-        var outcomes = race(this::approve, this::approve);
+        List<Object> outcomes = race(this::approve, this::approve);
         assertThat(outcomes.stream().filter(value -> value instanceof RefundApprovalTransactionService.CommandResponse).count()).isEqualTo(1);
         assertThat(outcomes).contains(ErrorCode.CONCURRENT_MODIFICATION);
         verify(gateway, times(1)).cancelFully(anyString(), anyString(), anyString());
@@ -484,7 +498,7 @@ class RefundTransactionMySqlIntegrationTest {
     @RepeatedTest(3)
     void 동시_승인과_거절은_하나만_확정한다() throws Exception {
         stubSuccessfulCancellation();
-        var outcomes = race(this::approve,
+        List<Object> outcomes = race(this::approve,
                 () -> refunds.rejectRefund(fixture.adminId(), fixture.refundId(), "검증 거절"));
         assertThat(outcomes.stream().filter(value -> value instanceof ErrorCode).count()).isEqualTo(1);
         assertThat(outcomes).contains(ErrorCode.CONCURRENT_MODIFICATION);
@@ -499,7 +513,7 @@ class RefundTransactionMySqlIntegrationTest {
     @RepeatedTest(3)
     void 환불요청과_최초장착이_경합해도_사용과_환불이_동시에_성립하지_않는다() throws Exception {
         jdbc.update("DELETE FROM refund_requests WHERE id = ?", fixture.refundId());
-        var outcomes = race(
+        List<Object> outcomes = race(
                 () -> refunds.createRefundRequest(fixture.ownerId(), fixture.purchaseId(), "동시 환불", UUID.randomUUID().toString()),
                 () -> avatars.equipAvatarItem(fixture.ownerId(), AvatarSlot.HEAD, fixture.itemId(), true));
         assertThat(outcomes.stream().filter(value -> value instanceof ErrorCode).count()).isEqualTo(1);
@@ -528,7 +542,7 @@ class RefundTransactionMySqlIntegrationTest {
                 1000, "KRW", "CARD", null, "LIVE", Instant.now().minusSeconds(900),
                 List.of(new PaymentSnapshot.CancellationSnapshot("refund-test-" + fixture.refundId(),
                         "SUCCEEDED", 1000, Instant.now().minusSeconds(600), Instant.now()))));
-        var result = normalizer().normalize();
+        RefundReconciliationNormalizationService.Result result = normalizer().normalize();
         assertThat(result.error()).isNull();
         assertThat(result.execution()).isEqualTo(SchedulerJobRunner.ExecutionResult.SUCCEEDED);
         assertThat(result.summary()).isEqualTo(new RefundRecoveryWork.RecoverySummary(1, 1, 0, 0, 0, 0, 0));
@@ -546,7 +560,7 @@ class RefundTransactionMySqlIntegrationTest {
         prepareStaleUnknownRefund();
         when(lookupGateway.getPayment(command.paymentId())).thenThrow(new PaymentGatewayException(
                 PaymentGatewayException.Kind.UNAVAILABLE, "조회 Timeout 대역", null));
-        var result = normalizer().normalize();
+        RefundReconciliationNormalizationService.Result result = normalizer().normalize();
         assertThat(result.error()).isNotNull();
         assertThat(result.summary()).isEqualTo(new RefundRecoveryWork.RecoverySummary(1, 0, 0, 0, 0, 0, 1));
         assertThat(status("refund_requests", fixture.refundId())).isEqualTo("CANCEL_UNKNOWN");
@@ -560,7 +574,7 @@ class RefundTransactionMySqlIntegrationTest {
         prepareStaleUnknownRefund();
         when(lookupGateway.getPayment(command.paymentId())).thenThrow(new PaymentGatewayException(
                 PaymentGatewayException.Kind.UNAVAILABLE, "조회 Timeout 대역", null));
-        var result = normalizer().normalize();
+        RefundReconciliationNormalizationService.Result result = normalizer().normalize();
         assertThat(result.summary().errorCount()).isEqualTo(1);
         assertThat(schedulerColumn("status")).isEqualTo("FAILED");
         assertThat(schedulerColumn("attempt_count")).isEqualTo("1");
@@ -574,7 +588,7 @@ class RefundTransactionMySqlIntegrationTest {
     @RepeatedTest(3)
     void 다른_실행구간의_복구가_겹쳐도_단건_조회는_하나만_선점한다() throws Exception {
         prepareStaleUnknownRefund();
-        var outcomes = race(
+        List<Object> outcomes = race(
                 () -> recoveryPreparation.prepareScheduled(fixture.refundId()),
                 () -> recoveryPreparation.prepareScheduled(fixture.refundId()));
         long claimed = outcomes.stream()
@@ -590,13 +604,13 @@ class RefundTransactionMySqlIntegrationTest {
     @Test
     void 중단된_조회는_재선점하고_이전응답과_중복응답은_회수에_반영하지_않는다() {
         prepareStaleUnknownRefund();
-        var oldCommand = recoveryPreparation.prepareScheduled(fixture.refundId()).orElseThrow();
+        RefundRecoveryPreparationService.RecoveryCommand oldCommand = recoveryPreparation.prepareScheduled(fixture.refundId()).orElseThrow();
         Timestamp stale = Timestamp.from(Instant.now().minusSeconds(600));
         // 선점 Commit 뒤 서버가 중단되어 조회 완료를 기록하지 못한 상황입니다.
         jdbc.update("UPDATE refund_requests SET cancel_claimed_at = ? WHERE id = ?", stale, fixture.refundId());
         jdbc.update("UPDATE pg_api_attempts SET started_at = ? WHERE id = ?", stale, oldCommand.lookupAttemptId());
-        var newCommand = recoveryPreparation.prepareScheduled(fixture.refundId()).orElseThrow();
-        var snapshot = successfulLookup();
+        RefundRecoveryPreparationService.RecoveryCommand newCommand = recoveryPreparation.prepareScheduled(fixture.refundId()).orElseThrow();
+        PaymentSnapshot snapshot = successfulLookup();
         assertThat(results.applyRecovery(oldCommand, snapshot)).isEmpty();
         assertThat(status("refund_requests", fixture.refundId())).isEqualTo("CANCEL_UNKNOWN");
         assertThat(status("owned_items", fixture.itemId())).isEqualTo("OWNED_UNUSED");
@@ -618,12 +632,12 @@ class RefundTransactionMySqlIntegrationTest {
         jdbc.update("UPDATE pg_api_attempts SET started_at = ? WHERE id = ?", stale, command.pgApiAttemptId());
         assertThat(recoveryPreparation.findScheduledCandidates()).containsExactly(fixture.refundId());
         when(lookupGateway.getPayment(command.paymentId())).thenReturn(successfulLookup());
-        var summary = reconciliation.recoverStaleRefunds(() -> {});
+        RefundRecoveryWork.RecoverySummary summary = reconciliation.recoverStaleRefunds(() -> {});
         assertThat(summary.completedCount()).isEqualTo(1);
         assertThat(status("refund_requests", fixture.refundId())).isEqualTo("COMPLETED");
         assertThat(status("owned_items", fixture.itemId())).isEqualTo("REVOKED");
         // 업무만 복구되고 멱등 키가 영구 PROCESSING으로 남으면 재요청이 막힙니다.
-        var response = refunds.approveRefund(fixture.adminId(), fixture.refundId(), "중단 검증", key, "retry");
+        RefundApprovalTransactionService.CommandResponse response = refunds.approveRefund(fixture.adminId(), fixture.refundId(), "중단 검증", key, "retry");
         assertThat(response.httpStatus()).isEqualTo(200);
         assertThat(response.data().status()).isEqualTo(RefundStatus.COMPLETED);
         verifyNoInteractions(gateway);
@@ -680,12 +694,12 @@ class RefundTransactionMySqlIntegrationTest {
     }
 
     private List<Object> race(Callable<?> first, Callable<?> second) throws Exception {
-        var executor = Executors.newFixedThreadPool(2);
-        var ready = new CountDownLatch(2);
-        var start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
         try {
-            var left = executor.submit(() -> runAfterStart(first, ready, start));
-            var right = executor.submit(() -> runAfterStart(second, ready, start));
+            Future<Object> left = executor.submit(() -> runAfterStart(first, ready, start));
+            Future<Object> right = executor.submit(() -> runAfterStart(second, ready, start));
             assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
             start.countDown();
             return List.of(left.get(20, TimeUnit.SECONDS), right.get(20, TimeUnit.SECONDS));

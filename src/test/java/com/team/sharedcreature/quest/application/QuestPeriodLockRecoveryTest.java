@@ -49,7 +49,7 @@ class QuestPeriodLockRecoveryTest {
      */
     @Test
     void retriesDeadlockInFreshPersistenceCall() {
-        var result = new QuestPeriodAssignmentService.Result(
+        QuestPeriodAssignmentService.Result result = new QuestPeriodAssignmentService.Result(
                 QuestPeriodAssignmentService.Outcome.CREATED, 12L, 3);
         when(persistence.assign(WINDOW))
                 .thenThrow(new CannotAcquireLockException("deadlock"))
@@ -111,7 +111,7 @@ class QuestPeriodLockRecoveryTest {
         when(period.getId()).thenReturn(17L);
         when(f.assignmentRepository().countByQuestPeriodId(17L)).thenReturn(3L);
 
-        var result = f.service().assign(WINDOW);
+        QuestPeriodAssignmentService.Result result = f.service().assign(WINDOW);
         assertEquals(QuestPeriodAssignmentService.Outcome.ALREADY_ACTIVE, result.outcome());
         assertEquals(Long.valueOf(17L), result.periodId());
         verify(f.periodRepository()).findForUpdateByPeriodTypeAndStartAt(QuestPeriodType.DAILY, WINDOW.startAt());
@@ -123,15 +123,15 @@ class QuestPeriodLockRecoveryTest {
      * JDBC 연결 없이 잠금 조회 순서만 결정적으로 검증합니다.
      */
     private Fixture fixture() {
-        var seasonQuery = mock(SeasonQueryService.class);
-        var seasons = mock(SeasonRepository.class);
-        var calendar = mock(QuestPeriodCalendar.class);
-        var selector = mock(QuestTemplateSelectionService.class);
-        var periods = mock(QuestPeriodRepository.class);
-        var assignments = mock(QuestAssignmentRepository.class);
-        var templates = mock(QuestTemplateRepository.class);
-        var versions = mock(QuestTemplateVersionRepository.class);
-        var season = mock(Season.class);
+        SeasonQueryService seasonQuery = mock(SeasonQueryService.class);
+        SeasonRepository seasons = mock(SeasonRepository.class);
+        QuestPeriodCalendar calendar = mock(QuestPeriodCalendar.class);
+        QuestTemplateSelectionService selector = mock(QuestTemplateSelectionService.class);
+        QuestPeriodRepository periods = mock(QuestPeriodRepository.class);
+        QuestAssignmentRepository assignments = mock(QuestAssignmentRepository.class);
+        QuestTemplateRepository templates = mock(QuestTemplateRepository.class);
+        QuestTemplateVersionRepository versions = mock(QuestTemplateVersionRepository.class);
+        Season season = mock(Season.class);
 
         // 트랜잭션 프록시는 사용하지 않고 시즌 적격성 검사에 필요한 값만 설정합니다.
         when(seasonQuery.findCurrentSeasonForShareIfPresent()).thenReturn(Optional.of(season));

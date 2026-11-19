@@ -1,6 +1,7 @@
 package com.team.sharedcreature.avatar.infrastructure;
 
 import com.team.sharedcreature.avatar.application.AvatarEquipmentChangedEvent;
+import com.team.sharedcreature.avatar.application.AvatarEquipmentEventPublisher;
 import com.team.sharedcreature.avatar.domain.AvatarSlot;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.TransactionDefinition;
@@ -69,7 +70,7 @@ class AfterCommitAvatarEquipmentEventPublisherTest {
 
     @Test
     void 전파_실패가_이미_확정된_장착의_재시도를_유발하지_않는다() {
-        var failingPublisher = new AfterCommitAvatarEquipmentEventPublisher(value -> {
+        AvatarEquipmentEventPublisher failingPublisher = new AfterCommitAvatarEquipmentEventPublisher(value -> {
             throw new IllegalStateException("의도한 전파 실패");
         });
 

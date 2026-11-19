@@ -20,6 +20,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
@@ -71,7 +72,7 @@ class GroupControllerValidationTest {
         validator.afterPropertiesSet();
 
         // 유효한 GROUP_MEMBER 인증 객체를 요청 스레드에 설정합니다.
-        var principal = new LoginUser(1L, "검증회원", Set.of("MEMBER"));
+        LoginUser principal = new LoginUser(1L, "검증회원", Set.of("MEMBER"));
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(principal, "N/A", List.of())
         );
@@ -134,9 +135,9 @@ class GroupControllerValidationTest {
      */
     @Test
     void 페이징_기본값은_0페이지_20건이다() throws Exception {
-        var member = new GroupMemberResponse(
+        GroupMemberResponse member = new GroupMemberResponse(
                 2L, "member", 10L, GroupRole.PRIMARY, GroupMembershipStatus.ACTIVE, Instant.EPOCH, null);
-        var members = new PageImpl<>(List.of(member), PageRequest.of(0, 20), 1);
+        Page<GroupMemberResponse> members = new PageImpl<>(List.of(member), PageRequest.of(0, 20), 1);
         when(groupQueryService.listMyGroupMembers(1L, 0, 20)).thenReturn(members);
 
         // 인자를 생략하고 호출했을 때 기본값을 사용하는지 확인합니다.
@@ -153,7 +154,7 @@ class GroupControllerValidationTest {
     @ParameterizedTest
     @EnumSource(value = GroupRole.class, names = {"MEMBER", "DEPUTY"})
     void roleChangeAcceptsDocumentedRoles(GroupRole role) throws Exception {
-        var member = new GroupMemberResponse(
+        GroupMemberResponse member = new GroupMemberResponse(
                 2L, "member", 10L, role, GroupMembershipStatus.ACTIVE, Instant.EPOCH, null);
         when(groupAdminService.changeMemberRole(1L, 2L, role)).thenReturn(member);
 

@@ -22,12 +22,14 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.test.context.web.WebAppConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.Optional;
@@ -79,11 +81,11 @@ class AvatarHttpContractTest {
     @ParameterizedTest
     @EnumSource(AvatarSlot.class)
     void passesDocumentedListSlotToServices(AvatarSlot slot) throws Exception {
-        var pageable = PageRequest.of(0, 20);
+        PageRequest pageable = PageRequest.of(0, 20);
         when(shopService.list(0, 20, slot)).thenReturn(Page.empty(pageable));
         when(avatarService.listOwnedItems(1L, 0, 20, slot, null)).thenReturn(Page.empty(pageable));
 
-        var session = authenticatedSession();
+        MockHttpSession session = authenticatedSession();
         for (String path : new String[]{"/api/v1/shop-items", "/api/v1/owned-items"}) {
             mvc.perform(get(path).session(session).queryParam("slot", slot.name()))
                     .andExpect(status().isOk());
@@ -96,7 +98,7 @@ class AvatarHttpContractTest {
     @ParameterizedTest
     @ValueSource(strings = {"head", " HEAD", "HEAD ", "", "HAT"})
     void rejectsInvalidListSlotWithExistingFieldError(String slot) throws Exception {
-        var session = authenticatedSession();
+        MockHttpSession session = authenticatedSession();
         for (String path : new String[]{"/api/v1/shop-items", "/api/v1/owned-items"}) {
             mvc.perform(get(path).session(session).queryParam("slot", slot))
                     .andExpect(status().isBadRequest())
@@ -113,8 +115,8 @@ class AvatarHttpContractTest {
         when(commands.equipAvatarItem(1L, slot, 10L, true)).thenReturn(emptyAvatar);
         when(commands.unequipAvatarItem(1L, slot)).thenReturn(emptyAvatar);
 
-        var session = authenticatedSession();
-        var path = "/api/v1/avatar/equipments/{slot}";
+        MockHttpSession session = authenticatedSession();
+        String path = "/api/v1/avatar/equipments/{slot}";
         mvc.perform(put(path, slot.name()).session(session).with(csrf().asHeader())
                         .contentType("application/json")
                         .content("{\"ownedItemId\":10,\"confirmFirstUse\":true}"))
@@ -129,8 +131,8 @@ class AvatarHttpContractTest {
     @ParameterizedTest
     @ValueSource(strings = {"head", "HEAD ", "HAT"})
     void rejectsInvalidEquipmentSlotWithExistingFieldError(String slot) throws Exception {
-        var session = authenticatedSession();
-        var path = "/api/v1/avatar/equipments/{slot}";
+        MockHttpSession session = authenticatedSession();
+        String path = "/api/v1/avatar/equipments/{slot}";
         mvc.perform(put(path, slot).session(session).with(csrf().asHeader())
                         .contentType("application/json")
                         .content("{\"ownedItemId\":10}"))
@@ -179,7 +181,7 @@ class AvatarHttpContractTest {
 
     @Test
     void 장착과_해제는_CSRF_토큰_없이는_실행하지_않는다() throws Exception {
-        var session = authenticatedSession();
+        MockHttpSession session = authenticatedSession();
         mvc.perform(put("/api/v1/avatar/equipments/HEAD").session(session)
                         .contentType("application/json").content("{\"ownedItemId\":10}"))
                 .andExpect(status().isForbidden())
@@ -192,10 +194,10 @@ class AvatarHttpContractTest {
 
     @Test
     void 실제_발급한_CSRF_헤더와_세션으로_최초_장착을_호출한다() throws Exception {
-        var session = authenticatedSession();
-        var csrfResponse = mvc.perform(get("/api/v1/auth/csrf").session(session))
+        MockHttpSession session = authenticatedSession();
+        MockHttpServletResponse csrfResponse = mvc.perform(get("/api/v1/auth/csrf").session(session))
                 .andExpect(status().isOk()).andReturn().getResponse();
-        var token = mapper.readTree(csrfResponse.getContentAsString()).get("data");
+        JsonNode token = mapper.readTree(csrfResponse.getContentAsString()).get("data");
         when(commands.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true)).thenReturn(emptyAvatar);
 
         mvc.perform(put("/api/v1/avatar/equipments/HEAD").session(session)
@@ -267,7 +269,7 @@ class AvatarHttpContractTest {
     @ParameterizedTest
     @ValueSource(strings = {"/api/v1/shop-items", "/api/v1/owned-items"})
     void 두_목록의_중복과_미등록_Query만_필드_오류로_변환한다(String path) throws Exception {
-        var session = authenticatedSession();
+        MockHttpSession session = authenticatedSession();
         mvc.perform(get(path).session(session).queryParam("page", "0", "1"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_FIELD_VALUE"));
@@ -282,7 +284,7 @@ class AvatarHttpContractTest {
         when(shopService.list(0, 20, null)).thenReturn(Page.empty(PageRequest.of(0, 20)));
         when(avatarService.listOwnedItems(1L, 0, 20, null, null))
                 .thenReturn(Page.empty(PageRequest.of(0, 20)));
-        var session = authenticatedSession();
+        MockHttpSession session = authenticatedSession();
 
         for (String path : new String[]{"/api/v1/shop-items", "/api/v1/owned-items"}) {
             mvc.perform(get(path).session(session))
@@ -307,7 +309,7 @@ class AvatarHttpContractTest {
 
     @Test
     void 다른_Controller의_Query와_JSON_동작은_기존대로_유지한다() throws Exception {
-        var session = authenticatedSession();
+        MockHttpSession session = authenticatedSession();
         mvc.perform(get("/api/v1/issue20-test/other").session(session).queryParam("unknown", "1"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
@@ -327,7 +329,7 @@ class AvatarHttpContractTest {
     private MockHttpSession authenticatedSession() {
         when(users.findById(1L)).thenReturn(Optional.of(user(1L)));
         when(memberships.findByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE)).thenReturn(Optional.empty());
-        var session = new MockHttpSession();
+        MockHttpSession session = new MockHttpSession();
         session.setAttribute(SessionAuthenticationFilter.LOGIN_USER, new LoginUser(1L, "테스트 회원", Set.of()));
         return session;
     }

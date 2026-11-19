@@ -15,6 +15,7 @@ import com.team.sharedcreature.auth.domain.GlobalRole;
 import com.team.sharedcreature.auth.domain.UserStatus;
 import com.team.sharedcreature.auth.domain.UserProfile;
 import com.team.sharedcreature.auth.infrastructure.*;
+import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.domain.GroupMembershipStatus;
 import com.team.sharedcreature.group.domain.GroupRole;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
@@ -42,6 +43,7 @@ import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -202,7 +204,7 @@ public class AuthService {
         }
 
         SocialProvider provider = attempt.getProvider();
-        var account = socialAccountRepository.findByProviderAndProviderUserId(
+        Optional<SocialAccount> account = socialAccountRepository.findByProviderAndProviderUserId(
                 provider,
                 profile.providerUserId()
         );
@@ -296,7 +298,7 @@ public class AuthService {
 
         Object lock = SESSION_LIMIT_LOCKS[Math.floorMod(userId.hashCode(), SESSION_LIMIT_LOCKS.length)];
         synchronized (lock) {
-            var previousSessions = new ArrayList<>(sessionRepository.findByPrincipalName(principal).entrySet());
+            List<Map.Entry<String, ? extends Session>> previousSessions = new ArrayList<>(sessionRepository.findByPrincipalName(principal).entrySet());
             previousSessions.removeIf(entry -> entry.getKey().equals(session.getId()));
             previousSessions.sort(Comparator.comparing(entry -> entry.getValue().getCreationTime()));
             while (previousSessions.size() > 2) {
@@ -323,7 +325,7 @@ public class AuthService {
             session.setAttribute(ONBOARDING_REASON, "INVITE_INVALID");
             return;
         }
-        var current = membershipRepository.findActiveWithGroupByUserId(user.getId());
+        Optional<GroupMembership> current = membershipRepository.findActiveWithGroupByUserId(user.getId());
         if (current.isPresent() && current.get().getGroup().getId().equals(invitation.getGroup().getId())) {
             session.removeAttribute(ONBOARDING_REASON);
             session.removeAttribute(InvitationSessionContext.SESSION_KEY);
@@ -344,7 +346,7 @@ public class AuthService {
     }
 
     private Set<String> currentRoles(User user) {
-        var roles = new java.util.HashSet<String>();
+        Set<String> roles = new java.util.HashSet<>();
         if (user.getGlobalRole() == GlobalRole.SUPER_ADMIN) {
             roles.add(GlobalRole.SUPER_ADMIN.name());
         }

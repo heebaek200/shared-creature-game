@@ -1,5 +1,6 @@
 package com.team.sharedcreature.auth.api;
 
+import com.team.sharedcreature._core.api.ApiResponse;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature._core.security.SessionAuthenticationFilter;
 import com.team.sharedcreature.auth.application.AuthService;
@@ -7,6 +8,7 @@ import com.team.sharedcreature.auth.application.PendingSignup;
 import com.team.sharedcreature.group.domain.GroupMembershipStatus;
 import com.team.sharedcreature.group.domain.GroupRole;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpSession;
 import tools.jackson.databind.JsonNode;
@@ -53,22 +55,22 @@ class AuthJsonContractTest {
         when(authService.currentMembership(1L)).thenReturn(Optional.of(new AuthService.CurrentMembership(
                 1L, 2L, GroupRole.DEPUTY, GroupMembershipStatus.ACTIVE, Instant.EPOCH)));
 
-        var data = currentUserData();
+        JsonNode data = currentUserData();
         assertStates(data, "AUTHENTICATED", "COMPLETED");
         assertMembership(data.get("membership"), "DEPUTY");
     }
 
     @Test
     void signupResponseSerializesMembershipRoleAndStatusAsStrings() {
-        var request = new MockHttpServletRequest();
+        MockHttpServletRequest request = new MockHttpServletRequest();
         request.setSession(session);
         when(authService.completeSignup("creature", session))
                 .thenReturn(new LoginUser(1L, "creature", Set.of("MEMBER")));
         when(authService.currentMembership(1L)).thenReturn(Optional.of(new AuthService.CurrentMembership(
                 1L, 2L, GroupRole.MEMBER, GroupMembershipStatus.ACTIVE, Instant.EPOCH)));
 
-        var response = controller.completeSignup(new AuthController.SignupRequest("creature"), request);
-        var membership = mapper.readTree(mapper.writeValueAsString(response.getBody())).at("/data/membership");
+        ResponseEntity<ApiResponse<AuthController.CurrentUserResponse>> response = controller.completeSignup(new AuthController.SignupRequest("creature"), request);
+        JsonNode membership = mapper.readTree(mapper.writeValueAsString(response.getBody())).at("/data/membership");
 
         assertMembership(membership, "MEMBER");
     }

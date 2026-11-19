@@ -7,7 +7,9 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.security.Hashing;
+import com.team.sharedcreature.payment.domain.PaymentTransaction;
 import com.team.sharedcreature.payment.domain.PaymentWebhookEvent;
+import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
 import com.team.sharedcreature.payment.infrastructure.PaymentWebhookEventRepository;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
@@ -17,6 +19,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.Set;
 
 /** 서명 검증된 PortOne 이벤트를 보존하고 결제 정합화로 전달합니다. */
@@ -87,7 +90,7 @@ public class PaymentWebhookService {
             return;
         }
         try {
-            var result = reconciliationService.reconcileByPaymentId(parsed.paymentId());
+            PaymentReconciliationService.ReconciliationResult result = reconciliationService.reconcileByPaymentId(parsed.paymentId());
             complete(eventDatabaseId, result);
         } catch (BusinessException | PaymentGatewayException exception) {
             transactionTemplate.executeWithoutResult(status -> eventRepository.findByIdForUpdate(eventDatabaseId)
@@ -113,7 +116,7 @@ public class PaymentWebhookService {
             return RecoveryOutcome.SKIPPED;
         }
         try {
-            var result = reconciliationService.reconcileByPaymentId(recoverable.paymentId());
+            PaymentReconciliationService.ReconciliationResult result = reconciliationService.reconcileByPaymentId(recoverable.paymentId());
             complete(recoverable.eventId(), result);
             return RecoveryOutcome.PROCESSED;
         } catch (BusinessException | PaymentGatewayException exception) {
@@ -129,22 +132,22 @@ public class PaymentWebhookService {
 
     private void complete(Long eventDatabaseId, PaymentReconciliationService.ReconciliationResult result) {
         transactionTemplate.executeWithoutResult(status -> {
-            var event = eventRepository.findByIdForUpdate(eventDatabaseId)
+            PaymentWebhookEvent event = eventRepository.findByIdForUpdate(eventDatabaseId)
                     .orElseThrow(() -> new PaymentWebhookConsistencyException("Webhook 이벤트를 찾을 수 없습니다."));
-            var purchase = purchaseRepository.findById(result.purchaseId())
+            Purchase purchase = purchaseRepository.findById(result.purchaseId())
                     .orElseThrow(() -> new PaymentWebhookConsistencyException("Webhook 구매를 찾을 수 없습니다."));
-            var transaction = transactionRepository.findById(result.transactionId())
+            PaymentTransaction transaction = transactionRepository.findById(result.transactionId())
                     .orElseThrow(() -> new PaymentWebhookConsistencyException("Webhook 결제 거래를 찾을 수 없습니다."));
             event.complete(purchase, transaction, clock.instant());
         });
     }
 
     private Long persist(String eventId, ParsedWebhook parsed, String body) {
-        var duplicate = eventRepository.findByProviderAndProviderEventId(PaymentProvider.PORTONE, eventId);
+        Optional<PaymentWebhookEvent> duplicate = eventRepository.findByProviderAndProviderEventId(PaymentProvider.PORTONE, eventId);
         if (duplicate.isPresent()) {
             return null;
         }
-        var purchase = parsed.paymentId() == null
+        Purchase purchase = parsed.paymentId() == null
                 ? null
                 : purchaseRepository.findByOrderNumber(parsed.paymentId()).orElse(null);
         PaymentWebhookEvent event = eventRepository.save(PaymentWebhookEvent.received(

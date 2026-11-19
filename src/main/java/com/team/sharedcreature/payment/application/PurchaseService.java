@@ -8,6 +8,7 @@ import com.team.sharedcreature.avatar.domain.ShopItem;
 import com.team.sharedcreature.avatar.domain.ShopItemStatus;
 import com.team.sharedcreature.avatar.infrastructure.ShopItemRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
+import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.domain.GroupStatus;
 import com.team.sharedcreature.payment.api.CreatePurchaseResponse;
 import com.team.sharedcreature.payment.domain.Purchase;
@@ -55,7 +56,7 @@ public class PurchaseService {
     /** 같은 사용자·키·상품 요청에는 최초 주문 응답을 재사용합니다. */
     @Transactional
     public CreatePurchaseResponse create(Long userId, Long shopItemId, String idempotencyKey) {
-        var claim = idempotencyService.claim(
+        ApiIdempotencyService.Claim<CreatePurchaseResponse> claim = idempotencyService.claim(
                 userId,
                 OPERATION,
                 idempotencyKey,
@@ -72,7 +73,7 @@ public class PurchaseService {
                 .orElseThrow(() ->
                         new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)
                 );
-        var membership = membershipRepository.findActiveWithGroupByUserId(userId)
+        GroupMembership membership = membershipRepository.findActiveWithGroupByUserId(userId)
                 .filter(activeMembership ->
                         activeMembership.getGroup().getStatus() == GroupStatus.ACTIVE
                 )
@@ -90,7 +91,7 @@ public class PurchaseService {
     }
 
     private CreatePurchaseResponse response(Purchase purchase) {
-        var payment = new CreatePurchaseResponse.Payment(
+        CreatePurchaseResponse.Payment payment = new CreatePurchaseResponse.Payment(
                 portOneProperties.storeId(),
                 portOneProperties.channelKey(),
                 purchase.getOrderNumber(),

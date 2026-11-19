@@ -104,7 +104,7 @@ class SchedulerCrossDomainMySqlIntegrationTest {
         when(paymentWork.recoverStaleWebhooks()).thenReturn(paymentSummary(3, 2, 1, 0));
 
         // Scheduler는 사용자 API를 호출하지 않고 실제 실행권만 선점합니다.
-        var result = paymentNormalizer(FIXED_CLOCK).normalize();
+        PaymentWebhookReconciliationNormalizationService.Result result = paymentNormalizer(FIXED_CLOCK).normalize();
 
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, result.execution());
         assertNull(result.error());
@@ -122,8 +122,8 @@ class SchedulerCrossDomainMySqlIntegrationTest {
     @Test
     void duplicatePaymentBucketIsSkippedAcrossInstances() {
         when(paymentWork.recoverStaleWebhooks()).thenReturn(paymentSummary(1, 1, 0, 0));
-        var first = paymentNormalizer(FIXED_CLOCK).normalize();
-        var second = paymentNormalizer(FIXED_CLOCK).normalize();
+        PaymentWebhookReconciliationNormalizationService.Result first = paymentNormalizer(FIXED_CLOCK).normalize();
+        PaymentWebhookReconciliationNormalizationService.Result second = paymentNormalizer(FIXED_CLOCK).normalize();
 
         // DB의 논리 작업 키가 실행 인스턴스를 넘어 중복을 막습니다.
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, first.execution());
@@ -143,12 +143,12 @@ class SchedulerCrossDomainMySqlIntegrationTest {
                 paymentSummary(2, 1, 0, 1),
                 paymentSummary(1, 1, 0, 0)
         );
-        var first = paymentNormalizer(FIXED_CLOCK).normalize();
+        PaymentWebhookReconciliationNormalizationService.Result first = paymentNormalizer(FIXED_CLOCK).normalize();
         assertNotNull(first.error());
         assertEquals("FAILED", status(PAYMENT, BUCKET));
 
         // 기존 FAILED 행이 attempt_count=2로 갱신되어야 합니다.
-        var second = paymentNormalizer(FIXED_CLOCK).normalize();
+        PaymentWebhookReconciliationNormalizationService.Result second = paymentNormalizer(FIXED_CLOCK).normalize();
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, second.execution());
         assertEquals("SUCCEEDED", status(PAYMENT, BUCKET));
         assertEquals(2, attemptCount(PAYMENT, BUCKET));
@@ -204,7 +204,7 @@ class SchedulerCrossDomainMySqlIntegrationTest {
                 .thenReturn(refundSummary(2, 1, 1, 0));
 
         // 완료 1건과 PG 확정 실패 1건 모두 정상 집계로 처리합니다.
-        var result = refundNormalizer().normalize();
+        RefundReconciliationNormalizationService.Result result = refundNormalizer().normalize();
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, result.execution());
         assertEquals("SUCCEEDED", status(REFUND, BUCKET));
         assertEquals(1, jsonCount(REFUND, BUCKET, "definitiveFailedCount"));
@@ -262,8 +262,8 @@ class SchedulerCrossDomainMySqlIntegrationTest {
     @Test
     void nextUtcBucketGetsDistinctExecutionRow() {
         when(paymentWork.recoverStaleWebhooks()).thenReturn(paymentSummary(0, 0, 0, 0));
-        var first = paymentNormalizer(FIXED_CLOCK).normalize();
-        var second = paymentNormalizer(Clock.fixed(NOW.plus(Duration.ofMinutes(5)), ZoneOffset.UTC))
+        PaymentWebhookReconciliationNormalizationService.Result first = paymentNormalizer(FIXED_CLOCK).normalize();
+        PaymentWebhookReconciliationNormalizationService.Result second = paymentNormalizer(Clock.fixed(NOW.plus(Duration.ofMinutes(5)), ZoneOffset.UTC))
                 .normalize();
 
         // 과거 완료 행이 다음 5분 경계의 새로운 작업을 차단하지 않습니다.
@@ -299,7 +299,7 @@ class SchedulerCrossDomainMySqlIntegrationTest {
         try {
             // 첫 실행이 DB 실행권을 선점하고 업무를 시작한 다음 두 번째를 호출합니다.
             assertTrue(entered.await(8, TimeUnit.SECONDS));
-            var second = paymentNormalizer(FIXED_CLOCK).normalize();
+            PaymentWebhookReconciliationNormalizationService.Result second = paymentNormalizer(FIXED_CLOCK).normalize();
             assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, second.execution());
         } finally {
             release.countDown();
@@ -378,7 +378,7 @@ class SchedulerCrossDomainMySqlIntegrationTest {
      * 재시도는 직전 FAILED 행의 시도 번호를 증가시킵니다.
      */
     private String statusAfterPaymentRetry() {
-        var retry = paymentNormalizer(FIXED_CLOCK).normalize();
+        PaymentWebhookReconciliationNormalizationService.Result retry = paymentNormalizer(FIXED_CLOCK).normalize();
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, retry.execution());
         return status(PAYMENT, BUCKET);
     }

@@ -312,7 +312,7 @@ class PaymentReconciliationServiceTest {
         });
         executeTransactionsImmediately();
 
-        var result = service.reconcileByPaymentId(PAYMENT_ID);
+        PaymentReconciliationService.ReconciliationResult result = service.reconcileByPaymentId(PAYMENT_ID);
 
         assertThat(result).isEqualTo(
                 new PaymentReconciliationService.ReconciliationResult(10L, 20L, PurchaseStatus.FAILED));
