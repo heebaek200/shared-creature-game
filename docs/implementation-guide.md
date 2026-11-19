@@ -327,6 +327,8 @@ Mock ON/OFF를 바꿔 정상·빈 목록·오류를 확인하고 Network에서 G
 | 결제·환불 | `createPurchase` ~ `reconcileRefund` | Payment·Refund Service·`PaymentGateway` | `purchases`, `payment_transactions`, `refund_requests`, `api_idempotency_records` |
 | 채팅·신고·전체 관리자 | `createGroupChatMessage` ~ `listOperationalWarnings` | `GroupChatService`, `UserReportService`, Admin Service | `chat_messages`, `user_reports`, `user_report_chat_evidence`, `admin_audit_logs`, `scheduler_executions` |
 
+채팅은 기존 `GroupPresenceService`와 `GroupStompAuthorizationInterceptor`를 최소 확장하고 `/live` Stream Cursor와 분리된 Publisher를 사용합니다. 관리자 신고 목록은 채팅 증거를 매핑하지 않고 상세·처리 응답에만 매핑하여 기존 목록 JSON 계약을 유지합니다.
+
 ## 6. 목 데이터로 프론트엔드를 먼저 만드는 방법
 
 ### 처리 순서

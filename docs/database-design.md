@@ -593,7 +593,7 @@ UPDATE game_groups
 | `group_id` | `BIGINT` | FK, 전송 당시 그룹 |
 | `sender_user_id` | `BIGINT` | FK, 인증 발신자 |
 | `sender_nickname` | `VARCHAR(20)` | 전송 당시 닉네임 Snapshot |
-| `content` | `VARCHAR(80)` | 앞뒤 공백 제거한 단일 행 1~80자 |
+| `content` | `VARCHAR(80)` | 앞뒤 Unicode 공백 제거한 단일 행 1~80 Unicode 코드 포인트 |
 | `sent_at` | `DATETIME(6)` | UTC 작성 시각 |
 | `expires_at` | `DATETIME(6)` | `sent_at + 24시간`, INDEX |
 

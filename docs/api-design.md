@@ -142,7 +142,7 @@
 
 **오류 조건 우선순위:** 인증/서명 → CSRF → 권한·리소스 범위 → 형식 및 필드 검증 → 업무 상태·동시성. 필드 오류와 공통 상태 오류가 함께 발생하면 선행 단계 오류로 응답합니다. 동일 주문·환불의 멱등 재요청은 최초 HTTP 상태와 Body를 그대로 반환합니다.
 
-**확인 필요 — `429 Retry-After` 응답 헤더:** [프론트엔드 공통 오류 이슈 #34](https://github.com/heebaek200/shared-creature-game/issues/34)에는 `Retry-After` 동안 재요청을 제한하도록 되어 있습니다. 현재 REST 계약에는 이 헤더의 필수 여부와 값 형식(지연 초 또는 HTTP-date)이 정의되지 않았으므로 구현 전 합의가 필요합니다. 이 문서는 형식을 임의로 확정하지 않습니다.
+`Retry-After`는 Operation별 계약에서 요구한 경우에만 필수입니다. 값은 HTTP-date가 아닌 10진수 지연 초이며, 남은 밀리초를 초 단위로 올림하고 최소 1을 반환합니다. 기존 Operation의 429 계약은 각 Operation 정의를 따릅니다.
 
 ## 2. 인증·초대 API
 
@@ -2335,7 +2335,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 ### createGroupChatMessage — `POST /api/v1/groups/me/chat`
 
 - **Operation ID:** `createGroupChatMessage` · **요구사항:** `REQ-RT-001` · **인증·권한:** `GROUP_MEMBER` · **성공 HTTP:** `201`
-- **엔드포인트 조건:** 서버 인증 사용자와 현재 활성 그룹을 사용합니다. 사용자 전체의 여러 탭을 합산해 성공한 전송 사이에 2초 간격을 적용합니다.
+- **엔드포인트 조건:** 서버 인증 사용자와 현재 활성 그룹을 사용합니다. 사용자 전체의 여러 탭 요청을 원자적으로 판정해 성공한 전송 사이에 2초 간격을 적용합니다. DB 저장 실패·Rollback은 성공 전송으로 기록하지 않고, Commit 후 WebSocket 발행 실패는 성공 전송으로 기록합니다.
 
 **요청 필드**
 
@@ -2344,7 +2344,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | Header | Cookie | string | Y | N | Spring Session 세션 쿠키; HttpOnly / SameSite=Lax |
 | Header | X-CSRF-TOKEN | string | Y | N | 현재 세션에서 발급된 CSRF 토큰 |
 | Header | Content-Type | string | Y | N | application/json |
-| Body | content | string | Y | N | 앞뒤 공백 제거 후 Unicode 1~80자; 줄바꿈·제어문자 불가 |
+| Body | content | string | Y | N | 앞뒤 Unicode 공백 제거 후 1~80 Unicode 코드 포인트; 줄바꿈·제어문자 불가 |
 
 **성공 응답 필드**
 
@@ -2355,7 +2355,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.groupId | integer(int64) | Y | N | 1 이상 | 전송 그룹 ID |
 | data.senderUserId | integer(int64) | Y | N | 1 이상 | 인증 발신자 ID |
 | data.senderNickname | string | Y | N | 2~20자 | 전송 당시 닉네임 |
-| data.content | string | Y | N | 1~80자 | 앞뒤 공백을 제거한 일반 텍스트 |
+| data.content | string | Y | N | 1~80 Unicode 코드 포인트 | 앞뒤 Unicode 공백을 제거한 일반 텍스트 |
 | data.sentAt | string(date-time) | Y | N | UTC ISO 8601 | 서버 작성 시각 |
 
 **오류 응답**
@@ -2368,7 +2368,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | 403 | `CSRF_INVALID` | CSRF 토큰 없음 또는 불일치 |
 | 400 | `INVALID_FIELD_VALUE` | 본문 길이·줄바꿈·제어문자 검증 실패 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
-| 429 | `RATE_LIMIT_EXCEEDED` | 직전 성공 전송 후 2초 미경과; 남은 초를 `Retry-After` Header로 반환 |
+| 429 | `RATE_LIMIT_EXCEEDED` | 직전 성공 전송 후 2초 미경과; 남은 밀리초를 올림한 최소 1의 지연 초를 `Retry-After` Header로 반환 |
 
 ### createUserReport — `POST /api/v1/reports`
 
@@ -2866,7 +2866,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 
 초기 Snapshot 조회 중 이벤트를 수신하면 Snapshot 완료 후 한 번 더 조회합니다. Snapshot 완료 후 아직 처리하지 않은 이벤트가 Snapshot의 sequence 이하로 도착해도 지연 도착으로 보고 Payload를 적용하지 않고 Snapshot을 한 번 다시 조회합니다. SUBSCRIBE RECEIPT, 이벤트 Payload Buffer와 시간 기반 재정렬은 요구하지 않습니다.
 
-로그아웃·탈퇴·강퇴 시 해당 사용자의 구독과 Presence를 즉시 제거합니다. 자연 만료는 Spring Session이 만료를 감지해 Session 삭제 이벤트를 발행할 때 제거합니다. Presence와 Stream Cursor는 단일 백엔드 인스턴스 메모리에만 보관합니다.
+`/live`와 `/chat` 구독은 연결별로 독립 관리합니다. `/chat` 해제는 Presence를 제거하지 않고 `/live` 해제 후 `/chat`만 유지할 수 있습니다. 중복 목적지·다른 그룹·등록되지 않은 구독 해제는 거부하며 구독 등록 실패와 비정상 연결 종료에서는 등록 상태를 정리합니다.
+
+로그아웃·탈퇴·강퇴 시 `/chat`만 남은 연결을 포함해 해당 사용자의 WebSocket 연결과 Presence를 즉시 제거합니다. 자연 만료는 Spring Session이 만료를 감지해 Session 삭제 이벤트를 발행할 때 같은 방식으로 제거합니다. Presence와 구독 상태, Stream Cursor는 단일 백엔드 인스턴스 메모리에만 보관합니다.
 
 **`/live` 서버 → 클라이언트 이벤트 Envelope**
 
@@ -2955,7 +2957,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 
 ### 10.7. 그룹 채팅 이벤트 — `/topic/groups/{groupId}/chat`
 
-채팅 이벤트는 `/live`의 `eventId`, `streamInstanceId`, `sequence`, `eventType`, `payload` Envelope을 사용하지 않습니다. 재접속 시 복원하거나 상태 Snapshot 재조회 조건에 포함하지 않으며 `messageId`로만 중복 표시를 막습니다.
+채팅 이벤트는 `/live`의 `eventId`, `streamInstanceId`, `sequence`, `eventType`, `payload` Envelope과 Publisher를 사용하지 않습니다. 별도 Publisher가 Commit 후 Best Effort로 전달하며 실패는 로그에 기록하되 저장 성공을 실패로 바꾸거나 `/live` 상태 동기화에 영향을 주지 않습니다. 재접속 시 복원하거나 상태 Snapshot 재조회 조건에 포함하지 않으며 `messageId`로만 중복 표시를 막습니다.
 
 | 필드 | 타입 | 필수 | null | 제약 |
 |---|---|---|---|---|
@@ -2963,5 +2965,5 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | groupId | integer(int64) | Y | N | 1 이상, 구독 그룹과 동일 |
 | senderUserId | integer(int64) | Y | N | 1 이상 |
 | senderNickname | string | Y | N | 2~20자; 전송 당시 Snapshot |
-| content | string | Y | N | 일반 텍스트 1~80자 |
+| content | string | Y | N | 일반 텍스트 1~80 Unicode 코드 포인트 |
 | sentAt | string(date-time) | Y | N | UTC ISO 8601 |

@@ -681,11 +681,12 @@ classDiagram
         <<Adapter>>
         +publishAfterCommit()
     }
-    class GroupPresenceRegistry {
-        <<Core>>
-        +connected()
-        +disconnected()
-        +snapshot()
+    class GroupPresenceService {
+        <<Service>>
+        +registerSubscription(channel)
+        +removeSubscription()
+        +removeSession()
+        +activeUserIds()
     }
     class RequestRateLimiter {
         <<Core>>
@@ -696,9 +697,10 @@ classDiagram
     class GroupChatRateLimiter {
         <<Core>>
         +tryAcquire(userId)
+        +finish(userId, committed)
         +retryAfter()
     }
-    class StompInboundAuthorization {
+    class GroupStompAuthorizationInterceptor {
         <<Core>>
         +authorizeConnect()
         +authorizeSubscribe()
@@ -752,14 +754,14 @@ classDiagram
     StompGroupLiveEventPublisher --> GroupLiveEvent
     GroupChatEventPublisher <|.. StompGroupChatEventPublisher
     StompGroupChatEventPublisher --> GroupChatEvent
-    GroupPresenceRegistry --> GroupLiveEvent
+    GroupPresenceService --> GroupLiveEvent
     SchedulerExecutionService --> SchedulerExecution
     AdminAuditService --> AdminAuditLog
     ApiIdempotencyService --> ApiIdempotencyRecord
     TextProofreadingService --> TextProofreader
     TextProofreadingService --> RequestRateLimiter
     TextProofreader <|.. GeminiTextProofreader
-    StompInboundAuthorization --> CurrentUser
+    GroupStompAuthorizationInterceptor --> CurrentUser
     PhotoProcessingLimiter --> RequestRateLimiter
     SchedulerExecutionService --> BusinessClock
     AdminAuditService --> CurrentUser
@@ -775,10 +777,10 @@ classDiagram
 - `ChatMessageRetentionScheduler`는 매시간 `SchedulerJobRunner`를 통해 만료 채팅을 삭제하며 서버 중단 중 실행 틱은 재생하지 않고 다음 실행에서 현재 만료 행을 정리합니다.
 - `scheduledFor`는 업무 논리 경계이며 실제 실행 시각이 아닙니다. 실행 이력이 없어도 업무 테이블의 상태·기한으로 누락을 찾고 `FAILED`와 Lease 만료 `RUNNING`만 재선점합니다.
 - 시즌 그룹 초기화·일반 `ACTIVE` 부화·사진·결제처럼 대상이 많은 상태 기반 작업은 100건씩 처리하며, 다음 5분 점검이 남은 대상을 이어서 처리합니다. 초기화 대상이 남은 시즌 활성화 실행은 성공 처리하지 않고, 지나간 5분 틱 자체는 재생하지 않습니다.
-- WebSocket 상태·채팅 이벤트는 DB Commit 이후에만 발행하고 명령 처리는 REST API가 담당합니다.
-- `StompInboundAuthorization`은 세션·Origin·CSRF와 같은 활성 그룹의 `/live`·`/chat` 구독을 각각 하나만 허용하고 클라이언트 애플리케이션 메시지는 기본 거부합니다.
-- Presence는 MVP에서 단일 애플리케이션 인스턴스 메모리만 사용하며 영속 Entity로 만들지 않습니다.
-- `GroupChatRateLimiter`는 단일 인스턴스 메모리에서 사용자별 성공 전송 간격 2초를 여러 탭에 합산합니다.
+- WebSocket 상태·채팅 이벤트는 DB Commit 이후에만 발행하고 명령 처리는 REST API가 담당합니다. 채팅 Publisher는 `/live` Stream Cursor를 사용하지 않으며 실패를 기록하고 저장 결과는 유지합니다.
+- `GroupStompAuthorizationInterceptor`는 세션·Origin·CSRF와 같은 활성 그룹의 `/live`·`/chat` 구독을 각각 하나만 허용하고 클라이언트 애플리케이션 메시지는 기본 거부합니다.
+- 기존 `GroupPresenceService`가 연결별 `/live`·`/chat` 구독을 구분해 관리합니다. Presence는 `/live`만 계산하고 `/chat`만 남은 연결도 로그아웃·탈퇴·강퇴·세션 만료 시 종료합니다. 별도 영속 Entity나 분산 Registry는 만들지 않습니다.
+- `GroupChatRateLimiter`는 단일 인스턴스 메모리에서 사용자별 여러 탭 요청을 원자적으로 판정합니다. DB Commit만 성공 시각으로 기록하고 Rollback 시 선점을 해제합니다.
 - 중요 권한 변경, 강퇴, 환불 판단과 운영 복구는 `AdminAuditService`로 감사 이력을 남깁니다.
 - 외부 효과 명령은 `ApiIdempotencyService`가 사용자·Operation·Key를 선점한 뒤 같은 요청에는 최초 결과를 반환합니다.
 - Gemini 교정은 `TextProofreader` Port 뒤에 격리하고 DB 트랜잭션 밖에서 한 번 호출합니다. 테스트는 외부 API 대신 단순 Fake를 사용합니다.

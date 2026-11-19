@@ -816,6 +816,9 @@
 - 결정: 채팅 원문은 DB에 24시간 보관하고 매시간 만료 삭제합니다. 신고 접수 시 서버가 원본을 검증해 메시지·발신자·작성 시각 Snapshot을 `user_reports`와 같은 기간 보존합니다.
 - 결정: 채팅 신고자는 접수 시 해당 그룹의 활성 회원이어야 하며 발신자는 전송 당시 같은 그룹이었다면 탈퇴·강퇴 후에도 신고할 수 있습니다. 이미 비활성인 대상의 유효 신고는 관리자가 추가 강퇴 없이 `RESOLVED`로 처리할 수 있습니다.
 - 결정: 기존 회원 신고 Modal을 공통화하고 크리처 홈의 아바타 정보 카드에서 채팅 신고로 진입합니다. 관리자 목록에는 채팅 원문을 노출하지 않고 상세에만 증거를 표시합니다.
+- 결정: 기존 `GroupPresenceService`가 연결별 `/live`·`/chat` 구독을 구분해 관리하고 Presence는 `/live`만 계산합니다. 채팅만 남은 연결도 권한 회수 시 종료하며 별도 분산 Registry는 도입하지 않습니다.
+- 결정: 채팅 이벤트는 `/live` Stream Cursor와 분리된 Publisher가 Commit 후 Best Effort로 전달합니다. 전달 실패는 저장 성공과 `/live` 복구에 영향을 주지 않습니다.
+- 결정: 채팅 길이는 앞뒤 Unicode 공백 제거 후 1~80 Unicode 코드 포인트로 계산합니다. 여러 탭의 Rate Limit은 원자적으로 판정하고 DB Commit만 성공 전송으로 기록하며 `Retry-After`는 남은 시간을 올림한 지연 초입니다.
 - 상태: confirmed
 - 근거: 기존 Presence·Snapshot 계약을 유지하면서 일시적 상호작용과 서버 검증 신고 증거를 함께 제공하기 위함입니다.
 - 영향 문서: requirements.md, business-rules.md, api-design.md, database-design.md, screen-design.md, class-diagram.md, implementation-guide.md, decision-log.md
