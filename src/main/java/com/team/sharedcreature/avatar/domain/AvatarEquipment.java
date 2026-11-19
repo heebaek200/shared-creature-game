@@ -4,6 +4,8 @@ import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -32,6 +34,7 @@ public class AvatarEquipment {
 
     /** 상품 슬롯과 일치해야 하는 아바타 장착 슬롯입니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "slot_code", length = 30, nullable = false)
     private AvatarSlot slotCode;
 

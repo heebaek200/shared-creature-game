@@ -2,6 +2,8 @@ package com.team.sharedcreature.quest.domain;
 
 import com.team.sharedcreature.season.domain.Season;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -30,6 +32,7 @@ public class QuestPeriod {
     private Season season;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "period_type", length = 30, nullable = false)
     private QuestPeriodType periodType;
 
@@ -43,6 +46,7 @@ public class QuestPeriod {
     private Instant endAt;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
     private QuestPeriodStatus status;
 

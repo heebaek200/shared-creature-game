@@ -1,6 +1,8 @@
 package com.team.sharedcreature.quest.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -47,10 +49,12 @@ public class QuestAssignment {
 
     /** 배정 당시의 난이도를 복사하여 이후 템플릿 변경과 분리합니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "difficulty_snapshot", length = 30, nullable = false)
     private QuestDifficulty difficultySnapshot;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "verification_type_snapshot", length = 30, nullable = false)
     private QuestVerificationType verificationTypeSnapshot;
 

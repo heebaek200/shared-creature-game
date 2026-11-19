@@ -1,6 +1,8 @@
 package com.team.sharedcreature.admin.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -39,6 +41,7 @@ public class SchedulerExecution {
     private Instant scheduledFor;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
     private SchedulerExecutionStatus status;
 

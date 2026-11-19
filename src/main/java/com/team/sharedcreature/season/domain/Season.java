@@ -1,6 +1,8 @@
 package com.team.sharedcreature.season.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -32,6 +34,7 @@ public class Season {
     private Instant endAt;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
     private SeasonStatus status;
 
@@ -41,6 +44,7 @@ public class Season {
      * CLOSING 중 서버가 재시작하더라도 Snapshot 처리 기준을 보존한다.
      */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "closing_from_status", length = 30)
     private SeasonStatus closingFromStatus;
 

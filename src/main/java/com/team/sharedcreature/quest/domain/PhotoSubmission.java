@@ -62,6 +62,7 @@ public class PhotoSubmission {
     private BigDecimal longitude;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "verification_status", length = 30, nullable = false)
     private PhotoVerificationStatus verificationStatus;
 

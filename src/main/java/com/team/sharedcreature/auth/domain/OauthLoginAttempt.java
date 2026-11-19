@@ -2,6 +2,8 @@ package com.team.sharedcreature.auth.domain;
 
 import com.team.sharedcreature.group.domain.GroupInviteLink;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -32,6 +34,7 @@ public class OauthLoginAttempt {
      * OAuth 로그인 시도를 시작한 인증 공급자입니다.
      */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "provider", length = 30, nullable = false)
     private SocialProvider provider;
 
@@ -39,6 +42,7 @@ public class OauthLoginAttempt {
      * 일반 로그인 또는 그룹 초대 로그인 여부를 나타냅니다.
      */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "intent", length = 30, nullable = false)
     private OauthLoginIntent intent;
 
@@ -51,6 +55,7 @@ public class OauthLoginAttempt {
 
     /** 일회성 OAuth 로그인 시도의 처리 상태입니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
     private OauthLoginAttemptStatus status;
 

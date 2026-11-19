@@ -1,6 +1,8 @@
 package com.team.sharedcreature.quest.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -26,15 +28,18 @@ public class QuestTemplate {
     private String code;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "period_type", length = 30, nullable = false)
     private QuestPeriodType periodType;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "difficulty", length = 30, nullable = false)
     private QuestDifficulty difficulty;
 
     /** 활성 템플릿만 배정 대상으로 사용합니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
     private QuestTemplateStatus status;
 

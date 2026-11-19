@@ -8,6 +8,8 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import java.util.Objects;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -53,6 +55,7 @@ public class Purchase {
 
     /** 상품의 현재 슬롯과 별도로 보존하는 구매 당시 장착 슬롯입니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "slot_code_snapshot", length = 30, nullable = false)
     private AvatarSlot slotCodeSnapshot;
 
@@ -64,6 +67,7 @@ public class Purchase {
 
     /** 구매 주문의 결제 진행 및 취소 상태입니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
     private PurchaseStatus status;
 

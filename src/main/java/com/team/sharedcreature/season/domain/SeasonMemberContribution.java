@@ -4,6 +4,8 @@ import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.domain.GroupMembershipStatus;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -45,6 +47,7 @@ public class SeasonMemberContribution {
 
     /** 최신 멤버십 상태를 복사하며 탈퇴·강퇴해도 점수는 보존합니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "participant_status", length = 30, nullable = false)
     private GroupMembershipStatus participantStatus;
 

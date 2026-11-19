@@ -5,6 +5,8 @@ import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -43,6 +45,7 @@ public class OwnedItem {
 
     /** 최초 사용 확정과 환불 회수 여부를 나타내는 보유 상태입니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
     private OwnedItemStatus status;
 

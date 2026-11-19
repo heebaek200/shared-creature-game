@@ -1,6 +1,8 @@
 package com.team.sharedcreature.auth.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -25,6 +27,7 @@ public class User {
      * 활성·이용 정지·탈퇴 여부를 나타내는 계정 상태입니다.
      */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
     private UserStatus status;
 
@@ -32,6 +35,7 @@ public class User {
      * 그룹 역할과 구분되는 서비스 전체 범위의 역할입니다.
      */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "global_role", length = 30, nullable = false)
     private GlobalRole globalRole;
 

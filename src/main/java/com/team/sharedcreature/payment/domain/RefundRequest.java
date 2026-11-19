@@ -2,6 +2,8 @@ package com.team.sharedcreature.payment.domain;
 
 import com.team.sharedcreature.auth.domain.User;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -47,6 +49,7 @@ public class RefundRequest {
 
     /** 환불 요청의 심사 및 PG 취소 처리 상태입니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
     private RefundStatus status;
 

@@ -2,6 +2,8 @@ package com.team.sharedcreature.group.domain;
 
 import com.team.sharedcreature.auth.domain.User;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -30,6 +32,7 @@ public class GroupInviteLink {
 
     /** 초대 링크의 사용 가능 여부를 기존 문자열 값으로 저장합니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
     private GroupInviteLinkStatus status;
 

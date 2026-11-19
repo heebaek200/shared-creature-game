@@ -58,6 +58,7 @@ public class PaymentWebhookEvent {
 
     /** Webhook 접수 이후의 내부 처리 및 복구 상태입니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "processing_status", length = 30, nullable = false)
     private WebhookProcessingStatus processingStatus;
 

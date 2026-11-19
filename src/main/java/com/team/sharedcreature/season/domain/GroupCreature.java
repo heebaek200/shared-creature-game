@@ -1,6 +1,8 @@
 package com.team.sharedcreature.season.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -35,6 +37,7 @@ public class GroupCreature {
 
     /** 부화 전에는 null이며 부화 시 그룹 시즌의 선택 경로를 복사합니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "selection_source", length = 30)
     private CreatureSelectionSource selectionSource;
 
@@ -42,6 +45,7 @@ public class GroupCreature {
     private Long totalExperience;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "growth_stage", length = 30, nullable = false)
     private CreatureGrowthStage growthStage;
 
@@ -53,6 +57,7 @@ public class GroupCreature {
 
     /** 그룹 종료 후에도 성장·경험치 이력은 보관 상태로 유지합니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
     private GroupCreatureStatus status;
 

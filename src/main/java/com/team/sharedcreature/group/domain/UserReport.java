@@ -2,6 +2,8 @@ package com.team.sharedcreature.group.domain;
 
 import com.team.sharedcreature.auth.domain.User;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -38,6 +40,7 @@ public class UserReport {
 
     /** 신고 분류는 기존 문자열 코드로 저장합니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "category", length = 30, nullable = false)
     private UserReportCategory category;
 
@@ -46,6 +49,7 @@ public class UserReport {
 
     /** 신고 상태는 이름 그대로 저장하며 접수 상태에서만 심사할 수 있습니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
     private UserReportStatus status;
 

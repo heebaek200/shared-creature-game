@@ -1,6 +1,8 @@
 package com.team.sharedcreature.payment.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -41,6 +43,7 @@ public class PgApiAttempt {
 
     /** 실제 취소 요청과 기존 취소 결과 조회를 구분합니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "operation", length = 30, nullable = false)
     private PgApiOperation operation;
 
@@ -52,6 +55,7 @@ public class PgApiAttempt {
 
     /** 호출 준비 상태 또는 해당 호출에서 확인한 결과입니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "result_type", length = 30, nullable = false)
     private PgApiResultType resultType;
 

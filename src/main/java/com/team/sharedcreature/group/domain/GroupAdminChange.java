@@ -2,6 +2,8 @@ package com.team.sharedcreature.group.domain;
 
 import com.team.sharedcreature.auth.domain.User;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -38,16 +40,19 @@ public class GroupAdminChange {
 
     /** 권한 변경과 동일한 트랜잭션에서 확정한 작업 유형입니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "change_type", length = 30, nullable = false)
     private GroupAdminChangeType changeType;
 
     /** 변경 당시의 이전 역할이며 최초 지정 이력에서는 null입니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "previous_role", length = 30, nullable = true)
     private GroupRole previousRole;
 
     /** 변경 당시의 새 역할을 현재 멤버십과 독립적으로 보존합니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "new_role", length = 30, nullable = true)
     private GroupRole newRole;
 

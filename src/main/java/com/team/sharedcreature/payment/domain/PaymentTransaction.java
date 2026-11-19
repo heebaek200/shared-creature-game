@@ -41,6 +41,7 @@ public class PaymentTransaction {
 
     /** 결제 승인 거래와 환불 취소 거래를 구분합니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "transaction_type", length = 30, nullable = false)
     private PaymentTransactionType transactionType;
 
@@ -49,6 +50,7 @@ public class PaymentTransaction {
 
     /** 승인·취소 거래의 처리 결과입니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
     private PaymentTransactionStatus status;
 

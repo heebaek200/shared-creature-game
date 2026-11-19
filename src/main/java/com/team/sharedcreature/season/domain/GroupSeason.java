@@ -3,6 +3,8 @@ package com.team.sharedcreature.season.domain;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.group.domain.Group;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -46,6 +48,7 @@ public class GroupSeason {
 
     /** 미선택 시 null이며 종 확정 후 선택 경로를 보존합니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "selection_source", length = 30, nullable = true)
     private CreatureSelectionSource selectionSource;
 
@@ -54,6 +57,7 @@ public class GroupSeason {
 
     /** 알 준비·활성 참여·종료 상태를 기존 문자열로 저장합니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
     private GroupSeasonStatus status;
 

@@ -1,6 +1,8 @@
 package com.team.sharedcreature.auth.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -31,6 +33,7 @@ public class SocialAccount {
      * 회원과 연결된 소셜 인증 공급자입니다.
      */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "provider", length = 30, nullable = false)
     private SocialProvider provider;
 

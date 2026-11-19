@@ -4,6 +4,8 @@ import com.team.sharedcreature.season.domain.GroupCreature;
 import com.team.sharedcreature.season.domain.SeasonGroupScore;
 import com.team.sharedcreature.season.domain.SeasonMemberContribution;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -30,6 +32,7 @@ public class QuestRewardLedger {
 
     /** 원장의 유형별 유일 제약과 기존 문자열 저장값을 유지합니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "reward_type", length = 30, nullable = false)
     private QuestRewardType rewardType;
 

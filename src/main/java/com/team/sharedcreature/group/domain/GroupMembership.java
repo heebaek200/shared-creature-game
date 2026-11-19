@@ -2,6 +2,8 @@ package com.team.sharedcreature.group.domain;
 
 import com.team.sharedcreature.auth.domain.User;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -36,6 +38,7 @@ public class GroupMembership {
      * 해당 그룹 안에서 사용자가 가진 역할입니다.
      */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "role", length = 30, nullable = false)
     private GroupRole role;
 
@@ -43,6 +46,7 @@ public class GroupMembership {
      * 사용자의 활성 소속·자진 탈퇴·강퇴 상태입니다.
      */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
     private GroupMembershipStatus status;
 

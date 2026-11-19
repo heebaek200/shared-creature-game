@@ -1,6 +1,8 @@
 package com.team.sharedcreature.season.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -32,6 +34,7 @@ public class CreatureSpecies {
 
     /** 활성 종만 선택·부화 대상이며 상태는 기존 문자열로 저장합니다. */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
     private CreatureSpeciesStatus status;
 

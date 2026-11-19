@@ -35,6 +35,7 @@ public class AdminAuditLog {
     private User actorUser;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "actor_role_snapshot", length = 30, nullable = false)
     private GlobalRole actorRoleSnapshot;
 
