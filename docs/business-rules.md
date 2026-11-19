@@ -339,7 +339,8 @@ GPS 누락·범위 초과·기간 초과·Timeout·동시 제출이 정확히 �
 |---|---|
 | 결제 | 포트원 V2, `EASY_PAY`, `KRW`, 상품 1개 / 주문 1건 |
 | 최초 장착 | `used_at` 설정, 이후 해제해도 삭제 금지 |
-| 사용 전 환불 | `REQUESTED` → 관리자 결정 → PG 취소 확인 |
+| 사용 전 환불 | `REQUESTED` → 사용자 철회 또는 관리자 결정 → PG 취소 확인 |
+| 요청 철회 | 본인의 `REQUESTED`만 `WITHDRAWN`; 결제·아이템 유지, PG 미호출 |
 | 사용한 아이템 | 환불 불가 |
 | PG 성공 | `COMPLETED` 확정 후 아이템 `REVOKED` |
 | PG 명확한 실패 | `FAILED`, 결제와 소유권 유지 |
@@ -351,7 +352,7 @@ GPS 누락·범위 초과·기간 초과·Timeout·동시 제출이 정확히 �
 
 1. 주문 생성·결제창 호출 → 서버 PG 조회로 구매 확정.
 2. 아이템 최초 장착 시 미사용 해제 여부 확인.
-3. 환불 요청·심사 → 취소 결과 재확인 → 아이템 회수.
+3. 환불 요청은 사용자 철회 시 소유권을 유지하고, 관리자 승인 시 취소 결과 재확인 후 아이템을 회수합니다.
 
 ### 완료 확인
 
@@ -364,11 +365,12 @@ GPS 누락·범위 초과·기간 초과·Timeout·동시 제출이 정확히 �
 | 대상 | 상태 전이 |
 |---|---|
 | 아이템 | `NOT_OWNED → OWNED_UNUSED → OWNED_USED` 또는 `OWNED_UNUSED → REVOKED` |
-| 환불 | `NONE → REQUESTED → REJECTED` 또는 `REQUESTED → CANCEL_PENDING → COMPLETED / FAILED / CANCEL_UNKNOWN` |
+| 환불 | `NONE → REQUESTED → WITHDRAWN / REJECTED` 또는 `REQUESTED → CANCEL_PENDING → COMPLETED / FAILED / CANCEL_UNKNOWN` |
 | 재처리 | `CANCEL_UNKNOWN → (조회 결과에 따라) COMPLETED / CANCEL_PENDING / FAILED`, `FAILED → CANCEL_PENDING`은 재검증 후 |
 | 결제 | `PAID → CANCELLED`는 환불 `COMPLETED` 확정 시에만 |
 
 - `REQUESTED`, `CANCEL_PENDING`, `CANCEL_UNKNOWN` 상태에서는 최초 장착을 차단합니다.
+- `WITHDRAWN`은 요청 이력과 철회 시각을 보존하며, 결제가 `PAID`이고 아이템이 미사용이면 장착과 환불 재요청을 허용합니다.
 - 실패·불명확 응답을 성공으로 가정하거나 아이템을 먼저 회수하지 않습니다.
 
 ## 6.2. 아바타 과시·접속 Presence·말풍선 채팅
@@ -438,11 +440,12 @@ GPS 누락·범위 초과·기간 초과·Timeout·동시 제출이 정확히 �
 
 1. 구매 → 보유 아이템 → 환불 요청 순으로 동일하게 잠급니다.
 2. 장착이 먼저 `used_at`을 확정했으면 환불을 거절합니다.
-3. 환불이 먼저 `CANCEL_PENDING`을 확정했으면 장착을 거절합니다.
+3. 사용자 철회와 관리자 승인·거절은 잠금 후 `REQUESTED` 상태를 다시 확인하며 먼저 확정된 전이만 성공합니다.
+4. 환불이 먼저 `CANCEL_PENDING`을 확정했으면 장착과 철회를 거절합니다.
 
 #### 완료 확인
 
-동시 승인·재요청에도 아이템의 장착과 회수가 동시에 확정되지 않습니다.
+동시 철회·승인·거절·재요청에도 아이템의 장착과 회수가 동시에 확정되지 않습니다.
 
 ### 7.5. PG 취소 단계
 

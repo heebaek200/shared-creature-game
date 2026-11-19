@@ -467,6 +467,11 @@ classDiagram
         +rejectRefund()
         +reconcileRefund()
     }
+    class RefundController {
+        <<Controller>>
+        +requestRefund()
+        +withdrawRefund()
+    }
     class PurchaseService {
         <<Service>>
         +createPurchase()
@@ -483,6 +488,7 @@ classDiagram
     class RefundService {
         <<Service>>
         +requestRefund()
+        +withdrawRefund()
         +approveRefund()
         +rejectRefund()
         +reconcileUnknownResult()
@@ -542,6 +548,8 @@ classDiagram
     class RefundRequest {
         <<Entity>>
         +status: RefundStatus
+        +withdrawnAt: Instant
+        +withdraw()
         +claimProcessing()
         +complete()
         +markUnknown()
@@ -574,6 +582,7 @@ classDiagram
     ShopController --> PurchaseService
     PaymentController --> PaymentReconciliationService
     AvatarController --> AvatarService
+    RefundController --> RefundService
     RefundAdminController --> RefundService
     RefundReconciliationScheduler --> RefundService
     PaymentReconciliationScheduler --> PaymentReconciliationService
@@ -602,6 +611,7 @@ classDiagram
 - 주문 `paymentId`는 `Purchase.orderNumber`에 유지하고 승인 거래 ID와 취소 `cancellation.id`는 `PaymentTransaction.providerTransactionId`에 공급자 코드와 함께 저장합니다.
 - 최초 장착은 `OwnedItem.usedAt`을 한 번만 설정하며 이후 장착 해제해도 되돌리지 않습니다.
 - 환불 승인은 환불 요청과 소유 아이템을 잠가 미사용 상태를 재검사한 뒤 처리권을 선점합니다.
+- 환불 철회는 같은 잠금 순서에서 본인 요청과 `REQUESTED`를 재검사하고, PG·구매·아이템을 변경하지 않은 채 `WITHDRAWN`과 철회 시각을 기록합니다.
 - PG 취소 Timeout이나 연결 단절은 실패로 추정하지 않고 `CANCEL_UNKNOWN`으로 보존한 뒤 조회로 복구합니다.
 - `RefundReconciliationScheduler`는 5분 이상 고착된 `CANCEL_PENDING`을 PortOne 조회부터 복구하고, `PaymentReconciliationScheduler`는 오래된 Webhook `PENDING`과 `FAILED`를 같은 결제 정합성 Service로 재처리합니다.
 

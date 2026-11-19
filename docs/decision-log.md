@@ -823,3 +823,13 @@
 - 근거: 기존 Presence·Snapshot 계약을 유지하면서 일시적 상호작용과 서버 검증 신고 증거를 함께 제공하기 위함입니다.
 - 영향 문서: requirements.md, business-rules.md, api-design.md, database-design.md, screen-design.md, class-diagram.md, implementation-guide.md, decision-log.md
 - 연관: Issue #81
+
+## 2026-11-19 사용자 환불 요청 철회 확정
+
+- 결정: 요청자는 관리자 처리 전 `REQUESTED` 환불을 `WITHDRAWN`으로 철회할 수 있으며 철회 시각을 보존합니다. 철회 사유는 받지 않고 결제·아이템·PG 상태를 변경하지 않습니다.
+- 결정: `POST /api/v1/refund-requests/{requestId}/withdrawals`는 본문과 `Idempotency-Key` 없이 처리합니다. 본인의 이미 철회된 요청은 현재 응답을 다시 반환하고 다른 상태는 `409 CONCURRENT_MODIFICATION`, 타인 요청은 `404 RESOURCE_NOT_FOUND`로 처리합니다.
+- 결정: 사용자 환불 요청 카드에서 확인 후 철회하며, 관리자는 `WITHDRAWN`을 조회·필터링하되 처리 동작은 수행할 수 없습니다.
+- 상태: confirmed
+- 근거: 사용자 오신청을 관리자 처리 전에 안전하게 복구하면서 환불 이력과 기존 잠금·PG 정합성 계약을 유지하기 위함입니다.
+- 영향 문서: requirements.md, business-rules.md, database-design.md, api-design.md, screen-design.md, class-diagram.md, decision-log.md
+- 연관: Issue #92
