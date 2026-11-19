@@ -248,7 +248,7 @@ const mockPurchases = [
     ownedItemStatus: 'OWNED_UNUSED',
     latestRefundStatus: 'CANCEL_UNKNOWN',
     transactions: [{ transactionId: 303, provider: 'PORTONE', providerTransactionId: null, transactionType: 'CANCELLATION', amountKrw: 1000, status: 'UNKNOWN', processedAt: null }],
-    refundRequests: [{ refundRequestId: 201, purchaseId: 103, requestedByUserId: 101, requestReason: '사용하지 않은 상품입니다.', decisionReason: '환불 승인', status: 'CANCEL_UNKNOWN', requestedAt: '2026-11-14T07:00:00Z', reviewedAt: '2026-11-14T08:00:00Z', completedAt: null }],
+    refundRequests: [{ refundRequestId: 201, purchaseId: 103, requestedByUserId: 101, requestReason: '사용하지 않은 상품입니다.', decisionReason: '환불 승인', status: 'CANCEL_UNKNOWN', requestedAt: '2026-11-14T07:00:00Z', withdrawnAt: null, reviewedAt: '2026-11-14T08:00:00Z', completedAt: null }],
   },
 ];
 
@@ -957,9 +957,20 @@ export const mockApi = {
     if (['REQUESTED', 'CANCEL_PENDING', 'CANCEL_UNKNOWN'].includes(purchase.latestRefundStatus)) {
       throw new ApiError(409, { code: 'REFUND_ALREADY_ACTIVE', message: '진행 중인 환불이 있습니다.' });
     }
-    const refund = { refundRequestId: nextMockRefundId++, purchaseId: purchase.purchaseId, requestedByUserId: 101, requestReason: reason.trim(), decisionReason: null, status: 'REQUESTED', requestedAt: new Date().toISOString(), reviewedAt: null, completedAt: null };
+    const refund = { refundRequestId: nextMockRefundId++, purchaseId: purchase.purchaseId, requestedByUserId: 101, requestReason: reason.trim(), decisionReason: null, status: 'REQUESTED', requestedAt: new Date().toISOString(), withdrawnAt: null, reviewedAt: null, completedAt: null };
     purchase.refundRequests.push(refund);
     purchase.latestRefundStatus = 'REQUESTED';
+    return structuredClone(refund);
+  },
+
+  async withdrawRefundRequest(requestId) {
+    await delay(120);
+    const refund = allMockRefunds().find((item) => item.refundRequestId === Number(requestId));
+    if (!refund) throw new ApiError(404, { code: 'RESOURCE_NOT_FOUND', message: '환불 요청을 찾을 수 없습니다.' });
+    if (refund.status === 'WITHDRAWN') return structuredClone(refund);
+    if (refund.status !== 'REQUESTED') throw new ApiError(409, { code: 'CONCURRENT_MODIFICATION', message: '이미 처리된 환불 요청입니다.' });
+    refund.status = 'WITHDRAWN'; refund.withdrawnAt = new Date().toISOString();
+    findMockPurchase(refund.purchaseId).latestRefundStatus = 'WITHDRAWN';
     return structuredClone(refund);
   },
 
@@ -978,7 +989,9 @@ export const mockApi = {
     const refund = allMockRefunds().find((item) => item.refundRequestId === Number(requestId));
     if (!refund) throw new ApiError(404, { code: 'RESOURCE_NOT_FOUND', message: '환불 요청을 찾을 수 없습니다.' });
     const purchase = findMockPurchase(refund.purchaseId);
-    const cancellation = [...purchase.transactions].reverse().find((item) => item.transactionType === 'CANCELLATION') ?? null;
+    const cancellation = refund.status === 'WITHDRAWN'
+      ? null
+      : [...purchase.transactions].reverse().find((item) => item.transactionType === 'CANCELLATION') ?? null;
     return {
       ...structuredClone(refund), reviewedByUserId: refund.reviewedAt ? 1 : null,
       purchase: { orderNumber: purchase.orderNumber, itemName: purchase.itemName, priceKrw: purchase.priceKrw, status: purchase.status },

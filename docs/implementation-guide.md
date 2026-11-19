@@ -305,7 +305,7 @@ Mock ON/OFF를 바꿔 정상·빈 목록·오류를 확인하고 Network에서 G
 | `/group` | `getMyGroup`, `listMyGroupMembers` | `leaveMyGroup`, `createUserReport` | 탈퇴 시 `/groups/select` / 신고 안내 |
 | `/shop` | `listShopItems`, `getShopItem` | `createPurchase`, `verifyPurchasePayment` | 구매·아바타로 이동 |
 | `/avatar` | `getAvatar`, `listOwnedItems` | `equipAvatarItem`, `unequipAvatarItem` | `AvatarResponse` 재렌더 |
-| `/payments` | `listPurchases`, `listMyRefundRequests` | `getPurchase`, `createRefundRequest` | 구매·환불 재조회 |
+| `/payments` | `listPurchases`, `listMyRefundRequests` | `getPurchase`, `createRefundRequest`, `withdrawRefundRequest` | 구매·환불 재조회; 철회 성공 후 환불 목록·구매 목록·구매 상세 재조회 |
 | `/group-admin` | `getMyGroup`, `listMyGroupMembers`, `getInvitationManagement`, `listActiveCreatureSpecies` | `changeMemberRole`, `removeGroupMember`, `transferPrimaryAdmin`, `rotateInvitation`, `selectCreatureSpecies` | 관련 Snapshot 재조회 |
 | `/admin` | `getAdminDashboard` | 필터 변경 | 카드·차트 갱신 |
 | `/admin/reports` | `listAdminReports` | `getAdminReport`, `dismissReport`, `removeReportedMember`, `resolveInactiveReport` | 목록·상세 재조회 |

@@ -1218,11 +1218,11 @@ UPDATE game_groups
 
 ### 13.7. `refund_requests`
 
-**구현할 기능** — 환불 요청과 관리자 판단·PG 취소 상태를 기록합니다.
+**구현할 기능** — 환불 요청과 사용자 철회·관리자 판단·PG 취소 상태를 기록합니다.
 
 **주요 규칙**
 
-`active_purchase_id` 조건부 UNIQUE; `REQUESTED/REJECTED/CANCEL_PENDING/CANCEL_UNKNOWN/COMPLETED/FAILED`; 취소 성공 후 회수.
+`active_purchase_id`는 `REQUESTED/CANCEL_PENDING/CANCEL_UNKNOWN`에서만 `purchase_id`이며 UNIQUE; 상태는 `REQUESTED/WITHDRAWN/REJECTED/CANCEL_PENDING/CANCEL_UNKNOWN/COMPLETED/FAILED`; 철회는 비활성 이력으로 보존하고 취소 성공 후 회수.
 
 | 컬럼 | 자료형 | 역할·제약 |
 |---|---|---|
@@ -1234,6 +1234,7 @@ UPDATE game_groups
 | `decision_reason` | `VARCHAR(500)` | — |
 | `status` | `VARCHAR(30)` | — |
 | `requested_at` | `DATETIME(6)` | — |
+| `withdrawn_at` | `DATETIME(6)` | 사용자 철회 시각, 미철회 null |
 | `reviewed_at` | `DATETIME(6)` | — |
 | `cancel_claimed_at` | `DATETIME(6)` | — |
 | `completed_at` | `DATETIME(6)` | — |

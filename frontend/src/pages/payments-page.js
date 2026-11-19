@@ -6,8 +6,10 @@ import {
   listMyRefundRequests,
   listPurchases,
   verifyPurchasePayment,
+  withdrawRefundRequest,
 } from '../features/payment/api.js';
 import {
+  canWithdrawRefund,
   canRequestRefund,
   isCurrentRequest,
   isDefinitivePurchaseStatus,
@@ -18,7 +20,7 @@ import { clearCheckoutContext, loadCheckoutContext } from '../features/payment/p
 const PAGE_SIZE = 10;
 const PURCHASE_LABELS = { READY: '결제 확인 중', PAID: '결제 완료', FAILED: '결제 실패', CANCELLED: '환불 완료' };
 const ITEM_LABELS = { OWNED_UNUSED: '미사용', OWNED_USED: '사용됨', REVOKED: '회수됨' };
-const REFUND_LABELS = { REQUESTED: '환불 요청', REJECTED: '환불 거절', CANCEL_PENDING: '취소 확인 중', CANCEL_UNKNOWN: '결과 확인 필요', COMPLETED: '환불 완료', FAILED: '환불 실패' };
+const REFUND_LABELS = { REQUESTED: '환불 요청', WITHDRAWN: '요청 철회', REJECTED: '환불 거절', CANCEL_PENDING: '취소 확인 중', CANCEL_UNKNOWN: '결과 확인 필요', COMPLETED: '환불 완료', FAILED: '환불 실패' };
 
 function formatDate(value) {
   if (!value) return '-';
@@ -69,6 +71,16 @@ export function paymentsPage({ navigate, currentUser }) {
           <button class="btn btn-primary" type="submit" data-action="submit-refund">환불 요청</button>
         </div>
       </form>
+    </dialog>
+    <dialog class="commerce-dialog" data-withdraw-dialog>
+      <form method="dialog" data-withdraw-form>
+        <h2 class="h5">환불 요청 철회</h2>
+        <p class="text-app-muted">관리자가 먼저 처리하면 철회할 수 없습니다. 이 요청을 철회하시겠습니까?</p>
+        <div class="d-flex justify-content-end gap-2 mt-4">
+          <button class="btn btn-outline-secondary" type="button" data-action="cancel-withdraw">취소</button>
+          <button class="btn btn-danger" type="submit" data-action="submit-withdraw">철회</button>
+        </div>
+      </form>
     </dialog>`;
 
   const element = createAppShell({ content, currentPath: '/payments', currentUser, navigate });
@@ -81,6 +93,8 @@ export function paymentsPage({ navigate, currentUser }) {
   const dialog = content.querySelector('[data-refund-dialog]');
   const refundForm = content.querySelector('[data-refund-form]');
   const reasonInput = content.querySelector('[data-refund-reason]');
+  const withdrawDialog = content.querySelector('[data-withdraw-dialog]');
+  const withdrawForm = content.querySelector('[data-withdraw-form]');
 
   let tab = 'purchases';
   let page = 0;
@@ -88,6 +102,8 @@ export function paymentsPage({ navigate, currentUser }) {
   let rows = [];
   let selectedPurchase = null;
   let refundPurchaseId = null;
+  let withdrawRequestId = null;
+  let withdrawPurchaseId = null;
   let loading = false;
   let processing = false;
   let mounted = true;
@@ -145,8 +161,15 @@ export function paymentsPage({ navigate, currentUser }) {
     const title = document.createElement('h2'); title.className = 'h5'; title.textContent = `환불 요청 #${refund.refundRequestId}`;
     header.append(title, badge(REFUND_LABELS[refund.status] ?? refund.status, ['CANCEL_PENDING', 'CANCEL_UNKNOWN'].includes(refund.status) ? 'warning' : refund.status === 'COMPLETED' ? 'success' : 'secondary'));
     const reason = document.createElement('p'); reason.textContent = refund.requestReason;
-    const meta = document.createElement('p'); meta.className = 'small text-app-muted mb-0'; meta.textContent = `주문 #${refund.purchaseId} · ${formatDate(refund.requestedAt)}`;
-    body.append(header, reason, meta); card.append(body); return card;
+    const meta = document.createElement('p'); meta.className = 'small text-app-muted'; meta.textContent = `주문 #${refund.purchaseId} · 신청 ${formatDate(refund.requestedAt)}${refund.withdrawnAt ? ` · 철회 ${formatDate(refund.withdrawnAt)}` : ''}`;
+    body.append(header, reason, meta);
+    if (canWithdrawRefund(refund)) {
+      const withdraw = actionButton('요청 철회', 'withdraw', refund.refundRequestId, 'outline-danger');
+      withdraw.dataset.requestId = String(refund.refundRequestId);
+      withdraw.dataset.purchaseId = String(refund.purchaseId);
+      body.append(withdraw);
+    }
+    card.append(body); return card;
   }
 
   function actionButton(label, action, id, kind) {
@@ -177,7 +200,8 @@ export function paymentsPage({ navigate, currentUser }) {
     const refundTitle = document.createElement('h3'); refundTitle.className = 'h6'; refundTitle.textContent = '환불 이력';
     const refundList = document.createElement('ul'); refundList.className = 'list-group list-group-flush';
     for (const refund of purchase.refundRequests ?? []) {
-      const li = document.createElement('li'); li.className = 'list-group-item px-0 bg-transparent'; li.textContent = `${REFUND_LABELS[refund.status] ?? refund.status} · ${refund.requestReason}`; refundList.append(li);
+      const withdrawn = refund.status === 'WITHDRAWN' ? ` · 철회 ${formatDate(refund.withdrawnAt)}` : '';
+      const li = document.createElement('li'); li.className = 'list-group-item px-0 bg-transparent'; li.textContent = `${REFUND_LABELS[refund.status] ?? refund.status} · ${refund.requestReason}${withdrawn}`; refundList.append(li);
     }
     if (!refundList.children.length) { const li = document.createElement('li'); li.className = 'list-group-item px-0 bg-transparent text-app-muted'; li.textContent = '환불 이력이 없습니다.'; refundList.append(li); }
     body.append(title, summary, statuses, txTitle, txList, refundTitle, refundList); card.append(body); detailNode.append(card);
@@ -190,13 +214,15 @@ export function paymentsPage({ navigate, currentUser }) {
       const result = tab === 'purchases'
         ? await listPurchases({ page: targetPage, size: PAGE_SIZE })
         : await listMyRefundRequests({ page: targetPage, size: PAGE_SIZE });
-      if (!mounted || version !== loadVersion) return;
+      if (!mounted || version !== loadVersion) return false;
       rows = result.data ?? []; page = result.meta?.page ?? targetPage; totalPages = result.meta?.totalPages ?? 0;
       renderRows(); renderPagination();
+      return true;
     } catch (error) {
-      if (!mounted || version !== loadVersion) return;
+      if (!mounted || version !== loadVersion) return false;
       if (error?.status === 401) navigate('/login'); else showFeedback(error?.message ?? '내역을 불러오지 못했습니다.');
       rows = []; renderRows();
+      return false;
     } finally { loading = false; renderPagination(); }
   }
 
@@ -205,11 +231,13 @@ export function paymentsPage({ navigate, currentUser }) {
     if (detailNode instanceof HTMLElement) detailNode.innerHTML = '<div class="app-surface-card border border-app rounded-3 p-4 placeholder-glow"><span class="placeholder col-8"></span></div>';
     try {
       const purchase = await getPurchase(purchaseId);
-      if (!isCurrentRequest(version, detailVersion, mounted)) return;
+      if (!isCurrentRequest(version, detailVersion, mounted)) return false;
       selectedPurchase = purchase; renderDetail();
+      return true;
     } catch (error) {
-      if (!isCurrentRequest(version, detailVersion, mounted)) return;
+      if (!isCurrentRequest(version, detailVersion, mounted)) return false;
       showFeedback(error?.message ?? '구매 상세를 불러오지 못했습니다.'); selectedPurchase = null; renderDetail();
+      return false;
     }
   }
 
@@ -256,6 +284,11 @@ export function paymentsPage({ navigate, currentUser }) {
     refundPurchaseId = purchaseId; reasonInput.value = ''; reasonInput.classList.remove('is-invalid'); dialog.showModal(); reasonInput.focus();
   }
 
+  function openWithdrawDialog(requestId, purchaseId) {
+    if (!(withdrawDialog instanceof HTMLDialogElement)) return;
+    withdrawRequestId = requestId; withdrawPurchaseId = purchaseId; withdrawDialog.showModal();
+  }
+
   async function submitRefund(event) {
     event.preventDefault();
     if (processing || !refundPurchaseId || !(reasonInput instanceof HTMLTextAreaElement)) return;
@@ -274,6 +307,50 @@ export function paymentsPage({ navigate, currentUser }) {
     } finally { processing = false; reasonInput.disabled = false; renderRows(); renderPagination(); }
   }
 
+  async function submitWithdrawal(event) {
+    event.preventDefault();
+    if (processing || !withdrawRequestId || !withdrawPurchaseId) return;
+    const requestId = withdrawRequestId; const purchaseId = withdrawPurchaseId;
+    processing = true; renderRows(); renderPagination();
+    try {
+      await withdrawRefundRequest(requestId);
+      if (!mounted) return;
+      withdrawDialog?.close();
+      let refundListRefreshed = true;
+      if (tab === 'refunds') {
+        refundListRefreshed = await loadRows(0);
+      } else {
+        try {
+          await listMyRefundRequests({ page: 0, size: PAGE_SIZE });
+        } catch {
+          refundListRefreshed = false;
+        }
+      }
+      let purchaseListRefreshed = true;
+      if (tab === 'purchases') {
+        purchaseListRefreshed = await loadRows(0);
+      } else {
+        try {
+          await listPurchases({ page: 0, size: PAGE_SIZE });
+        } catch {
+          purchaseListRefreshed = false;
+        }
+      }
+      const purchaseDetailRefreshed = await loadDetail(purchaseId);
+      const refreshed = refundListRefreshed && purchaseListRefreshed && purchaseDetailRefreshed;
+      showFeedback(
+          refreshed ? '환불 요청을 철회했습니다.' : '환불 요청은 철회했지만 일부 내역을 새로고침하지 못했습니다.',
+          refreshed ? 'success' : 'warning',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      showFeedback(error?.message ?? '환불 요청을 철회하지 못했습니다.');
+      if (error?.status === 409) { await loadRows(0); await loadDetail(purchaseId); }
+    } finally {
+      processing = false; withdrawRequestId = null; withdrawPurchaseId = null; renderRows(); renderPagination();
+    }
+  }
+
   async function onClick(event) {
     if (!(event.target instanceof Element)) return;
     const tabButton = event.target.closest('[data-tab]');
@@ -285,22 +362,26 @@ export function paymentsPage({ navigate, currentUser }) {
     const button = event.target.closest('[data-action]');
     if (!(button instanceof HTMLButtonElement) || button.disabled) return;
     const purchaseId = Number(button.dataset.purchaseId);
+    const requestId = Number(button.dataset.requestId);
     if (button.dataset.action === 'detail' && purchaseId) await loadDetail(purchaseId);
     if (button.dataset.action === 'refund' && purchaseId) openRefundDialog(purchaseId);
+    if (button.dataset.action === 'withdraw' && requestId && purchaseId) openWithdrawDialog(requestId, purchaseId);
     if (button.dataset.action === 'verify' && purchaseId) {
       const purchase = rows.find((row) => row.purchaseId === purchaseId); if (purchase) await verifyPurchase(purchaseId, purchase.orderNumber);
     }
     if (button.dataset.action === 'prev' && page > 0) { detailVersion += 1; selectedPurchase = null; renderDetail(); await loadRows(page - 1); }
     if (button.dataset.action === 'next' && page < totalPages - 1) { detailVersion += 1; selectedPurchase = null; renderDetail(); await loadRows(page + 1); }
     if (button.dataset.action === 'cancel-refund' && !processing) dialog?.close();
+    if (button.dataset.action === 'cancel-withdraw' && !processing) withdrawDialog?.close();
   }
 
   content.addEventListener('click', onClick);
   refundForm?.addEventListener('submit', submitRefund);
+  withdrawForm?.addEventListener('submit', submitWithdrawal);
   renderDetail(); renderPagination();
   void (async () => { await processPaymentReturn(); if (mounted) await loadRows(0); })();
 
-  return { element, cleanup: () => { mounted = false; loadVersion += 1; detailVersion += 1; if (dialog?.open) dialog.close(); content.removeEventListener('click', onClick); refundForm?.removeEventListener('submit', submitRefund); } };
+  return { element, cleanup: () => { mounted = false; loadVersion += 1; detailVersion += 1; if (dialog?.open) dialog.close(); if (withdrawDialog?.open) withdrawDialog.close(); content.removeEventListener('click', onClick); refundForm?.removeEventListener('submit', submitRefund); withdrawForm?.removeEventListener('submit', submitWithdrawal); } };
 }
 
 export { paymentsPage as adminPage };

@@ -4,6 +4,7 @@ import {
   adminRefundActions,
   adminRefundFeedback,
   canRequestRefund,
+  canWithdrawRefund,
   checkoutRecoveryPath,
   isCurrentRequest,
   isDefinitivePurchaseStatus,
@@ -16,7 +17,14 @@ test('결제 완료·미사용·진행 중 환불 없음인 구매만 환불할 
   assert.equal(canRequestRefund({ status: 'PAID', ownedItemStatus: 'OWNED_UNUSED', latestRefundStatus: null }), true);
   assert.equal(canRequestRefund({ status: 'PAID', ownedItemStatus: 'OWNED_USED', latestRefundStatus: null }), false);
   assert.equal(canRequestRefund({ status: 'PAID', ownedItemStatus: 'OWNED_UNUSED', latestRefundStatus: 'CANCEL_UNKNOWN' }), false);
+  assert.equal(canRequestRefund({ status: 'PAID', ownedItemStatus: 'OWNED_UNUSED', latestRefundStatus: 'WITHDRAWN' }), true);
   assert.equal(canRequestRefund({ status: 'READY', ownedItemStatus: null, latestRefundStatus: null }), false);
+});
+
+test('사용자는 관리자 처리 전 REQUESTED 환불만 철회할 수 있다', () => {
+  assert.equal(canWithdrawRefund({ status: 'REQUESTED' }), true);
+  assert.equal(canWithdrawRefund({ status: 'WITHDRAWN' }), false);
+  assert.equal(canWithdrawRefund({ status: 'CANCEL_PENDING' }), false);
 });
 
 test('관리자 환불 동작은 서버 상태에 따라 제한한다', () => {
@@ -24,6 +32,7 @@ test('관리자 환불 동작은 서버 상태에 따라 제한한다', () => {
   assert.deepEqual(adminRefundActions('CANCEL_PENDING'), ['reconcile']);
   assert.deepEqual(adminRefundActions('CANCEL_UNKNOWN'), ['reconcile']);
   assert.deepEqual(adminRefundActions('COMPLETED'), []);
+  assert.deepEqual(adminRefundActions('WITHDRAWN'), []);
 });
 
 test('관리자 환불 알림은 HTTP 성공 여부가 아니라 환불 상태를 따른다', () => {
@@ -32,6 +41,7 @@ test('관리자 환불 알림은 HTTP 성공 여부가 아니라 환불 상태�
   assert.deepEqual(adminRefundFeedback('CANCEL_UNKNOWN'), { message: 'PG 취소 결과를 확인해야 합니다.', type: 'warning' });
   assert.deepEqual(adminRefundFeedback('FAILED'), { message: '환불 처리에 실패했습니다.', type: 'danger' });
   assert.deepEqual(adminRefundFeedback('REJECTED'), { message: '환불 거절 처리가 완료되었습니다.', type: 'success' });
+  assert.deepEqual(adminRefundFeedback('WITHDRAWN'), { message: '사용자가 환불 요청을 철회했습니다.', type: 'info' });
 });
 
 test('생성된 주문 문맥은 서버의 확정 상태에서만 제거한다', () => {
@@ -78,6 +88,14 @@ test('PG 취소 상태는 미실행 사유와 자동 점검 안내를 구분한�
   assert.deepEqual(
       pgCancellationPresentation({ status: 'REQUESTED', latestCancellation: null }),
       { label: '승인 전', hint: null },
+  );
+  assert.deepEqual(
+      pgCancellationPresentation({ status: 'WITHDRAWN', latestCancellation: null }),
+      { label: '미실행 (사용자 철회)', hint: null },
+  );
+  assert.deepEqual(
+      pgCancellationPresentation({ status: 'WITHDRAWN', latestCancellation: { status: 'SUCCESS' } }),
+      { label: '미실행 (사용자 철회)', hint: null },
   );
   assert.equal(
       pgCancellationPresentation({

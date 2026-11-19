@@ -45,6 +45,7 @@ public record PurchaseResponse(
             String decisionReason,
             RefundStatus status,
             Instant requestedAt,
+            Instant withdrawnAt,
             Instant reviewedAt,
             Instant completedAt
     ) {

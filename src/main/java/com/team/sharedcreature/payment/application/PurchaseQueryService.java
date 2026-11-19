@@ -145,6 +145,7 @@ public class PurchaseQueryService {
                 // 환불 상태 enum은 JSON에 이름으로 전달합니다.
                 refund.getStatus(),
                 refund.getRequestedAt(),
+                refund.getWithdrawnAt(),
                 refund.getReviewedAt(),
                 refund.getCompletedAt()
         );

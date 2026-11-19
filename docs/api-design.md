@@ -96,7 +96,7 @@
 | 보유 | `OWNED_UNUSED`, `OWNED_USED`, `REVOKED` |
 | 구매 | READY \| PAID \| FAILED \| CANCELLED |
 | 결제 거래 | `REQUESTED`, `SUCCESS`, `DEFINITIVE_FAILURE`, `UNKNOWN` |
-| 환불 | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED |
+| 환불 | REQUESTED \| WITHDRAWN \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED |
 | 신고 | `RECEIVED`, `RESOLVED`, `REJECTED` |
 | 신고 분류 | `HARASSMENT`, `SPAM`, `INAPPROPRIATE_CONTENT`, `OTHER` |
 | 사진 판정 | `PENDING`, `VALID`, `INVALID` |
@@ -1817,7 +1817,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.status | string(enum) | Y | N | READY \| PAID \| FAILED \| CANCELLED | 성공 데이터 상태 |
 | data.createdAt | string(date-time) | Y | N | UTC ISO 8601 | 생성 시각 |
 | data.ownedItemStatus | string(enum) | Y | Y | OWNED_UNUSED \| OWNED_USED \| REVOKED; 미지급 null | 아이템 보유 상태 |
-| data.latestRefundStatus | string(enum) | Y | Y | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED; 요청 없으면 null | 최근 환불 상태 |
+| data.latestRefundStatus | string(enum) | Y | Y | REQUESTED \| WITHDRAWN \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED; 요청 없으면 null | 최근 환불 상태 |
 | data.shopItemId | integer(int64) | Y | N | 1 이상 | 상점 상품 ID |
 | data.transactions | array<object> | Y | N | 미거래면 [] | PG 거래 기록 |
 | data.transactions[].transactionId | integer(int64) | Y | N | 1 이상 | 거래 ID |
@@ -1833,8 +1833,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.refundRequests[].requestedByUserId | integer(int64) | Y | N | 1 이상 | 신청 사용자 ID |
 | data.refundRequests[].requestReason | string | Y | N | 1~500자 | 환불 요청 사유 |
 | data.refundRequests[].decisionReason | string | Y | Y | 처리 전 null | 관리자 판단 사유 |
-| data.refundRequests[].status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 환불 요청 목록 상태 |
+| data.refundRequests[].status | string(enum) | Y | N | REQUESTED \| WITHDRAWN \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 환불 요청 목록 상태 |
 | data.refundRequests[].requestedAt | string(date-time) | Y | N | UTC ISO 8601 | 요청 시각 |
+| data.refundRequests[].withdrawnAt | string(date-time) | Y | Y | 미철회 null | 사용자 철회 시각 |
 | data.refundRequests[].reviewedAt | string(date-time) | Y | Y | 미심사 null | 관리자 심사 시각 |
 | data.refundRequests[].completedAt | string(date-time) | Y | Y | 완료 전 null | 완료 시각 |
 
@@ -1878,7 +1879,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data[].status | string(enum) | Y | N | READY \| PAID \| FAILED \| CANCELLED | 성공 데이터 상태 |
 | data[].createdAt | string(date-time) | Y | N | UTC ISO 8601 | 생성 시각 |
 | data[].ownedItemStatus | string(enum) | Y | Y | OWNED_UNUSED \| OWNED_USED \| REVOKED; 미지급 null | 아이템 보유 상태 |
-| data[].latestRefundStatus | string(enum) | Y | Y | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED; 요청 없으면 null | 최근 환불 상태 |
+| data[].latestRefundStatus | string(enum) | Y | Y | REQUESTED \| WITHDRAWN \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED; 요청 없으면 null | 최근 환불 상태 |
 | meta | object | Y | N | — | 목록 부가 정보 |
 | meta.page | integer | Y | N | 0 이상 | 현재 페이지 |
 | meta.size | integer | Y | N | 1~50 | 요청 페이지 크기 |
@@ -1918,7 +1919,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.status | string(enum) | Y | N | READY \| PAID \| FAILED \| CANCELLED | 성공 데이터 상태 |
 | data.createdAt | string(date-time) | Y | N | UTC ISO 8601 | 생성 시각 |
 | data.ownedItemStatus | string(enum) | Y | Y | OWNED_UNUSED \| OWNED_USED \| REVOKED; 미지급 null | 아이템 보유 상태 |
-| data.latestRefundStatus | string(enum) | Y | Y | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED; 요청 없으면 null | 최근 환불 상태 |
+| data.latestRefundStatus | string(enum) | Y | Y | REQUESTED \| WITHDRAWN \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED; 요청 없으면 null | 최근 환불 상태 |
 | data.shopItemId | integer(int64) | Y | N | 1 이상 | 상점 상품 ID |
 | data.transactions | array<object> | Y | N | 미거래면 [] | PG 거래 기록 |
 | data.transactions[].transactionId | integer(int64) | Y | N | 1 이상 | 거래 ID |
@@ -1934,8 +1935,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.refundRequests[].requestedByUserId | integer(int64) | Y | N | 1 이상 | 신청 사용자 ID |
 | data.refundRequests[].requestReason | string | Y | N | 1~500자 | 환불 요청 사유 |
 | data.refundRequests[].decisionReason | string | Y | Y | 처리 전 null | 관리자 판단 사유 |
-| data.refundRequests[].status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 환불 요청 목록 상태 |
+| data.refundRequests[].status | string(enum) | Y | N | REQUESTED \| WITHDRAWN \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 환불 요청 목록 상태 |
 | data.refundRequests[].requestedAt | string(date-time) | Y | N | UTC ISO 8601 | 요청 시각 |
+| data.refundRequests[].withdrawnAt | string(date-time) | Y | Y | 미철회 null | 사용자 철회 시각 |
 | data.refundRequests[].reviewedAt | string(date-time) | Y | Y | 미심사 null | 관리자 심사 시각 |
 | data.refundRequests[].completedAt | string(date-time) | Y | Y | 완료 전 null | 완료 시각 |
 
@@ -2002,8 +2004,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.requestedByUserId | integer(int64) | Y | N | 1 이상 | 신청 사용자 ID |
 | data.requestReason | string | Y | N | 1~500자 | 환불 요청 사유 |
 | data.decisionReason | string | Y | Y | 처리 전 null | 관리자 판단 사유 |
-| data.status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
+| data.status | string(enum) | Y | N | REQUESTED \| WITHDRAWN \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
 | data.requestedAt | string(date-time) | Y | N | UTC ISO 8601 | 요청 시각 |
+| data.withdrawnAt | string(date-time) | Y | Y | 미철회 null | 사용자 철회 시각 |
 | data.reviewedAt | string(date-time) | Y | Y | 미심사 null | 관리자 심사 시각 |
 | data.completedAt | string(date-time) | Y | Y | 완료 전 null | 완료 시각 |
 
@@ -2021,6 +2024,46 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | 409 | `REFUND_ALREADY_ACTIVE` | 진행 중 환불이 존재 |
 | 409 | `IDEMPOTENCY_KEY_REUSED` | 같은 키로 다른 Payload 전달 |
 
+### withdrawRefundRequest — `POST /api/v1/refund-requests/{requestId}/withdrawals`
+
+- **Operation ID:** `withdrawRefundRequest` · **요구사항:** `REQ-PAY-002` · **인증·권한:** `AUTHENTICATED` · **성공 HTTP:** `200`
+- **엔드포인트 조건:** 요청자 본인의 `REQUESTED`만 철회하며 요청 본문과 `Idempotency-Key`는 사용하지 않는다. 본인의 `WITHDRAWN` 재요청은 현재 응답을 반환한다.
+
+**요청 필드**
+
+| 위치 | 필드명 | 타입 | 필수 | null | 검증·기본값 |
+|---|---|---|---|---|---|
+| Header | Cookie | string | Y | N | Spring Session 세션 쿠키; HttpOnly / SameSite=Lax |
+| Header | X-CSRF-TOKEN | string | Y | N | 현재 세션에서 발급된 CSRF 토큰 |
+| Path | requestId | integer(int64) | Y | N | 1 이상 |
+
+**성공 응답 필드**
+
+| 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
+|---|---|---|---|---|---|
+| data | object | Y | N | 빈 응답은 {} | 성공 DTO |
+| data.refundRequestId | integer(int64) | Y | N | 1 이상 | 환불 요청 ID |
+| data.purchaseId | integer(int64) | Y | N | 1 이상 | 구매 ID |
+| data.requestedByUserId | integer(int64) | Y | N | 1 이상 | 신청 사용자 ID |
+| data.requestReason | string | Y | N | 1~500자 | 환불 요청 사유 |
+| data.decisionReason | string | Y | Y | 철회 시 null | 관리자 판단 사유 |
+| data.status | string(enum) | Y | N | WITHDRAWN | 철회 상태 |
+| data.requestedAt | string(date-time) | Y | N | UTC ISO 8601 | 요청 시각 |
+| data.withdrawnAt | string(date-time) | Y | N | UTC ISO 8601 | 사용자 철회 시각 |
+| data.reviewedAt | string(date-time) | Y | Y | 철회 시 null | 관리자 심사 시각 |
+| data.completedAt | string(date-time) | Y | Y | 철회 시 null | 완료 시각 |
+
+**오류 응답**
+
+| HTTP | code | 조건 |
+|---|---|---|
+| 401 | `AUTH_REQUIRED` | 세션 인증 없음 |
+| 401 | `SESSION_EXPIRED` | 인증 세션 만료 |
+| 403 | `CSRF_INVALID` | CSRF 토큰 없음 또는 불일치 |
+| 400 | `INVALID_FIELD_VALUE` | Path 타입·범위 검증 실패 |
+| 404 | `RESOURCE_NOT_FOUND` | 요청이 없거나 요청자가 소유하지 않음 |
+| 409 | `CONCURRENT_MODIFICATION` | 관리자 처리 등으로 `REQUESTED`가 아님 |
+
 ### listMyRefundRequests — `GET /api/v1/refund-requests`
 
 - **Operation ID:** `listMyRefundRequests` · **요구사항:** `REQ-PAY-002` · **인증·권한:** `AUTHENTICATED` · **성공 HTTP:** `200`
@@ -2032,7 +2075,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | Header | Cookie | string | Y | N | Spring Session 세션 쿠키; HttpOnly / SameSite=Lax |
 | Query | page | integer | N | N | 0 이상, 미지정 0; 0-based page |
 | Query | size | integer | N | N | 1~50, 미지정 20; 페이지 크기 |
-| Query | status | string(enum) | N | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED; 미지정 전체 |
+| Query | status | string(enum) | N | N | REQUESTED \| WITHDRAWN \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED; 미지정 전체 |
 
 **성공 응답 필드**
 
@@ -2044,8 +2087,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data[].requestedByUserId | integer(int64) | Y | N | 1 이상 | 신청 사용자 ID |
 | data[].requestReason | string | Y | N | 1~500자 | 환불 요청 사유 |
 | data[].decisionReason | string | Y | Y | 처리 전 null | 관리자 판단 사유 |
-| data[].status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
+| data[].status | string(enum) | Y | N | REQUESTED \| WITHDRAWN \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
 | data[].requestedAt | string(date-time) | Y | N | UTC ISO 8601 | 요청 시각 |
+| data[].withdrawnAt | string(date-time) | Y | Y | 미철회 null | 사용자 철회 시각 |
 | data[].reviewedAt | string(date-time) | Y | Y | 미심사 null | 관리자 심사 시각 |
 | data[].completedAt | string(date-time) | Y | Y | 완료 전 null | 완료 시각 |
 | meta | object | Y | N | — | 목록 부가 정보 |
@@ -2074,7 +2118,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | Header | Cookie | string | Y | N | Spring Session 세션 쿠키; HttpOnly / SameSite=Lax |
 | Query | page | integer | N | N | 0 이상, 미지정 0; 0-based page |
 | Query | size | integer | N | N | 1~50, 미지정 20; 페이지 크기 |
-| Query | status | string(enum) | N | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED; 미지정 전체 |
+| Query | status | string(enum) | N | N | REQUESTED \| WITHDRAWN \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED; 미지정 전체 |
 
 **성공 응답 필드**
 
@@ -2086,8 +2130,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data[].requestedByUserId | integer(int64) | Y | N | 1 이상 | 신청 사용자 ID |
 | data[].requestReason | string | Y | N | 1~500자 | 환불 요청 사유 |
 | data[].decisionReason | string | Y | Y | 처리 전 null | 관리자 판단 사유 |
-| data[].status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
+| data[].status | string(enum) | Y | N | REQUESTED \| WITHDRAWN \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
 | data[].requestedAt | string(date-time) | Y | N | UTC ISO 8601 | 요청 시각 |
+| data[].withdrawnAt | string(date-time) | Y | Y | 미철회 null | 사용자 철회 시각 |
 | data[].reviewedAt | string(date-time) | Y | Y | 미심사 null | 관리자 심사 시각 |
 | data[].completedAt | string(date-time) | Y | Y | 완료 전 null | 완료 시각 |
 | meta | object | Y | N | — | 목록 부가 정보 |
@@ -2127,8 +2172,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.requestedByUserId | integer(int64) | Y | N | 1 이상 | 신청 사용자 ID |
 | data.requestReason | string | Y | N | 1~500자 | 환불 요청 사유 |
 | data.decisionReason | string | Y | Y | 처리 전 null | 관리자 판단 사유 |
-| data.status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
+| data.status | string(enum) | Y | N | REQUESTED \| WITHDRAWN \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
 | data.requestedAt | string(date-time) | Y | N | UTC ISO 8601 | 요청 시각 |
+| data.withdrawnAt | string(date-time) | Y | Y | 미철회 null | 사용자 철회 시각 |
 | data.reviewedAt | string(date-time) | Y | Y | 미심사 null | 관리자 심사 시각 |
 | data.completedAt | string(date-time) | Y | Y | 완료 전 null | 완료 시각 |
 | data.reviewedByUserId | integer(int64) | Y | Y | 미심사 null | 심사한 관리자 ID |
@@ -2141,9 +2187,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.ownedItem.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
 | data.ownedItem.status | string(enum) | C | N | OWNED_UNUSED \| OWNED_USED \| REVOKED | 보유 아이템 상태 |
 | data.ownedItem.usedAt | string(date-time) | C | Y | 미사용 null | 최초 사용 시각 |
-| data.latestCancellation | object | Y | Y | 취소 시도 전 null | 최근 PG 취소 거래 |
+| data.latestCancellation | object | Y | Y | 해당 환불 요청의 취소 시도 전 null | 해당 환불 요청의 최근 PG 취소 거래 |
 | data.latestCancellation.providerTransactionId | string | C | Y | 미확정 null | PG 거래 ID |
-| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 최근 PG 취소 거래 상태 |
+| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 해당 환불 요청의 최근 PG 취소 거래 상태 |
 | data.latestCancellation.processedAt | string(date-time) | C | Y | 미확정 null | 처리 시각 |
 
 **오류 응답**
@@ -2183,8 +2229,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.requestedByUserId | integer(int64) | Y | N | 1 이상 | 신청 사용자 ID |
 | data.requestReason | string | Y | N | 1~500자 | 환불 요청 사유 |
 | data.decisionReason | string | Y | Y | 처리 전 null | 관리자 판단 사유 |
-| data.status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
+| data.status | string(enum) | Y | N | REQUESTED \| WITHDRAWN \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
 | data.requestedAt | string(date-time) | Y | N | UTC ISO 8601 | 요청 시각 |
+| data.withdrawnAt | string(date-time) | Y | Y | 미철회 null | 사용자 철회 시각 |
 | data.reviewedAt | string(date-time) | Y | Y | 미심사 null | 관리자 심사 시각 |
 | data.completedAt | string(date-time) | Y | Y | 완료 전 null | 완료 시각 |
 | data.reviewedByUserId | integer(int64) | Y | Y | 미심사 null | 심사한 관리자 ID |
@@ -2197,9 +2244,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.ownedItem.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
 | data.ownedItem.status | string(enum) | C | N | OWNED_UNUSED \| OWNED_USED \| REVOKED | 보유 아이템 상태 |
 | data.ownedItem.usedAt | string(date-time) | C | Y | 미사용 null | 최초 사용 시각 |
-| data.latestCancellation | object | Y | Y | 취소 시도 전 null | 최근 PG 취소 거래 |
+| data.latestCancellation | object | Y | Y | 해당 환불 요청의 취소 시도 전 null | 해당 환불 요청의 최근 PG 취소 거래 |
 | data.latestCancellation.providerTransactionId | string | C | Y | 미확정 null | PG 거래 ID |
-| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 최근 PG 취소 거래 상태 |
+| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 해당 환불 요청의 최근 PG 취소 거래 상태 |
 | data.latestCancellation.processedAt | string(date-time) | C | Y | 미확정 null | 처리 시각 |
 
 **오류 응답**
@@ -2215,6 +2262,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | 404 | `RESOURCE_NOT_FOUND` | 없거나 요청자에게 노출하지 않는 리소스 |
 | 409 | `REFUND_NOT_ALLOWED_USED_ITEM` | 사용된 아이템 환불 불가 |
 | 409 | `PG_CANCEL_RESULT_UNKNOWN` | PG 취소 결과 불명 |
+| 409 | `CONCURRENT_MODIFICATION` | 사용자 철회 또는 다른 관리자 처리로 요청 상태가 변경되어 승인할 수 없음 |
 | 409 | `IDEMPOTENCY_REQUEST_IN_PROGRESS` | 같은 멱등 키 처리 중 |
 
 ### rejectRefund — `POST /api/v1/admin/refund-requests/{requestId}/rejections`
@@ -2241,8 +2289,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.requestedByUserId | integer(int64) | Y | N | 1 이상 | 신청 사용자 ID |
 | data.requestReason | string | Y | N | 1~500자 | 환불 요청 사유 |
 | data.decisionReason | string | Y | Y | 처리 전 null | 관리자 판단 사유 |
-| data.status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
+| data.status | string(enum) | Y | N | REQUESTED \| WITHDRAWN \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
 | data.requestedAt | string(date-time) | Y | N | UTC ISO 8601 | 요청 시각 |
+| data.withdrawnAt | string(date-time) | Y | Y | 미철회 null | 사용자 철회 시각 |
 | data.reviewedAt | string(date-time) | Y | Y | 미심사 null | 관리자 심사 시각 |
 | data.completedAt | string(date-time) | Y | Y | 완료 전 null | 완료 시각 |
 | data.reviewedByUserId | integer(int64) | Y | Y | 미심사 null | 심사한 관리자 ID |
@@ -2255,9 +2304,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.ownedItem.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
 | data.ownedItem.status | string(enum) | C | N | OWNED_UNUSED \| OWNED_USED \| REVOKED | 보유 아이템 상태 |
 | data.ownedItem.usedAt | string(date-time) | C | Y | 미사용 null | 최초 사용 시각 |
-| data.latestCancellation | object | Y | Y | 취소 시도 전 null | 최근 PG 취소 거래 |
+| data.latestCancellation | object | Y | Y | 해당 환불 요청의 취소 시도 전 null | 해당 환불 요청의 최근 PG 취소 거래 |
 | data.latestCancellation.providerTransactionId | string | C | Y | 미확정 null | PG 거래 ID |
-| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 최근 PG 취소 거래 상태 |
+| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 해당 환불 요청의 최근 PG 취소 거래 상태 |
 | data.latestCancellation.processedAt | string(date-time) | C | Y | 미확정 null | 처리 시각 |
 
 **오류 응답**
@@ -2297,8 +2346,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.requestedByUserId | integer(int64) | Y | N | 1 이상 | 신청 사용자 ID |
 | data.requestReason | string | Y | N | 1~500자 | 환불 요청 사유 |
 | data.decisionReason | string | Y | Y | 처리 전 null | 관리자 판단 사유 |
-| data.status | string(enum) | Y | N | REQUESTED \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
+| data.status | string(enum) | Y | N | REQUESTED \| WITHDRAWN \| REJECTED \| CANCEL_PENDING \| CANCEL_UNKNOWN \| COMPLETED \| FAILED | 성공 데이터 상태 |
 | data.requestedAt | string(date-time) | Y | N | UTC ISO 8601 | 요청 시각 |
+| data.withdrawnAt | string(date-time) | Y | Y | 미철회 null | 사용자 철회 시각 |
 | data.reviewedAt | string(date-time) | Y | Y | 미심사 null | 관리자 심사 시각 |
 | data.completedAt | string(date-time) | Y | Y | 완료 전 null | 완료 시각 |
 | data.reviewedByUserId | integer(int64) | Y | Y | 미심사 null | 심사한 관리자 ID |
@@ -2311,9 +2361,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.ownedItem.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
 | data.ownedItem.status | string(enum) | C | N | OWNED_UNUSED \| OWNED_USED \| REVOKED | 보유 아이템 상태 |
 | data.ownedItem.usedAt | string(date-time) | C | Y | 미사용 null | 최초 사용 시각 |
-| data.latestCancellation | object | Y | Y | 취소 시도 전 null | 최근 PG 취소 거래 |
+| data.latestCancellation | object | Y | Y | 해당 환불 요청의 취소 시도 전 null | 해당 환불 요청의 최근 PG 취소 거래 |
 | data.latestCancellation.providerTransactionId | string | C | Y | 미확정 null | PG 거래 ID |
-| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 최근 PG 취소 거래 상태 |
+| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 해당 환불 요청의 최근 PG 취소 거래 상태 |
 | data.latestCancellation.processedAt | string(date-time) | C | Y | 미확정 null | 처리 시각 |
 
 **오류 응답**

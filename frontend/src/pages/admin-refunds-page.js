@@ -14,8 +14,8 @@ import {
 } from '../features/payment/payment-policy.js';
 
 const PAGE_SIZE = 10;
-const STATUSES = ['', 'REQUESTED', 'REJECTED', 'CANCEL_PENDING', 'CANCEL_UNKNOWN', 'COMPLETED', 'FAILED'];
-const LABELS = { '': '전체', REQUESTED: '환불 요청', REJECTED: '거절', CANCEL_PENDING: '취소 확인 중', CANCEL_UNKNOWN: '결과 확인 필요', COMPLETED: '환불 완료', FAILED: '환불 실패' };
+const STATUSES = ['', 'REQUESTED', 'WITHDRAWN', 'REJECTED', 'CANCEL_PENDING', 'CANCEL_UNKNOWN', 'COMPLETED', 'FAILED'];
+const LABELS = { '': '전체', REQUESTED: '환불 요청', WITHDRAWN: '사용자 철회', REJECTED: '거절', CANCEL_PENDING: '취소 확인 중', CANCEL_UNKNOWN: '결과 확인 필요', COMPLETED: '환불 완료', FAILED: '환불 실패' };
 
 function formatDate(value) {
   if (!value) return '-';
@@ -166,6 +166,7 @@ export function adminRefundsPage({ navigate } = {}) {
       ['상품', detail.purchase?.itemName], ['금액', `${Number(detail.purchase?.priceKrw ?? 0).toLocaleString('ko-KR')}원`],
       ['구매 상태', detail.purchase?.status], ['아이템 상태', detail.ownedItem?.status ?? '-'],
       ['환불 상태', LABELS[detail.status] ?? detail.status], ['신청 사유', detail.requestReason],
+      ['철회 시각', formatDate(detail.withdrawnAt)],
       ['관리자 사유', detail.decisionReason ?? '-'], ['PG 취소 상태', pgCancellation.label],
     ];
     for (const [term, value] of values) { const dt = document.createElement('dt'); dt.className = 'col-4'; dt.textContent = term; const dd = document.createElement('dd'); dd.className = 'col-8 text-break'; dd.textContent = String(value ?? '-'); description.append(dt, dd); }

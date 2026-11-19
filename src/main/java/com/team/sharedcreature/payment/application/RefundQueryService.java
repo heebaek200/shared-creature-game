@@ -7,10 +7,10 @@ import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
 import com.team.sharedcreature.payment.api.AdminRefundResponse;
 import com.team.sharedcreature.payment.api.RefundResponse;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
-import com.team.sharedcreature.payment.domain.PaymentTransactionType;
+import com.team.sharedcreature.payment.domain.PgApiAttempt;
 import com.team.sharedcreature.payment.domain.RefundRequest;
 import com.team.sharedcreature.payment.domain.RefundStatus;
-import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
+import com.team.sharedcreature.payment.infrastructure.PgApiAttemptRepository;
 import com.team.sharedcreature.payment.infrastructure.RefundRequestRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -29,7 +29,7 @@ public class RefundQueryService {
 
     private final RefundRequestRepository refundRequestRepository;
     private final OwnedItemRepository ownedItemRepository;
-    private final PaymentTransactionRepository transactionRepository;
+    private final PgApiAttemptRepository pgApiAttemptRepository;
 
     /**
      * 인증된 사용자가 신청한 환불 목록을 조회합니다.
@@ -75,7 +75,7 @@ public class RefundQueryService {
     }
 
     /**
-     * 관리자 환불 상세에 구매·보유 아이템·최근 취소 거래를 포함합니다.
+     * 관리자 환불 상세에 구매·보유 아이템·해당 요청의 최근 취소 거래를 포함합니다.
      *
      * @param requestId 환불 요청 ID
      * @return 관리자 환불 상세 응답
@@ -99,12 +99,12 @@ public class RefundQueryService {
         OwnedItem item = ownedItemRepository.findByPurchaseId(purchaseId)
                 .orElse(null);
 
-        // 승인 거래가 아닌 취소 거래만 선택합니다.
-        PaymentTransaction cancellation = transactionRepository
-                .findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
-                        purchaseId,
-                        PaymentTransactionType.CANCELLATION
+        // PG 시도 이력의 환불 요청 연결을 사용해 다른 환불의 취소 거래를 제외합니다.
+        PaymentTransaction cancellation = pgApiAttemptRepository
+                .findFirstByRefundRequest_IdAndPaymentTransactionIsNotNullOrderByCreatedAtDescIdDesc(
+                        requestId
                 )
+                .map(PgApiAttempt::getPaymentTransaction)
                 .orElse(null);
 
         return AdminRefundResponse.from(refund, item, cancellation);

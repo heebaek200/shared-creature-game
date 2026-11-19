@@ -32,6 +32,11 @@ export function canRequestRefund(purchase) {
       && !REFUND_IN_PROGRESS.has(purchase?.latestRefundStatus);
 }
 
+/** 사용자 환불 목록에서 철회 동작을 제공할 상태인지 판정합니다. */
+export function canWithdrawRefund(refund) {
+  return refund?.status === 'REQUESTED';
+}
+
 /** 관리자 환불 상태에 맞는 동작 목록을 반환합니다. */
 export function adminRefundActions(status) {
   if (status === 'REQUESTED') return ['approve', 'reject'];
@@ -49,6 +54,7 @@ export function adminRefundFeedback(status) {
     case 'CANCEL_UNKNOWN': return { message: 'PG 취소 결과를 확인해야 합니다.', type: 'warning' };
     case 'FAILED': return { message: '환불 처리에 실패했습니다.', type: 'danger' };
     case 'REJECTED': return { message: '환불 거절 처리가 완료되었습니다.', type: 'success' };
+    case 'WITHDRAWN': return { message: '사용자가 환불 요청을 철회했습니다.', type: 'info' };
     default: return { message: '최신 환불 상태를 확인했습니다.', type: 'warning' };
   }
 }
@@ -66,7 +72,8 @@ export function pgCancellationPresentation(refund) {
   const unresolved = refund?.status === 'CANCEL_PENDING' || refund?.status === 'CANCEL_UNKNOWN';
   let label;
 
-  if (cancellationStatus) label = PG_CANCELLATION_LABELS[cancellationStatus] ?? cancellationStatus;
+  if (refund?.status === 'WITHDRAWN') label = '미실행 (사용자 철회)';
+  else if (cancellationStatus) label = PG_CANCELLATION_LABELS[cancellationStatus] ?? cancellationStatus;
   else if (refund?.status === 'REQUESTED') label = '승인 전';
   else if (refund?.status === 'REJECTED') label = '미실행 (환불 거절)';
   else if (unresolved) label = '처리 준비 중';

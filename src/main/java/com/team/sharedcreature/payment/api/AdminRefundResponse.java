@@ -25,6 +25,7 @@ public record AdminRefundResponse(
         String decisionReason,
         RefundStatus status,
         Instant requestedAt,
+        Instant withdrawnAt,
         Instant reviewedAt,
         Instant completedAt,
         Long reviewedByUserId,
@@ -34,7 +35,7 @@ public record AdminRefundResponse(
 ) {
 
     /**
-     * 환불 요청과 연결된 구매·아이템·최근 취소 거래를 응답으로 변환합니다.
+     * 환불 요청과 연결된 구매·아이템·해당 요청의 최근 취소 거래를 응답으로 변환합니다.
      *
      * @param refund 환불 요청
      * @param item 보유 아이템, 미지급이면 null
@@ -57,6 +58,7 @@ public record AdminRefundResponse(
                 // 환불 상태 enum은 JSON에 이름으로 전달합니다.
                 refund.getStatus(),
                 refund.getRequestedAt(),
+                refund.getWithdrawnAt(),
                 refund.getReviewedAt(),
                 refund.getCompletedAt(),
                 refund.getReviewedByUser() == null
@@ -106,7 +108,7 @@ public record AdminRefundResponse(
     }
 
     /**
-     * 가장 최근 PG 취소 거래의 상태입니다.
+     * 해당 환불 요청에 연결된 가장 최근 PG 취소 거래의 상태입니다.
      */
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record CancellationInfo(
