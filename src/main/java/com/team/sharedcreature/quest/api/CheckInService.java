@@ -1,5 +1,8 @@
 package com.team.sharedcreature.quest.api;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
+import com.team.sharedcreature.season.domain.GroupSeasonStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
@@ -9,6 +12,8 @@ import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.quest.domain.QuestAssignment;
 import com.team.sharedcreature.quest.domain.ServiceCheckIn;
 import com.team.sharedcreature.quest.domain.UserActivityEvent;
+import com.team.sharedcreature.quest.domain.UserActivityEventType;
+import com.team.sharedcreature.quest.domain.UserActivitySourceType;
 import com.team.sharedcreature.quest.infrastructure.QuestAssignmentRepository;
 import com.team.sharedcreature.quest.infrastructure.QuestPeriodRepository;
 import com.team.sharedcreature.quest.infrastructure.ServiceCheckInRepository;
@@ -89,7 +94,7 @@ public class CheckInService {
         Long seasonId = seasonQueryService.findCurrentSeason().getId();
         var currentPeriod = periodRepository.findCurrentBySeasonAndType(
                 seasonId,
-                "DAILY",
+                QuestPeriodType.DAILY,
                 now
         );
 
@@ -124,7 +129,7 @@ public class CheckInService {
         Long seasonId = seasonQueryService.findCurrentSeason().getId();
         var currentPeriod = periodRepository.findCurrentBySeasonAndType(
                 seasonId,
-                "WEEKLY",
+                QuestPeriodType.WEEKLY,
                 now
         );
 
@@ -226,7 +231,7 @@ public class CheckInService {
                         "현재 그룹 시즌이 활성 상태가 아닙니다."
                 ));
 
-        if (!"ACTIVE".equals(groupSeason.getStatus())) {
+        if (groupSeason.getStatus() != GroupSeasonStatus.ACTIVE) {
             throw new BusinessException(
                     ErrorCode.QUEST_PERIOD_ENDED,
                     "현재 그룹 시즌이 활성 상태가 아닙니다."
@@ -260,8 +265,8 @@ public class CheckInService {
 
         // 퀘스트 완료 상태 저장
         ArrayList<QuestAssignment> currentAssignments = new ArrayList<>();
-        currentAssignments.addAll(questCompletionService.findCurrentAssignments("DAILY"));
-        currentAssignments.addAll(questCompletionService.findCurrentAssignments("WEEKLY"));
+        currentAssignments.addAll(questCompletionService.findCurrentAssignments(QuestPeriodType.DAILY));
+        currentAssignments.addAll(questCompletionService.findCurrentAssignments(QuestPeriodType.WEEKLY));
 
         var completionsBefore =
                 questCompletionService.findCompletionsByAssignmentId(
@@ -272,8 +277,8 @@ public class CheckInService {
         // 사용자 활동 저장
         UserActivityEvent activityEvent = UserActivityEvent.create(
                 user,
-                "check_in",
-                "service_check_in",
+                UserActivityEventType.CHECK_IN,
+                UserActivitySourceType.SERVICE_CHECK_IN,
                 userId,
                 membership,
                 groupSeason,

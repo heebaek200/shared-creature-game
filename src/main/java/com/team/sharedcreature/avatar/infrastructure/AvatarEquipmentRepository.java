@@ -1,6 +1,7 @@
 package com.team.sharedcreature.avatar.infrastructure;
 
 import com.team.sharedcreature.avatar.domain.AvatarEquipment;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -58,6 +59,6 @@ public interface AvatarEquipmentRepository
         """)
     Optional<AvatarEquipment> findByUserIdAndSlotCodeForUpdate(
             @Param("userId") Long userId,
-            @Param("slotCode") String slotCode
+            @Param("slotCode") AvatarSlot slotCode
     );
 }

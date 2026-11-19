@@ -7,6 +7,7 @@ import com.team.sharedcreature._core.realtime.PresenceMemberPayloadProvider;
 import com.team.sharedcreature.auth.domain.UserProfile;
 import com.team.sharedcreature.auth.infrastructure.UserProfileRepository;
 import com.team.sharedcreature.avatar.domain.AvatarEquipment;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
 import com.team.sharedcreature.avatar.domain.ShopItem;
 import com.team.sharedcreature.avatar.infrastructure.AvatarEquipmentRepository;
@@ -186,21 +187,28 @@ public class RealtimeCreatureHomeSupplementProvider
         if (userIds.isEmpty()) {
             return Map.of();
         }
-        Map<Long, Map<Slot, CreatureHomeResponse.EquippedItemResponse>> grouped = new HashMap<>();
+        Map<Long, Map<AvatarSlot, CreatureHomeResponse.EquippedItemResponse>> grouped =
+                new HashMap<>();
         for (AvatarEquipment equipment : equipmentRepository.findAllByUserIdIn(userIds)) {
             if (equipment.getOwnedItem() == null) {
                 continue;
             }
-            grouped.computeIfAbsent(equipment.getUser().getId(), ignored -> new EnumMap<>(Slot.class))
-                    .put(Slot.valueOf(equipment.getSlotCode()), equippedItem(equipment.getOwnedItem()));
+            // 아바타 도메인의 슬롯 타입을 그대로 사용합니다.
+            grouped.computeIfAbsent(
+                    equipment.getUser().getId(),
+                    ignored -> new EnumMap<>(AvatarSlot.class)
+            ).put(
+                    equipment.getSlotCode(),
+                    equippedItem(equipment.getOwnedItem())
+            );
         }
         return grouped.entrySet().stream().collect(Collectors.toMap(
                 Map.Entry::getKey,
                 entry -> new CreatureHomeResponse.EquipmentSlotsResponse(
-                        entry.getValue().get(Slot.HEAD),
-                        entry.getValue().get(Slot.FACE),
-                        entry.getValue().get(Slot.BODY),
-                        entry.getValue().get(Slot.ACCESSORY)
+                        entry.getValue().get(AvatarSlot.HEAD),
+                        entry.getValue().get(AvatarSlot.FACE),
+                        entry.getValue().get(AvatarSlot.BODY),
+                        entry.getValue().get(AvatarSlot.ACCESSORY)
                 )
         ));
     }
@@ -217,13 +225,6 @@ public class RealtimeCreatureHomeSupplementProvider
 
     private CreatureHomeResponse.EquipmentSlotsResponse emptyEquipments() {
         return new CreatureHomeResponse.EquipmentSlotsResponse(null, null, null, null);
-    }
-
-    private enum Slot {
-        HEAD,
-        FACE,
-        BODY,
-        ACCESSORY
     }
 
     private record SnapshotData(

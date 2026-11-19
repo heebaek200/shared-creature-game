@@ -1,5 +1,6 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
 import com.team.sharedcreature.season.domain.GroupCreature;
 
 import java.time.Instant;
@@ -9,7 +10,7 @@ public record CreatureUpdatedEvent(
         Long groupId,
         Long seasonId,
         Long groupCreatureId,
-        String stage,
+        CreatureGrowthStage stage,
         long experience,
         Long creatureSpeciesId,
         Instant occurredAt

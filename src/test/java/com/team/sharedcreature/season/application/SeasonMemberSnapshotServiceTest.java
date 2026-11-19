@@ -1,5 +1,11 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.UserProfile;
 import com.team.sharedcreature.auth.infrastructure.UserProfileRepository;
@@ -111,7 +117,7 @@ class SeasonMemberSnapshotServiceTest {
         assertThat(snapshots).extracting(s -> s.getUser().getId())
                 .containsExactly(1L, 2L, 1L);
         assertThat(snapshots).extracting(SeasonMemberRankSnapshot::getParticipantStatus)
-                .containsExactly("LEFT", "ACTIVE", "ACTIVE");
+                .containsExactly(GroupMembershipStatus.LEFT, GroupMembershipStatus.ACTIVE, GroupMembershipStatus.ACTIVE);
         assertThat(snapshots).extracting(SeasonMemberRankSnapshot::getNicknameSnapshot)
                 .containsExactly("이동회원", "기여회원", "이동회원");
         assertThat(snapshots).extracting(SeasonMemberRankSnapshot::getCreatedAt)
@@ -136,7 +142,7 @@ class SeasonMemberSnapshotServiceTest {
         );
 
         // 기존 Snapshot만 완료된 상태에서 원본 참가 상태를 변경합니다.
-        ReflectionTestUtils.setField(source, "participantStatus", "LEFT");
+        ReflectionTestUtils.setField(source, "participantStatus", GroupMembershipStatus.LEFT);
         arrange(season, List.of(source));
         when(snapshotRepository.findAllBySeasonId(SEASON_ID)).thenReturn(List.of(existing));
 
@@ -145,7 +151,7 @@ class SeasonMemberSnapshotServiceTest {
         assertThat(progress.total()).isEqualTo(1);
         assertThat(progress.inserted()).isZero();
         assertThat(progress.remaining()).isZero();
-        assertThat(existing.getParticipantStatus()).isEqualTo("ACTIVE");
+        assertThat(existing.getParticipantStatus()).isEqualTo(GroupMembershipStatus.ACTIVE);
         assertThat(existing.getNicknameSnapshot()).isEqualTo("기존닉네임");
         assertThat(existing.getCreatedAt()).isEqualTo(CREATED);
         verifyNoInteractions(profileRepository);
@@ -311,8 +317,8 @@ class SeasonMemberSnapshotServiceTest {
     private Season closingSeason(String originalStatus) {
         Season season = BeanUtils.instantiateClass(Season.class);
         ReflectionTestUtils.setField(season, "id", SEASON_ID);
-        ReflectionTestUtils.setField(season, "status", "CLOSING");
-        ReflectionTestUtils.setField(season, "closingFromStatus", originalStatus);
+        ReflectionTestUtils.setField(season, "status", SeasonStatus.CLOSING);
+        ReflectionTestUtils.setField(season, "closingFromStatus", originalStatus == null ? null : SeasonStatus.valueOf(originalStatus));
         return season;
     }
 
@@ -335,7 +341,7 @@ class SeasonMemberSnapshotServiceTest {
      * 다른 스레드나 DB의 AUTO_INCREMENT에 의존하지 않습니다.
      */
     private User user(long userId) {
-        User user = User.register("USER", CREATED);
+        User user = User.register(GlobalRole.USER, CREATED);
         ReflectionTestUtils.setField(user, "id", userId);
         return user;
     }
@@ -353,7 +359,7 @@ class SeasonMemberSnapshotServiceTest {
         ReflectionTestUtils.setField(contribution, "user", user);
         ReflectionTestUtils.setField(contribution, "contributionScore", score);
         ReflectionTestUtils.setField(contribution, "scoreReachedAt", reachedAt);
-        ReflectionTestUtils.setField(contribution, "participantStatus", status);
+        ReflectionTestUtils.setField(contribution, "participantStatus", status == null ? null : GroupMembershipStatus.valueOf(status));
         return contribution;
     }
 

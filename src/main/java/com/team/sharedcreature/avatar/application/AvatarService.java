@@ -4,6 +4,8 @@ import com.team.sharedcreature.avatar.api.AvatarResponse;
 import com.team.sharedcreature.avatar.api.OwnedItemResponse;
 import com.team.sharedcreature.avatar.domain.AvatarEquipment;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.avatar.infrastructure.AvatarEquipmentRepository;
 import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
 import com.team.sharedcreature._core.exception.BusinessException;
@@ -11,7 +13,9 @@ import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.payment.domain.Purchase;
+import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import com.team.sharedcreature.payment.domain.RefundRequest;
+import com.team.sharedcreature.payment.domain.RefundStatus;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
 import com.team.sharedcreature.payment.infrastructure.RefundRequestRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
@@ -22,7 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -49,13 +53,13 @@ public class AvatarService {
     /**
      * 아바타 조회·변경과 변경 이벤트 예약에 필요한 의존성을 주입받습니다.
      *
-     * @param ownedItemRepository 보유 아이템 Repository
-     * @param avatarEquipmentRepository 아바타 장착 정보 Repository
-     * @param userRepository 사용자 Repository
-     * @param purchaseRepository 구매 Repository
-     * @param refundRequestRepository 환불 요청 Repository
-     * @param clock 서버 현재 시각의 기준
-     * @param groupMembershipRepository 현재 소속 그룹 조회 Repository
+     * @param ownedItemRepository           보유 아이템 Repository
+     * @param avatarEquipmentRepository     아바타 장착 정보 Repository
+     * @param userRepository                사용자 Repository
+     * @param purchaseRepository            구매 Repository
+     * @param refundRequestRepository       환불 요청 Repository
+     * @param clock                         서버 현재 시각의 기준
+     * @param groupMembershipRepository     현재 소속 그룹 조회 Repository
      * @param avatarEquipmentEventPublisher Commit 이후 이벤트 발행기
      */
     public AvatarService(
@@ -82,9 +86,9 @@ public class AvatarService {
      * 로그인한 사용자의 보유 아이템 목록을 조회합니다.
      *
      * @param userId 로그인한 사용자 ID
-     * @param page 검증된 페이지 번호, 0 이상
-     * @param size 검증된 페이지 크기, 1~50
-     * @param slot 검증된 슬롯 코드, null이면 전체
+     * @param page   검증된 페이지 번호, 0 이상
+     * @param size   검증된 페이지 크기, 1~50
+     * @param slot   검증된 슬롯 코드, null이면 전체
      * @param status 검증된 보유 상태, null이면 전체
      * @return 현재 장착 여부를 포함한 보유 아이템 페이지
      */
@@ -92,8 +96,8 @@ public class AvatarService {
             Long userId,
             int page,
             int size,
-            String slot,
-            String status
+            AvatarSlot slot,
+            OwnedItemStatus status
     ) {
         PageRequest pageable = PageRequest.of(
                 page,
@@ -138,7 +142,9 @@ public class AvatarService {
         List<AvatarEquipment> equipments =
                 avatarEquipmentRepository.findAllByUserId(userId);
 
-        Map<String, AvatarResponse.Equipment> slots = new HashMap<>();
+        // 고정된 슬롯 Enum을 키로 사용해 문자열 오타를 방지합니다.
+        Map<AvatarSlot, AvatarResponse.Equipment> slots =
+                new EnumMap<>(AvatarSlot.class);
 
         for (AvatarEquipment equipment : equipments) {
             OwnedItem ownedItem = equipment.getOwnedItem();
@@ -158,35 +164,35 @@ public class AvatarService {
         return new AvatarResponse(
                 userId,
                 new AvatarResponse.Equipments(
-                        slots.get("HEAD"),
-                        slots.get("FACE"),
-                        slots.get("BODY"),
-                        slots.get("ACCESSORY")
+                        slots.get(AvatarSlot.HEAD),
+                        slots.get(AvatarSlot.FACE),
+                        slots.get(AvatarSlot.BODY),
+                        slots.get(AvatarSlot.ACCESSORY)
                 )
         );
     }
 
     /**
      * 본인의 보유 아이템을 지정한 아바타 슬롯에 장착합니다.
-     *
+     * <p>
      * 사용 확정과 슬롯 변경은 하나의 트랜잭션으로 처리합니다.
      *
-     * @param userId 로그인한 사용자 ID
-     * @param slot 장착할 슬롯
-     * @param ownedItemId 장착할 보유 아이템 ID
+     * @param userId          로그인한 사용자 ID
+     * @param avatarSlot            장착할 슬롯
+     * @param ownedItemId     장착할 보유 아이템 ID
      * @param confirmFirstUse 최초 사용 동의 여부
      * @return 변경된 아바타의 전체 슬롯 정보
      * @throws BusinessException 잘못된 슬롯, 소유권·상태 위반,
-     *                          환불 진행 또는 최초 사용 동의 누락인 경우
+     *                           환불 진행 또는 최초 사용 동의 누락인 경우
      */
     @Transactional
     public AvatarResponse equipAvatarItem(
             Long userId,
-            String slot,
+            AvatarSlot avatarSlot,
             Long ownedItemId,
             boolean confirmFirstUse
     ) {
-        validateSlot(slot);
+        validateRequiredSlot(avatarSlot);
 
         // 같은 사용자의 장착·해제를 직렬화하고 최초 슬롯 생성 경합을 막습니다.
         User user = userRepository.findByIdForUpdate(userId)
@@ -224,24 +230,29 @@ public class AvatarService {
         List<RefundRequest> refunds =
                 refundRequestRepository.findAllByPurchaseIdForUpdate(purchaseId);
 
-        if (item.getRevokedAt() != null || "REVOKED".equals(item.getStatus())) {
+        if (item.getRevokedAt() != null
+                || item.getStatus() == OwnedItemStatus.REVOKED) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
-        if (!"PAID".equals(purchase.getStatus())) {
+        if (purchase.getStatus() != PurchaseStatus.PAID) {
             throw new BusinessException(
                     ErrorCode.CONCURRENT_MODIFICATION,
                     "결제 완료 상태의 아이템만 장착할 수 있습니다."
             );
         }
 
-        if (!slot.equals(item.getShopItem().getSlotCode())) {
+        if (avatarSlot != item.getShopItem().getSlotCode()) {
             throw new BusinessException(ErrorCode.SLOT_MISMATCH); // 아이템 슬롯과 장착 대상 슬롯이 다름
         }
 
         boolean refundInProgress = refunds.stream()
                 .anyMatch(refund ->
-                        Set.of("REQUESTED", "CANCEL_PENDING", "CANCEL_UNKNOWN")
+                        Set.of(
+                                        RefundStatus.REQUESTED,
+                                        RefundStatus.CANCEL_PENDING,
+                                        RefundStatus.CANCEL_UNKNOWN
+                                )
                                 .contains(refund.getStatus())
                 );
 
@@ -253,7 +264,7 @@ public class AvatarService {
         }
 
         AvatarEquipment equipment = avatarEquipmentRepository
-                .findByUserIdAndSlotCodeForUpdate(userId, slot)
+                .findByUserIdAndSlotCodeForUpdate(userId, avatarSlot)
                 .orElse(null);
 
         // 같은 아이템을 다시 지정한 요청은 장착 변경 이벤트를 만들지 않습니다.
@@ -265,7 +276,7 @@ public class AvatarService {
         Instant now = clock.instant();
 
         if (equipment == null) {
-            equipment = AvatarEquipment.createEmpty(user, slot, now);
+            equipment = AvatarEquipment.createEmpty(user, avatarSlot, now);
         }
 
         item.confirmUse(confirmFirstUse, now);
@@ -280,7 +291,7 @@ public class AvatarService {
         if (equipmentChanged) {
             scheduleEquipmentChangedEvent(
                     userId,
-                    slot,
+                    avatarSlot,
                     AvatarResponse.Equipment.from(item),
                     now
             );
@@ -289,17 +300,12 @@ public class AvatarService {
         return getAvatar(userId);
     }
 
-    /**
-     * 아바타 슬롯이 허용된 값인지 검증합니다.
-     *
-     * @param slot 검사할 슬롯 코드
-     * @throws BusinessException 허용되지 않은 슬롯인 경우
-     */
-    private void validateSlot(String slot) {
-        if (slot == null
-                || !Set.of("HEAD", "FACE", "BODY", "ACCESSORY").contains(slot)) {
+    /** 장착·해제에 필수인 슬롯의 누락을 확인합니다. */
+    private void validateRequiredSlot(AvatarSlot slot) {
+        // 목록 필터와 달리 장착·해제에서는 슬롯 생략을 허용하지 않습니다.
+        if (slot == null) {
             throw new BusinessException(
-                    ErrorCode.INVALID_FIELD_VALUE, // 허용하지 않는 슬롯
+                    ErrorCode.INVALID_FIELD_VALUE,
                     "슬롯은 HEAD, FACE, BODY, ACCESSORY 중 하나여야 합니다."
             );
         }
@@ -307,17 +313,17 @@ public class AvatarService {
 
     /**
      * 지정한 아바타 슬롯의 아이템을 해제합니다.
-     *
+     * <p>
      * 보유 아이템의 사용 상태와 최초 사용 시각은 변경하지 않습니다.
      *
      * @param userId 로그인한 사용자 ID
-     * @param slot 해제할 슬롯
+     * @param avatarSlot   해제할 슬롯
      * @return 변경된 아바타의 전체 슬롯 정보
      * @throws BusinessException 허용되지 않은 슬롯이거나 사용자가 없는 경우
      */
     @Transactional
-    public AvatarResponse unequipAvatarItem(Long userId, String slot) {
-        validateSlot(slot);
+    public AvatarResponse unequipAvatarItem(Long userId, AvatarSlot avatarSlot) {
+        validateRequiredSlot(avatarSlot);
 
         // 장착과 같은 사용자 잠금을 먼저 획득해 동시 변경을 순서대로 처리합니다.
         userRepository.findByIdForUpdate(userId)
@@ -326,7 +332,7 @@ public class AvatarService {
                 );
 
         AvatarEquipment equipment = avatarEquipmentRepository
-                .findByUserIdAndSlotCodeForUpdate(userId, slot)
+                .findByUserIdAndSlotCodeForUpdate(userId, avatarSlot)
                 .orElse(null);
 
         // 슬롯 행이 없거나 이미 비어 있다면 현재 아바타를 그대로 반환합니다.
@@ -343,24 +349,24 @@ public class AvatarService {
         avatarEquipmentRepository.flush();
 
         // 해제 이벤트에는 변경 후 장착 아이템을 null로 전달합니다.
-        scheduleEquipmentChangedEvent(userId, slot, null, now);
+        scheduleEquipmentChangedEvent(userId, avatarSlot, null, now);
 
         return getAvatar(userId);
     }
 
     /**
      * 현재 소속 그룹에 전달할 아바타 변경 이벤트를 예약합니다.
-     *
+     * <p>
      * 호출자는 사용자 잠금을 확보한 쓰기 트랜잭션 안에서 호출해야 합니다.
      *
-     * @param userId 아바타를 변경한 사용자 ID
-     * @param slot 변경한 슬롯
+     * @param userId       아바타를 변경한 사용자 ID
+     * @param slot         변경한 슬롯
      * @param equippedItem 변경 후 장착 아이템, 해제하면 null
-     * @param occurredAt 변경 시각
+     * @param occurredAt   변경 시각
      */
     private void scheduleEquipmentChangedEvent(
             Long userId,
-            String slot,
+            AvatarSlot slot,
             AvatarResponse.Equipment equippedItem,
             Instant occurredAt
     ) {

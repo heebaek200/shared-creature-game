@@ -1,6 +1,8 @@
 
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature.season.api.SeasonResponse;
 import com.team.sharedcreature.season.domain.Season;
@@ -55,17 +57,17 @@ class SeasonQueryServiceTest {
         Season expiredActive = mock(Season.class);
         Season ended = mock(Season.class);
 
-        when(active.getStatus()).thenReturn("ACTIVE");
+        when(active.getStatus()).thenReturn(SeasonStatus.ACTIVE);
         when(active.isActiveAt(NOW)).thenReturn(true);
         when(active.getId()).thenReturn(3L);
         when(active.getSeasonNumber()).thenReturn(3);
         when(active.getStartAt()).thenReturn(NOW.minusSeconds(60));
         when(active.getEndAt()).thenReturn(NOW.plusSeconds(60));
 
-        when(expiredActive.getStatus()).thenReturn("ACTIVE");
+        when(expiredActive.getStatus()).thenReturn(SeasonStatus.ACTIVE);
         when(expiredActive.isActiveAt(NOW)).thenReturn(false);
 
-        when(ended.getStatus()).thenReturn("ENDED");
+        when(ended.getStatus()).thenReturn(SeasonStatus.ENDED);
         when(ended.getId()).thenReturn(1L);
         when(ended.getSeasonNumber()).thenReturn(1);
         when(ended.getStartAt()).thenReturn(NOW.minusSeconds(180));
@@ -90,7 +92,7 @@ class SeasonQueryServiceTest {
     void currentSeasonReturnsWhenValid() {
         Season season = mock(Season.class);
 
-        when(repository.findFirstByStatusOrderByStartAtDesc("ACTIVE"))
+        when(repository.findFirstByStatusOrderByStartAtDesc(SeasonStatus.ACTIVE))
                 .thenReturn(Optional.of(season));
         when(season.isActiveAt(NOW)).thenReturn(true);
 
@@ -105,7 +107,7 @@ class SeasonQueryServiceTest {
      */
     @Test
     void missingCurrentSeasonReturnsConflict() {
-        when(repository.findFirstByStatusOrderByStartAtDesc("ACTIVE"))
+        when(repository.findFirstByStatusOrderByStartAtDesc(SeasonStatus.ACTIVE))
                 .thenReturn(Optional.empty());
 
         BusinessException error = assertThrows(
@@ -125,7 +127,7 @@ class SeasonQueryServiceTest {
     void invalidCurrentWindowReturnsConflict() {
         Season season = mock(Season.class);
 
-        when(repository.findFirstByStatusOrderByStartAtDesc("ACTIVE"))
+        when(repository.findFirstByStatusOrderByStartAtDesc(SeasonStatus.ACTIVE))
                 .thenReturn(Optional.of(season));
         when(season.isActiveAt(NOW)).thenReturn(false);
 
@@ -147,7 +149,7 @@ class SeasonQueryServiceTest {
         Season season = mock(Season.class);
 
         when(repository.findForShareByStatus(
-                eq("ACTIVE"), any(Pageable.class)
+                eq(SeasonStatus.ACTIVE), any(Pageable.class)
         )).thenReturn(List.of(season));
         when(season.isActiveAt(NOW)).thenReturn(false);
 
@@ -167,7 +169,7 @@ class SeasonQueryServiceTest {
         Season season = mock(Season.class);
 
         when(repository.findForShareByStatus(
-                eq("ACTIVE"), any(Pageable.class)
+                eq(SeasonStatus.ACTIVE), any(Pageable.class)
         )).thenReturn(List.of(season));
         when(season.isActiveAt(NOW)).thenReturn(true);
 

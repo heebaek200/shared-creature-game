@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.integration;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.domain.Group;
@@ -210,7 +212,7 @@ class SeasonCloseFinalizationIntegrationTest {
      */
     private void createGroupAndScore() {
         Instant now = Instant.parse("2026-11-01T00:00:00Z");
-        User user = userRepository.save(User.register("USER", now));
+        User user = userRepository.save(User.register(GlobalRole.USER, now));
         userId = user.getId();
 
         // 실서비스 그룹명 유니크 제약과 충돌하지 않도록 고유 이름을 사용합니다.

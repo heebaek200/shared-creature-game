@@ -5,6 +5,7 @@ import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.payment.application.PaymentReconciliationService;
 import com.team.sharedcreature.payment.application.PurchaseQueryService;
 import com.team.sharedcreature.payment.application.PurchaseService;
+import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -80,7 +81,8 @@ public class PaymentController {
             @RequestParam(required = false)
             @Pattern(regexp = "READY|PAID|FAILED|CANCELLED") String status
     ) {
-        Page<PurchaseSummaryResponse> result = queryService.list(loginUser.id(), page, size, status);
+        PurchaseStatus filter = status == null ? null : PurchaseStatus.valueOf(status);
+        Page<PurchaseSummaryResponse> result = queryService.list(loginUser.id(), page, size, filter);
         return ApiResponse.page(result);
     }
 

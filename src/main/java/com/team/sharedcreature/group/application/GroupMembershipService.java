@@ -117,7 +117,7 @@ public class GroupMembershipService {
         if (groupRepository.existsByNormalizedName(name)) {
             throw conflict(ErrorCode.GROUP_NAME_ALREADY_USED, "이미 사용 중인 그룹 이름입니다.");
         }
-        if (membershipRepository.existsByUserIdAndStatus(creator.getId(), "ACTIVE")) {
+        if (membershipRepository.existsByUserIdAndStatus(creator.getId(), GroupMembershipStatus.ACTIVE)) {
             throw conflict(ErrorCode.ALREADY_IN_GROUP, "이미 활성 그룹에 소속되어 있습니다.");
         }
         if (restrictionRepository.existsByUserIdAndRestrictedUntilAfter(creator.getId(), now)) {
@@ -138,7 +138,7 @@ public class GroupMembershipService {
         var primary = new CreateGroupResponse.GroupMemberResponse(
                 creator.getId(), loginUser.nickname(), "PRIMARY", membership.getJoinedAt());
         var myMembership = new CreateGroupResponse.MembershipResponse(
-                membership.getId(), group.getId(), "PRIMARY", membership.getJoinedAt(), "ACTIVE");
+                membership.getId(), group.getId(), membership.getRole(), membership.getJoinedAt(), membership.getStatus());
         return new CreateGroupResponse(
                 new CreateGroupResponse.GroupDetailResponse(summary, primary, myMembership),
                 appBaseUrl + "/invite/" + invitationToken
@@ -149,7 +149,7 @@ public class GroupMembershipService {
     @Transactional(readOnly = true)
     public Page<GroupSummaryResponse> listPublicGroups(LoginUser loginUser, String query, int page, int size) {
         Instant now = Instant.now(clock);
-        boolean alreadyInGroup = membershipRepository.existsByUserIdAndStatus(loginUser.id(), "ACTIVE");
+        boolean alreadyInGroup = membershipRepository.existsByUserIdAndStatus(loginUser.id(), GroupMembershipStatus.ACTIVE);
         boolean restricted = restrictionRepository.existsByUserIdAndRestrictedUntilAfter(loginUser.id(), now);
         String normalizedQuery = query == null ? "" : escapeLike(normalize(query));
         PageRequest pageable = PageRequest.of(
@@ -199,10 +199,10 @@ public class GroupMembershipService {
     /** 가입 대기 화면에 표시할 활성 초대 정보를 조회합니다. */
     @Transactional(readOnly = true)
     public java.util.Optional<com.team.sharedcreature.group.api.PublicInvitationResponse> findInvitation(Long invitationId) {
-        return inviteLinkRepository.findByIdAndStatus(invitationId, "ACTIVE")
+        return inviteLinkRepository.findByIdAndStatus(invitationId, GroupInviteLinkStatus.ACTIVE)
                 .map(invitation -> {
                     Group group = invitation.getGroup();
-                    boolean active = "ACTIVE".equals(group.getStatus());
+                    boolean active = group.getStatus() == GroupStatus.ACTIVE;
                     return new com.team.sharedcreature.group.api.PublicInvitationResponse(
                             group.getId(),
                             group.getName(),
@@ -210,8 +210,9 @@ public class GroupMembershipService {
                             group.getCurrentMemberCount(),
                             group.getCapacity(),
                             active && group.getCurrentMemberCount() < group.getCapacity(),
-                            !active ? "INVITE_INVALID"
-                                    : group.getCurrentMemberCount() >= group.getCapacity() ? "GROUP_FULL" : null
+                            !active ? GroupJoinBlockedReason.INVITE_INVALID
+                                    : group.getCurrentMemberCount() >= group.getCapacity()
+                                            ? GroupJoinBlockedReason.GROUP_FULL : null
                     );
                 });
     }
@@ -223,9 +224,9 @@ public class GroupMembershipService {
     }
 
     private GroupInviteLink activeInvitation(Long invitationId) {
-        GroupInviteLink invitation = inviteLinkRepository.findByIdAndStatus(invitationId, "ACTIVE")
+        GroupInviteLink invitation = inviteLinkRepository.findByIdAndStatus(invitationId, GroupInviteLinkStatus.ACTIVE)
                 .orElseThrow(() -> conflict(ErrorCode.INVITE_INVALID, "현재 사용할 수 없는 초대입니다."));
-        if (!"ACTIVE".equals(invitation.getGroup().getStatus())) {
+        if (invitation.getGroup().getStatus() != GroupStatus.ACTIVE) {
             throw conflict(ErrorCode.INVITE_INVALID, "현재 사용할 수 없는 초대입니다.");
         }
         return invitation;
@@ -239,14 +240,14 @@ public class GroupMembershipService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REQUIRED));
         Group group = groupRepository.findByIdForUpdate(groupId)
                 .orElseThrow(() -> notFound("가입할 그룹을 찾을 수 없습니다."));
-        if (!"ACTIVE".equals(group.getStatus()) || !"PUBLIC".equals(group.getVisibility())) {
+        if (group.getStatus() != GroupStatus.ACTIVE || group.getVisibility() != GroupVisibility.PUBLIC) {
             throw notFound("가입할 그룹을 찾을 수 없습니다.");
         }
         if (invitationId != null
                 && inviteLinkRepository.findActiveForUpdate(invitationId, groupId).isEmpty()) {
             throw conflict(ErrorCode.INVITE_INVALID, "현재 사용할 수 없는 초대입니다.");
         }
-        if (membershipRepository.existsByUserIdAndStatus(userId, "ACTIVE")) {
+        if (membershipRepository.existsByUserIdAndStatus(userId, GroupMembershipStatus.ACTIVE)) {
             throw conflict(ErrorCode.ALREADY_IN_GROUP, "이미 활성 그룹에 소속되어 있습니다.");
         }
         Instant now = Instant.now(clock);
@@ -273,9 +274,10 @@ public class GroupMembershipService {
 
     private GroupSummaryResponse summary(Group group, boolean alreadyInGroup, boolean restricted) {
         int remaining = Math.max(0, group.getCapacity() - group.getCurrentMemberCount());
-        String reason = alreadyInGroup
-                ? "ALREADY_IN_GROUP"
-                : restricted ? "JOIN_COOLDOWN_ACTIVE" : remaining == 0 ? "GROUP_FULL" : null;
+        GroupJoinBlockedReason reason = alreadyInGroup
+                ? GroupJoinBlockedReason.ALREADY_IN_GROUP
+                : restricted ? GroupJoinBlockedReason.JOIN_COOLDOWN_ACTIVE
+                : remaining == 0 ? GroupJoinBlockedReason.GROUP_FULL : null;
         return new GroupSummaryResponse(
                 group.getId(),
                 group.getName(),
@@ -350,7 +352,7 @@ public class GroupMembershipService {
         Group group = groupRepository.findByIdForUpdate(groupId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 
-        if (!"ACTIVE".equals(group.getStatus())) {
+        if (group.getStatus() != GroupStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
         }
 
@@ -374,14 +376,14 @@ public class GroupMembershipService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.CONCURRENT_MODIFICATION));
 
         // 6. 잠금 이후 현재 사용자, 그룹, 멤버십의 일치 여부 다시 검사
-        if (!"ACTIVE".equals(membership.getStatus()) ||
+        if (membership.getStatus() != GroupMembershipStatus.ACTIVE ||
             !userId.equals(membership.getUser().getId()) ||
             !groupId.equals(membership.getGroup().getId())
         ) {
             throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
         }
 
-        boolean isPrimary = "PRIMARY".equals(membership.getRole());
+        boolean isPrimary = membership.getRole() == GroupRole.PRIMARY;
         int memberCount = group.getCurrentMemberCount();
 
         // 7. 다른 활성 구성원이 있다면 주 관리자(PRIMARY)는 이전 후에 탈퇴 가능
@@ -437,7 +439,7 @@ public class GroupMembershipService {
 
         // Commit
         return new LeaveMyGroupResponse(
-                groupId, userId, now, "SELF", now.plusSeconds(24L * 60 * 60), isPrimary
+                groupId, userId, now, membership.getExitReason(), now.plusSeconds(24L * 60 * 60), isPrimary
         );
     }
 

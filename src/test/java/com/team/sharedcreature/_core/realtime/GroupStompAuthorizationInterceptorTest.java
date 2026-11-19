@@ -1,5 +1,7 @@
 package com.team.sharedcreature._core.realtime;
 
+import com.team.sharedcreature.group.domain.GroupStatus;
+
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.domain.GroupMembership;
@@ -83,7 +85,7 @@ class GroupStompAuthorizationInterceptorTest {
         assertThat(interceptor.preSend(subscribe, channel)).isSameAs(subscribe);
 
         assertThat(presenceService.activeUserIds(20L)).containsExactly(10L);
-        verify(eventPublisher).publish(eq(20L), eq("PRESENCE_JOINED"), any(), eq(payload));
+        verify(eventPublisher).publish(eq(20L), eq(GroupLiveEventType.PRESENCE_JOINED), any(), eq(payload));
     }
 
     @Test
@@ -112,7 +114,7 @@ class GroupStompAuthorizationInterceptorTest {
         assertThat(presenceService.activeUserIds(20L)).isEmpty();
         verify(eventPublisher).publish(
                 eq(20L),
-                eq("PRESENCE_LEFT"),
+                eq(GroupLiveEventType.PRESENCE_LEFT),
                 any(),
                 eq(new GroupLivePayloads.PresenceLeft(10L))
         );
@@ -179,7 +181,7 @@ class GroupStompAuthorizationInterceptorTest {
     private GroupMembership activeMembership(Long groupId) {
         Group group = mock(Group.class);
         when(group.getId()).thenReturn(groupId);
-        when(group.getStatus()).thenReturn("ACTIVE");
+        when(group.getStatus()).thenReturn(GroupStatus.ACTIVE);
         GroupMembership membership = mock(GroupMembership.class);
         when(membership.getGroup()).thenReturn(group);
         return membership;

@@ -10,6 +10,10 @@ import com.team.sharedcreature.auth.application.PendingSignup;
 import com.team.sharedcreature.group.api.NavigationResponse;
 import com.team.sharedcreature.group.api.PublicInvitationResponse;
 import com.team.sharedcreature.group.domain.GroupInviteLink;
+import com.team.sharedcreature.group.domain.GroupInviteLinkStatus;
+import com.team.sharedcreature.group.domain.GroupJoinBlockedReason;
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+import com.team.sharedcreature.group.domain.GroupStatus;
 import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import jakarta.servlet.http.HttpSession;
@@ -56,7 +60,7 @@ public class GroupInvitationService {
     @Transactional
     public NavigationResponse acceptInvitation(String token, HttpSession session) {
         GroupInviteLink invitation = activeInvitation(token);
-        if (!"ACTIVE".equals(invitation.getGroup().getStatus())) {
+        if (invitation.getGroup().getStatus() != GroupStatus.ACTIVE) {
             throw conflict(ErrorCode.INVITE_INVALID, "현재 사용할 수 없는 초대입니다.");
         }
         Object login = session.getAttribute(SessionAuthenticationFilter.LOGIN_USER);
@@ -73,7 +77,7 @@ public class GroupInvitationService {
             }
             var membership = membershipService.joinInvitation(loginUser, invitation.getId());
             var roles = new HashSet<>(loginUser.roles());
-            roles.add(membership.role());
+            roles.add(membership.role().name());
             session.setAttribute(
                     SessionAuthenticationFilter.LOGIN_USER,
                     new LoginUser(loginUser.id(), loginUser.nickname(), Set.copyOf(roles))
@@ -110,7 +114,7 @@ public class GroupInvitationService {
 
         Object login = session.getAttribute(SessionAuthenticationFilter.LOGIN_USER);
         if (login instanceof LoginUser loginUser) {
-            String route = membershipRepository.existsByUserIdAndStatus(loginUser.id(), "ACTIVE")
+            String route = membershipRepository.existsByUserIdAndStatus(loginUser.id(), GroupMembershipStatus.ACTIVE)
                     ? "/creature"
                     : "/groups/select";
             return new NavigationResponse(route, "INVITATION_REJECTED");
@@ -127,7 +131,7 @@ public class GroupInvitationService {
                         ErrorCode.RESOURCE_NOT_FOUND,
                         "초대 정보를 찾을 수 없습니다."
                 ));
-        if (!"ACTIVE".equals(invitation.getStatus())) {
+        if (invitation.getStatus() != GroupInviteLinkStatus.ACTIVE) {
             throw conflict(ErrorCode.INVITE_INVALID, "현재 사용할 수 없는 초대입니다.");
         }
         return invitation;
@@ -135,7 +139,7 @@ public class GroupInvitationService {
 
     private PublicInvitationResponse response(GroupInviteLink invitation, HttpSession session) {
         var group = invitation.getGroup();
-        String blockedReason = blockedReason(group, session);
+        GroupJoinBlockedReason blockedReason = blockedReason(group, session);
         return new PublicInvitationResponse(
                 group.getId(),
                 group.getName(),
@@ -147,22 +151,22 @@ public class GroupInvitationService {
         );
     }
 
-    private String blockedReason(com.team.sharedcreature.group.domain.Group group, HttpSession session) {
-        if (!"ACTIVE".equals(group.getStatus())) {
-            return "INVITE_INVALID";
+    private GroupJoinBlockedReason blockedReason(com.team.sharedcreature.group.domain.Group group, HttpSession session) {
+        if (group.getStatus() != GroupStatus.ACTIVE) {
+            return GroupJoinBlockedReason.INVITE_INVALID;
         }
         Object login = session.getAttribute(SessionAuthenticationFilter.LOGIN_USER);
         if (login instanceof LoginUser loginUser) {
             var membership = membershipRepository.findActiveWithGroupByUserId(loginUser.id());
             if (membership.isPresent()) {
-                return "ALREADY_IN_GROUP";
+                return GroupJoinBlockedReason.ALREADY_IN_GROUP;
             }
             if (membershipService.isJoinRestricted(loginUser.id())) {
-                return "JOIN_COOLDOWN_ACTIVE";
+                return GroupJoinBlockedReason.JOIN_COOLDOWN_ACTIVE;
             }
         }
         if (group.getCurrentMemberCount() >= group.getCapacity()) {
-            return "GROUP_FULL";
+            return GroupJoinBlockedReason.GROUP_FULL;
         }
         return null;
     }

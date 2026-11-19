@@ -3,7 +3,10 @@ package com.team.sharedcreature.quest.domain;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.season.domain.GroupSeason;
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -49,8 +52,11 @@ public class QuestCompletion {
     @Column(name = "creature_total_experience_after")
     private Long creatureTotalExperienceAfter;
 
+    /** 완료 당시의 단계를 기존 코드로 보존하며 과거 미기록 값 null도 허용합니다. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "creature_growth_stage_after", length = 30)
-    private String creatureGrowthStageAfter;
+    private CreatureGrowthStage creatureGrowthStageAfter;
 
     @Column(name = "group_season_score_after")
     private Long groupSeasonScoreAfter;
@@ -90,7 +96,7 @@ public class QuestCompletion {
     /** 중복 완료 응답을 재현할 수 있도록 최초 보상 확정 결과를 저장합니다. */
     public void recordResultSnapshot(
             long creatureTotalExperienceAfter,
-            String creatureGrowthStageAfter,
+            CreatureGrowthStage creatureGrowthStageAfter,
             long groupSeasonScoreAfter
     ) {
         this.creatureTotalExperienceAfter = creatureTotalExperienceAfter;

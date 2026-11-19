@@ -3,13 +3,12 @@ package com.team.sharedcreature.group.application;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
+import com.team.sharedcreature.auth.domain.UserStatus;
 import com.team.sharedcreature.auth.infrastructure.UserProfileRepository;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.api.GroupMemberResponse;
 import com.team.sharedcreature.group.api.MyGroupResponse;
-import com.team.sharedcreature.group.domain.Group;
-import com.team.sharedcreature.group.domain.GroupAdminChange;
-import com.team.sharedcreature.group.domain.GroupMembership;
+import com.team.sharedcreature.group.domain.*;
 import com.team.sharedcreature.group.infrastructure.GroupAdminChangeRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
@@ -103,7 +102,7 @@ public class GroupAdminService {
         Group group = groupRepository.findByIdForUpdate(groupId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 
-        if (!"ACTIVE".equals(group.getStatus())) {
+        if (group.getStatus() != GroupStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
@@ -136,15 +135,15 @@ public class GroupAdminService {
         validateMembership(targetMembership, targetId, groupId, ErrorCode.RESOURCE_NOT_FOUND);
         // 현재 DB(세션이 아닌)의 주 관리자 기준으로 검사함
         if (
-                !"ACTIVE".equals(actor.getStatus()) ||
-                !"PRIMARY".equals(actorMembership.getRole()) ||
+                actor.getStatus() != UserStatus.ACTIVE ||
+                actorMembership.getRole() != GroupRole.PRIMARY ||
                 group.getPrimaryAdminUser() == null ||
                 !actorId.equals(group.getPrimaryAdminUser().getId()))
         {
             throw new BusinessException(ErrorCode.ROLE_FORBIDDEN);
         }
 
-        if (!"ACTIVE".equals(target.getStatus())) {
+        if (target.getStatus() != UserStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
@@ -161,7 +160,7 @@ public class GroupAdminService {
             Long groupId,
             ErrorCode errorCode
     ) {
-        if (!"ACTIVE".equals(membership.getStatus()) ||
+        if (membership.getStatus() != GroupMembershipStatus.ACTIVE ||
         !userId.equals(membership.getUser().getId()) ||
         !groupId.equals(membership.getGroup().getId())) {
             throw new BusinessException(errorCode);
@@ -196,26 +195,26 @@ public class GroupAdminService {
     public GroupMemberResponse changeMemberRole(
             Long actorId,
             Long targetId,
-            String nextRole
+            GroupRole requestedRole
     ) {
         // 변경 허용된 값
-        if (!"MEMBER".equals(nextRole) && !"DEPUTY".equals(nextRole)) {
+        if (requestedRole != GroupRole.MEMBER && requestedRole != GroupRole.DEPUTY) {
             throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE);
         }
 
         LockedRoles locked = lockRoles(actorId, targetId);
         GroupMembership targetMembership = locked.targetMembership();
-        String previousRole = targetMembership.getRole();
+        GroupRole previousRole = targetMembership.getRole();
 
         // 주 관리자(PRIMARY) 역할 변경은 해당 로직에서 처리하지 않음
-        if (!"MEMBER".equals(previousRole) && !"DEPUTY".equals(previousRole)) {
+        if (previousRole != GroupRole.MEMBER && previousRole != GroupRole.DEPUTY) {
             throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
         }
 
         // 이미 해당 역할이면 변경하지 않음
-        if (!previousRole.equals(nextRole)) {
+        if (previousRole != requestedRole) {
             Instant now = Instant.now(clock);
-            targetMembership.changeDeputyRole(nextRole, now);
+            targetMembership.changeDeputyRole(requestedRole, now);
 
             // 역할 변경 이력 기록
             adminChangeRepository.save(GroupAdminChange.deputyChanged(
@@ -223,7 +222,7 @@ public class GroupAdminService {
                     locked.actor(),
                     locked.target(),
                     previousRole,
-                    nextRole,
+                    requestedRole,
                     now
             ));
         }
@@ -240,11 +239,11 @@ public class GroupAdminService {
     public MyGroupResponse transferPrimaryAdmin(Long actorId, Long targetId) {
         LockedRoles locked = lockRoles(actorId, targetId);
         GroupMembership targetMembership = locked.targetMembership();
-        String previousRole = targetMembership.getRole();
+        GroupRole previousRole = targetMembership.getRole();
         Instant now = Instant.now(clock);
 
         // 새 관리자는 기존 활성 회원 또는 부 관리자이어야 함
-        if (!"MEMBER".equals(previousRole) && !"DEPUTY".equals(previousRole)) {
+        if (previousRole != GroupRole.MEMBER && previousRole != GroupRole.DEPUTY) {
             throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
         }
 

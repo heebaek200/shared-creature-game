@@ -1,6 +1,8 @@
 package com.team.sharedcreature.season.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -33,14 +35,19 @@ public class GroupCreature {
     @JoinColumn(name = "species_id", nullable = true)
     private CreatureSpecies species;
 
+    /** 부화 전에는 null이며 부화 시 그룹 시즌의 선택 경로를 복사합니다. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "selection_source", length = 30)
-    private String selectionSource;
+    private CreatureSelectionSource selectionSource;
 
     @Column(name = "total_experience", nullable = false)
     private Long totalExperience;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "growth_stage", length = 30, nullable = false)
-    private String growthStage;
+    private CreatureGrowthStage growthStage;
 
     @Column(name = "growth_stage_reached_at")
     private Instant growthStageReachedAt;
@@ -48,8 +55,11 @@ public class GroupCreature {
     @Column(name = "hatched_at")
     private Instant hatchedAt;
 
+    /** 그룹 종료 후에도 성장·경험치 이력은 보관 상태로 유지합니다. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    private GroupCreatureStatus status;
 
     @Version
     @Column(name = "version", nullable = false)
@@ -64,8 +74,8 @@ public class GroupCreature {
     private GroupCreature(GroupSeason groupSeason, Instant now) {
         this.groupSeason = groupSeason;
         this.totalExperience = 0L;
-        this.growthStage = "EGG";
-        this.status = "ACTIVE";
+        this.growthStage = CreatureGrowthStage.EGG;
+        this.status = GroupCreatureStatus.ACTIVE;
         this.createdAt = now;
         this.updatedAt = now;
     }
@@ -86,15 +96,15 @@ public class GroupCreature {
             throw new IllegalArgumentException("Experience amount must be positive.");
         }
         this.totalExperience = Math.addExact(totalExperience, amount);
-        if (!"EGG".equals(growthStage)) {
+        if (growthStage != CreatureGrowthStage.EGG) {
             advanceTo(stageFor(totalExperience), now);
         }
         this.updatedAt = now;
     }
 
     /** 선택이 확정된 알을 누적 경험치에 맞는 최고 단계로 부화시킵니다. */
-    public void hatch(CreatureSpecies species, String source, Instant now) {
-        if (!"EGG".equals(growthStage)) {
+    public void hatch(CreatureSpecies species, CreatureSelectionSource source, Instant now) {
+        if (growthStage != CreatureGrowthStage.EGG) {
             return;
         }
         this.species = species;
@@ -106,25 +116,25 @@ public class GroupCreature {
     }
 
     /** 현재 경험치에 대응하는 부화 이후 성장 단계를 계산합니다. */
-    public static String stageFor(long experience) {
+    public static CreatureGrowthStage stageFor(long experience) {
         if (experience >= COMPLETE_THRESHOLD) {
-            return "COMPLETE";
+            return CreatureGrowthStage.COMPLETE;
         }
         if (experience >= MATURE_THRESHOLD) {
-            return "MATURE";
+            return CreatureGrowthStage.MATURE;
         }
         if (experience >= GROWING_THRESHOLD) {
-            return "GROWING";
+            return CreatureGrowthStage.GROWING;
         }
-        return "HATCHLING";
+        return CreatureGrowthStage.HATCHLING;
     }
 
     /** 응답 진행률에 사용하는 현재 단계 시작 경험치를 반환합니다. */
     public long currentStageThreshold() {
         return switch (growthStage) {
-            case "GROWING" -> GROWING_THRESHOLD;
-            case "MATURE" -> MATURE_THRESHOLD;
-            case "COMPLETE" -> COMPLETE_THRESHOLD;
+            case GROWING -> GROWING_THRESHOLD;
+            case MATURE -> MATURE_THRESHOLD;
+            case COMPLETE -> COMPLETE_THRESHOLD;
             default -> 0L;
         };
     }
@@ -132,15 +142,15 @@ public class GroupCreature {
     /** 응답 진행률에 사용하는 다음 단계 경험치를 반환합니다. */
     public Long nextStageThreshold() {
         return switch (growthStage) {
-            case "EGG", "HATCHLING" -> GROWING_THRESHOLD;
-            case "GROWING" -> MATURE_THRESHOLD;
-            case "MATURE" -> COMPLETE_THRESHOLD;
-            case "COMPLETE" -> null;
+            case EGG, HATCHLING -> GROWING_THRESHOLD;
+            case GROWING -> MATURE_THRESHOLD;
+            case MATURE -> COMPLETE_THRESHOLD;
+            case COMPLETE -> null;
             default -> throw new IllegalStateException("Unknown growth stage: " + growthStage);
         };
     }
 
-    private void advanceTo(String targetStage, Instant now) {
+    private void advanceTo(CreatureGrowthStage targetStage, Instant now) {
         if (stageOrder(targetStage) <= stageOrder(growthStage)) {
             return;
         }
@@ -148,13 +158,13 @@ public class GroupCreature {
         this.growthStageReachedAt = now;
     }
 
-    private int stageOrder(String stage) {
+    private int stageOrder(CreatureGrowthStage stage) {
         return switch (stage) {
-            case "EGG" -> 0;
-            case "HATCHLING" -> 1;
-            case "GROWING" -> 2;
-            case "MATURE" -> 3;
-            case "COMPLETE" -> 4;
+            case EGG -> 0;
+            case HATCHLING -> 1;
+            case GROWING -> 2;
+            case MATURE -> 3;
+            case COMPLETE -> 4;
             default -> throw new IllegalStateException("Unknown growth stage: " + stage);
         };
     }
@@ -165,11 +175,11 @@ public class GroupCreature {
      *  - 상태만 변경(비활성)
      */
     public void archiveForGroupClosure(Instant now) {
-        if ("ARCHIVED".equals(this.status)) {
+        if (this.status == GroupCreatureStatus.ARCHIVED) {
             return;
         }
 
-        this.status = "ARCHIVED";
+        this.status = GroupCreatureStatus.ARCHIVED;
         this.updatedAt = now;
     }
 }

@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -29,20 +31,28 @@ public class PaymentTransaction {
     @JoinColumn(name = "purchase_id", nullable = false)
     private Purchase purchase;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "provider", length = 30, nullable = false)
-    private String provider;
+    private PaymentProvider provider;
 
     @Column(name = "provider_transaction_id", length = 255)
     private String providerTransactionId;
 
+    /** 결제 승인 거래와 환불 취소 거래를 구분합니다. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "transaction_type", length = 30, nullable = false)
-    private String transactionType;
+    private PaymentTransactionType transactionType;
 
     @Column(name = "amount_krw", nullable = false)
     private Long amountKrw;
 
+    /** 승인·취소 거래의 처리 결과입니다. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    private PaymentTransactionStatus status;
 
     @Column(name = "provider_result_code", length = 100)
     private String providerResultCode;
@@ -60,14 +70,14 @@ public class PaymentTransaction {
             Purchase purchase,
             String providerTransactionId,
             Long amountKrw,
-            String status,
+            PaymentTransactionStatus status,
             Instant processedAt,
             Instant now
     ) {
         this.purchase = purchase;
-        this.provider = "PORTONE";
+        this.provider = PaymentProvider.PORTONE;
         this.providerTransactionId = providerTransactionId;
-        this.transactionType = PaymentTransactionType.APPROVAL.name();
+        this.transactionType = PaymentTransactionType.APPROVAL;
         this.amountKrw = amountKrw;
         this.status = status;
         this.processedAt = processedAt;
@@ -87,7 +97,7 @@ public class PaymentTransaction {
                 purchase,
                 providerTransactionId,
                 amountKrw,
-                PaymentTransactionStatus.SUCCESS.name(),
+                PaymentTransactionStatus.SUCCESS,
                 processedAt,
                 now
         );
@@ -99,7 +109,7 @@ public class PaymentTransaction {
                 purchase,
                 null,
                 amountKrw,
-                PaymentTransactionStatus.DEFINITIVE_FAILURE.name(),
+                PaymentTransactionStatus.DEFINITIVE_FAILURE,
                 now,
                 now
         );
@@ -111,7 +121,7 @@ public class PaymentTransaction {
                 purchase,
                 null,
                 amountKrw,
-                PaymentTransactionStatus.UNKNOWN.name(),
+                PaymentTransactionStatus.UNKNOWN,
                 null,
                 now
         );
@@ -142,10 +152,10 @@ public class PaymentTransaction {
 
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.purchase = purchase;
-        transaction.provider = "PORTONE";
-        transaction.transactionType = PaymentTransactionType.CANCELLATION.name();
+        transaction.provider = PaymentProvider.PORTONE;
+        transaction.transactionType = PaymentTransactionType.CANCELLATION;
         transaction.amountKrw = amount;
-        transaction.status = PaymentTransactionStatus.REQUESTED.name();
+        transaction.status = PaymentTransactionStatus.REQUESTED;
         transaction.createdAt = now;
         transaction.updatedAt = now;
 
@@ -175,20 +185,20 @@ public class PaymentTransaction {
         Objects.requireNonNull(now, "now");
 
         // 기존 승인 거래를 취소 결과로 변경하지 않습니다.
-        if (!PaymentTransactionType.CANCELLATION.name().equals(transactionType)) {
+        if (transactionType != PaymentTransactionType.CANCELLATION) {
             throw new IllegalStateException(
                     "취소 거래에만 취소 결과를 반영할 수 있습니다."
             );
         }
 
         // 늦게 도착한 응답으로 확정 결과를 변경하지 않습니다.
-        if (PaymentTransactionStatus.SUCCESS.name().equals(status)
-                || PaymentTransactionStatus.DEFINITIVE_FAILURE.name().equals(status)) {
+        if (status == PaymentTransactionStatus.SUCCESS
+                || status == PaymentTransactionStatus.DEFINITIVE_FAILURE) {
             return false;
         }
 
-        if (!PaymentTransactionStatus.REQUESTED.name().equals(status)
-                && !PaymentTransactionStatus.UNKNOWN.name().equals(status)) {
+        if (status != PaymentTransactionStatus.REQUESTED
+                && status != PaymentTransactionStatus.UNKNOWN) {
             throw new IllegalStateException("유효하지 않은 취소 거래 상태입니다.");
         }
 
@@ -230,14 +240,14 @@ public class PaymentTransaction {
         }
 
         // 동일한 결과를 반복 반영해도 변경 시각을 유지합니다.
-        if (nextStatus.name().equals(this.status)
+        if (nextStatus == this.status
                 && Objects.equals(this.providerTransactionId, resolvedTransactionId)
                 && Objects.equals(this.processedAt, processedAt)
                 && Objects.equals(this.providerResultCode, providerResultCode)) {
             return false;
         }
 
-        this.status = nextStatus.name();
+        this.status = nextStatus;
         this.providerTransactionId = resolvedTransactionId;
         this.processedAt = processedAt;
         this.providerResultCode = providerResultCode;

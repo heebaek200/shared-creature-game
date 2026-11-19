@@ -5,6 +5,7 @@ import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
+import com.team.sharedcreature.group.domain.GroupStatus;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
@@ -78,7 +79,7 @@ public class GroupStompAuthorizationInterceptor implements ChannelInterceptor {
                 .filter(GroupPresenceService.Removal::lastSession)
                 .ifPresent(removal -> eventPublisher.publish(
                         removal.groupId(),
-                        "PRESENCE_LEFT",
+                        GroupLiveEventType.PRESENCE_LEFT,
                         Instant.now(),
                         new GroupLivePayloads.PresenceLeft(removal.userId())
                 ));
@@ -106,7 +107,7 @@ public class GroupStompAuthorizationInterceptor implements ChannelInterceptor {
         GroupMembership membership = membershipRepository.findActiveWithGroupByUserId(loginUser.id())
                 .orElseThrow(() -> new StompAccessException("ROLE_FORBIDDEN"));
         if (!groupId.equals(membership.getGroup().getId())
-                || !"ACTIVE".equals(membership.getGroup().getStatus())) {
+                || membership.getGroup().getStatus() != GroupStatus.ACTIVE) {
             throw new StompAccessException("ROLE_FORBIDDEN");
         }
 
@@ -131,7 +132,7 @@ public class GroupStompAuthorizationInterceptor implements ChannelInterceptor {
             try {
                 GroupLivePayloads.PresenceJoined payload =
                         payloadProvider.getPresenceJoined(groupId, loginUser.id());
-                eventPublisher.publish(groupId, "PRESENCE_JOINED", Instant.now(), payload);
+                eventPublisher.publish(groupId, GroupLiveEventType.PRESENCE_JOINED, Instant.now(), payload);
             } catch (RuntimeException exception) {
                 presenceService.removeSession(webSocketSessionId);
                 throw exception;
@@ -155,7 +156,7 @@ public class GroupStompAuthorizationInterceptor implements ChannelInterceptor {
                     .filter(GroupPresenceService.Removal::lastSession)
                     .ifPresent(removal -> eventPublisher.publish(
                             removal.groupId(),
-                            "PRESENCE_LEFT",
+                            GroupLiveEventType.PRESENCE_LEFT,
                             Instant.now(),
                             new GroupLivePayloads.PresenceLeft(removal.userId())
                     ));

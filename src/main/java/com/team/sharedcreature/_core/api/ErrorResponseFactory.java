@@ -1,6 +1,8 @@
 package com.team.sharedcreature._core.api;
 
 import com.team.sharedcreature._core.exception.ErrorCode;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -34,5 +36,21 @@ public class ErrorResponseFactory {
                 traceId,
                 Instant.now(clock)
         );
+    }
+
+    /** 공통 오류 본문과 오류 코드에 해당하는 HTTP 상태로 응답을 생성합니다. */
+    public ResponseEntity<ErrorResponse> createMvcResponse(
+            ErrorCode errorCode,
+            String message,
+            List<FieldErrorResponse> fieldErrors,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(errorCode.status())
+                .body(create(errorCode, message, fieldErrors, requestTraceId(request)));
+    }
+
+    public static String requestTraceId(HttpServletRequest request) {
+        Object requestId = request.getAttribute("requestId");
+        return requestId == null ? "unavailable" : requestId.toString();
     }
 }

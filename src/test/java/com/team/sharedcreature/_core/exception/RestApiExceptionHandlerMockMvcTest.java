@@ -1,6 +1,7 @@
 package com.team.sharedcreature._core.exception;
 
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
+import com.team.sharedcreature._core.web.RequestIdFilter;
 import com.team.sharedcreature._core.web.StrictQueryParameterInterceptor;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -8,25 +9,42 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
+import org.springframework.mock.http.MockHttpInputMessage;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.io.IOException;
 import java.time.Clock;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 
 class RestApiExceptionHandlerMockMvcTest {
 
@@ -41,6 +59,7 @@ class RestApiExceptionHandlerMockMvcTest {
         mockMvc = MockMvcBuilders.standaloneSetup(new TestController())
                 .setControllerAdvice(handler)
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(objectMapper))
+                .addFilters(new RequestIdFilter())
                 .addInterceptors(new StrictQueryParameterInterceptor())
                 .build();
     }
@@ -141,11 +160,73 @@ class RestApiExceptionHandlerMockMvcTest {
                 .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
     }
 
+    @Test
+    void missingRequiredHeaderReturnsInvalidRequest() throws Exception {
+        mockMvc.perform(post("/required-header"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.fieldErrors").isEmpty())
+                .andExpect(result -> assertThat(result.getResolvedException())
+                        .isInstanceOf(MissingRequestHeaderException.class));
+    }
+
+    @Test
+    void missingRequiredMultipartFileReturnsInvalidRequest() throws Exception {
+        mockMvc.perform(multipart("/required-part"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.fieldErrors").isEmpty())
+                .andExpect(result -> assertThat(result.getResolvedException())
+                        .isInstanceOf(MissingServletRequestPartException.class));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "/too-large,413,FILE_TOO_LARGE",
+            "/rate-limited,429,RATE_LIMIT_EXCEEDED"
+    })
+    void uploadAndRateLimitErrorsUseTheCommonEnvelope(String path, int httpStatus, String code) throws Exception {
+        mockMvc.perform(post(path).header("X-Request-Id", "test-limit-error"))
+                .andExpect(status().is(httpStatus))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value(code))
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.fieldErrors").isArray())
+                .andExpect(jsonPath("$.fieldErrors").isEmpty())
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
+                .andExpect(header().string("X-Request-Id", "test-limit-error"))
+                .andExpect(jsonPath("$.traceId").value("test-limit-error"));
+    }
+
+    @Test
+    void internalFailureRetainsClientMessageWithoutExposingItsCause() throws Exception {
+        mockMvc.perform(post("/storage-error").header("X-Request-Id", "test-storage-error"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"))
+                .andExpect(jsonPath("$.message").value("사진 파일을 저장하지 못했습니다."))
+                .andExpect(jsonPath("$.fieldErrors").isEmpty())
+                .andExpect(jsonPath("$.traceId").value("test-storage-error"))
+                .andExpect(content().string(not(containsString("internal storage path"))));
+    }
+
+    @Test
+    void wrappedFieldErrorOutsideAvatarAndRefundKeepsInvalidRequest() throws Exception {
+        mockMvc.perform(post("/unreadable"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
     @RestController
     static class TestController {
 
         @PostMapping("/test")
         void validate(@Valid @RequestBody TestRequest request) {
+        }
+
+        @PostMapping("/unreadable")
+        void unreadable() {
+            throw new HttpMessageNotReadableException("Unreadable body",
+                    new BusinessException(ErrorCode.INVALID_FIELD_VALUE), new MockHttpInputMessage(new byte[0]));
         }
 
         @GetMapping("/test/{id}")
@@ -156,6 +237,14 @@ class RestApiExceptionHandlerMockMvcTest {
         void required(@RequestParam String q) {
         }
 
+        @PostMapping("/required-header")
+        void requiredHeader(@RequestHeader("Idempotency-Key") String idempotencyKey) {
+        }
+
+        @PostMapping(path = "/required-part", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        void requiredPart(@RequestPart("file") MultipartFile file) {
+        }
+
         @GetMapping("/bounded")
         void bounded(@RequestParam @Min(1) int size) {
         }
@@ -163,6 +252,22 @@ class RestApiExceptionHandlerMockMvcTest {
         @GetMapping("/conflict")
         void conflict() {
             throw new BusinessException(ErrorCode.GROUP_FULL);
+        }
+
+        @PostMapping("/too-large")
+        void tooLarge() {
+            throw new MaxUploadSizeExceededException(10L * 1024 * 1024);
+        }
+
+        @PostMapping("/rate-limited")
+        void rateLimited() {
+            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED);
+        }
+
+        @PostMapping("/storage-error")
+        void storageError() {
+            throw new InternalApiException(
+                    "사진 파일을 저장하지 못했습니다.", new IOException("internal storage path"));
         }
 
         @GetMapping("/invalid-return")

@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.SeasonActivationInspectionRepository;
 import com.team.sharedcreature.season.infrastructure.SeasonRepository;
@@ -53,10 +55,10 @@ public class SeasonActivationService {
         // 모든 그룹 초기화 배치와 같은 순서로 시즌 행을 가장 먼저 배타 잠금합니다.
         Season season = seasonRepository.findForUpdateById(seasonId)
                 .orElseThrow(() -> new IllegalStateException("시즌이 없습니다. seasonId=" + seasonId));
-        if ("ACTIVE".equals(season.getStatus())) {
+        if ((season.getStatus() == SeasonStatus.ACTIVE)) {
             return new ActivationResult(Outcome.ALREADY_ACTIVE, null);
         }
-        if (!"SCHEDULED".equals(season.getStatus())) {
+        if ((season.getStatus() != SeasonStatus.SCHEDULED)) {
             return new ActivationResult(Outcome.NOT_SCHEDULED, null);
         }
 

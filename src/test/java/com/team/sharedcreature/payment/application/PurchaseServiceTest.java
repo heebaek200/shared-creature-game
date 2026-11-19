@@ -1,10 +1,14 @@
 package com.team.sharedcreature.payment.application;
 
+import com.team.sharedcreature.group.domain.GroupStatus;
+
 import com.team.sharedcreature.admin.application.ApiIdempotencyService;
 import com.team.sharedcreature.admin.domain.ApiIdempotencyRecord;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.avatar.domain.ShopItem;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
+import com.team.sharedcreature.avatar.domain.ShopItemStatus;
 import com.team.sharedcreature.avatar.infrastructure.ShopItemRepository;
 import com.team.sharedcreature.payment.api.CreatePurchaseResponse;
 import com.team.sharedcreature.payment.domain.Purchase;
@@ -62,11 +66,11 @@ class PurchaseServiceTest {
         when(item.getId()).thenReturn(101L);
         when(item.getCode()).thenReturn("HEAD-01");
         when(item.getName()).thenReturn("새싹 모자");
-        when(item.getSlotCode()).thenReturn("HEAD");
+        when(item.getSlotCode()).thenReturn(AvatarSlot.HEAD);
         when(item.getPriceKrw()).thenReturn(1500L);
-        when(shopItemRepository.findByIdAndStatus(101L, "ACTIVE")).thenReturn(Optional.of(item));
+        when(shopItemRepository.findByIdAndStatus(101L, ShopItemStatus.ACTIVE)).thenReturn(Optional.of(item));
         when(userRepository.getReferenceById(7L)).thenReturn(user);
-        when(group.getStatus()).thenReturn("ACTIVE");
+        when(group.getStatus()).thenReturn(GroupStatus.ACTIVE);
         when(membership.getGroup()).thenReturn(group);
         when(membershipRepository.findActiveWithGroupByUserId(7L)).thenReturn(Optional.of(membership));
         when(idempotencyService.claim(eq(7L), eq("CREATE_PURCHASE"), anyString(), eq("shopItemId=101"),
@@ -85,6 +89,8 @@ class PurchaseServiceTest {
         var purchaseCaptor = org.mockito.ArgumentCaptor.forClass(Purchase.class);
         verify(purchaseRepository).save(purchaseCaptor.capture());
         assertThat(purchaseCaptor.getValue().getGroupSnapshot()).isSameAs(group);
+        // 상품의 Enum 슬롯이 구매 당시 Snapshot에도 동일하게 보존됩니다.
+        assertThat(purchaseCaptor.getValue().getSlotCodeSnapshot()).isEqualTo(AvatarSlot.HEAD);
         verify(idempotencyService).complete(any(), eq(201), eq("PURCHASE"), isNull(), eq(response));
     }
 

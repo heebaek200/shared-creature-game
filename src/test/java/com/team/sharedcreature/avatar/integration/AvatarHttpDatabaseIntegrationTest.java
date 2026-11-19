@@ -150,6 +150,8 @@ class AvatarHttpDatabaseIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.meta.totalElements").value(1))
                 .andExpect(jsonPath("$.data[0].ownedItemId").value(headItem.ownedItemId()))
+                .andExpect(jsonPath("$.data[0].slot").value("HEAD"))
+                .andExpect(jsonPath("$.data[0].status").value("OWNED_UNUSED"))
                 .andExpect(jsonPath("$.data[0].equipped").value(false));
 
         browser.perform(get("/api/v1/owned-items").queryParam("status", "REVOKED"))
@@ -193,6 +195,7 @@ class AvatarHttpDatabaseIntegrationTest {
         assertThat(usedAt(headItem)).isEqualTo(firstUsedAt);
         browser.perform(get("/api/v1/owned-items").queryParam("status", "OWNED_USED"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].status").value("OWNED_USED"))
                 .andExpect(jsonPath("$.data[0].equipped").value(true));
     }
 
@@ -229,7 +232,9 @@ class AvatarHttpDatabaseIntegrationTest {
     void 상점_상세와_목록의_활성_상품_조회가_JPA에서_동작한다() throws Exception {
         browser.perform(get("/api/v1/shop-items/" + headShopId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.shopItemId").value(headShopId));
+                .andExpect(jsonPath("$.data.shopItemId").value(headShopId))
+                .andExpect(jsonPath("$.data.slot").value("HEAD"))
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"));
         browser.perform(get("/api/v1/shop-items/" + inactiveShopId))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));

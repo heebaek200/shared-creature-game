@@ -1,6 +1,11 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.GroupSeasonStatus;
+
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.group.domain.Group;
+import com.team.sharedcreature.group.domain.GroupStatus;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
 import com.team.sharedcreature.season.domain.GroupCreature;
 import com.team.sharedcreature.season.domain.GroupSeason;
@@ -73,7 +78,7 @@ public class SeasonGroupInitializationService {
         // 동일한 시즌에 대한 두 서버의 초기화와 종료 전이를 먼저 직렬화합니다.
         Season season = seasonRepository.findForUpdateById(seasonId)
                 .orElseThrow(() -> new IllegalStateException("시즌이 없습니다. seasonId=" + seasonId));
-        if (!"SCHEDULED".equals(season.getStatus())) {
+        if ((season.getStatus() != SeasonStatus.SCHEDULED)) {
             return new BatchResult(Outcome.NOT_SCHEDULED, 0, 0, 0, 0);
         }
 
@@ -106,7 +111,7 @@ public class SeasonGroupInitializationService {
             if (groupNow.isBefore(season.getStartAt()) || !groupNow.isBefore(season.getEndAt())) {
                 throw new IllegalStateException("그룹 초기화 도중 시즌 유효기간이 종료됐습니다.");
             }
-            if (!"ACTIVE".equals(group.getStatus())) {
+            if (group.getStatus() != GroupStatus.ACTIVE) {
                 throw new IllegalStateException("초기화 대상 그룹 상태가 변경됐습니다. groupId=" + group.getId());
             }
 
@@ -126,7 +131,7 @@ public class SeasonGroupInitializationService {
             }
 
             // SCHEDULED에서 부화나 보상이 반영된 비정상 기록은 조용히 덮어쓰지 않습니다.
-            if (!"PREPARING".equals(groupSeason.getStatus())) {
+            if (groupSeason.getStatus() != GroupSeasonStatus.PREPARING) {
                 throw new IllegalStateException("SCHEDULED 시즌의 그룹 상태가 PREPARING이 아닙니다. groupId=" + group.getId());
             }
 

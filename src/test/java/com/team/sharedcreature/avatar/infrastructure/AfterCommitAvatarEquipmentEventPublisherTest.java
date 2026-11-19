@@ -1,6 +1,7 @@
 package com.team.sharedcreature.avatar.infrastructure;
 
 import com.team.sharedcreature.avatar.application.AvatarEquipmentChangedEvent;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.AbstractPlatformTransactionManager;
@@ -24,7 +25,7 @@ class AfterCommitAvatarEquipmentEventPublisherTest {
             new AfterCommitAvatarEquipmentEventPublisher(event -> receivedEvents.add(event));
     private final TransactionTemplate transaction = new TransactionTemplate(new TestTransactionManager());
     private final AvatarEquipmentChangedEvent event = new AvatarEquipmentChangedEvent(
-            1L, 2L, "HEAD", null, Instant.parse("2026-11-11T00:00:00Z"));
+            1L, 2L, AvatarSlot.HEAD, null, Instant.parse("2026-11-11T00:00:00Z"));
 
     @Test
     void Commit_이후에만_이벤트를_한번_발행한다() {

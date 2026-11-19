@@ -1,6 +1,8 @@
 package com.team.sharedcreature.season.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -31,16 +33,20 @@ public class Season {
     @Column(name = "end_at", nullable = false)
     private Instant endAt;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    private SeasonStatus status;
 
     /**
      * 종료 절차에 진입하기 직전의 시즌 상태.
      * ACTIVE에서 종료되었는지 SCHEDULED에서 만료되었는지 구분함.
      * CLOSING 중 서버가 재시작하더라도 Snapshot 처리 기준을 보존한다.
      */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "closing_from_status", length = 30)
-    private String closingFromStatus;
+    private SeasonStatus closingFromStatus;
 
     @Version
     @Column(name = "version", nullable = false)
@@ -62,7 +68,7 @@ public class Season {
     public boolean isActiveAt(Instant now) {
         Objects.requireNonNull(now, "now");
 
-        return "ACTIVE".equals(status) && ! now.isBefore(startAt) && now.isBefore(endAt);
+        return (status == SeasonStatus.ACTIVE) && ! now.isBefore(startAt) && now.isBefore(endAt);
     }
 
     /**
@@ -74,16 +80,16 @@ public class Season {
         Objects.requireNonNull(now, "now");
 
         // 이미 활성화된 시즌은 다시 갱신하지 않는다
-        if ("ACTIVE".equals(status)) {
+        if ((status == SeasonStatus.ACTIVE)) {
             return false;
         }
 
-        if (! "SCHEDULED".equals(status) || now.isBefore(startAt) || !now.isBefore(endAt)) {
+        if ((status != SeasonStatus.SCHEDULED) || now.isBefore(startAt) || !now.isBefore(endAt)) {
             throw new IllegalStateException("현재 시즌을 활성화할 수 없습니다.");
         }
 
         // 그룹 초기화 완료는 호출자가 검증한 뒤 실행합니다.
-        status = "ACTIVE";
+        status = SeasonStatus.ACTIVE;
         updatedAt = now;
 
         return true;
@@ -98,11 +104,11 @@ public class Season {
         Objects.requireNonNull(now, "now");
 
         // 종료 중이거나 이미 종료됐다면 다시 변경하지 않는다.
-        if ("CLOSING".equals(status) || "ENDED".equals(status)) {
+        if ((status == SeasonStatus.CLOSING) || (status == SeasonStatus.ENDED)) {
             return false;
         }
 
-        if (!"ACTIVE".equals(status) && ! "SCHEDULED".equals(status)) {
+        if ((status != SeasonStatus.ACTIVE) && (status != SeasonStatus.SCHEDULED)) {
             throw new IllegalStateException("현재 시즌에서 종료를 시작할 수 없습니다.");
         }
 
@@ -112,7 +118,7 @@ public class Season {
         }
 
         closingFromStatus = status;
-        status = "CLOSING";
+        status = SeasonStatus.CLOSING;
         updatedAt = now;
 
         return true;
@@ -127,15 +133,15 @@ public class Season {
         Objects.requireNonNull(now, "now");
 
         // 중복 정상화에서는 종료 시각을 다시 기록하지 않습니다.
-        if ("ENDED".equals(status)) {
+        if ((status == SeasonStatus.ENDED)) {
             return false;
         }
 
-        if (! "CLOSING".equals(status)) {
+        if ((status != SeasonStatus.CLOSING)) {
             throw new IllegalStateException("CLOSING 상태의 시즌만 종료할 수 있습니다.");
         }
 
-        status = "ENDED";
+        status = SeasonStatus.ENDED;
         updatedAt = now;
 
         return true;
@@ -147,17 +153,17 @@ public class Season {
      * SCHEDULED에서 만료된 시즌은 Snapshot을 생성하지 않는다.
      */
     public boolean requiresRankingSnapshotOnClosing() {
-        if (! "CLOSING".equals(status)) {
+        if ((status != SeasonStatus.CLOSING)) {
             throw new IllegalStateException("CLOSING 상태에서만 Snapshot 필요 여부를 판정할 수 있습니다.");
         }
 
         // ACTIVE에서 종료된 시즌은 랭킹 확정
-        if ("ACTIVE".equals(closingFromStatus)) {
+        if ((closingFromStatus == SeasonStatus.ACTIVE)) {
             return true;
         }
 
         // 초기화 중 만료된 시즌은 랭킹을 소급 생성하지 않는다.
-        if ("SCHEDULED".equals(closingFromStatus)) {
+        if ((closingFromStatus == SeasonStatus.SCHEDULED)) {
             return false;
         }
 
@@ -197,7 +203,7 @@ public class Season {
         season.seasonNumber = seasonNumber;
         season.startAt = startAt;
         season.endAt = endAt;
-        season.status = "SCHEDULED";
+        season.status = SeasonStatus.SCHEDULED;
         season.closingFromStatus = null;
         season.createdAt = now;
         season.updatedAt = now;

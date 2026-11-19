@@ -5,6 +5,8 @@ import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -41,8 +43,11 @@ public class OwnedItem {
     @JoinColumn(name = "shop_item_id", nullable = false)
     private ShopItem shopItem;
 
+    /** 최초 사용 확정과 환불 회수 여부를 나타내는 보유 상태입니다. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    private OwnedItemStatus status;
 
     @Column(name = "used_at")
     private Instant usedAt;
@@ -64,7 +69,7 @@ public class OwnedItem {
         this.purchase = purchase;
         this.user = user;
         this.shopItem = shopItem;
-        this.status = "OWNED_UNUSED";
+        this.status = OwnedItemStatus.OWNED_UNUSED;
         this.createdAt = now;
         this.updatedAt = now;
     }
@@ -88,12 +93,12 @@ public class OwnedItem {
     public void confirmUse(boolean confirmFirstUse, Instant now) {
         // 회수 시각이 있거나 유효한 보유 상태가 아니면 사용을 거부합니다.
         if (revokedAt != null
-                || (!"OWNED_UNUSED".equals(status)
-                && !"OWNED_USED".equals(status))) {
+                || (status != OwnedItemStatus.OWNED_UNUSED
+                && status != OwnedItemStatus.OWNED_USED)) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
-        if ("OWNED_USED".equals(status)) {
+        if (status == OwnedItemStatus.OWNED_USED) {
             // 사용 상태인데 사용 시각이 없다면 임의로 이력을 복구하지 않습니다.
             if (usedAt == null) {
                 throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
@@ -113,7 +118,7 @@ public class OwnedItem {
             );
         }
 
-        this.status = "OWNED_USED";
+        this.status = OwnedItemStatus.OWNED_USED;
         this.usedAt = now;
         this.updatedAt = now;
     }
@@ -130,14 +135,14 @@ public class OwnedItem {
         Objects.requireNonNull(now, "now");
 
         // 상태뿐 아니라 최초 사용 이력도 검사합니다.
-        if (usedAt != null || "OWNED_USED".equals(status)) {
+        if (usedAt != null || status == OwnedItemStatus.OWNED_USED) {
             throw new BusinessException(
                     ErrorCode.REFUND_NOT_ALLOWED_USED_ITEM,
                     "사용한 아이템은 미사용 환불로 회수할 수 없습니다."
             );
         }
 
-        if ("REVOKED".equals(status)) {
+        if (status == OwnedItemStatus.REVOKED) {
             // 회수 상태인데 시각이 없다면 정상적인 중복 처리로 간주하지 않습니다.
             if (revokedAt == null) {
                 throw new BusinessException(
@@ -150,14 +155,14 @@ public class OwnedItem {
             return false;
         }
 
-        if (!"OWNED_UNUSED".equals(status) || revokedAt != null) {
+        if (status != OwnedItemStatus.OWNED_UNUSED || revokedAt != null) {
             throw new BusinessException(
                     ErrorCode.CONCURRENT_MODIFICATION,
                     "아이템 보유 상태와 회수 이력이 일치하지 않습니다."
             );
         }
 
-        this.status = "REVOKED";
+        this.status = OwnedItemStatus.REVOKED;
         this.revokedAt = now;
         this.updatedAt = now;
 

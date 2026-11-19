@@ -2,6 +2,7 @@ package com.team.sharedcreature.group.infrastructure;
 
 import com.team.sharedcreature.group.api.GroupMemberResponse;
 import com.team.sharedcreature.group.domain.GroupMembership;
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -15,11 +16,11 @@ import java.util.Optional;
  * GroupMembership 엔티티의 기본 영속성 연산을 제공합니다.
  */
 public interface GroupMembershipRepository extends JpaRepository<GroupMembership, Long> {
-    boolean existsByUserIdAndStatus(Long userId, String status);
+    boolean existsByUserIdAndStatus(Long userId, GroupMembershipStatus status);
 
-    Optional<GroupMembership> findByUserIdAndStatus(Long userId, String status);
+    Optional<GroupMembership> findByUserIdAndStatus(Long userId, GroupMembershipStatus status);
 
-    long countByGroupIdAndStatus(Long groupId, String status);
+    long countByGroupIdAndStatus(Long groupId, GroupMembershipStatus status);
 
     @Query("""
             SELECT membership
@@ -27,7 +28,7 @@ public interface GroupMembershipRepository extends JpaRepository<GroupMembership
               JOIN FETCH membership.group
               JOIN FETCH membership.user
              WHERE membership.user.id = :userId
-               AND membership.status = 'ACTIVE'
+               AND membership.status = com.team.sharedcreature.group.domain.GroupMembershipStatus.ACTIVE
             """)
     Optional<GroupMembership> findActiveWithGroupByUserId(@Param("userId") Long userId);
 
@@ -56,14 +57,14 @@ public interface GroupMembershipRepository extends JpaRepository<GroupMembership
                   JOIN membership.user account
                   JOIN UserProfile profile ON profile.user.id = account.id
                  WHERE membership.group.id = :groupId
-                   AND membership.status = 'ACTIVE'
+                   AND membership.status = com.team.sharedcreature.group.domain.GroupMembershipStatus.ACTIVE
                  ORDER BY membership.joinedAt ASC, membership.id ASC
                 """,
             countQuery = """
                 SELECT COUNT(membership.id)
                   FROM GroupMembership membership
                  WHERE membership.group.id = :groupId
-                   AND membership.status = 'ACTIVE'
+                   AND membership.status = com.team.sharedcreature.group.domain.GroupMembershipStatus.ACTIVE
                 """
     )
     Page<GroupMemberResponse> findActiveMemberResponsesByGroupId(
@@ -83,7 +84,7 @@ public interface GroupMembershipRepository extends JpaRepository<GroupMembership
             GroupMembership membership
         WHERE
             membership.user.id = :userId
-        AND membership.status = 'ACTIVE'
+        AND membership.status = com.team.sharedcreature.group.domain.GroupMembershipStatus.ACTIVE
 """)
     Optional<Long> findActiveGroupIdByUserId(@Param("userId") Long userId);
 
@@ -100,7 +101,7 @@ public interface GroupMembershipRepository extends JpaRepository<GroupMembership
             WHERE
                 membership.group.id = :groupId
             AND membership.user.id  = :userId
-            AND membership.status   = 'ACTIVE'
+            AND membership.status = com.team.sharedcreature.group.domain.GroupMembershipStatus.ACTIVE
 """)
     Optional<Long> findActiveMembershipId(
             @Param("groupId") Long groupId,

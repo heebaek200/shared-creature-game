@@ -1,5 +1,16 @@
 package com.team.sharedcreature.quest.api;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
+import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
+
+import com.team.sharedcreature.quest.domain.QuestRewardType;
+import com.team.sharedcreature.quest.domain.QuestDifficulty;
+import com.team.sharedcreature.quest.domain.QuestVerificationType;
+
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
+
+import com.team.sharedcreature.season.domain.GroupSeasonStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
@@ -169,27 +180,21 @@ public class QuestCompletionService {
      * @param periodType 조회할 기간 유형 (일일, 주간)
      * @return 슬롯 순서로 정렬된 현재 퀘스트 배정 목록
      */
-    public List<QuestAssignment> findCurrentAssignments(String periodType) {
-        if (periodType != null
-                && !periodType.equals("DAILY")
-                && !periodType.equals("WEEKLY")) {
-            throw new BusinessException(
-                    ErrorCode.INVALID_FIELD_VALUE,
-                    "기간 유형이 올바르지 않습니다."
-            );
-        }
 
-        // null이 들어오면 DAILY WEEKLY 둘다 조회할 리스트로 생성
+    /**조회 하고자 하는 일일,주간 유형을 받고, 그에 맞는 퀘스트 목록을 리스트로 반환*/
+
+    public List<QuestAssignment> findCurrentAssignments(QuestPeriodType periodType) {
+        /**null이 들어오면 DAILY WEEKLY 둘다 조회할 리스트로 생성*/
         Instant now = Instant.now(clock);
         Long seasonId = seasonQueryService.findCurrentSeason().getId();
-        List<String> periodTypes = periodType == null
-                ? List.of("DAILY", "WEEKLY")
+        List<QuestPeriodType> periodTypes = periodType == null
+                ? List.of(QuestPeriodType.DAILY, QuestPeriodType.WEEKLY)
                 : List.of(periodType);
 
         // 반복문으로 퀘스트 수집
         List<QuestAssignment> assignments = new ArrayList<>();
 
-        for (String type : periodTypes) {
+        for (QuestPeriodType type : periodTypes) {
             periodRepository.findCurrentBySeasonAndType(seasonId, type, now)
                     .ifPresent(period ->
                             assignments.addAll(
@@ -274,8 +279,14 @@ public class QuestCompletionService {
                         "현재 그룹의 시즌 참여 정보를 찾을 수 없습니다."
                 ));
 
-        // 퀘스트 할당과 완료 이력 조회
-        List<QuestAssignment> assignments = findCurrentAssignments(periodType);
+        /**퀘스트 할당과 완료 이력 조회*/
+        QuestPeriodType filter;
+        try {
+            filter = periodType == null ? null : QuestPeriodType.valueOf(periodType);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE, "기간 유형이 올바르지 않습니다.");
+        }
+        List<QuestAssignment> assignments = findCurrentAssignments(filter);
         Map<Long, QuestCompletion> completionsByAssignmentId =
                 findCompletionsByAssignmentId(userId, assignments);
 
@@ -412,7 +423,7 @@ public class QuestCompletionService {
             // 성공·실패·처리 중인 제출 기록 모두 최대 5회 제한에 포함합니다.
             Integer photoAttemptsRemaining = null;
 
-            if ("PHOTO_EXIF".equals(assignment.getVerificationTypeSnapshot())) {
+        if (assignment.getVerificationTypeSnapshot() == QuestVerificationType.PHOTO_EXIF) {
                 long attemptCount = photoSubmissionRepository
                         .countByUser_IdAndQuestAssignment_Id(userId, assignment.getId());
 
@@ -460,7 +471,7 @@ public class QuestCompletionService {
     @Transactional(readOnly = true)
     public QuestAssignment findCompletableAssignment(Long userId,
                                                      Long assignmentId,
-                                                     String verificationType
+                                                     QuestVerificationType verificationType
     ) {
         membershipRepository.findActiveWithGroupByUserId(userId)
                 .orElseThrow(() -> new BusinessException(
@@ -482,8 +493,8 @@ public class QuestCompletionService {
         boolean currentSeason = assignment.getQuestPeriod().getSeason().getId()
                 .equals(currentSeasonId);
 
-        // 활성 기간 확인
-        boolean activePeriod = "ACTIVE".equals(assignment.getQuestPeriod().getStatus())
+        /**활성 기간 확인*/
+        boolean activePeriod = assignment.getQuestPeriod().getStatus() == QuestPeriodStatus.ACTIVE
                 && !now.isBefore(assignment.getQuestPeriod().getStartAt())
                 && now.isBefore(assignment.getQuestPeriod().getEndAt());
 
@@ -495,8 +506,8 @@ public class QuestCompletionService {
             );
         }
 
-        // 409  QUEST_COMPLETION_NOT_ALLOWED  해당 판정 유형 직접 완료 불가
-        if (!verificationType.equals(assignment.getVerificationTypeSnapshot())) {
+        /**409  QUEST_COMPLETION_NOT_ALLOWED  해당 판정 유형 직접 완료 불가*/
+        if (verificationType != assignment.getVerificationTypeSnapshot()) {
             throw new BusinessException(
                     ErrorCode.QUEST_COMPLETION_NOT_ALLOWED,
                     "이 퀘스트는 직접 완료할 수 없습니다."
@@ -578,10 +589,10 @@ public class QuestCompletionService {
         boolean currentSeason = seasonQueryService.findCurrentSeasonForShareIfPresent()
                 .map(season -> season.getId().equals(assignmentSeasonId))
                 .orElse(false);
-        boolean activePeriod = "ACTIVE".equals(assignment.getQuestPeriod().getStatus())
+        boolean activePeriod = assignment.getQuestPeriod().getStatus() == QuestPeriodStatus.ACTIVE
                 && !now.isBefore(assignment.getQuestPeriod().getStartAt())
                 && now.isBefore(assignment.getQuestPeriod().getEndAt());
-        boolean activeGroupSeason = "ACTIVE".equals(groupSeason.getStatus())
+        boolean activeGroupSeason = groupSeason.getStatus() == GroupSeasonStatus.ACTIVE
                 && groupSeason.getSeason().getId().equals(assignmentSeasonId);
 
         // 409  QUEST_PERIOD_ENDED  퀘스트 유효 기간 밖
@@ -655,7 +666,7 @@ public class QuestCompletionService {
                         "퀘스트 배정을 찾을 수 없습니다."
                 ));
 
-        if (!"SELF_CHECK".equals(requestedAssignment.getVerificationTypeSnapshot())) {
+        if (requestedAssignment.getVerificationTypeSnapshot() != QuestVerificationType.SELF_CHECK) {
             throw new BusinessException(
                     ErrorCode.QUEST_COMPLETION_NOT_ALLOWED, //409  QUEST_COMPLETION_NOT_ALLOWED  해당 판정 유형 직접 완료 불가
                     "이 퀘스트는 직접 완료할 수 없습니다."
@@ -675,7 +686,7 @@ public class QuestCompletionService {
             return buildExistingCompletionResponse(existing);
         }
 
-        QuestAssignment assignment = findCompletableAssignment(userId, assignmentId, "SELF_CHECK");
+        QuestAssignment assignment = findCompletableAssignment(userId, assignmentId, QuestVerificationType.SELF_CHECK);
 
         // 404	RESOURCE_NOT_FOUND	없거나 요청자에게 노출하지 않는 리소스
         var groupSeason = groupSeasonRepository.findForUpdateByGroupIdAndSeasonId(
@@ -684,8 +695,8 @@ public class QuestCompletionService {
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.RESOURCE_NOT_FOUND, "그룹 시즌을 찾을 수 없습니다."));
 
-        // 409	QUEST_PERIOD_ENDED	퀘스트 유효 기간 밖
-        if (!"ACTIVE".equals(groupSeason.getStatus())) {
+        /**409	QUEST_PERIOD_ENDED	퀘스트 유효 기간 밖*/
+        if (groupSeason.getStatus() != GroupSeasonStatus.ACTIVE) {
             throw new BusinessException(
                     ErrorCode.QUEST_PERIOD_ENDED, "그룹 시즌이 활성 상태가 아닙니다.");
         }
@@ -728,7 +739,7 @@ public class QuestCompletionService {
                 ));
 
         QuestAssignment assignment =
-                findCompletableAssignment(userId, assignmentId, "SERVER_EVENT");
+                findCompletableAssignment(userId, assignmentId, QuestVerificationType.SERVER_EVENT);
 
         GroupSeason groupSeason = groupSeasonRepository
                 .findForUpdateByGroupIdAndSeasonId(
@@ -740,7 +751,7 @@ public class QuestCompletionService {
                         "그룹 시즌을 찾을 수 없습니다."
                 ));
 
-        if (!"ACTIVE".equals(groupSeason.getStatus())) {
+        if (groupSeason.getStatus() != GroupSeasonStatus.ACTIVE) {
             throw new BusinessException(
                     ErrorCode.QUEST_PERIOD_ENDED, // 409  QUEST_PERIOD_ENDED  퀘스트 유효 기간 밖
                     "그룹 시즌이 활성 상태가 아닙니다."
@@ -748,9 +759,8 @@ public class QuestCompletionService {
         }
 
         // 실제 기상 퀘스트 체크 이력 검증
-        boolean morningQuest = "DAILY".equals(
-                assignment.getQuestPeriod().getPeriodType()
-        ) && "D-M-01".equals(assignment.getQuestTemplate().getCode());
+        boolean morningQuest = assignment.getQuestPeriod().getPeriodType() == QuestPeriodType.DAILY
+                && "D-M-01".equals(assignment.getQuestTemplate().getCode());
 
         boolean morningCheckInExists =
                 serviceCheckInRepository.existsByUserIdAndCheckInDateAndIsMorningTrue(
@@ -822,9 +832,7 @@ public class QuestCompletionService {
                                 "퀘스트 배정을 찾을 수 없습니다."
                         ));
 
-        if (!"PHOTO_EXIF".equals(
-                requestedAssignment.getVerificationTypeSnapshot()
-        )) {
+        if (requestedAssignment.getVerificationTypeSnapshot() != QuestVerificationType.PHOTO_EXIF) {
             throw new BusinessException(
                     ErrorCode.QUEST_COMPLETION_NOT_ALLOWED,
                     "사진 EXIF 인증 퀘스트가 아닙니다."
@@ -874,7 +882,7 @@ public class QuestCompletionService {
 
         // 촬영·접수 이후 판정 확정 시점에도 배정 기간과 현재 시즌을 재검증합니다.
         QuestAssignment assignment =
-                findCompletableAssignment(userId, assignmentId, "PHOTO_EXIF");
+                findCompletableAssignment(userId, assignmentId, QuestVerificationType.PHOTO_EXIF);
 
         // 보상 대상 그룹 시즌을 잠그고 활성 상태를 확인합니다.
         GroupSeason groupSeason = groupSeasonRepository
@@ -887,7 +895,7 @@ public class QuestCompletionService {
                         "그룹 시즌을 찾을 수 없습니다."
                 ));
 
-        if (!"ACTIVE".equals(groupSeason.getStatus())) {
+        if (groupSeason.getStatus() != GroupSeasonStatus.ACTIVE) {
             throw new BusinessException(
                     ErrorCode.QUEST_PERIOD_ENDED,
                     "그룹 시즌이 활성 상태가 아닙니다."
@@ -977,7 +985,7 @@ public class QuestCompletionService {
 
         // 퀘스트 코드별 목표치 및 조건 확인
         QuestAssignment assignment =
-                findCompletableAssignment(userId, assignmentId, "AGGREGATE");
+                findCompletableAssignment(userId, assignmentId, QuestVerificationType.AGGREGATE);
         String templateCode = assignment.getQuestTemplate().getCode();
         int target = readTargetFromSnapshot(assignment);
         boolean morningOnly;
@@ -994,7 +1002,7 @@ public class QuestCompletionService {
         }
 
         // 실제 출석일 검증
-        if (!"WEEKLY".equals(assignment.getQuestPeriod().getPeriodType())) {
+        if (assignment.getQuestPeriod().getPeriodType() != QuestPeriodType.WEEKLY) {
             return Optional.empty();
         }
 
@@ -1007,7 +1015,7 @@ public class QuestCompletionService {
                         ErrorCode.RESOURCE_NOT_FOUND,
                         "그룹 시즌을 찾을 수 없습니다."
                 ));
-        if (!"ACTIVE".equals(groupSeason.getStatus())) {
+        if (groupSeason.getStatus() != GroupSeasonStatus.ACTIVE) {
             throw new BusinessException(
                     ErrorCode.QUEST_PERIOD_ENDED,
                     "그룹 시즌이 활성 상태가 아닙니다."
@@ -1126,7 +1134,7 @@ public class QuestCompletionService {
         rewardLedgerRepository.saveAll(List.of(
                 QuestRewardLedger.create(
                         completion,
-                        "CREATURE_EXPERIENCE",
+                        QuestRewardType.CREATURE_EXPERIENCE,
                         experience,
                         creature,
                         null,
@@ -1135,7 +1143,7 @@ public class QuestCompletionService {
                 ),
                 QuestRewardLedger.create(
                         completion,
-                        "CONTRIBUTION",
+                        QuestRewardType.CONTRIBUTION,
                         contributionAmount,
                         null,
                         contribution,
@@ -1144,7 +1152,7 @@ public class QuestCompletionService {
                 )
         ));
         // 달성 여부를 검사 이후 집계 퀘스트 처리
-        if ("DAILY".equals(assignment.getQuestPeriod().getPeriodType())) {
+        if (assignment.getQuestPeriod().getPeriodType() == QuestPeriodType.DAILY) {
             completeEligibleAggregateQuests(user, membership, groupSeason);
         }
         completion.recordResultSnapshot(
@@ -1188,17 +1196,15 @@ public class QuestCompletionService {
             GroupMembership membership,
             GroupSeason groupSeason
     ) {
-        List<QuestAssignment> weeklyAssignments = findCurrentAssignments("WEEKLY");
-        List<QuestAssignment> dailyAssignments = findCurrentAssignments("DAILY");
+        List<QuestAssignment> weeklyAssignments = findCurrentAssignments(QuestPeriodType.WEEKLY);
+        List<QuestAssignment> dailyAssignments = findCurrentAssignments(QuestPeriodType.DAILY);
 
         // "D-H-03" 퀘스트 보상 처리
         for (QuestAssignment dailyAssignment : dailyAssignments) {
             String templateCode = dailyAssignment.getQuestTemplate().getCode();
 
             if (!"D-H-03".equals(templateCode)
-                    || !"AGGREGATE".equals(
-                    dailyAssignment.getVerificationTypeSnapshot()
-            )) {
+                    || dailyAssignment.getVerificationTypeSnapshot() != QuestVerificationType.AGGREGATE) {
                 continue;
             }
 
@@ -1222,7 +1228,7 @@ public class QuestCompletionService {
 
         // 현재 주간 퀘스트 조회 및 집계형 필터링
         for (QuestAssignment weeklyAssignment : weeklyAssignments) {
-            if (!"AGGREGATE".equals(weeklyAssignment.getVerificationTypeSnapshot())) {
+            if (weeklyAssignment.getVerificationTypeSnapshot() != QuestVerificationType.AGGREGATE) {
                 continue;
             }
 
@@ -1267,7 +1273,7 @@ public class QuestCompletionService {
                         userId,
                         membershipId,
                         groupSeasonId,
-                        "LOW",
+                        QuestDifficulty.LOW,
                         checkInDate,
                         nextDate
                 );
@@ -1276,7 +1282,7 @@ public class QuestCompletionService {
                         userId,
                         membershipId,
                         groupSeasonId,
-                        "MEDIUM",
+                        QuestDifficulty.MEDIUM,
                         checkInDate,
                         nextDate
                 );
@@ -1354,7 +1360,7 @@ public class QuestCompletionService {
                     userId,
                     membershipId,
                     groupSeasonId,
-                    "LOW",
+                    QuestDifficulty.LOW,
                     weekStart,
                     weekEndExclusive
             );
@@ -1362,7 +1368,7 @@ public class QuestCompletionService {
                     userId,
                     membershipId,
                     groupSeasonId,
-                    "MEDIUM",
+                    QuestDifficulty.MEDIUM,
                     weekStart,
                     weekEndExclusive
             );
@@ -1371,7 +1377,7 @@ public class QuestCompletionService {
                             userId,
                             membershipId,
                             groupSeasonId,
-                            "SELF_CHECK",
+                    QuestVerificationType.SELF_CHECK,
                             weekStart,
                             weekEndExclusive
                     );
@@ -1405,9 +1411,9 @@ public class QuestCompletionService {
 
         // 크리처 경험치 변동 이력, 지금 상태 조회
         for (QuestRewardLedger ledger : rewardLedgers) {
-            if ("CREATURE_EXPERIENCE".equals(ledger.getRewardType())) {
+            if (ledger.getRewardType() == QuestRewardType.CREATURE_EXPERIENCE) {
                 experienceAwarded = ledger.getAmount();
-            } else if ("CONTRIBUTION".equals(ledger.getRewardType())) {
+            } else if (ledger.getRewardType() == QuestRewardType.CONTRIBUTION) {
                 contributionAwarded = ledger.getAmount();
             }
         }
@@ -1420,7 +1426,7 @@ public class QuestCompletionService {
         long creatureTotalExperience = completion.getCreatureTotalExperienceAfter() == null
                 ? experienceLedger.getBalanceAfter()
                 : completion.getCreatureTotalExperienceAfter();
-        String creatureGrowthStage = completion.getCreatureGrowthStageAfter();
+        CreatureGrowthStage creatureGrowthStage = completion.getCreatureGrowthStageAfter();
 
         if (creatureGrowthStage == null) {
             var creature = groupCreatureRepository
@@ -1429,7 +1435,7 @@ public class QuestCompletionService {
                             "Group creature is missing. groupSeasonId=" + completion.getGroupSeason().getId()));
             creatureGrowthStage = creature.getHatchedAt() == null
                     || completion.getCompletedAt().isBefore(creature.getHatchedAt())
-                    ? "EGG"
+                    ? CreatureGrowthStage.EGG
                     : GroupCreature.stageFor(experienceLedger.getBalanceAfter());
         }
 

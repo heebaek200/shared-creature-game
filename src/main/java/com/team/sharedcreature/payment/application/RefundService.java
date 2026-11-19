@@ -4,8 +4,11 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.admin.application.ApiIdempotencyService;
 import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.payment.api.RefundResponse;
 import com.team.sharedcreature.payment.domain.RefundRequest;
+import com.team.sharedcreature.payment.domain.RefundStatus;
+import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
 import com.team.sharedcreature.payment.infrastructure.RefundRequestRepository;
 import com.team.sharedcreature.auth.domain.User;
@@ -13,6 +16,8 @@ import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.payment.api.AdminRefundResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import com.team.sharedcreature.auth.domain.GlobalRole;
+import com.team.sharedcreature.auth.domain.UserStatus;
 import org.springframework.transaction.annotation.Transactional;
 import com.team.sharedcreature.payment.application.RefundApprovalTransactionService.CommandResponse;
 import org.springframework.transaction.annotation.Propagation;
@@ -30,10 +35,11 @@ public class RefundService {
 
     private static final String CREATE_OPERATION = "createRefundRequest";
 
-    private static final Set<String> ACTIVE_REFUND_STATUSES = Set.of(
-            "REQUESTED",
-            "CANCEL_PENDING",
-            "CANCEL_UNKNOWN"
+    /** 중복 환불 요청을 차단해야 하는 진행 중 상태입니다. */
+    private static final Set<RefundStatus> ACTIVE_REFUND_STATUSES = Set.of(
+            RefundStatus.REQUESTED,
+            RefundStatus.CANCEL_PENDING,
+            RefundStatus.CANCEL_UNKNOWN
     );
 
     private final PurchaseRepository purchaseRepository;
@@ -107,7 +113,7 @@ public class RefundService {
         var refunds = refundRequestRepository
                 .findAllByPurchaseIdForUpdate(purchaseId);
 
-        if (!"PAID".equals(purchase.getStatus())) {
+        if (purchase.getStatus() != PurchaseStatus.PAID) {
             throw new BusinessException(
                     ErrorCode.RESOURCE_NOT_FOUND,
                     "환불 가능한 결제 완료 구매를 찾을 수 없습니다."
@@ -115,11 +121,12 @@ public class RefundService {
         }
 
         // 상태와 최초 사용 이력을 함께 확인합니다.
-        if (item.getUsedAt() != null || "OWNED_USED".equals(item.getStatus())) {
+        if (item.getUsedAt() != null
+                || item.getStatus() == OwnedItemStatus.OWNED_USED) {
             throw new BusinessException(ErrorCode.REFUND_NOT_ALLOWED_USED_ITEM);
         }
 
-        if (!"OWNED_UNUSED".equals(item.getStatus())
+        if (item.getStatus() != OwnedItemStatus.OWNED_UNUSED
                 || item.getRevokedAt() != null
                 || !userId.equals(item.getUser().getId())) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
@@ -255,8 +262,8 @@ public class RefundService {
                         new BusinessException(ErrorCode.ROLE_FORBIDDEN)
                 );
 
-        if (!"ACTIVE".equals(admin.getStatus())
-                || !"SUPER_ADMIN".equals(admin.getGlobalRole())) {
+        if (admin.getStatus() != UserStatus.ACTIVE
+                || admin.getGlobalRole() != GlobalRole.SUPER_ADMIN) {
             throw new BusinessException(
                     ErrorCode.ROLE_FORBIDDEN,
                     "전체 관리자만 환불을 처리할 수 있습니다."

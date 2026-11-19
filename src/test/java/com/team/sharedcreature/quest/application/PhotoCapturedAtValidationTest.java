@@ -1,5 +1,6 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.PhotoFailureReason;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -22,7 +23,7 @@ class PhotoCapturedAtValidationTest {
 
     @Test
     void 업로드_시각보다_미래에_촬영한_사진은_거절한다() {
-        String failureReason = PhotoVerificationService.capturedAtFailureReason(
+        PhotoFailureReason failureReason = PhotoVerificationService.capturedAtFailureReason(
                 UPLOADED_AT.plusSeconds(1),
                 UPLOADED_AT,
                 MEMBERSHIP_JOINED_AT,
@@ -30,12 +31,12 @@ class PhotoCapturedAtValidationTest {
                 PERIOD_END_AT
         );
 
-        assertThat(failureReason).isEqualTo("PHOTO_CAPTURED_AFTER_UPLOAD");
+        assertThat(failureReason).isEqualTo(PhotoFailureReason.PHOTO_CAPTURED_AFTER_UPLOAD);
     }
 
     @Test
     void 현재_멤버십_가입_전에_촬영한_사진은_거절한다() {
-        String failureReason = PhotoVerificationService.capturedAtFailureReason(
+        PhotoFailureReason failureReason = PhotoVerificationService.capturedAtFailureReason(
                 MEMBERSHIP_JOINED_AT.minusSeconds(1),
                 UPLOADED_AT,
                 MEMBERSHIP_JOINED_AT,
@@ -43,7 +44,7 @@ class PhotoCapturedAtValidationTest {
                 PERIOD_END_AT
         );
 
-        assertThat(failureReason).isEqualTo("PHOTO_CAPTURED_BEFORE_MEMBERSHIP");
+        assertThat(failureReason).isEqualTo(PhotoFailureReason.PHOTO_CAPTURED_BEFORE_MEMBERSHIP);
     }
 
     @Test
@@ -67,7 +68,7 @@ class PhotoCapturedAtValidationTest {
 
     @Test
     void 배정_종료_시각에_촬영한_사진은_기존과_같이_거절한다() {
-        String failureReason = PhotoVerificationService.capturedAtFailureReason(
+        PhotoFailureReason failureReason = PhotoVerificationService.capturedAtFailureReason(
                 PERIOD_END_AT,
                 PERIOD_END_AT.plusSeconds(1),
                 MEMBERSHIP_JOINED_AT,
@@ -76,6 +77,6 @@ class PhotoCapturedAtValidationTest {
         );
 
         assertThat(failureReason)
-                .isEqualTo("PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD");
+                .isEqualTo(PhotoFailureReason.PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD);
     }
 }

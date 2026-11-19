@@ -39,6 +39,25 @@ class PhotoProcessingLimiterTest {
     }
 
     @Test
+    void interruptedRequestPreservesTheCauseAndInterruptFlag() {
+        try (PhotoProcessingLimiter.Permit permit = limiter.reserve()) {
+            CountDownLatch releaseWorker = new CountDownLatch(1);
+            Thread.currentThread().interrupt();
+            try {
+                assertThatThrownBy(() -> limiter.execute(permit, () -> {
+                    releaseWorker.await();
+                    return "done";
+                })).isInstanceOf(IllegalStateException.class)
+                        .hasCauseInstanceOf(InterruptedException.class);
+                assertThat(Thread.currentThread().isInterrupted()).isTrue();
+            } finally {
+                Thread.interrupted();
+                releaseWorker.countDown();
+            }
+        }
+    }
+
+    @Test
     void 네_개의_Worker를_점유하면_다섯번째_예약은_RATE_LIMIT_EXCEEDED로_거절한다()
             throws Exception {
         CountDownLatch workersStarted = new CountDownLatch(4);

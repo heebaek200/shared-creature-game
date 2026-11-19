@@ -1,5 +1,22 @@
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.group.domain.GroupMembershipExitReason;
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
+
+import com.team.sharedcreature.season.domain.GroupCreatureStatus;
+
+import com.team.sharedcreature.season.domain.GroupSeasonStatus;
+
+import com.team.sharedcreature.group.domain.GroupInviteLinkStatus;
+
+import com.team.sharedcreature.group.domain.GroupRole;
+
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
+import com.team.sharedcreature.group.domain.GroupStatus;
+
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
@@ -98,17 +115,17 @@ class GroupDepartureServiceTest {
         assertThat(response.groupId()).isEqualTo(GROUP_ID);
         assertThat(response.userId()).isEqualTo(USER_ID);
         assertThat(response.endedAt()).isEqualTo(NOW);
-        assertThat(response.exitReason()).isEqualTo("SELF");
+        assertThat(response.exitReason()).isEqualTo(GroupMembershipExitReason.SELF);
         assertThat(response.restrictionUntil()).isEqualTo(NOW.plusSeconds(86_400));
         assertThat(response.groupDeactivated()).isFalse();
 
-        assertThat(fixture.membership().getStatus()).isEqualTo("LEFT");
-        assertThat(fixture.membership().getRole()).isEqualTo("MEMBER");
+        assertThat(fixture.membership().getStatus()).isEqualTo(GroupMembershipStatus.LEFT);
+        assertThat(fixture.membership().getRole()).isEqualTo(GroupRole.MEMBER);
         assertThat(fixture.membership().getEndedAt()).isEqualTo(NOW);
         assertThat(fixture.membership().getEndedByUser()).isSameAs(fixture.actor());
-        assertThat(fixture.membership().getExitReason()).isEqualTo("SELF");
+        assertThat(fixture.membership().getExitReason()).isEqualTo(GroupMembershipExitReason.SELF);
         assertThat(fixture.group().getCurrentMemberCount()).isEqualTo(2);
-        assertThat(fixture.group().getStatus()).isEqualTo("ACTIVE");
+        assertThat(fixture.group().getStatus()).isEqualTo(GroupStatus.ACTIVE);
 
         // 제한 기록이 회원·멤버십·만료 시각을 정확히 참조해야 합니다.
         ArgumentCaptor<GroupJoinRestriction> captor = ArgumentCaptor.forClass(GroupJoinRestriction.class);
@@ -133,8 +150,8 @@ class GroupDepartureServiceTest {
         // MEMBER와 동일한 종료 규칙이 적용되는지 확인합니다.
         var response = service.leaveMyGroup(USER_ID);
         assertThat(response.groupDeactivated()).isFalse();
-        assertThat(fixture.membership().getRole()).isEqualTo("DEPUTY");
-        assertThat(fixture.membership().getStatus()).isEqualTo("LEFT");
+        assertThat(fixture.membership().getRole()).isEqualTo(GroupRole.DEPUTY);
+        assertThat(fixture.membership().getStatus()).isEqualTo(GroupMembershipStatus.LEFT);
         assertThat(fixture.group().getCurrentMemberCount()).isEqualTo(1);
         assertThat(fixture.group().getPrimaryAdminUser().getId()).isEqualTo(2L);
         verify(restrictionRepository).save(any(GroupJoinRestriction.class));
@@ -178,8 +195,8 @@ class GroupDepartureServiceTest {
         assertThatThrownBy(() -> service.leaveMyGroup(USER_ID))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.code()).isEqualTo("PRIMARY_TRANSFER_REQUIRED"));
-        assertThat(fixture.membership().getStatus()).isEqualTo("ACTIVE");
-        assertThat(fixture.group().getStatus()).isEqualTo("ACTIVE");
+        assertThat(fixture.membership().getStatus()).isEqualTo(GroupMembershipStatus.ACTIVE);
+        assertThat(fixture.group().getStatus()).isEqualTo(GroupStatus.ACTIVE);
         assertThat(fixture.group().getCurrentMemberCount()).isEqualTo(3);
         verifyNoInteractions(restrictionRepository, groupSeasonRepository, groupCreatureRepository);
     }
@@ -207,19 +224,19 @@ class GroupDepartureServiceTest {
         when(groupCreatureRepository.findForUpdateByGroupSeasonId(55L))
                 .thenReturn(Optional.of(creature));
         long oldExperience = creature.getTotalExperience();
-        String oldGrowthStage = creature.getGrowthStage();
+        CreatureGrowthStage oldGrowthStage = creature.getGrowthStage();
 
         // 그룹 종료 결과와 관련 엔티티의 상태 전이를 함께 확인합니다.
         var response = service.leaveMyGroup(USER_ID);
         assertThat(response.groupDeactivated()).isTrue();
-        assertThat(fixture.group().getStatus()).isEqualTo("INACTIVE");
+        assertThat(fixture.group().getStatus()).isEqualTo(GroupStatus.INACTIVE);
         assertThat(fixture.group().getCurrentMemberCount()).isZero();
         assertThat(fixture.group().getPrimaryAdminUser()).isNull();
-        assertThat(fixture.membership().getStatus()).isEqualTo("LEFT");
-        assertThat(invitation.getStatus()).isEqualTo("INVALIDATED");
+        assertThat(fixture.membership().getStatus()).isEqualTo(GroupMembershipStatus.LEFT);
+        assertThat(invitation.getStatus()).isEqualTo(GroupInviteLinkStatus.INVALIDATED);
         assertThat(invitation.getInvalidatedAt()).isEqualTo(NOW);
-        assertThat(groupSeason.getStatus()).isEqualTo("ENDED");
-        assertThat(creature.getStatus()).isEqualTo("ARCHIVED");
+        assertThat(groupSeason.getStatus()).isEqualTo(GroupSeasonStatus.ENDED);
+        assertThat(creature.getStatus()).isEqualTo(GroupCreatureStatus.ARCHIVED);
         assertThat(creature.getTotalExperience()).isEqualTo(oldExperience);
         assertThat(creature.getGrowthStage()).isEqualTo(oldGrowthStage);
     }
@@ -238,7 +255,7 @@ class GroupDepartureServiceTest {
         // 선택적 부가 데이터가 없어도 탈퇴는 성공해야 합니다.
         var response = service.leaveMyGroup(USER_ID);
         assertThat(response.groupDeactivated()).isTrue();
-        assertThat(fixture.group().getStatus()).isEqualTo("INACTIVE");
+        assertThat(fixture.group().getStatus()).isEqualTo(GroupStatus.INACTIVE);
         verifyNoInteractions(groupCreatureRepository);
     }
 
@@ -290,7 +307,7 @@ class GroupDepartureServiceTest {
         assertThatThrownBy(() -> service.leaveMyGroup(USER_ID))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.code()).isEqualTo("CONCURRENT_MODIFICATION"));
-        assertThat(fixture.membership().getStatus()).isEqualTo("ACTIVE");
+        assertThat(fixture.membership().getStatus()).isEqualTo(GroupMembershipStatus.ACTIVE);
         verifyNoInteractions(restrictionRepository, groupSeasonRepository);
     }
 
@@ -302,7 +319,7 @@ class GroupDepartureServiceTest {
     @Test
     void 잠금_후_그룹이_비활성이면_탈퇴를_거부한다() {
         Fixture fixture = arrange("MEMBER", 2);
-        ReflectionTestUtils.setField(fixture.group(), "status", "INACTIVE");
+        ReflectionTestUtils.setField(fixture.group(), "status", GroupStatus.INACTIVE);
 
         // 그룹이 종료됐으므로 멤버십까지 잠그기 전에 차단합니다.
         assertThatThrownBy(() -> service.leaveMyGroup(USER_ID))
@@ -343,9 +360,9 @@ class GroupDepartureServiceTest {
      */
     private Fixture arrange(String role, int memberCount) {
         // 고정 사용자 ID로 Service의 조회 조건을 통과시킵니다.
-        User actor = User.register("USER", JOINED);
+        User actor = User.register(GlobalRole.USER, JOINED);
         ReflectionTestUtils.setField(actor, "id", USER_ID);
-        User primary = "PRIMARY".equals(role) ? actor : User.register("USER", JOINED);
+        User primary = "PRIMARY".equals(role) ? actor : User.register(GlobalRole.USER, JOINED);
         if (primary != actor) {
             ReflectionTestUtils.setField(primary, "id", 2L);
         }
@@ -358,7 +375,7 @@ class GroupDepartureServiceTest {
                 ? GroupMembership.primary(group, actor, JOINED)
                 : GroupMembership.member(group, actor, JOINED);
         if ("DEPUTY".equals(role)) {
-            membership.changeDeputyRole("DEPUTY", JOINED);
+            membership.changeDeputyRole(GroupRole.DEPUTY, JOINED);
         }
         ReflectionTestUtils.setField(membership, "id", MEMBERSHIP_ID);
 

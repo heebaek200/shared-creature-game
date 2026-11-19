@@ -56,7 +56,7 @@ public class AdminRefundController {
                 refundQueryService.listAdminRefunds(
                         pageNumber,
                         pageSize,
-                        status
+                        RefundStatusFilter.parse(status)
                 )
         );
     }

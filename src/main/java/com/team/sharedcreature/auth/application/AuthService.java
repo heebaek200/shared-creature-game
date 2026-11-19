@@ -6,29 +6,44 @@ import com.team.sharedcreature._core.security.Hashing;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature._core.security.SessionAuthenticationFilter;
 import com.team.sharedcreature.auth.domain.OauthLoginAttempt;
+import com.team.sharedcreature.auth.domain.OauthLoginAttemptStatus;
+import com.team.sharedcreature.auth.domain.OauthLoginIntent;
 import com.team.sharedcreature.auth.domain.SocialAccount;
+import com.team.sharedcreature.auth.domain.SocialProvider;
 import com.team.sharedcreature.auth.domain.User;
+import com.team.sharedcreature.auth.domain.GlobalRole;
+import com.team.sharedcreature.auth.domain.UserStatus;
 import com.team.sharedcreature.auth.domain.UserProfile;
 import com.team.sharedcreature.auth.infrastructure.*;
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+import com.team.sharedcreature.group.domain.GroupRole;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.application.GroupMembershipService;
 import com.team.sharedcreature.group.application.InvitationSessionContext;
 import com.team.sharedcreature.group.api.PublicInvitationResponse;
 import com.team.sharedcreature.group.domain.GroupInviteLink;
+import com.team.sharedcreature.group.domain.GroupInviteLinkStatus;
 import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
 import com.team.sharedcreature.group.infrastructure.GroupJoinRestrictionRepository;
 import jakarta.servlet.http.HttpSession;
+import org.springframework.session.FindByIndexNameSessionRepository;
+import org.springframework.session.Session;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.session.FindByIndexNameSessionRepository;
-import org.springframework.session.Session;
 
 import java.security.SecureRandom;
 import java.text.Normalizer;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * OAuth 시도, 가입 대기, 내부 회원 연결과 로그인 세션 흐름을 처리합니다.
@@ -39,6 +54,11 @@ public class AuthService {
     public static final String PENDING_SIGNUP = "PENDING_SIGNUP";
     public static final String ONBOARDING_REASON = "ONBOARDING_REASON";
     private static final String OAUTH_NONCE = "OAUTH_NONCE";
+    private static final Object[] SESSION_LIMIT_LOCKS = new Object[64];
+
+    static {
+        Arrays.setAll(SESSION_LIMIT_LOCKS, ignored -> new Object());
+    }
 
     private final OauthLoginAttemptRepository attemptRepository;
     private final SocialAccountRepository socialAccountRepository;
@@ -52,13 +72,7 @@ public class AuthService {
     private final InitialSuperAdminProperties initialSuperAdmin;
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
-
     private final FindByIndexNameSessionRepository<? extends Session> sessionRepository;
-    private static final Object[] SESSION_LIMIT_LOCKS = new Object[64];
-    static {
-        Arrays.setAll(SESSION_LIMIT_LOCKS, index -> new Object());
-    }
-
     private final SecureRandom secureRandom = new SecureRandom();
 
     /** 인증 흐름에 필요한 저장소와 공급자 Port를 주입받습니다. */
@@ -74,7 +88,8 @@ public class AuthService {
             List<SocialLoginClient> socialLoginClients,
             InitialSuperAdminProperties initialSuperAdmin,
             TransactionTemplate transactionTemplate,
-            Clock clock, FindByIndexNameSessionRepository<? extends Session> sessionRepository
+            Clock clock,
+            FindByIndexNameSessionRepository<? extends Session> sessionRepository
     ) {
         this.attemptRepository = attemptRepository;
         this.socialAccountRepository = socialAccountRepository;
@@ -99,21 +114,21 @@ public class AuthService {
         String state = token();
         String nonce = token();
         GroupInviteLink invitation = null;
-        String intent = "LOGIN";
+        OauthLoginIntent intent = OauthLoginIntent.LOGIN;
         String resolvedRoute = returnRoute == null ? "DEFAULT" : returnRoute;
         if ("INVITE".equals(resolvedRoute)) {
             Object context = session.getAttribute(InvitationSessionContext.SESSION_KEY);
             if (!(context instanceof InvitationSessionContext invitationContext)) {
                 throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE, "수락한 초대 문맥이 필요합니다.");
             }
-            invitation = inviteLinkRepository.findByIdAndStatus(invitationContext.inviteLinkId(), "ACTIVE")
+            invitation = inviteLinkRepository.findByIdAndStatus(invitationContext.inviteLinkId(), GroupInviteLinkStatus.ACTIVE)
                     .orElseThrow(() -> conflict(ErrorCode.INVITE_INVALID, "현재 사용할 수 없는 초대입니다."));
-            intent = "INVITE";
+            intent = OauthLoginIntent.INVITE;
         }
         attemptRepository.save(OauthLoginAttempt.start(
                 Hashing.sha256(state),
                 Hashing.sha256(session.getId()),
-                provider,
+                SocialProvider.valueOf(client.provider()),
                 intent,
                 invitation,
                 resolvedRoute,
@@ -138,32 +153,22 @@ public class AuthService {
         Instant now = Instant.now(clock);
         String stateHash = Hashing.sha256(state);
         String sessionHash = Hashing.sha256(session.getId());
-
-        // OAuth를 시작한 요청을 찾아 state와 세션을 검증하고 공급자를 확인합니다.
-        String provider = transactionTemplate.execute(status -> {
+        SocialProvider provider = transactionTemplate.execute(status -> {
             OauthLoginAttempt attempt = attemptRepository.findByStateHash(stateHash)
-                    .orElseThrow(() -> conflict(
-                            ErrorCode.OAUTH_STATE_INVALID,
-                            "유효하지 않은 로그인 요청입니다."
-                    ));
-
+                    .orElseThrow(() -> conflict(ErrorCode.OAUTH_STATE_INVALID, "유효하지 않은 로그인 요청입니다."));
             validateAttempt(attempt, sessionHash, now);
             return attempt.getProvider();
         });
-
         String nonce = (String) session.getAttribute(OAUTH_NONCE);
 
-        SocialLoginClient client = findSocialLoginClient(provider);
+        // 외부 공급자 호출은 DB Connection과 Transaction을 점유하지 않습니다.
+        SocialLoginClient.SocialProfile profile = findSocialLoginClient(provider.name()).exchange(code, nonce, state);
 
-        SocialLoginClient.SocialProfile profile = client.exchange(code, nonce, state);
-
-        return transactionTemplate.execute(status ->
-                completeCallback(stateHash, sessionHash, profile, session, now)
-        );
+        return transactionTemplate.execute(status -> completeCallback(stateHash, sessionHash, profile, session, now));
     }
 
     private void validateAttempt(OauthLoginAttempt attempt, String sessionHash, Instant now) {
-        if (!"PENDING".equals(attempt.getStatus())) {
+        if (attempt.getStatus() != OauthLoginAttemptStatus.PENDING) {
             throw conflict(ErrorCode.OAUTH_STATE_INVALID, "이미 사용한 로그인 요청입니다.");
         }
         if (attempt.getExpiresAt().isBefore(now)) {
@@ -184,7 +189,9 @@ public class AuthService {
         OauthLoginAttempt attempt = attemptRepository.findByStateHashForUpdate(stateHash)
                 .orElseThrow(() -> conflict(ErrorCode.OAUTH_STATE_INVALID, "유효하지 않은 로그인 요청입니다."));
         validateAttempt(attempt, sessionHash, now);
-        Long invitationId = "INVITE".equals(attempt.getIntent()) ? currentInvitationId(session) : null;
+        Long invitationId = attempt.getIntent() == OauthLoginIntent.INVITE
+                ? currentInvitationId(session)
+                : null;
         GroupInviteLink latestInvitation = invitationId == null
                 ? null
                 : inviteLinkRepository.findById(invitationId).orElse(null);
@@ -194,7 +201,7 @@ public class AuthService {
             session.removeAttribute(ONBOARDING_REASON);
         }
 
-        String provider = attempt.getProvider();
+        SocialProvider provider = attempt.getProvider();
         var account = socialAccountRepository.findByProviderAndProviderUserId(
                 provider,
                 profile.providerUserId()
@@ -203,7 +210,7 @@ public class AuthService {
             // 기존 회원 분기
             User user = account.get().getUser();
 
-            if (!"ACTIVE".equals(user.getStatus())) {
+            if (user.getStatus() != UserStatus.ACTIVE) {
                 throw new BusinessException(ErrorCode.ACCOUNT_NOT_ACTIVE);
             }
 
@@ -225,10 +232,7 @@ public class AuthService {
             throw conflict(ErrorCode.SOCIAL_EMAIL_PROVIDER_CONFLICT, "이미 다른 소셜 공급자로 가입한 이메일입니다.");
         }
         session.setAttribute(PENDING_SIGNUP, new PendingSignup(
-                provider,
-                profile.providerUserId(),
-                profile.email(),
-                profile.emailVerified(),
+                provider.name(), profile.providerUserId(), profile.email(), profile.emailVerified(),
                 profile.suggestedNickname(),
                 invitationId,
                 now.plusSeconds(1800)));
@@ -249,13 +253,24 @@ public class AuthService {
         if (userProfileRepository.existsByNormalizedNickname(normalizedNickname)) {
             throw conflict(ErrorCode.NICKNAME_ALREADY_USED, "이미 사용 중인 닉네임입니다.");
         }
-        String globalRole = initialSuperAdmin.matches(pending.provider(), pending.providerUserId())
-                && !userRepository.existsByGlobalRoleAndStatus("SUPER_ADMIN", "ACTIVE")
-                ? "SUPER_ADMIN"
-                : "USER";
+        GlobalRole globalRole = initialSuperAdmin.matches(
+                pending.provider(),
+                pending.providerUserId()
+        ) && !userRepository.existsByGlobalRoleAndStatus(
+                GlobalRole.SUPER_ADMIN,
+                UserStatus.ACTIVE
+        )
+                ? GlobalRole.SUPER_ADMIN
+                : GlobalRole.USER;
         User user = userRepository.save(User.register(globalRole, now));
         socialAccountRepository.save(SocialAccount.link(
-                user, pending.provider(), pending.providerUserId(), pending.email(), pending.emailVerified(), now));
+                user,
+                SocialProvider.valueOf(pending.provider()),
+                pending.providerUserId(),
+                pending.email(),
+                pending.emailVerified(),
+                now
+        ));
         userProfileRepository.save(UserProfile.create(user, nickname.strip(), normalizedNickname, now));
         if (pending.inviteLinkId() != null) {
             GroupMembershipService.InvitationJoinResult result =
@@ -272,6 +287,22 @@ public class AuthService {
         session.removeAttribute(PENDING_SIGNUP);
         session.removeAttribute(InvitationSessionContext.SESSION_KEY);
         return loginUser;
+    }
+
+    /** 현재 세션을 포함해 최대 3개를 유지하고 오래된 세션부터 정리합니다. */
+    private void enforceSessionLimit(Long userId, HttpSession session) {
+        String principal = userId.toString();
+        session.setAttribute(FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME, principal);
+
+        Object lock = SESSION_LIMIT_LOCKS[Math.floorMod(userId.hashCode(), SESSION_LIMIT_LOCKS.length)];
+        synchronized (lock) {
+            var previousSessions = new ArrayList<>(sessionRepository.findByPrincipalName(principal).entrySet());
+            previousSessions.removeIf(entry -> entry.getKey().equals(session.getId()));
+            previousSessions.sort(Comparator.comparing(entry -> entry.getValue().getCreationTime()));
+            while (previousSessions.size() > 2) {
+                sessionRepository.deleteById(previousSessions.removeFirst().getKey());
+            }
+        }
     }
 
     /** 가입 대기 세션에 연결된 현재 초대 표시 정보를 반환합니다. */
@@ -314,11 +345,11 @@ public class AuthService {
 
     private Set<String> currentRoles(User user) {
         var roles = new java.util.HashSet<String>();
-        if ("SUPER_ADMIN".equals(user.getGlobalRole())) {
-            roles.add("SUPER_ADMIN");
+        if (user.getGlobalRole() == GlobalRole.SUPER_ADMIN) {
+            roles.add(GlobalRole.SUPER_ADMIN.name());
         }
-        membershipRepository.findByUserIdAndStatus(user.getId(), "ACTIVE")
-                .ifPresent(membership -> roles.add(membership.getRole()));
+        membershipRepository.findByUserIdAndStatus(user.getId(), GroupMembershipStatus.ACTIVE)
+                .ifPresent(membership -> roles.add(membership.getRole().name()));
         return Set.copyOf(roles);
     }
 
@@ -332,7 +363,7 @@ public class AuthService {
     /** 현재 사용자의 활성 그룹 멤버십을 Route Guard 응답용으로 조회합니다. */
     @Transactional(readOnly = true)
     public Optional<CurrentMembership> currentMembership(Long userId) {
-        return membershipRepository.findByUserIdAndStatus(userId, "ACTIVE")
+        return membershipRepository.findByUserIdAndStatus(userId, GroupMembershipStatus.ACTIVE)
                 .map(membership -> new CurrentMembership(
                         membership.getId(),
                         membership.getGroup().getId(),
@@ -376,30 +407,9 @@ public class AuthService {
     public record CurrentMembership(
             Long membershipId,
             Long groupId,
-            String role,
-            String status,
+            GroupRole role,
+            GroupMembershipStatus status,
             Instant joinedAt
     ) {
     }
-
-    private void enforceSessionLimit(Long userId, HttpSession currentSession) {
-        String principalName = userId.toString();
-        currentSession.setAttribute(FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME, principalName);
-        Object lock = SESSION_LIMIT_LOCKS[Math.floorMod(userId.hashCode(), SESSION_LIMIT_LOCKS.length)];
-
-        synchronized (lock) {
-            Map<String, ? extends Session> sessions = sessionRepository.findByPrincipalName(principalName);
-
-            List<Map.Entry<String, ? extends Session>> previousSessions = new ArrayList<>(sessions.entrySet());
-            previousSessions.removeIf(entry -> entry.getKey().equals(currentSession.getId()));
-            previousSessions.sort(Comparator.comparing(entry -> entry.getValue().getCreationTime()));
-
-            while (previousSessions.size() > 2) {
-                Map.Entry<String, ? extends Session> oldest = previousSessions.remove(0);
-                sessionRepository.deleteById(oldest.getKey());
-            }
-        }
-    }
-
-
 }

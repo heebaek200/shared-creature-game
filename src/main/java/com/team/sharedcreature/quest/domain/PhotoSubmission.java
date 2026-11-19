@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -28,10 +30,6 @@ import java.util.Objects;
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PhotoSubmission {
-
-    public static final String STATUS_PENDING = "PENDING";
-    public static final String STATUS_VALID = "VALID";
-    public static final String STATUS_INVALID = "INVALID";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -63,11 +61,15 @@ public class PhotoSubmission {
     @Column(name = "longitude", precision = 10, scale = 7)
     private BigDecimal longitude;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "verification_status", length = 30, nullable = false)
-    private String verificationStatus;
+    private PhotoVerificationStatus verificationStatus;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "failure_reason", length = 50)
-    private String failureReason;
+    private PhotoFailureReason failureReason;
 
     @Column(name = "file_deleted_at")
     private Instant fileDeletedAt;
@@ -117,7 +119,7 @@ public class PhotoSubmission {
         submission.storageKey = storageKey;
         submission.attemptNumber = attemptNumber;
         submission.uploadedAt = uploadedAt;
-        submission.verificationStatus = STATUS_PENDING; // 대기중
+        submission.verificationStatus = PhotoVerificationStatus.PENDING; // 대기중
         submission.createdAt = uploadedAt;
         submission.updatedAt = uploadedAt;
         return submission;
@@ -128,7 +130,7 @@ public class PhotoSubmission {
      * EXIF 누락이나 파싱 Timeout처럼 값이 없는 경우 capturedAt, latitude, longitude에 null을 전달할 수 있습니다.
      */
     public void markInvalid(
-            String failureReason,
+            PhotoFailureReason failureReason,
             Instant capturedAt,
             BigDecimal latitude,
             BigDecimal longitude,
@@ -137,16 +139,14 @@ public class PhotoSubmission {
         requirePending(); // 현재 상태가 PENDING인지 선행 검증
         Objects.requireNonNull(verifiedAt, "verifiedAt은 필수입니다.");
 
-        if (failureReason == null
-                || failureReason.isBlank()
-                || failureReason.length() > 50) {
-            throw new IllegalArgumentException("failureReason은 1~50자여야 합니다.");
+        if (failureReason == null) {
+            throw new IllegalArgumentException("failureReason은 필수입니다.");
         }
 
         this.capturedAt = capturedAt;
         this.latitude = latitude;
         this.longitude = longitude;
-        this.verificationStatus = STATUS_INVALID; // 상태를 실패로 변경
+        this.verificationStatus = PhotoVerificationStatus.INVALID; // 상태를 실패로 변경
         this.failureReason = failureReason;
         this.updatedAt = verifiedAt;
     }
@@ -180,7 +180,7 @@ public class PhotoSubmission {
         this.capturedAt = capturedAt;
         this.latitude = latitude;
         this.longitude = longitude;
-        this.verificationStatus = STATUS_VALID; // 상태를 성공으로 변경
+        this.verificationStatus = PhotoVerificationStatus.VALID; // 상태를 성공으로 변경
         this.failureReason = null; // 성공했으므로 이전 실패 사유 초기화
         this.updatedAt = verifiedAt;
     }
@@ -193,7 +193,7 @@ public class PhotoSubmission {
 
         // 한 시간 안에 결과가 확정되지 않은 제출을 처리 실패로 종료합니다.
         markInvalid(
-                "PHOTO_PROCESSING_FAILED",
+                PhotoFailureReason.PHOTO_PROCESSING_FAILED,
                 null,
                 null,
                 null,
@@ -246,8 +246,8 @@ public class PhotoSubmission {
     public void markPhotoAndLocationDataDeleted(Instant deletedAt) {
         Objects.requireNonNull(deletedAt, "deletedAt은 필수입니다.");
 
-        if (!STATUS_VALID.equals(this.verificationStatus)
-                && !STATUS_INVALID.equals(this.verificationStatus)) {
+        if (this.verificationStatus != PhotoVerificationStatus.VALID
+                && this.verificationStatus != PhotoVerificationStatus.INVALID) {
             throw new IllegalStateException(
                     "VALID 또는 INVALID 제출만 정리할 수 있습니다. status="
                             + this.verificationStatus
@@ -269,7 +269,7 @@ public class PhotoSubmission {
 
     /** 문지기(Guard) 메서드 */
     private void requirePending() {
-        if (!STATUS_PENDING.equals(this.verificationStatus)) {
+        if (this.verificationStatus != PhotoVerificationStatus.PENDING) {
             throw new IllegalStateException(
                     "PENDING 상태의 제출만 판정할 수 있습니다. status="
                             + this.verificationStatus

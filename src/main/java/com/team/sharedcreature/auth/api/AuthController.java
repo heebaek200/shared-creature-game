@@ -7,6 +7,8 @@ import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature._core.security.SessionAuthenticationFilter;
 import com.team.sharedcreature.auth.application.AuthService;
 import com.team.sharedcreature.auth.application.PendingSignup;
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+import com.team.sharedcreature.group.domain.GroupRole;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
@@ -38,6 +40,19 @@ public class AuthController {
         OAUTH_SESSION_EXPIRED,
         OAUTH_AUTHENTICATION_FAILED,
         OAUTH_EMAIL_CONFLICT
+    }
+
+    public enum AuthenticationState {
+        ANONYMOUS,
+        SIGNUP_PENDING,
+        AUTHENTICATED
+    }
+
+    public enum OnboardingState {
+        NOT_STARTED,
+        SIGNUP_REQUIRED,
+        GROUP_REQUIRED,
+        COMPLETED
     }
 
     /** 인증 업무 Service를 주입받습니다. */
@@ -135,10 +150,12 @@ public class AuthController {
         Object pending = session.getAttribute(AuthService.PENDING_SIGNUP);
         if (pending instanceof PendingSignup pendingSignup && pendingSignup.expiresAt().isAfter(Instant.now())) {
             return ApiResponse.success(new CurrentUserResponse(
-                    "SIGNUP_PENDING", "SIGNUP_REQUIRED", null, null, List.of(), null, null));
+                    AuthenticationState.SIGNUP_PENDING, OnboardingState.SIGNUP_REQUIRED,
+                    null, null, List.of(), null, null));
         }
         return ApiResponse.success(new CurrentUserResponse(
-                "ANONYMOUS", "NOT_STARTED", null, null, List.of(), null, null));
+                AuthenticationState.ANONYMOUS, OnboardingState.NOT_STARTED,
+                null, null, List.of(), null, null));
     }
 
     /** 현재 애플리케이션 세션만 무효화합니다. */
@@ -158,12 +175,12 @@ public class AuthController {
                         value.joinedAt()
                 ))
                 .orElse(null);
-        String onboarding = user.roles().contains("SUPER_ADMIN") || membership != null
-                ? "COMPLETED"
-                : "GROUP_REQUIRED";
+        OnboardingState onboarding = user.roles().contains("SUPER_ADMIN") || membership != null
+                ? OnboardingState.COMPLETED
+                : OnboardingState.GROUP_REQUIRED;
         String onboardingReason = authService.consumeOnboardingReason(session);
         return new CurrentUserResponse(
-                "AUTHENTICATED",
+                AuthenticationState.AUTHENTICATED,
                 onboarding,
                 new UserSummaryResponse(user.id(), user.nickname()),
                 membership,
@@ -229,8 +246,8 @@ public class AuthController {
 
     /** Route Guard가 사용하는 현재 사용자 상태입니다. */
     public record CurrentUserResponse(
-            String authenticationState,
-            String onboardingState,
+            AuthenticationState authenticationState,
+            OnboardingState onboardingState,
             UserSummaryResponse user,
             MembershipResponse membership,
             List<String> roles,
@@ -247,8 +264,8 @@ public class AuthController {
     public record MembershipResponse(
             Long membershipId,
             Long groupId,
-            String role,
-            String status,
+            GroupRole role,
+            GroupMembershipStatus status,
             Instant joinedAt
     ) {
     }

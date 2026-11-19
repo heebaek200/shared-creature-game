@@ -1,7 +1,9 @@
 package com.team.sharedcreature.avatar.api;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.avatar.domain.ShopItem;
 
 import java.time.Instant;
@@ -26,9 +28,9 @@ public record OwnedItemResponse(
         Long purchaseId,
         Long shopItemId,
         String name,
-        String slot,
+        AvatarSlot slot,
         String assetKey,
-        String status,
+        OwnedItemStatus status,
         Instant usedAt,
         Instant revokedAt,
         boolean equipped
@@ -52,6 +54,7 @@ public record OwnedItemResponse(
                 ownedItem.getPurchase().getId(),
                 shopItem.getId(),
                 shopItem.getName(),
+                // 슬롯과 상태 enum은 JSON에 이름으로 전달합니다.
                 shopItem.getSlotCode(),
                 shopItem.getAssetKey(),
                 ownedItem.getStatus(),

@@ -3,6 +3,7 @@ package com.team.sharedcreature.admin.application;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.admin.domain.ApiIdempotencyRecord;
+import com.team.sharedcreature.admin.domain.ApiIdempotencyStatus;
 import com.team.sharedcreature.admin.infrastructure.ApiIdempotencyRecordRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -68,7 +69,7 @@ class ApiIdempotencyServiceTest {
         when(repository.findByActorUserIdAndOperationAndIdempotencyKey(7L, "CREATE_PURCHASE", "key-1"))
                 .thenReturn(Optional.of(record));
         when(record.getRequestHash()).thenReturn(sha256("shopItemId=101"));
-        when(record.getStatus()).thenReturn("COMPLETED");
+        when(record.getStatus()).thenReturn(ApiIdempotencyStatus.COMPLETED);
         when(record.getResponseSnapshot()).thenReturn("{\"purchaseId\":21}");
 
         var claim = service.claim(7L, "CREATE_PURCHASE", "key-1", "shopItemId=101", Replay.class);
@@ -91,6 +92,24 @@ class ApiIdempotencyServiceTest {
                 7L, "CREATE_PURCHASE", "key-1", "shopItemId=101", Replay.class
         )).isInstanceOfSatisfying(BusinessException.class, exception ->
                 assertThat(exception.errorCode()).isEqualTo(ErrorCode.IDEMPOTENCY_KEY_REUSED));
+    }
+
+    /** 처리 중인 동일 요청은 중복 실행하지 않고 기존 충돌 오류로 거부합니다. */
+    @Test
+    void processingRequestIsRejected() {
+        ApiIdempotencyRecord record = mock(ApiIdempotencyRecord.class);
+        when(repository.insertProcessingIfAbsent(
+                eq(7L), eq("CREATE_PURCHASE"), eq("key-1"), any(), eq(NOW)
+        )).thenReturn(0);
+        when(repository.findByActorUserIdAndOperationAndIdempotencyKey(7L, "CREATE_PURCHASE", "key-1"))
+                .thenReturn(Optional.of(record));
+        when(record.getRequestHash()).thenReturn(sha256("shopItemId=101"));
+        when(record.getStatus()).thenReturn(ApiIdempotencyStatus.PROCESSING);
+
+        assertThatThrownBy(() -> service.claim(
+                7L, "CREATE_PURCHASE", "key-1", "shopItemId=101", Replay.class
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.errorCode()).isEqualTo(ErrorCode.IDEMPOTENCY_REQUEST_IN_PROGRESS));
     }
 
     private String sha256(String value) {

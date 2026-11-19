@@ -1,6 +1,10 @@
 
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.group.domain.GroupInviteLinkStatus;
+
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.security.Hashing;
 import com.team.sharedcreature.auth.domain.User;
@@ -94,7 +98,7 @@ class GroupInvitationManagementServiceTest {
         var response = service.rotateInvitation(1L);
 
         // 기존 링크와 반환 URL이 올바른지 확인합니다.
-        assertThat(f.previous().getStatus()).isEqualTo("INVALIDATED");
+        assertThat(f.previous().getStatus()).isEqualTo(GroupInviteLinkStatus.INVALIDATED);
         assertThat(f.previous().getInvalidatedAt()).isEqualTo(DB_PRECISION_NOW);
         assertThat(response.groupId()).isEqualTo(10L);
         assertThat(response.issuedAt()).isEqualTo(DB_PRECISION_NOW);
@@ -114,7 +118,7 @@ class GroupInvitationManagementServiceTest {
         assertThat(token).matches("[A-Za-z0-9_-]{43}");
         assertThat(captor.getValue().getTokenHash())
                 .isEqualTo(Hashing.sha256(token));
-        assertThat(captor.getValue().getStatus()).isEqualTo("ACTIVE");
+        assertThat(captor.getValue().getStatus()).isEqualTo(GroupInviteLinkStatus.ACTIVE);
         assertThat(captor.getValue().getIssuedByUser()).isSameAs(f.actor());
         assertThat(captor.getValue().getIssuedAt()).isEqualTo(DB_PRECISION_NOW);
 
@@ -159,7 +163,7 @@ class GroupInvitationManagementServiceTest {
      */
     private Fixture fixture() {
         // 테스트 사용자와 그룹을 생성합니다.
-        User actor = User.register("USER", NOW);
+        User actor = User.register(GlobalRole.USER, NOW);
         ReflectionTestUtils.setField(actor, "id", 1L);
 
         Group group = Group.create("테스트", "테스트", "", actor, NOW);

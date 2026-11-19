@@ -1,5 +1,6 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
 import com.team.sharedcreature.admin.application.SchedulerJobRunner;
 import com.team.sharedcreature.quest.infrastructure.QuestPeriodRepository;
 import com.team.sharedcreature.season.domain.Season;
@@ -22,7 +23,7 @@ public class QuestAssignmentNormalizationService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final Duration LEASE_DURATION = Duration.ofMinutes(3);
-    private static final List<String> PERIOD_TYPES = List.of("DAILY", "WEEKLY");
+    private static final List<QuestPeriodType> PERIOD_TYPES = List.of(QuestPeriodType.DAILY, QuestPeriodType.WEEKLY);
 
     private final SeasonRepository seasonRepository;
     private final QuestPeriodRepository periodRepository;
@@ -104,7 +105,7 @@ public class QuestAssignmentNormalizationService {
 
         // 두 배정은 독립 실행권을 사용하여 하나의 실패가 다른 하나에 영향을 주지 않습니다.
         List<PeriodRun> attempts = new ArrayList<>(2);
-        for (String periodType : PERIOD_TYPES) {
+        for (QuestPeriodType periodType : PERIOD_TYPES) {
             try {
                 QuestPeriodCalendar.PeriodWindow window = calendar
                         .currentWindow(firstStart, now, periodType)
@@ -112,7 +113,7 @@ public class QuestAssignmentNormalizationService {
                 attempts.add(normalizeOne(seasonId, firstStart, window));
             } catch (RuntimeException failure) {
                 log.error("퀘스트 정상화 준비 실패. type={}, seasonId={}", periodType, seasonId, failure);
-                attempts.add(new PeriodRun(periodType, null, null, 0, failure.getMessage()));
+                attempts.add(new PeriodRun(periodType.name(), null, null, 0, failure.getMessage()));
             }
         }
         return new Result(Outcome.CHECKED, seasonId, List.copyOf(attempts));
@@ -130,7 +131,7 @@ public class QuestAssignmentNormalizationService {
         try {
             skipped = countExpiredOmissions(firstStart, window);
             SkipSummary summaryForJob = skipped;
-            String jobType = "QUEST_ASSIGN_" + window.periodType();
+            String jobType = "QUEST_ASSIGN_" + window.periodType().name();
 
             // 배정 Service는 독립 Commit을 종료한 뒤 결과를 반환합니다.
             SchedulerJobRunner.ExecutionResult execution = jobRunner.run(
@@ -159,15 +160,15 @@ public class QuestAssignmentNormalizationService {
                 if (audit.outcome() == QuestAssignmentIntegrityService.AuditOutcome.INCONSISTENT) {
                     log.error("퀘스트 Scheduler 성공 이력과 저장 데이터 불일치. jobType={}, scheduledFor={}, detail={}",
                             jobType, window.startAt(), audit.detail());
-                    return new PeriodRun(window.periodType(), window.startAt(), execution,
+                    return new PeriodRun(window.periodType().name(), window.startAt(), execution,
                             skipped.count(), audit.detail());
                 }
             }
-            return new PeriodRun(window.periodType(), window.startAt(), execution, skipped.count(), null);
+            return new PeriodRun(window.periodType().name(), window.startAt(), execution, skipped.count(), null);
         } catch (RuntimeException failure) {
             log.error("퀘스트 배정 또는 정합성 검사 실패. type={}, startAt={}",
                     window.periodType(), window.startAt(), failure);
-            return new PeriodRun(window.periodType(), window.startAt(), null,
+            return new PeriodRun(window.periodType().name(), window.startAt(), null,
                     skipped.count(), failure.getMessage());
         }
     }
@@ -216,8 +217,8 @@ public class QuestAssignmentNormalizationService {
      * 주간은 7일 간격이고 일일은 1일 간격입니다.
      * JVM 기본 시간대와 무관하게 동일한 Instant를 사용합니다.
      */
-    private Instant periodStartAt(Instant firstStart, String periodType, long index) {
-        long stepDays = "WEEKLY".equals(periodType) ? 7L : 1L;
+    private Instant periodStartAt(Instant firstStart, QuestPeriodType periodType, long index) {
+        long stepDays = periodType == QuestPeriodType.WEEKLY ? 7L : 1L;
         LocalDate firstDate = firstStart.atZone(KST).toLocalDate();
         return firstDate.plusDays(Math.multiplyExact(index, stepDays))
                 .atStartOfDay(KST).toInstant();
@@ -238,7 +239,7 @@ public class QuestAssignmentNormalizationService {
                 "periodId":%d,"assignmentCount":%d,"skippedExpiredCount":%d,\
                 "skippedFrom":%s,"skippedThrough":%s}
                 """.formatted(
-                window.periodType(), window.startAt(), result.outcome(),
+                window.periodType().name(), window.startAt(), result.outcome(),
                 result.periodId(), result.assignmentCount(), skipped.count(),
                 jsonInstant(skipped.first()), jsonInstant(skipped.last()));
     }

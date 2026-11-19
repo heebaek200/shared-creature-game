@@ -3,6 +3,7 @@ package com.team.sharedcreature.auth.application;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.auth.infrastructure.UserDailyActivityRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
+import com.team.sharedcreature.group.domain.GroupStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,7 +63,9 @@ public class UserActivityService {
         Instant threshold = now.minus(ACTIVITY_WRITE_INTERVAL);
 
         var membership = membershipRepository.findActiveWithGroupByUserId(userId)
-                .filter(activeMembership -> "ACTIVE".equals(activeMembership.getGroup().getStatus()))
+                .filter(activeMembership ->
+                        activeMembership.getGroup().getStatus() == GroupStatus.ACTIVE
+                )
                 .orElse(null);
         dailyActivityRepository.upsert(
                 userId,

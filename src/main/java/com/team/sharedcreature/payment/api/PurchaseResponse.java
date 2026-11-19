@@ -1,5 +1,11 @@
 package com.team.sharedcreature.payment.api;
 
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
+import com.team.sharedcreature.payment.domain.PaymentTransactionStatus;
+import com.team.sharedcreature.payment.domain.PaymentTransactionType;
+import com.team.sharedcreature.payment.domain.PurchaseStatus;
+import com.team.sharedcreature.payment.domain.RefundStatus;
+
 import java.time.Instant;
 import java.util.List;
 
@@ -10,10 +16,10 @@ public record PurchaseResponse(
         String itemName,
         Long priceKrw,
         String currency,
-        String status,
+        PurchaseStatus status,
         Instant createdAt,
-        String ownedItemStatus,
-        String latestRefundStatus,
+        OwnedItemStatus ownedItemStatus,
+        RefundStatus latestRefundStatus,
         Long shopItemId,
         List<Transaction> transactions,
         List<Refund> refundRequests
@@ -23,9 +29,9 @@ public record PurchaseResponse(
             Long transactionId,
             String provider,
             String providerTransactionId,
-            String transactionType,
+            PaymentTransactionType transactionType,
             Long amountKrw,
-            String status,
+            PaymentTransactionStatus status,
             Instant processedAt
     ) {
     }
@@ -37,7 +43,7 @@ public record PurchaseResponse(
             Long requestedByUserId,
             String requestReason,
             String decisionReason,
-            String status,
+            RefundStatus status,
             Instant requestedAt,
             Instant reviewedAt,
             Instant completedAt

@@ -3,6 +3,7 @@ package com.team.sharedcreature.group.api;
 import com.team.sharedcreature._core.api.ApiResponse;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.group.application.UserReportService;
+import com.team.sharedcreature.group.domain.UserReportCategory;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,6 +32,11 @@ public class ReportController {
             @Valid @RequestBody CreateUserReportRequest request
     ) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(reportService.create(loginUser.id(), request)));
+                .body(ApiResponse.success(reportService.create(
+                        loginUser.id(),
+                        request.reportedUserId(),
+                        UserReportCategory.valueOf(request.category()),
+                        request.content()
+                )));
     }
 }

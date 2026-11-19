@@ -1,5 +1,7 @@
 package com.team.sharedcreature.admin.api;
 
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -35,7 +37,7 @@ public record AdminDashboardResponse(
     }
 
     /** 현재 시즌 성장 단계별 그룹 수입니다. */
-    public record GrowthStagePoint(String stage, long count) {
+    public record GrowthStagePoint(CreatureGrowthStage stage, long count) {
     }
 
     /** 현재 시즌 점수 상위 그룹입니다. */

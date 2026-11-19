@@ -24,8 +24,8 @@ class PhotoSubmissionTest {
 
         submission.markPendingTimedOut(uploadedAt.plusSeconds(3601));
 
-        assertThat(submission.getVerificationStatus()).isEqualTo("INVALID");
+        assertThat(submission.getVerificationStatus()).isEqualTo(PhotoVerificationStatus.INVALID);
         assertThat(submission.getFailureReason())
-                .isEqualTo("PHOTO_PROCESSING_FAILED");
+                .isEqualTo(PhotoFailureReason.PHOTO_PROCESSING_FAILED);
     }
 }

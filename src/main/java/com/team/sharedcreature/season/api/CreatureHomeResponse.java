@@ -1,6 +1,7 @@
 package com.team.sharedcreature.season.api;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
 
 import java.time.Instant;
 import java.util.List;
@@ -23,7 +24,7 @@ public record CreatureHomeResponse(
     public record CreatureResponse(
             Long groupCreatureId,
             Long creatureSpeciesId,
-            String growthStage,
+            CreatureGrowthStage growthStage,
             long totalExperience,
             Long nextStageAtExperience,
             Instant selectionDeadlineAt

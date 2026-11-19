@@ -3,8 +3,12 @@ package com.team.sharedcreature.payment.application;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
+import com.team.sharedcreature.auth.domain.GlobalRole;
+import com.team.sharedcreature.auth.domain.UserStatus;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.payment.domain.PgApiAttempt;
 import com.team.sharedcreature.payment.infrastructure.PgApiAttemptRepository;
+import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -54,10 +58,11 @@ public class RefundApprovalTransactionService {
             throw new BusinessException(ErrorCode.ROLE_FORBIDDEN);
         }
 
+        // 활성 상태의 전체 관리자만 환불 승인을 준비할 수 있습니다.
         var reviewer = userRepository.findById(adminUserId)
                 .filter(user ->
-                        "ACTIVE".equals(user.getStatus())
-                                && "SUPER_ADMIN".equals(user.getGlobalRole())
+                        user.getStatus() == UserStatus.ACTIVE
+                                && user.getGlobalRole() == GlobalRole.SUPER_ADMIN
                 )
                 .orElseThrow(() ->
                         new BusinessException(ErrorCode.ROLE_FORBIDDEN)
@@ -130,18 +135,19 @@ public class RefundApprovalTransactionService {
             );
         }
 
-        if (!"PAID".equals(purchase.getStatus())) {
+        if (purchase.getStatus() != PurchaseStatus.PAID) {
             throw new BusinessException(
                     ErrorCode.CONCURRENT_MODIFICATION,
                     "결제 완료 구매만 환불을 승인할 수 있습니다."
             );
         }
 
-        if (item.getUsedAt() != null || "OWNED_USED".equals(item.getStatus())) {
+        if (item.getUsedAt() != null
+                || item.getStatus() == OwnedItemStatus.OWNED_USED) {
             throw new BusinessException(ErrorCode.REFUND_NOT_ALLOWED_USED_ITEM);
         }
 
-        if (!"OWNED_UNUSED".equals(item.getStatus())
+        if (item.getStatus() != OwnedItemStatus.OWNED_UNUSED
                 || item.getRevokedAt() != null) {
             throw new BusinessException(
                     ErrorCode.CONCURRENT_MODIFICATION,

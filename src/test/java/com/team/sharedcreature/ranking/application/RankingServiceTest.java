@@ -1,7 +1,14 @@
 package com.team.sharedcreature.ranking.application;
 
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
+import com.team.sharedcreature.group.domain.GroupStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
+import com.team.sharedcreature._core.exception.InternalApiException;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.UserProfile;
 import com.team.sharedcreature.auth.infrastructure.UserProfileRepository;
@@ -70,8 +77,8 @@ class RankingServiceTest {
         assertThat(first.data()).extracting(row -> row.userId()).containsExactly(1L, 2L);
         assertThat(second.data()).extracting(row -> row.userId()).containsExactly(3L, 4L);
         assertThat(second.data()).extracting(row -> row.rank()).containsExactly(3, 4);
-        assertThat(first.data().get(1).participantStatus()).isEqualTo("LEFT");
-        assertThat(second.data().get(0).participantStatus()).isEqualTo("REMOVED");
+        assertThat(first.data().get(1).participantStatus()).isEqualTo(GroupMembershipStatus.LEFT);
+        assertThat(second.data().get(0).participantStatus()).isEqualTo(GroupMembershipStatus.REMOVED);
         assertThat(first.meta().totalElements()).isEqualTo(4);
         assertThat(first.meta().totalPages()).isEqualTo(2);
         assertThat(first.meta().currentSubject().subjectId()).isEqualTo(4L);
@@ -122,7 +129,7 @@ class RankingServiceTest {
     @Test
     void 비활성그룹은_개인랭킹_조회권한이_없다() {
         Group group = group(7);
-        ReflectionTestUtils.setField(group, "status", "INACTIVE");
+        ReflectionTestUtils.setField(group, "status", GroupStatus.INACTIVE);
         when(membershipRepository.findActiveWithGroupByUserId(4L))
                 .thenReturn(Optional.of(entity(GroupMembership.class, "group", group)));
         assertCode(() -> service.getMemberRanking(4L, null, 0, 20), ErrorCode.ROLE_FORBIDDEN);
@@ -132,7 +139,9 @@ class RankingServiceTest {
     void 프로필이_누락돼도_랭킹대상을_임의로_제외하지_않는다() {
         stubCurrentMember(List.of(contribution(4, 10, NOW, "ACTIVE")));
         when(profileRepository.findAllByUserIdIn(anyCollection())).thenReturn(List.of());
-        assertCode(() -> service.getMemberRanking(4L, null, 0, 20), ErrorCode.INTERNAL_SERVER_ERROR);
+        assertThatThrownBy(() -> service.getMemberRanking(4L, null, 0, 20))
+                .isInstanceOf(InternalApiException.class)
+                .hasMessage("랭킹 사용자 프로필이 누락되었습니다.");
     }
 
     @Test
@@ -144,7 +153,7 @@ class RankingServiceTest {
         var snapshot = entity(SeasonMemberRankSnapshot.class,
                 "user", user(4), "rankNumber", 8, "nicknameSnapshot", "종료닉네임",
                 "contributionScore", 90L, "scoreReachedAt", NOW.minusSeconds(20),
-                "participantStatus", "LEFT");
+                "participantStatus", GroupMembershipStatus.LEFT);
         when(memberSnapshotRepository.findAllByGroupSeasonIdOrderByRankNumberAsc(70L))
                 .thenReturn(List.of(snapshot));
 
@@ -153,7 +162,7 @@ class RankingServiceTest {
 
         assertThat(first).isEqualTo(second);
         assertThat(first.data().getFirst().nickname()).isEqualTo("종료닉네임");
-        assertThat(first.data().getFirst().participantStatus()).isEqualTo("LEFT");
+        assertThat(first.data().getFirst().participantStatus()).isEqualTo(GroupMembershipStatus.LEFT);
         assertThat(first.meta().currentSubject().rank()).isEqualTo(8);
         assertThat(first.meta().currentSubject().score()).isEqualTo(90);
         verifyNoInteractions(seasonQueryService, contributionRepository, profileRepository);
@@ -256,12 +265,12 @@ class RankingServiceTest {
     }
 
     private Season season(String status) {
-        return entity(Season.class, "id", 10L, "status", status,
+        return entity(Season.class, "id", 10L, "status", SeasonStatus.valueOf(status),
                 "startAt", NOW.minusSeconds(3600), "endAt", NOW.plusSeconds(3600));
     }
 
     private Group group(long id) {
-        return entity(Group.class, "id", id, "name", "그룹" + id, "status", "ACTIVE");
+        return entity(Group.class, "id", id, "name", "그룹" + id, "status", GroupStatus.ACTIVE);
     }
 
     private User user(long id) {
@@ -270,7 +279,7 @@ class RankingServiceTest {
 
     private SeasonMemberContribution contribution(long id, long score, Instant reachedAt, String status) {
         return entity(SeasonMemberContribution.class, "user", user(id),
-                "contributionScore", score, "scoreReachedAt", reachedAt, "participantStatus", status);
+                "contributionScore", score, "scoreReachedAt", reachedAt, "participantStatus", GroupMembershipStatus.valueOf(status));
     }
 
     private SeasonGroupScore score(long id, long score, Instant reachedAt, Instant createdAt) {

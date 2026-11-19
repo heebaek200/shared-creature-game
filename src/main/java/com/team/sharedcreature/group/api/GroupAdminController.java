@@ -5,6 +5,7 @@ import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.group.application.GroupAdminService;
 import com.team.sharedcreature.group.application.GroupInvitationManagementService;
 import com.team.sharedcreature.group.application.GroupRemovalService;
+import com.team.sharedcreature.group.domain.GroupRole;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -58,7 +59,7 @@ public class GroupAdminController {
         return ApiResponse.success(groupAdminService.changeMemberRole(
                 loginUser.id(),
                 userId,
-                request.role()
+                GroupRole.valueOf(request.role())
         ));
     }
 

@@ -1,5 +1,9 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
+import com.team.sharedcreature.quest.domain.QuestDifficulty;
+import com.team.sharedcreature.quest.domain.QuestVerificationType;
+
 import com.team.sharedcreature.quest.domain.QuestAssignment;
 import com.team.sharedcreature.quest.domain.QuestPeriod;
 import com.team.sharedcreature.quest.domain.QuestTemplate;
@@ -40,7 +44,7 @@ class QuestPeriodBoundaryTest {
     private static final Instant EXPIRED = Instant.parse("2026-11-10T15:00:00Z");
     private static final QuestPeriodCalendar.PeriodWindow WINDOW =
             new QuestPeriodCalendar.PeriodWindow(
-                    "DAILY", LocalDate.of(2026, 11, 10),
+                    QuestPeriodType.DAILY, LocalDate.of(2026, 11, 10),
                     Instant.parse("2026-11-09T15:00:00Z"),
                     EXPIRED, 8L);
 
@@ -204,10 +208,10 @@ class QuestPeriodBoundaryTest {
                 .mapToObj(slot -> new QuestTemplateSelectionService.SelectedQuest(
                         slot, (long) slot, (long) slot + 10,
                         "D-TEST-" + slot,
-                        slot == 1 ? "LOW" : slot == 2 ? "MEDIUM" : "HIGH",
-                        "제목" + slot, "설명", "SELF_CHECK", "{}", 100L, 10L))
+                        slot == 1 ? QuestDifficulty.LOW : slot == 2 ? QuestDifficulty.MEDIUM : QuestDifficulty.HIGH,
+                        "제목" + slot, "설명", QuestVerificationType.SELF_CHECK, "{}", 100L, 10L))
                 .toList();
-        return new QuestTemplateSelectionService.SelectionBatch("DAILY", 8L, slots);
+        return new QuestTemplateSelectionService.SelectionBatch(QuestPeriodType.DAILY, 8L, slots);
     }
 
     /**
@@ -232,7 +236,7 @@ class QuestPeriodBoundaryTest {
         when(season.getStartAt()).thenReturn(FIRST_START);
         when(season.getEndAt()).thenReturn(FIRST_START.plus(Duration.ofDays(28)));
         when(seasons.findFirstByOrderByStartAtAsc()).thenReturn(Optional.of(season));
-        when(calendar.currentWindow(FIRST_START, NOW, "DAILY")).thenReturn(Optional.of(WINDOW));
+        when(calendar.currentWindow(FIRST_START, NOW, QuestPeriodType.DAILY)).thenReturn(Optional.of(WINDOW));
 
         QuestPeriodPersistenceService persistence = new QuestPeriodPersistenceService(
                 seasonQuery, seasons, calendar, selector, periods,

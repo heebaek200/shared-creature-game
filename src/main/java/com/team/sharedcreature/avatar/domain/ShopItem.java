@@ -1,6 +1,8 @@
 package com.team.sharedcreature.avatar.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -33,14 +35,20 @@ public class ShopItem {
     @Column(name = "price_krw", nullable = false)
     private Long priceKrw;
 
+    /** 상품을 장착할 수 있는 아바타 슬롯입니다. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "slot_code", length = 30, nullable = false)
-    private String slotCode;
+    private AvatarSlot slotCode;
 
     @Column(name = "asset_key", length = 255, nullable = false)
     private String assetKey;
 
+    /** 상품의 판매 상태입니다. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    private ShopItemStatus status;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;

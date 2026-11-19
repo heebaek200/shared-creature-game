@@ -1,5 +1,7 @@
 package com.team.sharedcreature.avatar.api;
 
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.LoginUser;
@@ -8,11 +10,14 @@ import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.avatar.application.AvatarCommandRetryService;
 import com.team.sharedcreature.avatar.application.AvatarService;
 import com.team.sharedcreature.avatar.application.ShopQueryService;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.avatar.support.AvatarHttpTestConfiguration;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -59,6 +64,99 @@ class AvatarHttpContractTest {
     }
 
     @ParameterizedTest
+    @EnumSource(OwnedItemStatus.class)
+    void passesDocumentedOwnedItemStatusToService(OwnedItemStatus filter) throws Exception {
+        when(avatarService.listOwnedItems(1L, 0, 20, null, filter))
+                .thenReturn(Page.empty(PageRequest.of(0, 20)));
+
+        mvc.perform(get("/api/v1/owned-items").session(authenticatedSession())
+                        .queryParam("status", filter.name()))
+                .andExpect(status().isOk());
+
+        verify(avatarService).listOwnedItems(1L, 0, 20, null, filter);
+    }
+
+    @ParameterizedTest
+    @EnumSource(AvatarSlot.class)
+    void passesDocumentedListSlotToServices(AvatarSlot slot) throws Exception {
+        var pageable = PageRequest.of(0, 20);
+        when(shopService.list(0, 20, slot)).thenReturn(Page.empty(pageable));
+        when(avatarService.listOwnedItems(1L, 0, 20, slot, null)).thenReturn(Page.empty(pageable));
+
+        var session = authenticatedSession();
+        for (String path : new String[]{"/api/v1/shop-items", "/api/v1/owned-items"}) {
+            mvc.perform(get(path).session(session).queryParam("slot", slot.name()))
+                    .andExpect(status().isOk());
+        }
+
+        verify(shopService).list(0, 20, slot);
+        verify(avatarService).listOwnedItems(1L, 0, 20, slot, null);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"head", " HEAD", "HEAD ", "", "HAT"})
+    void rejectsInvalidListSlotWithExistingFieldError(String slot) throws Exception {
+        var session = authenticatedSession();
+        for (String path : new String[]{"/api/v1/shop-items", "/api/v1/owned-items"}) {
+            mvc.perform(get(path).session(session).queryParam("slot", slot))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_FIELD_VALUE"))
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("slot"));
+        }
+
+        verifyNoInteractions(shopService, avatarService);
+    }
+
+    @ParameterizedTest
+    @EnumSource(AvatarSlot.class)
+    void passesDocumentedEquipmentSlotToCommands(AvatarSlot slot) throws Exception {
+        when(commands.equipAvatarItem(1L, slot, 10L, true)).thenReturn(emptyAvatar);
+        when(commands.unequipAvatarItem(1L, slot)).thenReturn(emptyAvatar);
+
+        var session = authenticatedSession();
+        var path = "/api/v1/avatar/equipments/{slot}";
+        mvc.perform(put(path, slot.name()).session(session).with(csrf().asHeader())
+                        .contentType("application/json")
+                        .content("{\"ownedItemId\":10,\"confirmFirstUse\":true}"))
+                .andExpect(status().isOk());
+        mvc.perform(delete(path, slot.name()).session(session).with(csrf().asHeader()))
+                .andExpect(status().isOk());
+
+        verify(commands).equipAvatarItem(1L, slot, 10L, true);
+        verify(commands).unequipAvatarItem(1L, slot);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"head", "HEAD ", "HAT"})
+    void rejectsInvalidEquipmentSlotWithExistingFieldError(String slot) throws Exception {
+        var session = authenticatedSession();
+        var path = "/api/v1/avatar/equipments/{slot}";
+        mvc.perform(put(path, slot).session(session).with(csrf().asHeader())
+                        .contentType("application/json")
+                        .content("{\"ownedItemId\":10}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_FIELD_VALUE"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("slot"));
+        mvc.perform(delete(path, slot).session(session).with(csrf().asHeader()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_FIELD_VALUE"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("slot"));
+
+        verifyNoInteractions(commands);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"owned_unused", " OWNED_USED", "", "ACTIVE", "CANCEL_PENDING"})
+    void rejectsInvalidOwnedItemStatusWithExistingFieldError(String filter) throws Exception {
+        mvc.perform(get("/api/v1/owned-items").session(authenticatedSession()).queryParam("status", filter))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_FIELD_VALUE"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("status"));
+
+        verifyNoInteractions(avatarService);
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"/api/v1/shop-items", "/api/v1/owned-items", "/api/v1/avatar"})
     void 로그인_세션이_없으면_조회가_거부된다(String path) throws Exception {
         mvc.perform(get(path).header("X-Request-Id", "issue20-anonymous"))
@@ -98,7 +196,7 @@ class AvatarHttpContractTest {
         var csrfResponse = mvc.perform(get("/api/v1/auth/csrf").session(session))
                 .andExpect(status().isOk()).andReturn().getResponse();
         var token = mapper.readTree(csrfResponse.getContentAsString()).get("data");
-        when(commands.equipAvatarItem(1L, "HEAD", 10L, true)).thenReturn(emptyAvatar);
+        when(commands.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true)).thenReturn(emptyAvatar);
 
         mvc.perform(put("/api/v1/avatar/equipments/HEAD").session(session)
                         .header(token.get("headerName").asText(), token.get("token").asText())
@@ -107,19 +205,19 @@ class AvatarHttpContractTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.userId").value(1));
 
-        verify(commands).equipAvatarItem(1L, "HEAD", 10L, true);
+        verify(commands).equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true);
     }
 
     @Test
     void 동의를_생략한_요청은_false로_Service에_전달한다() throws Exception {
-        when(commands.equipAvatarItem(1L, "HEAD", 10L, false)).thenReturn(emptyAvatar);
+        when(commands.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, false)).thenReturn(emptyAvatar);
 
         mvc.perform(put("/api/v1/avatar/equipments/HEAD").session(authenticatedSession())
                         .with(csrf().asHeader()).contentType("application/json")
                         .content("{\"ownedItemId\":10}"))
                 .andExpect(status().isOk());
 
-        verify(commands).equipAvatarItem(1L, "HEAD", 10L, false);
+        verify(commands).equipAvatarItem(1L, AvatarSlot.HEAD, 10L, false);
     }
 
     @ParameterizedTest
@@ -198,7 +296,7 @@ class AvatarHttpContractTest {
 
     @Test
     void 최초_사용_동의_누락_업무_오류는_409를_유지한다() throws Exception {
-        when(commands.equipAvatarItem(1L, "HEAD", 10L, false))
+        when(commands.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, false))
                 .thenThrow(new BusinessException(ErrorCode.FIRST_USE_CONFIRMATION_REQUIRED));
 
         mvc.perform(put("/api/v1/avatar/equipments/HEAD").session(authenticatedSession())
@@ -228,7 +326,7 @@ class AvatarHttpContractTest {
     /** 인증 필터가 실제로 복원하는 로그인 세션을 준비합니다. */
     private MockHttpSession authenticatedSession() {
         when(users.findById(1L)).thenReturn(Optional.of(user(1L)));
-        when(memberships.findByUserIdAndStatus(1L, "ACTIVE")).thenReturn(Optional.empty());
+        when(memberships.findByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE)).thenReturn(Optional.empty());
         var session = new MockHttpSession();
         session.setAttribute(SessionAuthenticationFilter.LOGIN_USER, new LoginUser(1L, "테스트 회원", Set.of()));
         return session;

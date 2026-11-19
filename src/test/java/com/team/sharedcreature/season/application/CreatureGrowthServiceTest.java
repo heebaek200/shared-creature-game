@@ -2,6 +2,7 @@ package com.team.sharedcreature.season.application;
 
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.quest.domain.QuestCompletion;
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
 import com.team.sharedcreature.season.domain.GroupCreature;
 import com.team.sharedcreature.season.domain.GroupSeason;
 import com.team.sharedcreature.season.domain.Season;
@@ -41,7 +42,7 @@ class CreatureGrowthServiceTest {
                 creature, completion, 45_000, Instant.parse("2026-11-03T01:00:00Z"));
 
         assertThat(result.totalExperience()).isEqualTo(45_000);
-        assertThat(result.stage()).isEqualTo("EGG");
+        assertThat(result.stage()).isEqualTo(CreatureGrowthStage.EGG);
         assertThat(result.duplicate()).isFalse();
         verify(ledgerRepository).save(any());
         verify(eventPublisher).publishAfterCommit(any());
@@ -62,6 +63,7 @@ class CreatureGrowthServiceTest {
                 creature, completion, 100, Instant.parse("2026-11-03T01:00:00Z"));
 
         assertThat(result.duplicate()).isTrue();
+        assertThat(result.stage()).isEqualTo(CreatureGrowthStage.EGG);
         assertThat(creature.getTotalExperience()).isZero();
         verify(ledgerRepository, never()).save(any());
         verify(eventPublisher, never()).publishAfterCommit(any());

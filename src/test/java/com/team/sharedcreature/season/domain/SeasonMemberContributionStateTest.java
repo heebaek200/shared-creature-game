@@ -1,5 +1,9 @@
 package com.team.sharedcreature.season.domain;
 
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.domain.GroupMembership;
@@ -34,7 +38,7 @@ class SeasonMemberContributionStateTest {
 
         // 회원 탈퇴 후 상태만 바뀌었는지 검사합니다.
         f.contribution().synchronizeMembership(f.membership(), CHANGE);
-        assertEquals("LEFT", f.contribution().getParticipantStatus());
+        assertEquals(GroupMembershipStatus.LEFT, f.contribution().getParticipantStatus());
         assertEquals(50L, f.contribution().getContributionScore());
         assertEquals(reachedAt, f.contribution().getScoreReachedAt());
     }
@@ -47,13 +51,13 @@ class SeasonMemberContributionStateTest {
     @Test
     void removedMemberIsMarkedRemoved() {
         Fixture f = fixture();
-        User actor = User.register("USER", START);
+        User actor = User.register(GlobalRole.USER, START);
         ReflectionTestUtils.setField(actor, "id", 99L);
         f.membership().removeForInactivity(actor, CHANGE);
 
         // 강퇴도 동일한 상태 동기화 메서드를 사용합니다.
         f.contribution().synchronizeMembership(f.membership(), CHANGE);
-        assertEquals("REMOVED", f.contribution().getParticipantStatus());
+        assertEquals(GroupMembershipStatus.REMOVED, f.contribution().getParticipantStatus());
         assertEquals(50L, f.contribution().getContributionScore());
     }
 
@@ -73,7 +77,7 @@ class SeasonMemberContributionStateTest {
 
         // 새 멤버십을 통해 같은 그룹 시즌에 복귀합니다.
         f.contribution().synchronizeMembership(newMembership, CHANGE.plusSeconds(60));
-        assertEquals("ACTIVE", f.contribution().getParticipantStatus());
+        assertEquals(GroupMembershipStatus.ACTIVE, f.contribution().getParticipantStatus());
         assertSame(newMembership, f.contribution().getLatestMembership());
         assertEquals(50L, f.contribution().getContributionScore());
         assertEquals(reachedAt, f.contribution().getScoreReachedAt());
@@ -85,7 +89,7 @@ class SeasonMemberContributionStateTest {
      * 데이터베이스를 사용하지 않고 도메인 메서드만 실행합니다.
      */
     private Fixture fixture() {
-        User user = User.register("USER", START);
+        User user = User.register(GlobalRole.USER, START);
         ReflectionTestUtils.setField(user, "id", 10L);
         Group group = Group.create("상태테스트", "상태테스트", "", user, START);
         ReflectionTestUtils.setField(group, "id", 20L);

@@ -1,5 +1,8 @@
 package com.team.sharedcreature.quest.infrastructure;
 
+import com.team.sharedcreature.quest.domain.QuestDifficulty;
+import com.team.sharedcreature.quest.domain.QuestVerificationType;
+
 import com.team.sharedcreature.quest.domain.QuestCompletion;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -44,7 +47,7 @@ public interface QuestCompletionRepository extends JpaRepository<QuestCompletion
             WHERE c.user.id = :userId
             AND c.membership.id = :membershipId
             AND c.groupSeason.id = :groupSeasonId
-            AND p.periodType = 'DAILY'
+            AND p.periodType = com.team.sharedcreature.quest.domain.QuestPeriodType.DAILY
             AND p.periodDate >= :startDate
             AND p.periodDate < :endDateExclusive
             """)
@@ -73,7 +76,7 @@ public interface QuestCompletionRepository extends JpaRepository<QuestCompletion
             WHERE c.user.id = :userId
             AND c.membership.id = :membershipId
             AND c.groupSeason.id = :groupSeasonId
-            AND p.periodType = 'DAILY'
+            AND p.periodType = com.team.sharedcreature.quest.domain.QuestPeriodType.DAILY
             AND p.periodDate >= :startDate
             AND p.periodDate < :endDateExclusive
             """)
@@ -103,7 +106,7 @@ public interface QuestCompletionRepository extends JpaRepository<QuestCompletion
             WHERE c.user.id = :userId
             AND c.membership.id = :membershipId
             AND c.groupSeason.id = :groupSeasonId
-            AND p.periodType = 'DAILY'
+            AND p.periodType = com.team.sharedcreature.quest.domain.QuestPeriodType.DAILY
             AND a.difficultySnapshot = :difficulty
             AND p.periodDate >= :startDate
             AND p.periodDate < :endDateExclusive
@@ -112,7 +115,7 @@ public interface QuestCompletionRepository extends JpaRepository<QuestCompletion
             @Param("userId") Long userId,
             @Param("membershipId") Long membershipId,
             @Param("groupSeasonId") Long groupSeasonId,
-            @Param("difficulty") String difficulty,
+            @Param("difficulty") QuestDifficulty difficulty,
             @Param("startDate") LocalDate startDate,
             @Param("endDateExclusive") LocalDate endDateExclusive
     );
@@ -133,7 +136,7 @@ public interface QuestCompletionRepository extends JpaRepository<QuestCompletion
             WHERE c.user.id = :userId
             AND c.membership.id = :membershipId
             AND c.groupSeason.id = :groupSeasonId
-            AND p.periodType = 'DAILY'
+            AND p.periodType = com.team.sharedcreature.quest.domain.QuestPeriodType.DAILY
             AND a.verificationTypeSnapshot = :verificationType
             AND p.periodDate >= :startDate
             AND p.periodDate < :endDateExclusive
@@ -142,7 +145,7 @@ public interface QuestCompletionRepository extends JpaRepository<QuestCompletion
             @Param("userId") Long userId,
             @Param("membershipId") Long membershipId,
             @Param("groupSeasonId") Long groupSeasonId,
-            @Param("verificationType") String verificationType,
+            @Param("verificationType") QuestVerificationType verificationType,
             @Param("startDate") LocalDate startDate,
             @Param("endDateExclusive") LocalDate endDateExclusive
     );

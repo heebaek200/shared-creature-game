@@ -3,6 +3,10 @@ package com.team.sharedcreature._core.exception;
 import com.team.sharedcreature._core.api.ErrorResponse;
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
 import com.team.sharedcreature._core.api.FieldErrorResponse;
+import com.team.sharedcreature.avatar.api.AvatarController;
+import com.team.sharedcreature.avatar.api.ShopController;
+import com.team.sharedcreature.payment.api.AdminRefundController;
+import com.team.sharedcreature.payment.api.RefundController;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
@@ -16,11 +20,13 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.ServletRequestBindingException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.List;
@@ -32,6 +38,8 @@ import java.util.List;
 public class RestApiExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(RestApiExceptionHandler.class);
+    private static final List<Class<?>> FIELD_VALUE_BODY_CONTROLLERS = List.of(
+            AvatarController.class, ShopController.class, RefundController.class, AdminRefundController.class);
     private final ErrorResponseFactory responseFactory;
 
     /**
@@ -46,7 +54,26 @@ public class RestApiExceptionHandler {
     /** 업무 예외를 설계된 상태와 코드로 응답합니다. */
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> handleBusiness(BusinessException exception, HttpServletRequest request) {
-        return response(exception.errorCode(), exception.getMessage(), List.of(), request);
+        ErrorCode code = exception.errorCode();
+        if (code == ErrorCode.INVALID_REQUEST && usesFieldValueForListQuery(request)) {
+            code = ErrorCode.INVALID_FIELD_VALUE;
+        }
+        return response(code, exception.getMessage(), List.of(), request);
+    }
+
+    /** 목록 API의 Query 오류 코드는 Context Path를 제외한 기존 API 경로로 구분합니다. */
+    private boolean usesFieldValueForListQuery(HttpServletRequest request) {
+        if (!"GET".equals(request.getMethod()) || request.getQueryString() == null) {
+            return false;
+        }
+
+        String path = request.getRequestURI().substring(request.getContextPath().length());
+        return switch (path) {
+            case "/api/v1/shop-items", "/api/v1/owned-items",
+                    "/api/v1/rankings/members", "/api/v1/rankings/groups",
+                    "/api/v1/refund-requests", "/api/v1/admin/refund-requests" -> true;
+            default -> false;
+        };
     }
 
     /** Bean Validation 실패를 필드 오류 배열로 응답합니다. */
@@ -120,6 +147,17 @@ public class RestApiExceptionHandler {
             HttpMessageNotReadableException exception,
             HttpServletRequest request
     ) {
+        Object handler = request.getAttribute(HandlerMapping.BEST_MATCHING_HANDLER_ATTRIBUTE);
+        // 기존 계약에 따라 아바타·환불 API의 DTO에서 거절한 필드 값만 복원합니다.
+        if (handler instanceof HandlerMethod method
+                && FIELD_VALUE_BODY_CONTROLLERS.stream().anyMatch(type -> type.isAssignableFrom(method.getBeanType()))) {
+            for (Throwable cause = exception.getCause(); cause != null; cause = cause.getCause()) {
+                if (cause instanceof BusinessException business
+                        && business.errorCode() == ErrorCode.INVALID_FIELD_VALUE) {
+                    return response(ErrorCode.INVALID_FIELD_VALUE, business.getMessage(), List.of(), request);
+                }
+            }
+        }
         return response(ErrorCode.INVALID_REQUEST, "요청 본문을 확인해 주세요.", List.of(), request);
     }
 
@@ -151,8 +189,20 @@ public class RestApiExceptionHandler {
     /** 예상하지 못한 오류는 세부 내용을 숨기고 추적 ID만 반환합니다. */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception exception, HttpServletRequest request) {
-        log.error("Unexpected API failure. requestId={}", traceId(request), exception);
-        return response(ErrorCode.INTERNAL_SERVER_ERROR, null, List.of(), request);
+        return internalError(exception, null, request);
+    }
+
+    /** 내부 원인은 로그에 기록하고 사전에 정한 사용자 안내 문구를 반환합니다. */
+    @ExceptionHandler(InternalApiException.class)
+    public ResponseEntity<ErrorResponse> handleInternal(InternalApiException exception, HttpServletRequest request) {
+        return internalError(exception, exception.getMessage(), request);
+    }
+
+    private ResponseEntity<ErrorResponse> internalError(
+            Exception exception, String clientMessage, HttpServletRequest request
+    ) {
+        log.error("Unexpected API failure. requestId={}", ErrorResponseFactory.requestTraceId(request), exception);
+        return response(ErrorCode.INTERNAL_SERVER_ERROR, clientMessage, List.of(), request);
     }
 
     private FieldErrorResponse toFieldError(FieldError error) {
@@ -174,16 +224,6 @@ public class RestApiExceptionHandler {
             List<FieldErrorResponse> fields,
             HttpServletRequest request
     ) {
-        return ResponseEntity.status(errorCode.status()).body(responseFactory.create(
-                errorCode,
-                message,
-                fields,
-                traceId(request)
-        ));
-    }
-
-    private String traceId(HttpServletRequest request) {
-        Object value = request.getAttribute("requestId");
-        return value == null ? "unavailable" : value.toString();
+        return responseFactory.createMvcResponse(errorCode, message, fields, request);
     }
 }

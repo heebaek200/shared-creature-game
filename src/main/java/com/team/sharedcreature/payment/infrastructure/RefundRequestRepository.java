@@ -1,6 +1,7 @@
 package com.team.sharedcreature.payment.infrastructure;
 
 import com.team.sharedcreature.payment.domain.RefundRequest;
+import com.team.sharedcreature.payment.domain.RefundStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -67,7 +68,7 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, Lo
     )
     Page<RefundRequest> findMyRefunds(
             @Param("userId") Long userId,
-            @Param("status") String status,
+            @Param("status") RefundStatus status,
             Pageable pageable
     );
 
@@ -92,7 +93,7 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, Lo
                     """
     )
     Page<RefundRequest> findAdminRefunds(
-            @Param("status") String status,
+            @Param("status") RefundStatus status,
             Pageable pageable
     );
 
@@ -140,7 +141,10 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, Lo
     @Query("""
         SELECT refund.id
         FROM RefundRequest refund
-        WHERE refund.status IN ('CANCEL_PENDING', 'CANCEL_UNKNOWN')
+        WHERE refund.status IN (
+            com.team.sharedcreature.payment.domain.RefundStatus.CANCEL_PENDING,
+            com.team.sharedcreature.payment.domain.RefundStatus.CANCEL_UNKNOWN
+        )
           AND refund.cancelClaimedAt <= :cutoff
         ORDER BY refund.cancelClaimedAt ASC, refund.id ASC
         """)

@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.integration;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.domain.Group;
@@ -89,7 +91,7 @@ class SeasonLifecycleNormalizationIntegrationTest {
                 "SELECT id FROM seasons WHERE season_number = 1", Long.class
         );
         assertNotNull(firstSeasonId);
-        User user = userRepository.saveAndFlush(User.register("USER", NOW));
+        User user = userRepository.saveAndFlush(User.register(GlobalRole.USER, NOW));
         userId = user.getId();
         Group group = groupRepository.saveAndFlush(Group.create(
                 "e4통합그룹" + userId,

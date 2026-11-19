@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature._core.time.SeasonCalendar;
 import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.SeasonRepository;
@@ -85,7 +87,7 @@ public class SeasonCreationService {
         }
 
         // 이전 시즌이 ENDED로 Commit되기 전에는 새로운 시즌을 만들지 않습니다.
-        if (!"ENDED".equals(latest.getStatus())) {
+        if (latest.getStatus() != SeasonStatus.ENDED) {
             return new CreationResult(Outcome.WAITING_FOR_CLOSURE, latest.getId(), currentWindow.startAt());
         }
 

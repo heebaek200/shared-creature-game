@@ -1,6 +1,7 @@
 package com.team.sharedcreature.payment.application;
 
 import com.team.sharedcreature.payment.domain.PgApiAttempt;
+import com.team.sharedcreature.payment.domain.PgApiOperation;
 import com.team.sharedcreature.payment.infrastructure.PgApiAttemptRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -122,7 +123,7 @@ public class RefundRecoveryPreparationService {
 
         var cancellation = history.stream()
                 .filter(attempt ->
-                        "CANCELLATION".equals(attempt.getOperation())
+                        attempt.getOperation() == PgApiOperation.CANCELLATION
                 )
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException(

@@ -1,6 +1,8 @@
 package com.team.sharedcreature.quest.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -34,8 +36,10 @@ public class QuestTemplateVersion {
     @Column(name = "description", length = 500, nullable = false)
     private String description;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "verification_type", length = 30, nullable = false)
-    private String verificationType;
+    private QuestVerificationType verificationType;
 
     @Column(name = "verification_parameters", columnDefinition = "JSON", nullable = false)
     private String verificationParameters;

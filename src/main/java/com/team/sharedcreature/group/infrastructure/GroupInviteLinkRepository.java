@@ -1,6 +1,7 @@
 package com.team.sharedcreature.group.infrastructure;
 
 import com.team.sharedcreature.group.domain.GroupInviteLink;
+import com.team.sharedcreature.group.domain.GroupInviteLinkStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -15,7 +16,7 @@ import java.util.Optional;
 public interface GroupInviteLinkRepository extends JpaRepository<GroupInviteLink, Long> {
     Optional<GroupInviteLink> findByTokenHash(String tokenHash);
 
-    Optional<GroupInviteLink> findByIdAndStatus(Long id, String status);
+    Optional<GroupInviteLink> findByIdAndStatus(Long id, GroupInviteLinkStatus status);
 
     /** 그룹 잠금 뒤 초대 유효성을 고정해 링크 회전과 가입을 직렬화합니다. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -24,7 +25,7 @@ public interface GroupInviteLinkRepository extends JpaRepository<GroupInviteLink
               FROM GroupInviteLink invitation
              WHERE invitation.id = :invitationId
                AND invitation.group.id = :groupId
-               AND invitation.status = 'ACTIVE'
+               AND invitation.status = com.team.sharedcreature.group.domain.GroupInviteLinkStatus.ACTIVE
             """)
     Optional<GroupInviteLink> findActiveForUpdate(
             @Param("invitationId") Long invitationId,
@@ -43,7 +44,7 @@ public interface GroupInviteLinkRepository extends JpaRepository<GroupInviteLink
                 GroupInviteLink AS gil
             WHERE
                 gil.group.id = :groupId
-            AND gil.status = 'ACTIVE'
+            AND gil.status = com.team.sharedcreature.group.domain.GroupInviteLinkStatus.ACTIVE
 """)
     Optional<GroupInviteLink> findActiveByGroupIdForUpdate(@Param("groupId") Long groupId);
 
@@ -56,7 +57,7 @@ public interface GroupInviteLinkRepository extends JpaRepository<GroupInviteLink
      */
     Optional<GroupInviteLink> findByGroup_IdAndStatus(
             Long groupId,
-            String status
+            GroupInviteLinkStatus status
     );
 
 }

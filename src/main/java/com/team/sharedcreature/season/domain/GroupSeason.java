@@ -3,6 +3,8 @@ package com.team.sharedcreature.season.domain;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.group.domain.Group;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -44,14 +46,20 @@ public class GroupSeason {
     @JoinColumn(name = "selected_by_user_id", nullable = true)
     private User selectedByUser;
 
+    /** 미선택 시 null이며 종 확정 후 선택 경로를 보존합니다. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "selection_source", length = 30, nullable = true)
-    private String selectionSource;
+    private CreatureSelectionSource selectionSource;
 
     @Column(name = "selected_at", nullable = true)
     private Instant selectedAt;
 
+    /** 알 준비·활성 참여·종료 상태를 기존 문자열로 저장합니다. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    private GroupSeasonStatus status;
 
     @Version
     @Column(name = "version", nullable = false)
@@ -67,7 +75,7 @@ public class GroupSeason {
         this.group = group;
         this.season = season;
         this.selectionDeadlineAt = now.plusSeconds(72L * 60 * 60);
-        this.status = "PREPARING";
+        this.status = GroupSeasonStatus.PREPARING;
         this.createdAt = now;
         this.updatedAt = now;
     }
@@ -94,7 +102,7 @@ public class GroupSeason {
         }
         this.selectedSpecies = species;
         this.selectedByUser = selectedBy;
-        this.selectionSource = "ADMIN";
+        this.selectionSource = CreatureSelectionSource.ADMIN;
         this.selectedAt = now;
         this.updatedAt = now;
         return true;
@@ -107,23 +115,23 @@ public class GroupSeason {
         }
         this.selectedSpecies = species;
         this.selectedByUser = null;
-        this.selectionSource = "RANDOM";
+        this.selectionSource = CreatureSelectionSource.RANDOM;
         this.selectedAt = now;
         this.updatedAt = now;
     }
 
     /** 알 준비 상태를 종료하고 현재 시즌의 활성 크리처 상태로 전환합니다. */
     public void activate(Instant now) {
-        if (!"PREPARING".equals(status) || selectedSpecies == null) {
+        if (status != GroupSeasonStatus.PREPARING || selectedSpecies == null) {
             throw new IllegalStateException("Only a selected preparing group season can be activated.");
         }
-        this.status = "ACTIVE";
+        this.status = GroupSeasonStatus.ACTIVE;
         this.updatedAt = now;
     }
 
     /** 현재 시각에 관리자 종 선택이 가능한지 반환합니다. */
     public boolean isSelectionOpenAt(Instant now) {
-        return "PREPARING".equals(status) && now.isBefore(selectionDeadlineAt);
+        return status == GroupSeasonStatus.PREPARING && now.isBefore(selectionDeadlineAt);
     }
 
     /**
@@ -132,12 +140,12 @@ public class GroupSeason {
      *  - 이미 확정된 종 선택과 시즌 이력은 보존
      */
     public void endForGroupClosure(Instant now) {
-        if ("ENDED".equals(this.status)) {
+        if (this.status == GroupSeasonStatus.ENDED) {
             return;
         }
 
         // 시즌 참가 상태만 종료
-        this.status = "ENDED";
+        this.status = GroupSeasonStatus.ENDED;
         this.updatedAt = now;
     }
 }

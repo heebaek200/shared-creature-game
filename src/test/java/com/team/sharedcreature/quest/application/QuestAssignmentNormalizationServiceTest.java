@@ -1,5 +1,6 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
 import com.team.sharedcreature.admin.application.SchedulerJobRunner;
 import com.team.sharedcreature.quest.infrastructure.QuestPeriodRepository;
 import com.team.sharedcreature.season.domain.Season;
@@ -100,7 +101,7 @@ class QuestAssignmentNormalizationServiceTest {
         mockSuccessfulExecution();
         mockCreatedAssignments();
         Instant monday = Instant.parse("2026-11-08T15:00:00Z");
-        when(periods.findHistoricalStartAts(eq("DAILY"), eq(FIRST), eq(monday)))
+        when(periods.findHistoricalStartAts(eq(QuestPeriodType.DAILY), eq(FIRST), eq(monday)))
                 .thenReturn(List.of(FIRST, FIRST.plus(Duration.ofDays(2)), FIRST.plus(Duration.ofDays(4))));
 
         var result = normalizer.normalizeForActiveSeason(7L);
@@ -124,7 +125,7 @@ class QuestAssignmentNormalizationServiceTest {
         mockSuccessfulExecution();
         when(assignments.assign(any())).thenAnswer(invocation -> {
             QuestPeriodCalendar.PeriodWindow w = invocation.getArgument(0);
-            if ("DAILY".equals(w.periodType())) {
+            if (w.periodType() == QuestPeriodType.DAILY) {
                 return new QuestPeriodAssignmentService.Result(
                         QuestPeriodAssignmentService.Outcome.FAILED, 10L, 0);
             }
@@ -200,7 +201,7 @@ class QuestAssignmentNormalizationServiceTest {
         mockCreatedAssignments();
         when(integrity.verifyCommittedAssignment(any(), eq(7L))).thenAnswer(invocation -> {
             QuestPeriodCalendar.PeriodWindow window = invocation.getArgument(0);
-            return "DAILY".equals(window.periodType())
+            return window.periodType() == QuestPeriodType.DAILY
                     ? new QuestAssignmentIntegrityService.Validation(false,
                             "[QUEST_ASSIGNMENT_INTEGRITY] code=ASSIGNMENT_COUNT_MISMATCH")
                     : new QuestAssignmentIntegrityService.Validation(true, null);
@@ -261,7 +262,7 @@ class QuestAssignmentNormalizationServiceTest {
         when(active.isActiveAt(NOW)).thenReturn(true);
         when(seasons.findFirstByOrderByStartAtAsc()).thenReturn(Optional.of(first));
         when(first.getStartAt()).thenReturn(FIRST);
-        when(periods.findHistoricalStartAts(anyString(), eq(FIRST), any(Instant.class)))
+        when(periods.findHistoricalStartAts(any(QuestPeriodType.class), eq(FIRST), any(Instant.class)))
                 .thenReturn(List.of());
     }
 
@@ -301,7 +302,7 @@ class QuestAssignmentNormalizationServiceTest {
     private void mockCreatedAssignments() {
         when(assignments.assign(any())).thenAnswer(invocation -> {
             QuestPeriodCalendar.PeriodWindow window = invocation.getArgument(0);
-            boolean daily = "DAILY".equals(window.periodType());
+            boolean daily = window.periodType() == QuestPeriodType.DAILY;
             return new QuestPeriodAssignmentService.Result(
                     QuestPeriodAssignmentService.Outcome.CREATED, daily ? 10L : 11L, daily ? 3L : 7L);
         });

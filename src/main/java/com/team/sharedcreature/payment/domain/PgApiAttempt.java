@@ -1,6 +1,8 @@
 package com.team.sharedcreature.payment.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -9,7 +11,6 @@ import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.Set;
 
 /**
  * pg_api_attempts 테이블의 상태와 이력을 보존하는 JPA 엔티티입니다.
@@ -40,8 +41,11 @@ public class PgApiAttempt {
     @JoinColumn(name = "refund_request_id", nullable = true)
     private RefundRequest refundRequest;
 
+    /** 실제 취소 요청과 기존 취소 결과 조회를 구분합니다. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "operation", length = 30, nullable = false)
-    private String operation;
+    private PgApiOperation operation;
 
     @Column(name = "idempotency_key", length = 128, nullable = false)
     private String idempotencyKey;
@@ -49,8 +53,11 @@ public class PgApiAttempt {
     @Column(name = "attempt_number", nullable = false)
     private Integer attemptNumber;
 
+    /** 호출 준비 상태 또는 해당 호출에서 확인한 결과입니다. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "result_type", length = 30, nullable = false)
-    private String resultType;
+    private PgApiResultType resultType;
 
     @Column(name = "http_status")
     private Integer httpStatus;
@@ -95,7 +102,7 @@ public class PgApiAttempt {
             );
         }
 
-        if (!"CANCEL_PENDING".equals(refund.getStatus())) {
+        if (refund.getStatus() != RefundStatus.CANCEL_PENDING) {
             throw new IllegalStateException(
                     "취소 처리권을 선점한 환불만 PG 호출을 준비할 수 있습니다."
             );
@@ -113,10 +120,10 @@ public class PgApiAttempt {
                 "refund.purchase"
         );
         attempt.refundRequest = refund;
-        attempt.operation = "CANCELLATION";
+        attempt.operation = PgApiOperation.CANCELLATION;
         attempt.idempotencyKey = pgIdempotencyKey;
         attempt.attemptNumber = attemptNumber;
-        attempt.resultType = "STARTED";
+        attempt.resultType = PgApiResultType.STARTED;
         attempt.startedAt = now;
         attempt.createdAt = now;
 
@@ -148,7 +155,7 @@ public class PgApiAttempt {
         if (refund.getId() == null
                 || cancellation.getId() == null
                 || cancellation.getRefundRequest() == null
-                || !"CANCELLATION".equals(cancellation.getOperation())
+                || cancellation.getOperation() != PgApiOperation.CANCELLATION
                 || !Objects.equals(
                 refund.getId(),
                 cancellation.getRefundRequest().getId()
@@ -162,8 +169,8 @@ public class PgApiAttempt {
             );
         }
 
-        if (!"CANCEL_PENDING".equals(refund.getStatus())
-                && !"CANCEL_UNKNOWN".equals(refund.getStatus())) {
+        if (refund.getStatus() != RefundStatus.CANCEL_PENDING
+                && refund.getStatus() != RefundStatus.CANCEL_UNKNOWN) {
             throw new IllegalStateException(
                     "취소 결과가 미확정인 환불만 조회를 준비할 수 있습니다."
             );
@@ -189,13 +196,13 @@ public class PgApiAttempt {
         attempt.refundRequest = refund;
 
         // 실제 취소 호출과 결과 확인용 조회를 구분합니다.
-        attempt.operation = "CANCELLATION_LOOKUP";
+        attempt.operation = PgApiOperation.CANCELLATION_LOOKUP;
 
         // 최초 취소 요청과의 연결을 유지합니다.
         attempt.idempotencyKey = key;
         attempt.attemptNumber = attemptNumber;
         attempt.paymentTransaction = cancellation.getPaymentTransaction();
-        attempt.resultType = "STARTED";
+        attempt.resultType = PgApiResultType.STARTED;
         attempt.startedAt = now;
         attempt.createdAt = now;
 
@@ -215,7 +222,7 @@ public class PgApiAttempt {
      * @return 처음 기록했으면 true, 이미 기록되어 있으면 false
      */
     public boolean complete(
-            String resultType,
+            PgApiResultType resultType,
             Integer httpStatus,
             String providerResultCode,
             String responseSummary,
@@ -229,12 +236,8 @@ public class PgApiAttempt {
             return false;
         }
 
-        if (resultType == null || !Set.of(
-                "SUCCESS",
-                "DEFINITIVE_FAILURE",
-                "PENDING",
-                "UNKNOWN"
-        ).contains(resultType)) {
+        // 준비 상태는 호출 완료 결과로 기록할 수 없습니다.
+        if (resultType == null || resultType == PgApiResultType.STARTED) {
             throw new IllegalArgumentException("유효하지 않은 PG 호출 결과입니다.");
         }
 
@@ -251,8 +254,7 @@ public class PgApiAttempt {
             if (!Objects.equals(
                     purchase.getId(),
                     transaction.getPurchase().getId()
-            ) || !PaymentTransactionType.CANCELLATION.name()
-                    .equals(transaction.getTransactionType())) {
+            ) || transaction.getTransactionType() != PaymentTransactionType.CANCELLATION) {
                 throw new IllegalArgumentException(
                         "동일 구매의 취소 거래만 연결할 수 있습니다."
                 );

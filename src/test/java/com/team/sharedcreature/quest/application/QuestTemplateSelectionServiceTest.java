@@ -1,11 +1,17 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
 import com.team.sharedcreature.quest.domain.QuestTemplate;
+import com.team.sharedcreature.quest.domain.QuestTemplateStatus;
+import com.team.sharedcreature.quest.domain.QuestDifficulty;
+import com.team.sharedcreature.quest.domain.QuestVerificationType;
 import com.team.sharedcreature.quest.domain.QuestTemplateVersion;
 import com.team.sharedcreature.quest.infrastructure.QuestTemplateRepository;
 import com.team.sharedcreature.quest.infrastructure.QuestTemplateVersionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -63,7 +69,7 @@ class QuestTemplateSelectionServiceTest {
         prepareCatalog("DAILY", 5, 4, 3);
         stubLatestVersions();
 
-        var batch = service.select(window("DAILY", 0));
+        var batch = service.select(window(QuestPeriodType.DAILY, 0));
 
         // 슬롯은 난이도 순서로 부여하고 버전 스냅샷을 반환합니다.
         assertEquals(3, batch.slots().size());
@@ -86,7 +92,7 @@ class QuestTemplateSelectionServiceTest {
         prepareCatalog("WEEKLY", 6, 4, 4);
         stubLatestVersions();
 
-        var batch = service.select(window("WEEKLY", 0));
+        var batch = service.select(window(QuestPeriodType.WEEKLY, 0));
 
         // 기준 주차 0의 난이도별 시작 오프셋은 0·1·2입니다.
         assertEquals(List.of("W-L-01", "W-L-02", "W-L-03",
@@ -106,7 +112,7 @@ class QuestTemplateSelectionServiceTest {
         prepareCatalog("WEEKLY", 6, 4, 4);
         stubLatestVersions();
 
-        var batch = service.select(window("WEEKLY", 1));
+        var batch = service.select(window(QuestPeriodType.WEEKLY, 1));
 
         // HIGH 4개 중 시작점 3에서 두 개를 선택해 4→1로 되돌아옵니다.
         assertEquals(List.of("W-L-02", "W-L-03", "W-L-04",
@@ -123,7 +129,7 @@ class QuestTemplateSelectionServiceTest {
         prepareCatalog("DAILY", 5, 4, 3);
         stubLatestVersions();
 
-        var batch = service.select(window("DAILY", 28));
+        var batch = service.select(window(QuestPeriodType.DAILY, 28));
 
         // 28을 각각 5·4·3으로 나눈 나머지와 오프셋을 적용합니다.
         assertEquals(List.of("D-L-04", "D-M-02", "D-H-01"), codes(batch));
@@ -140,7 +146,7 @@ class QuestTemplateSelectionServiceTest {
         prepareCatalog("DAILY", 4, 4, 3);
 
         var exception = assertThrows(QuestTemplateSelectionService.SelectionException.class,
-                () -> service.select(window("DAILY", 0)));
+                () -> service.select(window(QuestPeriodType.DAILY, 0)));
 
         // 요구되는 최소 수는 선정 슬롯 수보다 큽니다.
         assertEquals(QuestTemplateSelectionService.FailureCode.INSUFFICIENT_ACTIVE_TEMPLATES,
@@ -158,7 +164,7 @@ class QuestTemplateSelectionServiceTest {
         prepareCatalog("WEEKLY", 6, 4, 3);
 
         var exception = assertThrows(QuestTemplateSelectionService.SelectionException.class,
-                () -> service.select(window("WEEKLY", 0)));
+                () -> service.select(window(QuestPeriodType.WEEKLY, 0)));
 
         // HIGH 최소 활성 수는 4개로 고정돼 있습니다.
         assertEquals(QuestTemplateSelectionService.FailureCode.INSUFFICIENT_ACTIVE_TEMPLATES,
@@ -180,7 +186,7 @@ class QuestTemplateSelectionServiceTest {
         stubLatestVersions();
 
         var exception = assertThrows(QuestTemplateSelectionService.SelectionException.class,
-                () -> service.select(window("DAILY", 0)));
+                () -> service.select(window(QuestPeriodType.DAILY, 0)));
 
         // 최신 버전을 조회하지 못한 슬롯을 임의 기본값으로 메우지 않습니다.
         assertEquals(QuestTemplateSelectionService.FailureCode.MISSING_TEMPLATE_VERSION,
@@ -196,7 +202,7 @@ class QuestTemplateSelectionServiceTest {
     void selectedSnapshotDoesNotChangeWhenVersionEntityChanges() {
         prepareCatalog("DAILY", 5, 4, 3);
         stubLatestVersions();
-        var batch = service.select(window("DAILY", 0));
+        var batch = service.select(window(QuestPeriodType.DAILY, 0));
         var selected = batch.slots().getFirst();
 
         // 선정 후 원본 버전 객체의 제목을 바꿔도 Snapshot은 유지됩니다.
@@ -219,26 +225,19 @@ class QuestTemplateSelectionServiceTest {
         ReflectionTestUtils.setField(secondLow, "rotationOrder", 1);
 
         var exception = assertThrows(QuestTemplateSelectionService.SelectionException.class,
-                () -> service.select(window("DAILY", 0)));
+                () -> service.select(window(QuestPeriodType.DAILY, 0)));
 
         // 정렬의 비결정성을 만드는 중복 카탈로그를 거부합니다.
         assertEquals(QuestTemplateSelectionService.FailureCode.INVALID_TEMPLATE_CATALOG,
                 exception.failureCode());
     }
 
-    /**
-     * 선정기는 DAILY와 WEEKLY만 허용합니다.
-     * 잘못된 기간 정보에서는 Repository에 접근하기 전에 거절해야 합니다.
-     * 4-F-1과 마찬가지로 오타를 다른 기간으로 추정하지 않습니다.
-     */
+    /** A window must identify its quest period. */
     @Test
-    void unsupportedPeriodTypeIsRejected() {
-        var invalid = new QuestPeriodCalendar.PeriodWindow(
-                "MONTHLY", java.time.LocalDate.of(2026, 11, 2), FIRST_START,
-                FIRST_START.plus(Duration.ofDays(28)), 0);
-
-        // PERIOD 타입 검증을 조회 이전에 수행합니다.
-        assertThrows(IllegalArgumentException.class, () -> service.select(invalid));
+    void periodWindowRequiresPeriodType() {
+        assertThrows(NullPointerException.class, () -> new QuestPeriodCalendar.PeriodWindow(
+                null, java.time.LocalDate.of(2026, 11, 2), FIRST_START,
+                FIRST_START.plus(Duration.ofDays(1)), 0));
     }
 
     /**
@@ -246,10 +245,22 @@ class QuestTemplateSelectionServiceTest {
      * 회전 인덱스를 테스트 안에서 임의 계산하지 않도록 공통 도메인을 사용합니다.
      * DAILY는 일수, WEEKLY는 주차를 인자로 해석합니다.
      */
-    private QuestPeriodCalendar.PeriodWindow window(String type, long index) {
+    private QuestPeriodCalendar.PeriodWindow window(QuestPeriodType type, long index) {
         // 첫 시즌부터 해당 인덱스의 기간 시작 시각을 계산합니다.
-        Instant now = FIRST_START.plus(Duration.ofDays(index * ("DAILY".equals(type) ? 1 : 7)));
+        Instant now = FIRST_START.plus(Duration.ofDays(index * (type == QuestPeriodType.DAILY ? 1 : 7)));
         return new QuestPeriodCalendar().currentWindow(FIRST_START, now, type).orElseThrow();
+    }
+
+    /** 비활성·실험용 템플릿이 조회 결과에 섞이면 기존 카탈로그 오류로 거부합니다. */
+    @ParameterizedTest
+    @EnumSource(value = QuestTemplateStatus.class, names = {"INACTIVE", "EXPERIMENTAL"})
+    void 비활성_실험용_템플릿은_배정을_거절한다(QuestTemplateStatus status) {
+        prepareCatalog("DAILY", 5, 4, 3);
+        ReflectionTestUtils.setField(catalog.getFirst(), "status", status);
+
+        var exception = assertThrows(QuestTemplateSelectionService.SelectionException.class,
+                () -> service.select(window(QuestPeriodType.DAILY, 0)));
+        assertEquals(QuestTemplateSelectionService.FailureCode.INVALID_TEMPLATE_CATALOG, exception.failureCode());
     }
 
     /**
@@ -262,7 +273,7 @@ class QuestTemplateSelectionServiceTest {
         addDifficulty(type, "LOW", "L", lowCount, 1000);
         addDifficulty(type, "MEDIUM", "M", mediumCount, 2000);
         addDifficulty(type, "HIGH", "H", highCount, 3000);
-        when(templateRepository.findActiveByPeriodType(type)).thenReturn(catalog);
+        when(templateRepository.findActiveByPeriodType(QuestPeriodType.valueOf(type))).thenReturn(catalog);
     }
 
     /**
@@ -278,9 +289,9 @@ class QuestTemplateSelectionServiceTest {
             String templateCode = "%s-%s-%02d".formatted(period.equals("DAILY") ? "D" : "W", code, i);
             ReflectionTestUtils.setField(template, "id", id);
             ReflectionTestUtils.setField(template, "code", templateCode);
-            ReflectionTestUtils.setField(template, "periodType", period);
-            ReflectionTestUtils.setField(template, "difficulty", difficulty);
-            ReflectionTestUtils.setField(template, "status", "ACTIVE");
+            ReflectionTestUtils.setField(template, "periodType", QuestPeriodType.valueOf(period));
+            ReflectionTestUtils.setField(template, "difficulty", QuestDifficulty.valueOf(difficulty));
+            ReflectionTestUtils.setField(template, "status", QuestTemplateStatus.ACTIVE);
             ReflectionTestUtils.setField(template, "rotationOrder", i);
             catalog.add(template);
 
@@ -291,7 +302,7 @@ class QuestTemplateSelectionServiceTest {
             ReflectionTestUtils.setField(version, "versionNumber", 2);
             ReflectionTestUtils.setField(version, "title", templateCode + " v2");
             ReflectionTestUtils.setField(version, "description", "테스트 퀘스트");
-            ReflectionTestUtils.setField(version, "verificationType", "SELF_CHECK");
+            ReflectionTestUtils.setField(version, "verificationType", QuestVerificationType.SELF_CHECK);
             ReflectionTestUtils.setField(version, "verificationParameters", "{}");
             ReflectionTestUtils.setField(version, "creatureExperience", 15L);
             ReflectionTestUtils.setField(version, "contributionScore", 6L);
@@ -340,6 +351,6 @@ class QuestTemplateSelectionServiceTest {
      */
     private List<String> difficulties(QuestTemplateSelectionService.SelectionBatch batch) {
         // 엔티티 참조 없이 Snapshot 난이도만 반환합니다.
-        return batch.slots().stream().map(QuestTemplateSelectionService.SelectedQuest::difficultySnapshot).toList();
+        return batch.slots().stream().map(slot -> slot.difficultySnapshot().name()).toList();
     }
 }

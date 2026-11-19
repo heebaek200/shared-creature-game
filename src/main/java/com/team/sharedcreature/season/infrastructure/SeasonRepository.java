@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.infrastructure;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.season.domain.Season;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
@@ -16,7 +18,7 @@ import java.util.Optional;
  * Season 엔티티의 기본 영속성 연산을 제공합니다.
  */
 public interface SeasonRepository extends JpaRepository<Season, Long> {
-    Optional<Season> findFirstByStatusOrderByStartAtDesc(String status);
+    Optional<Season> findFirstByStatusOrderByStartAtDesc(SeasonStatus status);
 
     /**
      * 랭킹에서 선택할 수 있는 현재·종료 시즌을 최신 시즌부터 조회합니다.
@@ -27,8 +29,9 @@ public interface SeasonRepository extends JpaRepository<Season, Long> {
     @Query("""
             SELECT season
               FROM Season season
-             WHERE season.status = 'ACTIVE'
-                OR (season.status = 'ENDED' AND season.closingFromStatus = 'ACTIVE')
+             WHERE season.status = com.team.sharedcreature.season.domain.SeasonStatus.ACTIVE
+                OR (season.status = com.team.sharedcreature.season.domain.SeasonStatus.ENDED
+                    AND season.closingFromStatus = com.team.sharedcreature.season.domain.SeasonStatus.ACTIVE)
              ORDER BY season.seasonNumber DESC
             """)
     List<Season> findAllRankableOrderBySeasonNumberDesc();
@@ -47,7 +50,7 @@ public interface SeasonRepository extends JpaRepository<Season, Long> {
              WHERE season.status = :status
              ORDER BY season.startAt DESC
             """)
-    List<Season> findForShareByStatus(@Param("status") String status, Pageable pageable);
+    List<Season> findForShareByStatus(@Param("status") SeasonStatus status, Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT season FROM Season season WHERE season.id = :seasonId")
@@ -66,15 +69,15 @@ public interface SeasonRepository extends JpaRepository<Season, Long> {
               FROM Season season
              WHERE season.endAt <= :now
                AND (
-                   season.status IN ('ACTIVE', 'SCHEDULED', 'CLOSING')
+                   season.status IN (com.team.sharedcreature.season.domain.SeasonStatus.ACTIVE, com.team.sharedcreature.season.domain.SeasonStatus.SCHEDULED, com.team.sharedcreature.season.domain.SeasonStatus.CLOSING)
                    OR (
-                       season.status = 'ENDED'
+                       season.status = com.team.sharedcreature.season.domain.SeasonStatus.ENDED
                        AND NOT EXISTS (
                            SELECT execution.id
                              FROM SchedulerExecution execution
                             WHERE execution.jobType = 'SEASON_CLOSE'
                               AND execution.scheduledFor = season.endAt
-                              AND execution.status = 'SUCCEEDED'
+                              AND execution.status = com.team.sharedcreature.admin.domain.SchedulerExecutionStatus.SUCCEEDED
                        )
                    )
                )

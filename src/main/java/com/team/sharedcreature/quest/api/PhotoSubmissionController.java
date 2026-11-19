@@ -3,6 +3,7 @@ package com.team.sharedcreature.quest.api;
 import com.team.sharedcreature._core.api.ApiResponse;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
+import com.team.sharedcreature._core.exception.InternalApiException;
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.quest.application.PhotoVerificationService;
 import jakarta.servlet.ServletException;
@@ -83,10 +84,7 @@ public class PhotoSubmissionController {
 
             return ApiResponse.success(result);
         } catch (java.io.IOException exception) {
-            throw new BusinessException(
-                    ErrorCode.INTERNAL_SERVER_ERROR,
-                    "업로드된 사진을 읽지 못했습니다."
-            );
+            throw new InternalApiException("업로드된 사진을 읽지 못했습니다.", exception);
         }
     }
 

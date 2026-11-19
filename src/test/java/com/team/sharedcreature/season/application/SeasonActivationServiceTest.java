@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.SeasonActivationInspectionRepository;
 import com.team.sharedcreature.season.infrastructure.SeasonRepository;
@@ -63,7 +65,7 @@ class SeasonActivationServiceTest {
         var result = service.activateIfInitializationComplete(SEASON_ID);
 
         assertEquals(SeasonActivationService.Outcome.ACTIVATED, result.outcome());
-        assertEquals("ACTIVE", season.getStatus());
+        assertEquals(SeasonStatus.ACTIVE, season.getStatus());
         assertEquals(NOW, season.getUpdatedAt());
         assertEquals(3, result.inspection().activeGroups());
         var order = inOrder(seasonRepository, inspectionRepository);
@@ -83,7 +85,7 @@ class SeasonActivationServiceTest {
 
         assertEquals(SeasonActivationService.Outcome.ACTIVATED,
                 service.activateIfInitializationComplete(SEASON_ID).outcome());
-        assertEquals("ACTIVE", season.getStatus());
+        assertEquals(SeasonStatus.ACTIVE, season.getStatus());
     }
 
     /**
@@ -160,7 +162,7 @@ class SeasonActivationServiceTest {
     @Test
     void alreadyActiveIsIdempotent() {
         Season season = scheduledSeason();
-        ReflectionTestUtils.setField(season, "status", "ACTIVE");
+        ReflectionTestUtils.setField(season, "status", SeasonStatus.ACTIVE);
 
         var result = service.activateIfInitializationComplete(SEASON_ID);
 
@@ -181,7 +183,7 @@ class SeasonActivationServiceTest {
 
         assertEquals(SeasonActivationService.Outcome.NOT_STARTED,
                 service.activateIfInitializationComplete(SEASON_ID).outcome());
-        assertEquals("SCHEDULED", season.getStatus());
+        assertEquals(SeasonStatus.SCHEDULED, season.getStatus());
         verifyNoInteractions(inspectionRepository);
     }
 
@@ -197,7 +199,7 @@ class SeasonActivationServiceTest {
 
         assertEquals(SeasonActivationService.Outcome.EXPIRED,
                 service.activateIfInitializationComplete(SEASON_ID).outcome());
-        assertEquals("SCHEDULED", season.getStatus());
+        assertEquals(SeasonStatus.SCHEDULED, season.getStatus());
         verifyNoInteractions(inspectionRepository);
     }
 
@@ -209,11 +211,11 @@ class SeasonActivationServiceTest {
     @Test
     void endingSeasonDoesNotActivate() {
         Season season = scheduledSeason();
-        ReflectionTestUtils.setField(season, "status", "CLOSING");
+        ReflectionTestUtils.setField(season, "status", SeasonStatus.CLOSING);
 
         assertEquals(SeasonActivationService.Outcome.NOT_SCHEDULED,
                 service.activateIfInitializationComplete(SEASON_ID).outcome());
-        assertEquals("CLOSING", season.getStatus());
+        assertEquals(SeasonStatus.CLOSING, season.getStatus());
         verifyNoInteractions(inspectionRepository);
     }
 
@@ -232,7 +234,7 @@ class SeasonActivationServiceTest {
 
         assertEquals(SeasonActivationService.Outcome.EXPIRED,
                 service.activateIfInitializationComplete(SEASON_ID).outcome());
-        assertEquals("SCHEDULED", season.getStatus());
+        assertEquals(SeasonStatus.SCHEDULED, season.getStatus());
     }
 
     /**
@@ -263,7 +265,7 @@ class SeasonActivationServiceTest {
         assertEquals(SeasonActivationService.Outcome.INCOMPLETE, result.outcome());
         assertSame(inspection, result.inspection());
         assertFalse(inspection.complete());
-        assertEquals("SCHEDULED", season.getStatus());
+        assertEquals(SeasonStatus.SCHEDULED, season.getStatus());
         assertEquals(NOW, season.getUpdatedAt());
     }
 

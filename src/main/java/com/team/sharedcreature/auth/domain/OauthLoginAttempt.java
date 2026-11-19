@@ -2,6 +2,8 @@ package com.team.sharedcreature.auth.domain;
 
 import com.team.sharedcreature.group.domain.GroupInviteLink;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -28,11 +30,21 @@ public class OauthLoginAttempt {
     @Column(name = "initiating_session_hash", length = 64, nullable = false)
     private String initiatingSessionHash;
 
+    /**
+     * OAuth 로그인 시도를 시작한 인증 공급자입니다.
+     */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "provider", length = 30, nullable = false)
-    private String provider;
+    private SocialProvider provider;
 
+    /**
+     * 일반 로그인 또는 그룹 초대 로그인 여부를 나타냅니다.
+     */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "intent", length = 30, nullable = false)
-    private String intent;
+    private OauthLoginIntent intent;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "invite_link_id", nullable = true)
@@ -41,8 +53,11 @@ public class OauthLoginAttempt {
     @Column(name = "return_route", length = 100, nullable = false)
     private String returnRoute;
 
+    /** 일회성 OAuth 로그인 시도의 처리 상태입니다. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    private OauthLoginAttemptStatus status;
 
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
@@ -56,8 +71,8 @@ public class OauthLoginAttempt {
     private OauthLoginAttempt(
             String stateHash,
             String initiatingSessionHash,
-            String provider,
-            String intent,
+            SocialProvider provider,
+            OauthLoginIntent intent,
             GroupInviteLink inviteLink,
             String returnRoute,
             Instant now
@@ -68,7 +83,7 @@ public class OauthLoginAttempt {
         this.intent = intent;
         this.inviteLink = inviteLink;
         this.returnRoute = returnRoute;
-        this.status = "PENDING";
+        this.status = OauthLoginAttemptStatus.PENDING;
         this.expiresAt = now.plusSeconds(600);
         this.createdAt = now;
     }
@@ -77,8 +92,8 @@ public class OauthLoginAttempt {
     public static OauthLoginAttempt start(
             String stateHash,
             String initiatingSessionHash,
-            String provider,
-            String intent,
+            SocialProvider provider,
+            OauthLoginIntent intent,
             GroupInviteLink inviteLink,
             String returnRoute,
             Instant now
@@ -93,7 +108,7 @@ public class OauthLoginAttempt {
 
     /** 검증이 끝난 OAuth 시도를 한 번만 소비한 상태로 전환합니다. */
     public void consume(Instant now) {
-        this.status = "CONSUMED";
+        this.status = OauthLoginAttemptStatus.CONSUMED;
         this.consumedAt = now;
     }
 }

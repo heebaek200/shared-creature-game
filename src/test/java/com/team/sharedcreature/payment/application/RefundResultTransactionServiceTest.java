@@ -2,8 +2,10 @@ package com.team.sharedcreature.payment.application;
 
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
 import com.team.sharedcreature.admin.domain.ApiIdempotencyRecord;
+import com.team.sharedcreature.admin.domain.ApiIdempotencyStatus;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.payment.api.AdminRefundResponse;
 import com.team.sharedcreature.payment.domain.*;
 import com.team.sharedcreature.payment.infrastructure.*;
@@ -54,7 +56,7 @@ class RefundResultTransactionServiceTest {
         set(purchase, "orderNumber", "payment");
         set(purchase, "priceKrwSnapshot", 1000L);
         set(purchase, "currency", "KRW");
-        set(purchase, "status", "PAID");
+        set(purchase, "status", PurchaseStatus.PAID);
         item = OwnedItem.grant(purchase, NOW.minusSeconds(600));
         refund = RefundRequest.create(purchase, user, "요청", NOW.minusSeconds(600));
         set(refund, "id", 1L);
@@ -63,7 +65,7 @@ class RefundResultTransactionServiceTest {
         set(attempt, "id", 3L);
         record = BeanUtils.instantiateClass(ApiIdempotencyRecord.class);
         set(record, "operation", "approveRefund");
-        set(record, "status", "PROCESSING");
+        set(record, "status", ApiIdempotencyStatus.PROCESSING);
         command = new RefundApprovalTransactionService.CancellationCommand(
                 1L, 2L, 3L, "payment", 1000L, "KRW", "승인", attempt.getIdempotencyKey(), 4L);
         when(locks.lock(1L)).thenReturn(new RefundLockService.LockedRefund(purchase, item, refund));
@@ -87,14 +89,23 @@ class RefundResultTransactionServiceTest {
             case PENDING -> "CANCEL_PENDING";
             case UNKNOWN -> "CANCEL_UNKNOWN";
         };
-        assertThat(refund.getStatus()).isEqualTo(expected);
-        assertThat(purchase.getStatus()).isEqualTo(outcome == RefundGateway.Outcome.SUCCESS ? "CANCELLED" : "PAID");
-        assertThat(item.getStatus()).isEqualTo(outcome == RefundGateway.Outcome.SUCCESS ? "REVOKED" : "OWNED_UNUSED");
+        assertThat(refund.getStatus().name()).isEqualTo(expected);
+        assertThat(purchase.getStatus()).isEqualTo(outcome == RefundGateway.Outcome.SUCCESS
+                ? PurchaseStatus.CANCELLED
+                : PurchaseStatus.PAID);
+        assertThat(item.getStatus()).isEqualTo(outcome == RefundGateway.Outcome.SUCCESS
+                ? OwnedItemStatus.REVOKED
+                : OwnedItemStatus.OWNED_UNUSED);
         assertThat(item.getRevokedAt()).isEqualTo(outcome == RefundGateway.Outcome.SUCCESS ? NOW : null);
         assertThat(item.getUsedAt()).isNull();
-        assertThat(attempt.getResultType()).isEqualTo(outcome.name());
+        assertThat(attempt.getResultType()).isEqualTo(switch (outcome) {
+            case SUCCESS -> PgApiResultType.SUCCESS;
+            case DEFINITIVE_FAILURE -> PgApiResultType.DEFINITIVE_FAILURE;
+            case PENDING -> PgApiResultType.PENDING;
+            case UNKNOWN -> PgApiResultType.UNKNOWN;
+        });
         assertThat(attempt.getCompletedAt()).isEqualTo(NOW);
-        assertThat(record.getStatus()).isEqualTo("COMPLETED");
+        assertThat(record.getStatus()).isEqualTo(ApiIdempotencyStatus.COMPLETED);
         assertThat(result.httpStatus()).isEqualTo(outcome == RefundGateway.Outcome.UNKNOWN ? 409 : 200);
         assertThat(record.getHttpStatus()).isEqualTo(result.httpStatus());
         if (outcome == RefundGateway.Outcome.UNKNOWN) {
@@ -107,10 +118,13 @@ class RefundResultTransactionServiceTest {
     void 같은_성공결과를_재반영해도_거래를_추가하거나_다시_회수하지_않는다() {
         service.apply(command, pgResult(RefundGateway.Outcome.SUCCESS), "first");
         String snapshot = record.getResponseSnapshot();
+        assertThat(snapshot).contains("\"status\":\"COMPLETED\"");
         Instant revokedAt = item.getRevokedAt();
         var replay = service.apply(command, pgResult(RefundGateway.Outcome.UNKNOWN), "second");
         assertThat(replay.httpStatus()).isEqualTo(200);
-        assertThat(replay.data().status()).isEqualTo("COMPLETED");
+        assertThat(replay.data().status()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(replay.data().purchase().status()).isEqualTo(PurchaseStatus.CANCELLED);
+        assertThat(replay.data().ownedItem().status()).isEqualTo(OwnedItemStatus.REVOKED);
         assertThat(item.getRevokedAt()).isEqualTo(revokedAt);
         assertThat(record.getResponseSnapshot()).isEqualTo(snapshot);
         verify(transactions, times(1)).save(any(PaymentTransaction.class));

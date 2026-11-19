@@ -1,6 +1,8 @@
 package com.team.sharedcreature.avatar.infrastructure;
 
 import com.team.sharedcreature.avatar.domain.OwnedItem;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -58,8 +60,8 @@ public interface OwnedItemRepository extends JpaRepository<OwnedItem, Long> {
     )
     Page<OwnedItem> findAllForUser(
             @Param("userId") Long userId,
-            @Param("slot") String slot,
-            @Param("status") String status,
+            @Param("slot") AvatarSlot slot,
+            @Param("status") OwnedItemStatus status,
             Pageable pageable
     );
 

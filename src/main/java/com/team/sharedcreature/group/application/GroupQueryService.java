@@ -9,6 +9,8 @@ import com.team.sharedcreature.group.api.GroupMemberResponse;
 import com.team.sharedcreature.group.api.GroupSummaryResponse;
 import com.team.sharedcreature.group.api.MyGroupResponse;
 import com.team.sharedcreature.group.domain.Group;
+import com.team.sharedcreature.group.domain.GroupJoinBlockedReason;
+import com.team.sharedcreature.group.domain.GroupStatus;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import org.springframework.data.domain.Page;
@@ -85,7 +87,7 @@ public class GroupQueryService {
                 group.getCapacity(),
                 remaining,
                 false,
-                "ALREADY_IN_GROUP"
+                GroupJoinBlockedReason.ALREADY_IN_GROUP
         );
 
         // 주 관리자 표시 정보와 내 멤버십을 구성합니다.
@@ -148,7 +150,7 @@ public class GroupQueryService {
                 ));
 
         // 종료된 그룹의 구성원 조회는 허용하지 않습니다.
-        if (!"ACTIVE".equals(membership.getGroup().getStatus())) {
+        if (membership.getGroup().getStatus() != GroupStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 

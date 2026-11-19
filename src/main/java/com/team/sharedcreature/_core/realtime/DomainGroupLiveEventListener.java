@@ -32,7 +32,7 @@ public class DomainGroupLiveEventListener {
     public void onCreatureUpdated(CreatureUpdatedEvent event) {
         eventPublisher.publish(
                 event.groupId(),
-                "CREATURE_UPDATED",
+                GroupLiveEventType.CREATURE_UPDATED,
                 event.occurredAt(),
                 new GroupLivePayloads.CreatureUpdated(
                         event.seasonId(),
@@ -50,7 +50,7 @@ public class DomainGroupLiveEventListener {
     public void onAvatarEquipmentChanged(AvatarEquipmentChangedEvent event) {
         eventPublisher.publish(
                 event.groupId(),
-                "AVATAR_EQUIPMENT_CHANGED",
+                GroupLiveEventType.AVATAR_EQUIPMENT_CHANGED,
                 event.occurredAt(),
                 new GroupLivePayloads.AvatarEquipmentChanged(
                         event.userId(),
@@ -66,7 +66,7 @@ public class DomainGroupLiveEventListener {
         profileRepository.findByUserId(event.userId()).ifPresentOrElse(
                 profile -> eventPublisher.publish(
                         event.groupId(),
-                        "CONTRIBUTION_UPDATED",
+                        GroupLiveEventType.CONTRIBUTION_UPDATED,
                         event.occurredAt(),
                         new GroupLivePayloads.ContributionUpdated(
                                 event.userId(),

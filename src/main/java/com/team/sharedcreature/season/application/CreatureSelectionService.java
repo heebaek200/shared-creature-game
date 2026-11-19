@@ -1,12 +1,18 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.GroupSeasonStatus;
+
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.group.domain.GroupMembership;
+import com.team.sharedcreature.group.domain.GroupRole;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.season.api.CreatureSelectionResponse;
 import com.team.sharedcreature.season.api.CreatureSpeciesResponse;
 import com.team.sharedcreature.season.domain.CreatureSpecies;
+import com.team.sharedcreature.season.domain.CreatureSpeciesStatus;
 import com.team.sharedcreature.season.domain.GroupCreature;
 import com.team.sharedcreature.season.domain.GroupSeason;
 import com.team.sharedcreature.season.domain.Season;
@@ -60,7 +66,7 @@ public class CreatureSelectionService {
     @Transactional(readOnly = true)
     public List<CreatureSpeciesResponse> listActiveSpecies(Long userId) {
         requireActiveMembership(userId);
-        return speciesRepository.findAllByStatusOrderByDisplayOrderAscIdAsc("ACTIVE").stream()
+        return speciesRepository.findAllByStatusOrderByDisplayOrderAscIdAsc(CreatureSpeciesStatus.ACTIVE).stream()
                 .map(CreatureSpeciesResponse::from)
                 .toList();
     }
@@ -85,7 +91,7 @@ public class CreatureSelectionService {
             throw conflict(ErrorCode.CREATURE_SELECTION_CLOSED, "크리처 선택 시간이 종료되었습니다.");
         }
 
-        CreatureSpecies species = speciesRepository.findByIdAndStatus(speciesId, "ACTIVE")
+        CreatureSpecies species = speciesRepository.findByIdAndStatus(speciesId, CreatureSpeciesStatus.ACTIVE)
                 .orElseThrow(() -> notFound("선택할 수 있는 크리처 종을 찾을 수 없습니다."));
 
         boolean changed = groupSeason.selectSpecies(species, membership.getUser(), now);
@@ -110,7 +116,7 @@ public class CreatureSelectionService {
         Season season = currentSeason.get();
         GroupSeason groupSeason = groupSeasonRepository.findForUpdateById(groupSeasonId)
                 .orElseThrow(() -> notFound("그룹 시즌 참여 정보를 찾을 수 없습니다."));
-        if (!"PREPARING".equals(groupSeason.getStatus())
+        if (groupSeason.getStatus() != GroupSeasonStatus.PREPARING
                 || !season.getId().equals(groupSeason.getSeason().getId())) {
             return Optional.empty();
         }
@@ -119,7 +125,7 @@ public class CreatureSelectionService {
                 .orElseThrow(() -> notFound("현재 그룹 크리처를 찾을 수 없습니다."));
         Instant now = Instant.now(clock);
 //        if (now.isBefore(groupSeason.getSelectionDeadlineAt())
-//                || !"ACTIVE".equals(season.getStatus())
+//                || (season.getStatus() != SeasonStatus.ACTIVE)
 //                || !now.isBefore(season.getEndAt())
 //                || !groupSeason.getSelectionDeadlineAt().isBefore(season.getEndAt())) {
 //            return Optional.empty();
@@ -135,7 +141,7 @@ public class CreatureSelectionService {
 
         if (groupSeason.getSelectedSpecies() == null) {
             List<CreatureSpecies> activeSpecies = speciesRepository
-                    .findAllByStatusOrderByDisplayOrderAscIdAsc("ACTIVE");
+                .findAllByStatusOrderByDisplayOrderAscIdAsc(CreatureSpeciesStatus.ACTIVE);
             if (activeSpecies.isEmpty()) {
                 throw new IllegalStateException("No active creature species is available for hatching.");
             }
@@ -160,7 +166,7 @@ public class CreatureSelectionService {
 
     private GroupMembership requireAdminMembership(Long userId) {
         GroupMembership membership = requireActiveMembership(userId);
-        if (!"PRIMARY".equals(membership.getRole()) && !"DEPUTY".equals(membership.getRole())) {
+        if (membership.getRole() != GroupRole.PRIMARY && membership.getRole() != GroupRole.DEPUTY) {
             throw new BusinessException(ErrorCode.ROLE_FORBIDDEN);
         }
         return membership;
