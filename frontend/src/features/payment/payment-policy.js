@@ -72,10 +72,10 @@ export function pgCancellationPresentation(refund) {
   const unresolved = refund?.status === 'CANCEL_PENDING' || refund?.status === 'CANCEL_UNKNOWN';
   let label;
 
-  if (cancellationStatus) label = PG_CANCELLATION_LABELS[cancellationStatus] ?? cancellationStatus;
+  if (refund?.status === 'WITHDRAWN') label = '미실행 (사용자 철회)';
+  else if (cancellationStatus) label = PG_CANCELLATION_LABELS[cancellationStatus] ?? cancellationStatus;
   else if (refund?.status === 'REQUESTED') label = '승인 전';
   else if (refund?.status === 'REJECTED') label = '미실행 (환불 거절)';
-  else if (refund?.status === 'WITHDRAWN') label = '미실행 (사용자 철회)';
   else if (unresolved) label = '처리 준비 중';
   else label = '취소 이력 없음';
 

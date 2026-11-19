@@ -989,7 +989,9 @@ export const mockApi = {
     const refund = allMockRefunds().find((item) => item.refundRequestId === Number(requestId));
     if (!refund) throw new ApiError(404, { code: 'RESOURCE_NOT_FOUND', message: '환불 요청을 찾을 수 없습니다.' });
     const purchase = findMockPurchase(refund.purchaseId);
-    const cancellation = [...purchase.transactions].reverse().find((item) => item.transactionType === 'CANCELLATION') ?? null;
+    const cancellation = refund.status === 'WITHDRAWN'
+      ? null
+      : [...purchase.transactions].reverse().find((item) => item.transactionType === 'CANCELLATION') ?? null;
     return {
       ...structuredClone(refund), reviewedByUserId: refund.reviewedAt ? 1 : null,
       purchase: { orderNumber: purchase.orderNumber, itemName: purchase.itemName, priceKrw: purchase.priceKrw, status: purchase.status },

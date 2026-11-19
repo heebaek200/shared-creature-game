@@ -242,12 +242,24 @@ class RefundTransactionMySqlIntegrationTest {
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
         Long cancellationId = new TransactionTemplate(transactionManager).execute(tx -> {
             Purchase purchase = em.find(Purchase.class, fixture.purchaseId());
+            RefundRequest refund = em.find(RefundRequest.class, fixture.refundId());
+            User admin = em.find(User.class, fixture.adminId());
+            refund.claimCancellation(admin, "거래 조회 테스트", now);
             PaymentTransaction cancellation = PaymentTransaction.cancellationRequested(purchase, now);
             if (status != PaymentTransactionStatus.REQUESTED) {
                 Instant processedAt = status == PaymentTransactionStatus.UNKNOWN ? null : now;
                 cancellation.applyCancellationResult(status, "cancel-" + fixture.refundId(), processedAt, "PG", now);
             }
             em.persist(cancellation);
+            PgApiAttempt attempt = PgApiAttempt.prepareCancellation(refund, 1, now);
+            PgApiResultType resultType = switch (status) {
+                case REQUESTED -> PgApiResultType.PENDING;
+                case SUCCESS -> PgApiResultType.SUCCESS;
+                case DEFINITIVE_FAILURE -> PgApiResultType.DEFINITIVE_FAILURE;
+                case UNKNOWN -> PgApiResultType.UNKNOWN;
+            };
+            attempt.complete(resultType, 200, "PG", "{}", cancellation, now);
+            em.persist(attempt);
             // 더 최신 승인 거래가 있어도 취소 유형 조회에서는 제외되어야 합니다.
             em.persist(PaymentTransaction.approved(purchase, "approval-" + fixture.purchaseId(),
                     purchase.getPriceKrwSnapshot(), now, now.plusSeconds(1)));

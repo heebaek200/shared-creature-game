@@ -93,6 +93,10 @@ test('PG 취소 상태는 미실행 사유와 자동 점검 안내를 구분한�
       pgCancellationPresentation({ status: 'WITHDRAWN', latestCancellation: null }),
       { label: '미실행 (사용자 철회)', hint: null },
   );
+  assert.deepEqual(
+      pgCancellationPresentation({ status: 'WITHDRAWN', latestCancellation: { status: 'SUCCESS' } }),
+      { label: '미실행 (사용자 철회)', hint: null },
+  );
   assert.equal(
       pgCancellationPresentation({
         status: 'CANCEL_UNKNOWN',

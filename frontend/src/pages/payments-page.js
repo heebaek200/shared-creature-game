@@ -200,7 +200,8 @@ export function paymentsPage({ navigate, currentUser }) {
     const refundTitle = document.createElement('h3'); refundTitle.className = 'h6'; refundTitle.textContent = '환불 이력';
     const refundList = document.createElement('ul'); refundList.className = 'list-group list-group-flush';
     for (const refund of purchase.refundRequests ?? []) {
-      const li = document.createElement('li'); li.className = 'list-group-item px-0 bg-transparent'; li.textContent = `${REFUND_LABELS[refund.status] ?? refund.status} · ${refund.requestReason}`; refundList.append(li);
+      const withdrawn = refund.status === 'WITHDRAWN' ? ` · 철회 ${formatDate(refund.withdrawnAt)}` : '';
+      const li = document.createElement('li'); li.className = 'list-group-item px-0 bg-transparent'; li.textContent = `${REFUND_LABELS[refund.status] ?? refund.status} · ${refund.requestReason}${withdrawn}`; refundList.append(li);
     }
     if (!refundList.children.length) { const li = document.createElement('li'); li.className = 'list-group-item px-0 bg-transparent text-app-muted'; li.textContent = '환불 이력이 없습니다.'; refundList.append(li); }
     body.append(title, summary, statuses, txTitle, txList, refundTitle, refundList); card.append(body); detailNode.append(card);

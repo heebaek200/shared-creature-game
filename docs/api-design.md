@@ -2187,9 +2187,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.ownedItem.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
 | data.ownedItem.status | string(enum) | C | N | OWNED_UNUSED \| OWNED_USED \| REVOKED | 보유 아이템 상태 |
 | data.ownedItem.usedAt | string(date-time) | C | Y | 미사용 null | 최초 사용 시각 |
-| data.latestCancellation | object | Y | Y | 취소 시도 전 null | 최근 PG 취소 거래 |
+| data.latestCancellation | object | Y | Y | 해당 환불 요청의 취소 시도 전 null | 해당 환불 요청의 최근 PG 취소 거래 |
 | data.latestCancellation.providerTransactionId | string | C | Y | 미확정 null | PG 거래 ID |
-| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 최근 PG 취소 거래 상태 |
+| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 해당 환불 요청의 최근 PG 취소 거래 상태 |
 | data.latestCancellation.processedAt | string(date-time) | C | Y | 미확정 null | 처리 시각 |
 
 **오류 응답**
@@ -2244,9 +2244,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.ownedItem.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
 | data.ownedItem.status | string(enum) | C | N | OWNED_UNUSED \| OWNED_USED \| REVOKED | 보유 아이템 상태 |
 | data.ownedItem.usedAt | string(date-time) | C | Y | 미사용 null | 최초 사용 시각 |
-| data.latestCancellation | object | Y | Y | 취소 시도 전 null | 최근 PG 취소 거래 |
+| data.latestCancellation | object | Y | Y | 해당 환불 요청의 취소 시도 전 null | 해당 환불 요청의 최근 PG 취소 거래 |
 | data.latestCancellation.providerTransactionId | string | C | Y | 미확정 null | PG 거래 ID |
-| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 최근 PG 취소 거래 상태 |
+| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 해당 환불 요청의 최근 PG 취소 거래 상태 |
 | data.latestCancellation.processedAt | string(date-time) | C | Y | 미확정 null | 처리 시각 |
 
 **오류 응답**
@@ -2304,9 +2304,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.ownedItem.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
 | data.ownedItem.status | string(enum) | C | N | OWNED_UNUSED \| OWNED_USED \| REVOKED | 보유 아이템 상태 |
 | data.ownedItem.usedAt | string(date-time) | C | Y | 미사용 null | 최초 사용 시각 |
-| data.latestCancellation | object | Y | Y | 취소 시도 전 null | 최근 PG 취소 거래 |
+| data.latestCancellation | object | Y | Y | 해당 환불 요청의 취소 시도 전 null | 해당 환불 요청의 최근 PG 취소 거래 |
 | data.latestCancellation.providerTransactionId | string | C | Y | 미확정 null | PG 거래 ID |
-| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 최근 PG 취소 거래 상태 |
+| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 해당 환불 요청의 최근 PG 취소 거래 상태 |
 | data.latestCancellation.processedAt | string(date-time) | C | Y | 미확정 null | 처리 시각 |
 
 **오류 응답**
@@ -2361,9 +2361,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.ownedItem.ownedItemId | integer(int64) | C | N | 1 이상 | 보유 아이템 ID |
 | data.ownedItem.status | string(enum) | C | N | OWNED_UNUSED \| OWNED_USED \| REVOKED | 보유 아이템 상태 |
 | data.ownedItem.usedAt | string(date-time) | C | Y | 미사용 null | 최초 사용 시각 |
-| data.latestCancellation | object | Y | Y | 취소 시도 전 null | 최근 PG 취소 거래 |
+| data.latestCancellation | object | Y | Y | 해당 환불 요청의 취소 시도 전 null | 해당 환불 요청의 최근 PG 취소 거래 |
 | data.latestCancellation.providerTransactionId | string | C | Y | 미확정 null | PG 거래 ID |
-| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 최근 PG 취소 거래 상태 |
+| data.latestCancellation.status | string(enum) | C | N | REQUESTED \| SUCCESS \| DEFINITIVE_FAILURE \| UNKNOWN | 해당 환불 요청의 최근 PG 취소 거래 상태 |
 | data.latestCancellation.processedAt | string(date-time) | C | Y | 미확정 null | 처리 시각 |
 
 **오류 응답**

@@ -16,6 +16,17 @@ import java.util.Optional;
 public interface PgApiAttemptRepository extends JpaRepository<PgApiAttempt, Long> {
 
     /**
+     * 환불 요청에 연결된 PG 이력 중 취소 거래가 기록된 최신 이력을 조회합니다.
+     * 구매의 다른 환불 요청에서 발생한 거래는 포함하지 않습니다.
+     *
+     * @param requestId 환불 요청 ID
+     * @return 해당 요청에 연결된 취소 거래 이력, 취소 미실행이면 빈 Optional
+     */
+    Optional<PgApiAttempt> findFirstByRefundRequest_IdAndPaymentTransactionIsNotNullOrderByCreatedAtDescIdDesc(
+            Long requestId
+    );
+
+    /**
      * 특정 환불에 속한 PG 시도 이력을 잠금 조회합니다.
      * 호출자는 구매·보유 아이템·환불 요청을 먼저 잠근 상태여야 합니다.
      *

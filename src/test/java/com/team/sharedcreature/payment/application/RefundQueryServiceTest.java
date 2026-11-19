@@ -9,10 +9,11 @@ import com.team.sharedcreature.payment.api.AdminRefundResponse;
 import com.team.sharedcreature.payment.api.RefundResponse;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
 import com.team.sharedcreature.payment.domain.PaymentTransactionStatus;
+import com.team.sharedcreature.payment.domain.PgApiAttempt;
 import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import com.team.sharedcreature.payment.domain.RefundRequest;
 import com.team.sharedcreature.payment.domain.RefundStatus;
-import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
+import com.team.sharedcreature.payment.infrastructure.PgApiAttemptRepository;
 import com.team.sharedcreature.payment.infrastructure.RefundRequestRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
+import java.util.Optional;
 
 import static com.team.sharedcreature.avatar.support.AvatarTestFixtures.*;
 import static org.assertj.core.api.Assertions.*;
@@ -40,12 +42,12 @@ import static org.mockito.Mockito.*;
 class RefundQueryServiceTest {
     @Mock private RefundRequestRepository refunds;
     @Mock private OwnedItemRepository items;
-    @Mock private PaymentTransactionRepository transactions;
+    @Mock private PgApiAttemptRepository attempts;
     private RefundQueryService service;
 
     @BeforeEach
     void 준비() {
-        service = new RefundQueryService(refunds, items, transactions);
+        service = new RefundQueryService(refunds, items, attempts);
     }
 
     @ParameterizedTest
@@ -79,7 +81,7 @@ class RefundQueryServiceTest {
         assertThat(mine.getContent().getFirst().requestedByUserId()).isEqualTo(1L);
         assertThat(admin.getContent().getFirst().status()).isEqualTo(status);
         assertThat(mine.getTotalElements()).isEqualTo(1);
-        verifyNoInteractions(items, transactions);
+        verifyNoInteractions(items, attempts);
     }
 
     @Test
@@ -96,7 +98,43 @@ class RefundQueryServiceTest {
     void 페이지_범위오류는_기존대로_조회전에_거절한다(int page, int size) {
         assertFieldError(() -> service.listMyRefunds(1L, page, size, null));
         assertFieldError(() -> service.listAdminRefunds(page, size, null));
-        verifyNoInteractions(refunds, items, transactions);
+        verifyNoInteractions(refunds, items, attempts);
+    }
+
+    @Test
+    void 관리자상세는_해당환불요청에_연결된_취소거래만_반환한다() {
+        OwnedItem item = unusedItem(10L, 1L, "HEAD");
+        RefundRequest refund = RefundRequest.create(item.getPurchase(), item.getUser(), "조회 테스트", CREATED_AT);
+        ReflectionTestUtils.setField(refund, "id", 20L);
+        PaymentTransaction cancellation = PaymentTransaction.cancellationRequested(item.getPurchase(), NOW);
+        PgApiAttempt attempt = mock(PgApiAttempt.class);
+        when(attempt.getPaymentTransaction()).thenReturn(cancellation);
+        when(refunds.findDetailById(20L)).thenReturn(Optional.of(refund));
+        when(items.findByPurchaseId(item.getPurchase().getId())).thenReturn(Optional.of(item));
+        when(attempts.findFirstByRefundRequest_IdAndPaymentTransactionIsNotNullOrderByCreatedAtDescIdDesc(20L))
+                .thenReturn(Optional.of(attempt));
+
+        AdminRefundResponse response = service.getAdminRefund(20L);
+
+        assertThat(response.latestCancellation().status()).isEqualTo(PaymentTransactionStatus.REQUESTED);
+        verify(attempts).findFirstByRefundRequest_IdAndPaymentTransactionIsNotNullOrderByCreatedAtDescIdDesc(20L);
+    }
+
+    @Test
+    void 철회요청에_연결된_PG시도가_없으면_과거구매취소결과를_노출하지않는다() {
+        OwnedItem item = unusedItem(10L, 1L, "HEAD");
+        RefundRequest refund = RefundRequest.create(item.getPurchase(), item.getUser(), "철회 테스트", CREATED_AT);
+        ReflectionTestUtils.setField(refund, "id", 21L);
+        refund.withdraw(NOW);
+        when(refunds.findDetailById(21L)).thenReturn(Optional.of(refund));
+        when(items.findByPurchaseId(item.getPurchase().getId())).thenReturn(Optional.of(item));
+        when(attempts.findFirstByRefundRequest_IdAndPaymentTransactionIsNotNullOrderByCreatedAtDescIdDesc(21L))
+                .thenReturn(Optional.empty());
+
+        AdminRefundResponse response = service.getAdminRefund(21L);
+
+        assertThat(response.status()).isEqualTo(RefundStatus.WITHDRAWN);
+        assertThat(response.latestCancellation()).isNull();
     }
 
     /** 입력 검증이 일반 서버 오류로 바뀌지 않도록 오류 코드를 확인합니다. */
