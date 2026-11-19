@@ -56,6 +56,14 @@ export function createRefundRequest(purchaseId, reason, idempotencyKey = newIdem
   });
 }
 
+/** 관리자 처리 전인 본인의 환불 요청을 철회합니다. */
+export function withdrawRefundRequest(requestId) {
+  if (useMock) return mockApi.withdrawRefundRequest(requestId);
+  return apiRequest(`/api/v1/refund-requests/${encodeURIComponent(requestId)}/withdrawals`, {
+    method: 'POST',
+  });
+}
+
 /** 내 환불 요청 목록과 페이지 정보를 조회합니다. */
 export function listMyRefundRequests(filters = {}) {
   if (useMock) return mockApi.listMyRefundRequests(filters);

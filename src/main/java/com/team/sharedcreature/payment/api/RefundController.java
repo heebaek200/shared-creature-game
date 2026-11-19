@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * 로그인한 사용자의 환불 요청 생성과 목록 조회를 처리합니다.
+ * 로그인한 사용자의 환불 요청 생성·철회와 목록 조회를 처리합니다.
  * 구매 소유권과 환불 가능 여부는 Service에서 검사합니다.
  */
 @Validated
@@ -59,6 +59,20 @@ public class RefundController {
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response));
+    }
+
+    /**
+     * 관리자 처리 전인 본인의 환불 요청을 철회합니다.
+     * 이미 철회된 요청에는 저장된 현재 상태를 반환합니다.
+     */
+    @PostMapping("/refund-requests/{requestId}/withdrawals")
+    public ApiResponse<RefundResponse> withdrawRefundRequest(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @PathVariable(name = "requestId") @Min(1) Long requestId
+    ) {
+        return ApiResponse.success(
+                refundService.withdrawRefundRequest(loginUser.id(), requestId)
+        );
     }
 
     /**

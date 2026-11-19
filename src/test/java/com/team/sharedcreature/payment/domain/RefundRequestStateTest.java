@@ -47,6 +47,29 @@ class RefundRequestStateTest {
     }
 
     @Test
+    void 요청철회는_시각을_기록하고_중복호출에도_최초시각을_보존한다() {
+        RefundRequest refund = requested();
+        Instant withdrawnAt = START.plusSeconds(10);
+        assertThat(refund.withdraw(withdrawnAt)).isTrue();
+        assertThat(refund.withdraw(START.plusSeconds(20))).isFalse();
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.WITHDRAWN);
+        assertThat(refund.getWithdrawnAt()).isEqualTo(withdrawnAt);
+        assertThat(refund.getReviewedAt()).isNull();
+        assertThat(refund.getCancelClaimedAt()).isNull();
+        assertThat(refund.getCompletedAt()).isNull();
+    }
+
+    @Test
+    void 관리자처리가_시작되거나_확정된_요청은_철회할수없다() {
+        RefundRequest pending = pending();
+        assertConflict(() -> pending.withdraw(START.plusSeconds(1)));
+
+        RefundRequest rejected = requested();
+        rejected.reject(reviewer, "거절", START);
+        assertConflict(() -> rejected.withdraw(START.plusSeconds(1)));
+    }
+
+    @Test
     void 거절하면_재승인할_수_없고_취소_선점시각은_없다() {
         RefundRequest refund = requested();
         refund.reject(reviewer, "  거절 사유  ", START);

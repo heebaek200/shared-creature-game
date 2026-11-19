@@ -388,7 +388,9 @@ class RefundTransactionMySqlIntegrationTest {
         new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
             RefundRequest refund = em.find(RefundRequest.class, fixture.refundId());
             User admin = em.find(User.class, fixture.adminId());
-            if (status == RefundStatus.REJECTED) {
+            if (status == RefundStatus.WITHDRAWN) {
+                refund.withdraw(claimedAt);
+            } else if (status == RefundStatus.REJECTED) {
                 refund.reject(admin, "거절", claimedAt);
             } else if (status != RefundStatus.REQUESTED) {
                 refund.claimCancellation(admin, "승인", claimedAt);
@@ -406,6 +408,8 @@ class RefundTransactionMySqlIntegrationTest {
         Page<RefundResponse> mine = refundQueries.listMyRefunds(fixture.ownerId(), 0, 20, status);
         assertThat(mine.getTotalElements()).isEqualTo(1);
         assertThat(mine.getContent().getFirst().status()).isEqualTo(status);
+        assertThat(mine.getContent().getFirst().withdrawnAt())
+                .isEqualTo(status == RefundStatus.WITHDRAWN ? claimedAt : null);
         assertThat(refundQueries.listMyRefunds(fixture.adminId(), 0, 20, status)).isEmpty();
 
         PurchaseResponse purchase = purchaseQueries.get(fixture.ownerId(), fixture.purchaseId());
@@ -504,6 +508,60 @@ class RefundTransactionMySqlIntegrationTest {
         assertThat(outcomes).contains(ErrorCode.CONCURRENT_MODIFICATION);
         String refundStatus = status("refund_requests", fixture.refundId());
         assertThat(refundStatus).isIn("COMPLETED", "REJECTED");
+        boolean completed = "COMPLETED".equals(refundStatus);
+        verify(gateway, times(completed ? 1 : 0)).cancelFully(anyString(), anyString(), anyString());
+        assertThat(status("purchases", fixture.purchaseId())).isEqualTo(completed ? "CANCELLED" : "PAID");
+        assertThat(status("owned_items", fixture.itemId())).isEqualTo(completed ? "REVOKED" : "OWNED_UNUSED");
+    }
+
+    @Test
+    void 철회는_결제와_아이템을_유지하고_중복호출과_환불재요청을_허용한다() {
+        RefundResponse first = refunds.withdrawRefundRequest(fixture.ownerId(), fixture.refundId());
+        RefundResponse replay = refunds.withdrawRefundRequest(fixture.ownerId(), fixture.refundId());
+        assertThat(first.status()).isEqualTo(RefundStatus.WITHDRAWN);
+        assertThat(replay.withdrawnAt()).isEqualTo(first.withdrawnAt());
+        assertThat(status("purchases", fixture.purchaseId())).isEqualTo("PAID");
+        assertThat(status("owned_items", fixture.itemId())).isEqualTo("OWNED_UNUSED");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM pg_api_attempts WHERE purchase_id = ?",
+                Integer.class, fixture.purchaseId())).isZero();
+
+        RefundResponse requested = refunds.createRefundRequest(fixture.ownerId(), fixture.purchaseId(),
+                "철회 후 재요청", UUID.randomUUID().toString());
+        assertThat(requested.status()).isEqualTo(RefundStatus.REQUESTED);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM refund_requests WHERE purchase_id = ?",
+                Integer.class, fixture.purchaseId())).isEqualTo(2);
+        verifyNoInteractions(gateway);
+    }
+
+    @Test
+    void 철회후_미사용아이템을_장착할수있다() {
+        refunds.withdrawRefundRequest(fixture.ownerId(), fixture.refundId());
+        avatars.equipAvatarItem(fixture.ownerId(), AvatarSlot.HEAD, fixture.itemId(), true);
+        assertThat(status("owned_items", fixture.itemId())).isEqualTo("OWNED_USED");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM avatar_equipments WHERE owned_item_id = ?",
+                Integer.class, fixture.itemId())).isEqualTo(1);
+        verifyNoInteractions(gateway);
+    }
+
+    @Test
+    void 다른사용자는_환불요청을_철회할수없다() {
+        assertThatThrownBy(() -> refunds.withdrawRefundRequest(fixture.adminId(), fixture.refundId()))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        error -> assertThat(error.errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND));
+        assertThat(status("refund_requests", fixture.refundId())).isEqualTo("REQUESTED");
+        verifyNoInteractions(gateway);
+    }
+
+    @RepeatedTest(3)
+    void 동시_철회와_승인은_하나만_확정하고_PG호출을_중복하지않는다() throws Exception {
+        stubSuccessfulCancellation();
+        List<Object> outcomes = race(
+                () -> refunds.withdrawRefundRequest(fixture.ownerId(), fixture.refundId()),
+                this::approve);
+        assertThat(outcomes.stream().filter(value -> value instanceof ErrorCode).count()).isEqualTo(1);
+        assertThat(outcomes).contains(ErrorCode.CONCURRENT_MODIFICATION);
+        String refundStatus = status("refund_requests", fixture.refundId());
+        assertThat(refundStatus).isIn("WITHDRAWN", "COMPLETED");
         boolean completed = "COMPLETED".equals(refundStatus);
         verify(gateway, times(completed ? 1 : 0)).cancelFully(anyString(), anyString(), anyString());
         assertThat(status("purchases", fixture.purchaseId())).isEqualTo(completed ? "CANCELLED" : "PAID");

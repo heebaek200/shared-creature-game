@@ -54,7 +54,9 @@ class RefundQueryServiceTest {
         OwnedItem item = unusedItem(10L, 1L, "HEAD");
         RefundRequest refund = RefundRequest.create(item.getPurchase(), item.getUser(), "조회 테스트", CREATED_AT);
         ReflectionTestUtils.setField(refund, "id", 20L);
-        if (status == RefundStatus.REJECTED) {
+        if (status == RefundStatus.WITHDRAWN) {
+            refund.withdraw(NOW);
+        } else if (status == RefundStatus.REJECTED) {
             refund.reject(user(9L), "거절", NOW);
         } else if (status != RefundStatus.REQUESTED) {
             refund.claimCancellation(user(9L), "승인", NOW);

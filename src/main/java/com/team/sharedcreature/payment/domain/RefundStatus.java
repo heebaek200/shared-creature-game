@@ -10,6 +10,9 @@ public enum RefundStatus {
     // 사용자가 요청했으며 관리자 심사를 기다리는 상태입니다.
     REQUESTED,
 
+    // 사용자가 관리자 처리 전에 환불 요청을 철회한 상태입니다.
+    WITHDRAWN,
+
     // 관리자가 사유를 기록하고 환불을 거절한 상태입니다.
     REJECTED,
 

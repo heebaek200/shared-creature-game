@@ -148,7 +148,7 @@ class RefundHttpContractTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/api/v1/purchases/1/refund-requests", "/api/v1/admin/refund-requests/1/reconciliations"})
+    @ValueSource(strings = {"/api/v1/purchases/1/refund-requests", "/api/v1/refund-requests/1/withdrawals", "/api/v1/admin/refund-requests/1/reconciliations"})
     void 상태변경은_CSRF없이_실행할수없다(String path) throws Exception {
         mvc.perform(post(path).session(session(9)).header("Idempotency-Key", key)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"환불\"}"))
@@ -216,7 +216,7 @@ class RefundHttpContractTest {
 
     @Test
     void 생성성공은_201과_null키를_포함한_공통응답이다() throws Exception {
-        RefundResponse response = new RefundResponse(1L, 2L, 1L, "환불", null, RefundStatus.REQUESTED, Instant.EPOCH, null, null);
+        RefundResponse response = new RefundResponse(1L, 2L, 1L, "환불", null, RefundStatus.REQUESTED, Instant.EPOCH, null, null, null);
         when(refunds.createRefundRequest(1L, 2L, "환불", key)).thenReturn(response);
         mvc.perform(post("/api/v1/purchases/2/refund-requests").session(session(1)).with(csrf().asHeader())
                         .header("Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON)
@@ -224,8 +224,25 @@ class RefundHttpContractTest {
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.data.refundRequestId").value(1))
                 .andExpect(jsonPath("$.data.status").value("REQUESTED"))
                 .andExpect(jsonPath("$.data.decisionReason").value(nullValue()))
+                .andExpect(jsonPath("$.data.withdrawnAt").value(nullValue()))
                 .andExpect(jsonPath("$.data.reviewedAt").value(nullValue()));
         verify(refunds).createRefundRequest(1L, 2L, "환불", key);
+    }
+
+    @Test
+    void 철회성공은_본문과_멱등키없이_200과_철회시각을_반환한다() throws Exception {
+        Instant withdrawnAt = Instant.parse("2026-11-19T00:00:00Z");
+        RefundResponse response = new RefundResponse(1L, 2L, 1L, "환불", null,
+                RefundStatus.WITHDRAWN, Instant.EPOCH, withdrawnAt, null, null);
+        when(refunds.withdrawRefundRequest(1L, 1L)).thenReturn(response);
+
+        mvc.perform(post("/api/v1/refund-requests/1/withdrawals")
+                        .session(session(1)).with(csrf().asHeader()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WITHDRAWN"))
+                .andExpect(jsonPath("$.data.withdrawnAt").value("2026-11-19T00:00:00Z"))
+                .andExpect(jsonPath("$.data.reviewedAt").value(nullValue()));
+        verify(refunds).withdrawRefundRequest(1L, 1L);
     }
 
     @Test

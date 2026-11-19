@@ -56,6 +56,9 @@ public class RefundRequest {
     @Column(name = "requested_at", nullable = false)
     private Instant requestedAt;
 
+    @Column(name = "withdrawn_at")
+    private Instant withdrawnAt;
+
     @Column(name = "reviewed_at")
     private Instant reviewedAt;
 
@@ -116,6 +119,30 @@ public class RefundRequest {
 
         // 관리자 심사·PG 취소·환불 완료 정보는 아직 설정하지 않습니다.
         return refund;
+    }
+
+    /**
+     * 관리자 처리 전인 본인 환불 요청을 철회합니다.
+     * 이미 철회된 요청은 시각을 변경하지 않고 현재 결과를 재사용합니다.
+     *
+     * @param now 철회 시각
+     * @return 새로 철회했으면 true, 이미 철회된 요청이면 false
+     * @throws BusinessException 관리자 처리가 시작됐거나 다른 최종 상태인 경우
+     */
+    public boolean withdraw(Instant now) {
+        Objects.requireNonNull(now, "now");
+
+        if (status == RefundStatus.WITHDRAWN) {
+            return false;
+        }
+
+        requireRequested();
+        this.status = RefundStatus.WITHDRAWN;
+        this.withdrawnAt = now;
+        this.updatedAt = now;
+
+        // 철회는 관리자 심사와 PG 취소를 시작하지 않습니다.
+        return true;
     }
 
     /**

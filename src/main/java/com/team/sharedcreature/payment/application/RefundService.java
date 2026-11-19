@@ -25,6 +25,7 @@ import com.team.sharedcreature.payment.application.RefundApprovalTransactionServ
 import org.springframework.transaction.annotation.Propagation;
 
 import java.time.Clock;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
 
@@ -166,6 +167,29 @@ public class RefundService {
         );
 
         return response;
+    }
+
+    /**
+     * 본인이 요청한 미심사 환불을 철회하고 결제·아이템 상태는 유지합니다.
+     * 같은 요청을 다시 철회하면 최초 철회 시각을 보존한 현재 응답을 반환합니다.
+     *
+     * @param userId 인증된 요청 사용자 ID
+     * @param requestId 철회할 환불 요청 ID
+     * @return WITHDRAWN 상태의 환불 요청
+     */
+    @Transactional
+    public RefundResponse withdrawRefundRequest(Long userId, Long requestId) {
+        RefundLockService.LockedRefund locked = refundLockService.lock(requestId);
+        RefundRequest refund = locked.refund();
+
+        // 다른 사용자의 요청 존재 여부는 노출하지 않습니다.
+        if (userId == null || !userId.equals(refund.getRequestedByUser().getId())) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+
+        // MySQL DATETIME(6)와 응답 정밀도를 맞춰 재호출 응답의 철회 시각을 동일하게 유지합니다.
+        refund.withdraw(clock.instant().truncatedTo(ChronoUnit.MICROS));
+        return RefundResponse.from(refund);
     }
 
     /**
