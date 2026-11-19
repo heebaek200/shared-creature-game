@@ -27,3 +27,21 @@ export async function getActiveCreatureSpecies() {
 
     return apiRequest('/api/v1/creature-species');
 }
+
+/**
+ * 현재 그룹 시즌의 크리처 종을 선택하거나 변경합니다.
+ * PRIMARY 또는 DEPUTY가 부화 마감 전에 실행할 수 있습니다.
+ * 서버는 시즌 상태, 기한, 권한 및 종의 활성 상태를 다시 검증합니다.
+ *
+ * @param {number} creatureSpeciesId 선택할 크리처 종 ID
+ * @returns {Promise<object>} 저장된 종 선택 결과
+ */
+export function selectCreatureSpecies(creatureSpeciesId) {
+    return apiRequest(
+        '/api/v1/groups/me/seasons/current/creature-selection',
+        {
+            method: 'PUT',
+            body: {creatureSpeciesId}
+        }
+    );
+}

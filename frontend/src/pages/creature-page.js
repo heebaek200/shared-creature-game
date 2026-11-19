@@ -54,7 +54,9 @@ export function creaturePage(context) {
                 </div>
         
                 <!-- 크리처 및 아바타 이동 구역 -->
-                <div class="border rounded-3 p-4 text-center position-relative my-2 flex-grow-1 d-flex flex-column justify-content-center align-items-center creature-avatar-container" style="min-height: 480px;" id="avatar-container">
+                <div class="border rounded-3 p-4 text-center position-relative my-2 flex-grow-1 d-flex flex-column justify-content-center align-items-center creature-avatar-container" 
+                    style="min-height: 480px;" 
+                    id="avatar-container">
                   
                   <div id="creature-display" class="d-flex flex-column align-items-center justify-content-center" style="visibility: hidden;">
                     <div id="creature-img-wrapper" class="mb-1 d-flex align-items-center justify-content-center">
@@ -65,6 +67,34 @@ export function creaturePage(context) {
                     <span class="small text-app-muted" id="hatch-countdown" aria-live="polite"></span>
                   </div>
                 </div>
+                
+                <!-- 알 상태에서 주·부 관리자에게만 보여주는 종 선택 안내 -->
+                <div class="alert alert-info d-none mt-3 mb-2"
+                     role="status"
+                     data-creature-selection-guide>
+                
+                    <div class="d-flex flex-wrap justify-content-between
+                                align-items-center gap-3">
+                
+                        <div class="flex-grow-1">
+                            <h3 class="h6 fw-bold mb-1"
+                                data-creature-guide-title>
+                                크리처 종을 선택해 주세요
+                            </h3>
+                
+                            <p class="small mb-0"
+                               data-creature-guide-description>
+                            </p>
+                        </div>
+                
+                        <button type="button"
+                                class="btn btn-success flex-shrink-0"
+                                data-creature-guide-button>
+                            크리처 종 선택하기
+                        </button>
+                    </div>
+                </div>
+
               </div>
         
               <!-- 경험치 및 퀘스트 하단 구역 -->
@@ -74,7 +104,7 @@ export function creaturePage(context) {
                 </div>
                 <div class="progress mb-3" style="height: 12px;">
                   <!-- 부드러운 바 차오름을 위한 CSS 트랜지션 추가 -->
-                  <div class="progress-bar" role="progressbar" id="exp-bar" aria-label="크리처 성장 경험치 진행률" aria-valuetext="경험치 정보 불러오는 중" style="width: 0%; transition: width 2.8s ease-in-out;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                  <div class="progress-bar" role="progressbar" id="exp-bar" aria-label="크리처 성장 경험치 진행률" aria-valuetext="경험치 정보 불러오는 중" style="width: 0; transition: width 2.8s ease-in-out;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                 </div>
                 <div class="text-center">
                   <button type="button" class="btn btn-primary fw-bold px-4 py-2" id="btn-quest">오늘 퀘스트 확인</button>
@@ -159,6 +189,13 @@ export function creaturePage(context) {
     const btnGotoShop = element.querySelector('#btn-goto-shop');
     const btnToggleMovement = element.querySelector('#btn-toggle-movement');
     const avatarContainer = element.querySelector('#avatar-container');
+
+    // 종 선택 진입 안내의 DOM 요소입니다.
+    const creatureGuide = element.querySelector('[data-creature-selection-guide]');
+    const creatureGuideTitle = element.querySelector('[data-creature-guide-title]');
+    const creatureGuideDescription = element.querySelector('[data-creature-guide-description]');
+    const creatureGuideButton = element.querySelector('[data-creature-guide-button]');
+
     const loadError = element.querySelector('#creature-load-error');
     const loadErrorMessage = element.querySelector('#creature-load-error-message');
     const loadErrorDetails = element.querySelector('#creature-load-error-details');
@@ -318,6 +355,144 @@ export function creaturePage(context) {
     // 3. API 조회, 크리처 성장 렌더링 및 마감 감시 로직
     let isMounted = true;
     let currentUserId = null;
+
+    // 마지막으로 수신한 서버 Snapshot을 안내 표시용으로 보관합니다.
+    let latestCreatureGuideData = null;
+    let latestGuideSpeciesList = [];
+
+    /**
+     * 현재 사용자가 크리처 종을 선택할 수 있는 관리자 역할인지 확인합니다.
+     * Router에서 전달받은 /api/v1/me의 현재 멤버십 역할을 사용합니다.
+     * 역할이 변경되었다면 다음 페이지에서 서버가 다시 검증합니다.
+     *
+     * @returns {boolean} PRIMARY 또는 DEPUTY 여부
+     */
+    function isCreatureGuideAdmin() {
+        const role = context.currentUser?.membership?.role;
+
+        return role === 'PRIMARY' || role === 'DEPUTY';
+    }
+
+    /**
+     * 현재 크리처 Snapshot에서 종 선택 안내가 가능한지 판정합니다.
+     * 알 상태, 유효한 시즌, 선택 마감 전이라는 조건을 모두 확인합니다.
+     * 잘못된 시간 정보는 선택 가능 상태로 취급하지 않습니다.
+     *
+     * @returns {boolean} 안내를 노출할지 여부
+     */
+    function canShowCreatureSelectionGuide() {
+        if (!isMounted || !isCreatureGuideAdmin()) return false;
+
+        const creature = latestCreatureGuideData?.creature;
+        const season = latestCreatureGuideData?.season;
+
+        if (!creature || !season) return false;
+
+        const startAt = Date.parse(season.startAt ?? '');
+        const endAt = Date.parse(season.endAt ?? '');
+        const deadlineAt = Date.parse(
+            creature.selectionDeadlineAt ?? ''
+        );
+
+        // 시간이 누락되거나 잘못되었을 경우 안내하지 않습니다.
+        if (
+            !Number.isFinite(startAt) ||
+            !Number.isFinite(endAt) ||
+            !Number.isFinite(deadlineAt)
+        ) {
+            return false;
+        }
+
+        const now = Date.now();
+
+        return (
+            season.status === 'ACTIVE' &&
+            creature.growthStage === 'EGG' &&
+            now >= startAt &&
+            now < endAt &&
+            now < deadlineAt
+        );
+    }
+
+    /**
+     * 알 상태와 기존 종 선택 여부에 따라 안내 문구를 구성합니다.
+     * 서버 Snapshot의 종 ID를 활성 종 목록과 대조해 이름을 표시합니다.
+     * 시간 만료 또는 부화 시 안내 영역을 즉시 숨깁니다.
+     */
+    function renderCreatureSelectionGuide() {
+        if (!creatureGuide) return;
+
+        const visible = canShowCreatureSelectionGuide();
+        creatureGuide.classList.toggle('d-none', !visible);
+
+        if (!visible) return;
+
+        const speciesId =
+            latestCreatureGuideData?.creature?.creatureSpeciesId;
+
+        const alreadySelected =
+            speciesId !== null && speciesId !== undefined;
+
+        if (!alreadySelected) {
+            creatureGuideTitle.textContent =
+                '아직 크리처 종을 선택하지 않았습니다.';
+
+            creatureGuideDescription.textContent =
+                '부화 전까지 원하는 종을 선택할 수 있습니다. ' +
+                '선택하지 않으면 무작위로 결정됩니다.';
+
+            creatureGuideButton.textContent =
+                '크리처 종 선택하기';
+
+            return;
+        }
+
+        // 기존 크리처 홈에서 조회한 활성 종 목록을 그대로 재사용합니다.
+        const selectedSpecies = latestGuideSpeciesList.find(
+            species => String(species.creatureSpeciesId) ===
+                String(speciesId)
+        );
+
+        const speciesName =
+            selectedSpecies?.name ?? `종 ID ${speciesId}`;
+
+        creatureGuideTitle.textContent =
+            `현재 선택된 크리처: ${speciesName}`;
+
+        creatureGuideDescription.textContent =
+            '마감 전까지 다른 크리처 종으로 변경할 수 있습니다.';
+
+        creatureGuideButton.textContent =
+            '크리처 선택 변경하기';
+    }
+
+    /**
+     * 종 선택 안내 버튼을 클릭하면 그룹 관리의 크리처 탭으로 이동합니다.
+     * 클릭 순간에도 역할·시즌·마감 조건을 다시 확인합니다.
+     * 이동 후 Router와 관리자 페이지가 서버 정보를 재조회합니다.
+     */
+    function onCreatureGuideClick() {
+        if (!canShowCreatureSelectionGuide()) {
+            renderCreatureSelectionGuide();
+            return;
+        }
+
+        // data-link를 사용하면 기존 Router에서 Query String이 제거됩니다.
+        // 따라서 navigate()에 전체 경로를 직접 전달합니다.
+        context.navigate('/group-admin?tab=creature');
+    }
+
+    /**
+     * 다른 브라우저 탭에서 돌아왔을 때 안내 표시를 갱신합니다.
+     * 백그라운드 타이머의 지연과 관계없이 현재 시각을 재평가합니다.
+     * 마감이 지났으면 더 이상 종 선택 버튼을 노출하지 않습니다.
+     */
+    function onCreatureGuideVisibilityChange() {
+        if (!document.hidden) {
+            renderCreatureSelectionGuide();
+        }
+    }
+
     let countdownIntervalId = null;
     let deadlineTimeoutId = null;
 
@@ -335,6 +510,9 @@ export function creaturePage(context) {
 
     // 72시간까지 남은 시각(크리처 선택 마감 기간)
     function updateHatchCountdown(hatchDeadlineAt, growthStage, hatchStatusMessage = null) {
+        // 기존 부화 카운트다운과 종 선택 안내의 마감 상태를 동기화합니다.
+        renderCreatureSelectionGuide();
+
         const now = Date.now();
         const hatchCountdown = element.querySelector('#hatch-countdown');
 
@@ -411,6 +589,9 @@ export function creaturePage(context) {
 
         const refreshAtDeadline = async (retryCount = 0) => {
             if (!isMounted) return;
+
+            // 마감 시각 도달 즉시 종 선택 안내를 숨깁니다.
+            renderCreatureSelectionGuide();
 
             try {
                 const [creatureRes, seasonRes, speciesRes] = await Promise.all([
@@ -495,6 +676,12 @@ export function creaturePage(context) {
     function updateUI(creatureData, seasonData, speciesList = []) {
         if (!creatureData) return;
         clearLoadError();
+
+        // 화면이 다시 그려질 때 최신 크리처 상태로 안내 문구를 갱신합니다.
+        latestCreatureGuideData = creatureData;
+        latestGuideSpeciesList = speciesList;
+
+        renderCreatureSelectionGuide();
 
         const onlineMembers = creatureData.onlineMembers || [];
         const recentContributions = creatureData.recentContributions || [];
@@ -644,6 +831,19 @@ export function creaturePage(context) {
     const onLoginFromError = () => context.navigate('/login');
     retryButton?.addEventListener('click', onRetryLoad);
     loginButton?.addEventListener('click', onLoginFromError);
+
+    // 종 선택 안내 버튼
+    creatureGuideButton?.addEventListener(
+        'click',
+        onCreatureGuideClick
+    );
+
+    // 백그라운드에서 돌아왔을 때 마감 시각 재확인
+    document.addEventListener(
+        'visibilitychange',
+        onCreatureGuideVisibilityChange
+    );
+
     void loadCreaturePageData();
 
     return {
@@ -663,6 +863,21 @@ export function creaturePage(context) {
             btnToggleMovement?.removeEventListener('focus', onMovementFocus);
             btnToggleMovement?.removeEventListener('blur', onMovementBlur);
             avatarContainer?.removeEventListener('click', onAvatarContainerClick);
+
+            // 종 선택 안내 이벤트를 정리합니다.
+            creatureGuideButton?.removeEventListener(
+                'click',
+                onCreatureGuideClick
+            );
+
+            document.removeEventListener(
+                'visibilitychange',
+                onCreatureGuideVisibilityChange
+            );
+
+            // 이전 페이지의 안내용 Snapshot을 정리합니다.
+            latestCreatureGuideData = null;
+            latestGuideSpeciesList = [];
         },
     };
 }

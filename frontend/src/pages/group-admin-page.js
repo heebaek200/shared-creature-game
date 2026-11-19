@@ -9,6 +9,24 @@ import {
     getInvitationManagement,
     rotateInvitation
 } from '../features/group-admin/api.js';
+import {
+    getActiveCreatureSpecies,
+    getCreatureHome,
+    selectCreatureSpecies
+} from '../features/creature/api.js';
+
+import creatureLv0 from '../../assets/creature/lv0.png';
+
+// 기존 크리처 홈에서 사용하는 이미지 매핑 방식을 재사용합니다.
+// 종의 assetKey와 대응하는 lv1.png가 없으면 공통 알 이미지를 사용합니다.
+const CREATURE_EGG_IMAGES = import.meta.glob(
+    '../../assets/creature/*/lv1.png',
+    {
+        eager: true,
+        query: '?url',
+        import: 'default'
+    }
+);
 
 const ROLE_LABELS = {
     PRIMARY: '주 관리자',
@@ -72,6 +90,13 @@ export function adminPage({navigate, currentUser}) {
                     data-admin-tab="invitation"
                     aria-pressed="false">
                 초대 링크
+            </button>
+            
+            <button type="button"
+                    class="nav-link d-none"
+                    data-admin-tab="creature"
+                    aria-pressed="false">
+                크리처 선택
             </button>
         </nav>
 
@@ -218,6 +243,91 @@ export function adminPage({navigate, currentUser}) {
             </div>
         </section>
         
+        <!-- 그룹 관리자 전용 크리처 종 선택 화면 -->
+        <section class="app-surface-card border border-app rounded-4
+                        p-3 p-md-4 d-none"
+                 data-creature-panel>
+        
+            <div class="d-flex flex-wrap justify-content-between
+                        align-items-center gap-2 mb-3">
+                <h2 class="h5 fw-bold mb-0">
+                    크리처 종 선택
+                </h2>
+        
+                <button type="button"
+                        class="btn btn-outline-secondary btn-sm"
+                        data-creature-refresh>
+                    최신 정보 조회
+                </button>
+            </div>
+        
+            <div class="alert alert-info small">
+                부화 전에는 주·부 관리자가 크리처 종을 선택하거나 변경할 수 있습니다.
+                아무 종도 선택하지 않으면 부화 시 무작위 종이 확정됩니다.
+            </div>
+        
+            <!-- 선택 기한 및 현재 상태 -->
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <div class="small text-app-muted mb-1">
+                        종 선택 마감 시각
+                    </div>
+                    <strong data-creature-deadline>-</strong>
+                </div>
+        
+                <div class="col-md-6">
+                    <div class="small text-app-muted mb-1">
+                        선택 마감까지
+                    </div>
+                    <strong data-creature-remaining
+                            aria-live="off">
+                        -
+                    </strong>
+                </div>
+            </div>
+        
+            <div class="border border-app rounded-3 p-3 mb-4">
+                <div class="small text-app-muted mb-1">
+                    현재 선택된 종
+                </div>
+        
+                <div class="fw-semibold mb-2" data-creature-current>
+                    확인 중
+                </div>
+        
+                <p class="small mb-0" role="status"
+                   data-creature-status>
+                    크리처 정보를 불러오고 있습니다.
+                </p>
+            </div>
+        
+            <h3 class="h6 fw-bold mb-3">
+                선택 가능한 크리처
+            </h3>
+        
+            <!-- 활성 종 목록은 JavaScript에서 생성 -->
+            <div class="row g-3 mb-4"
+                 role="radiogroup"
+                 aria-label="크리처 종 선택"
+                 data-creature-options>
+            </div>
+        
+            <button type="button"
+                    class="btn btn-success"
+                    data-creature-save
+                    disabled>
+                선택 저장
+            </button>
+        
+            <div class="alert alert-success mt-3 d-none"
+                 role="status"
+                 data-creature-feedback></div>
+        
+            <div class="alert alert-danger mt-3 d-none"
+                 role="alert"
+                 data-creature-error></div>
+        </section>
+
         <!-- 링크 재발급은 기존 링크를 무효화하므로 확인이 필요 -->
         <dialog class="app-surface-card border border-app rounded-4
                        shadow-lg p-0 text-app"
@@ -372,12 +482,47 @@ export function adminPage({navigate, currentUser}) {
 
     // 재발급 응답의 URL은 현재 페이지 메모리에만 유지합니다.
     let activeTab = 'members';
+
+    // 크리처 홈에서 전달한 초기 탭 요청을 기억합니다.
+    // 그룹 정보가 로딩되기 전에는 권한을 판단할 수 없습니다.
+    const requestedInitialTab =
+        new URLSearchParams(window.location.search).get('tab');
+
+    let initialTabHandled = false;
+
     let invitationData = null;
     let invitationLoaded = false;
     let invitationLoading = false;
     let rotatingInvitation = false;
     let invitationLoadVersion = 0;
     let oneTimeInvitationUrl = '';
+
+    // 크리처 선택 탭
+    const creatureTab = content.querySelector('[data-admin-tab="creature"]');
+    const creaturePanel = content.querySelector('[data-creature-panel]');
+
+    // 크리처 선택 화면 요소
+    const creatureRefresh = content.querySelector('[data-creature-refresh]');
+    const creatureDeadline = content.querySelector('[data-creature-deadline]');
+    const creatureRemaining = content.querySelector('[data-creature-remaining]');
+    const creatureCurrent = content.querySelector('[data-creature-current]');
+    const creatureStatus = content.querySelector('[data-creature-status]');
+    const creatureOptions = content.querySelector('[data-creature-options]');
+    const creatureSave = content.querySelector('[data-creature-save]');
+    const creatureFeedback = content.querySelector('[data-creature-feedback]');
+    const creatureError = content.querySelector('[data-creature-error]');
+
+    // 크리처 조회 결과와 사용자의 선택 상태
+    let creatureHomeData = null;
+    let creatureSpeciesList = [];
+    let creatureSelectedId = '';
+
+    // 중복 요청 및 페이지 종료 처리
+    let creatureLoading = false;
+    let creatureSaving = false;
+    let creatureLoadVersion = 0;
+    let creatureTimerId = null;
+    let creatureDeadlineChecked = false;
 
     /**
      * UTC 활동 시각을 한국 시간대로 표시합니다.
@@ -495,30 +640,78 @@ export function adminPage({navigate, currentUser}) {
     }
 
     /**
-     * 관리자 메뉴의 선택 상태와 표시 영역을 갱신합니다.
-     * 초대 관리 탭은 PRIMARY에게만 허용합니다.
-     * 처음 초대 탭을 열 때만 발급 정보를 자동 조회합니다.
+     * 그룹 관리자 탭을 전환합니다.
+     * 초대 링크는 PRIMARY만, 크리처 선택은 PRIMARY·DEPUTY가 사용합니다.
+     * 각 기능의 첫 조회는 해당 탭을 열 때만 실행합니다.
      *
-     * @param {'members'|'invitation'} tab 이동할 탭
+     * @param {'members'|'invitation'|'creature'} tab 이동할 탭
      */
     function showAdminTab(tab) {
-        if (!mounted || busy || rotatingInvitation) return;
+        if (
+            !mounted ||
+            busy ||
+            rotatingInvitation ||
+            creatureSaving ||
+            dialog.open ||
+            invitationDialog.open ||
+            !groupData
+        ) {
+            return;
+        }
+
+        if (!['members', 'invitation', 'creature'].includes(tab)) {
+            return;
+        }
+
         if (tab === 'invitation' && !isPrimary()) return;
+        if (tab === 'creature' && !canManageCreature()) return;
 
         activeTab = tab;
 
+        // 현재 선택한 탭과 주소창의 Query Parameter를 동기화합니다.
+        // 크리처 탭은 직접 접근 가능한 URL을 유지합니다.
+        // replaceState는 Router를 다시 실행하지 않습니다.
+        const url = new URL(window.location.href);
+
+        if (tab === 'creature') {
+            url.searchParams.set('tab', 'creature');
+        } else {
+            url.searchParams.delete('tab');
+        }
+
+        window.history.replaceState(
+            window.history.state,
+            '',
+            `${url.pathname}${url.search}${url.hash}`
+        );
+
         membersPanel.classList.toggle('d-none', tab !== 'members');
         invitationPanel.classList.toggle('d-none', tab !== 'invitation');
+        creaturePanel.classList.toggle('d-none', tab !== 'creature');
 
-        membersTab.classList.toggle('active', tab === 'members');
-        invitationTab.classList.toggle('active', tab === 'invitation');
+        for (const button of [
+            membersTab,
+            invitationTab,
+            creatureTab
+        ]) {
+            const selected = button.dataset.adminTab === tab;
 
-        membersTab.setAttribute('aria-pressed', String(tab === 'members'));
-        invitationTab.setAttribute('aria-pressed', String(tab === 'invitation'));
+            button.classList.toggle('active', selected);
+            button.setAttribute('aria-pressed', String(selected));
+        }
 
-        // 최초 접근에만 API를 자동 호출합니다.
-        if (tab === 'invitation' && !invitationLoaded && !invitationLoading) {
+        if (tab === 'invitation' &&
+            !invitationLoaded &&
+            !invitationLoading) {
             void loadInvitationInfo();
+        }
+
+        if (tab === 'creature') {
+            if (!creatureHomeData && !creatureLoading) {
+                void loadCreatureSelection();
+            } else {
+                tickCreatureDeadline();
+            }
         }
     }
 
@@ -733,6 +926,546 @@ export function adminPage({navigate, currentUser}) {
     }
 
     /**
+     * 현재 사용자가 그룹 관리자 역할을 가지고 있는지 확인합니다.
+     * PRIMARY와 DEPUTY는 모두 크리처 선택이 가능합니다.
+     * 최종 작업 인가는 백엔드가 다시 검증합니다.
+     *
+     * @returns {boolean} 그룹 관리자 여부
+     */
+    function canManageCreature() {
+        const role = groupData?.myMembership?.role;
+
+        return role === 'PRIMARY' || role === 'DEPUTY';
+    }
+
+    /**
+     * 서버의 시즌·크리처·마감 시각으로 종 선택 가능 여부를 판정합니다.
+     * 현재 시즌이 ACTIVE이고 크리처가 EGG 상태여야 합니다.
+     * 브라우저 판정은 UI용이며 저장 시 서버가 최종 검증합니다.
+     *
+     * @returns {boolean} 현재 선택 UI를 사용할 수 있는지 여부
+     */
+    function isCreatureSelectionOpen() {
+        if (!canManageCreature() || !creatureHomeData) return false;
+
+        const season = creatureHomeData.season;
+        const creature = creatureHomeData.creature;
+
+        if (!season || !creature) return false;
+
+        const startAt = Date.parse(season.startAt);
+        const endAt = Date.parse(season.endAt);
+        const deadlineAt = Date.parse(creature.selectionDeadlineAt);
+        const now = Date.now();
+
+        // 잘못된 시각이 있다면 임의로 선택 기능을 허용하지 않습니다.
+        if (![startAt, endAt, deadlineAt].every(Number.isFinite)) {
+            return false;
+        }
+
+        return (
+            season.status === 'ACTIVE' &&
+            creature.growthStage === 'EGG' &&
+            now >= startAt &&
+            now < endAt &&
+            now < deadlineAt
+        );
+    }
+
+    /**
+     * 남은 시간을 일·시간·분·초로 표시합니다.
+     * 음수는 항상 0초로 처리합니다.
+     * 서버 기한에 도달했는지 판단하는 로직과 별도로 사용합니다.
+     *
+     * @param {number} milliseconds 남은 밀리초
+     * @returns {string} 화면 표시 문자열
+     */
+    function formatCreatureRemaining(milliseconds) {
+        let seconds = Math.max(0, Math.ceil(milliseconds / 1000));
+
+        const days = Math.floor(seconds / 86400);
+        seconds %= 86400;
+
+        const hours = Math.floor(seconds / 3600);
+        seconds %= 3600;
+
+        const minutes = Math.floor(seconds / 60);
+        seconds %= 60;
+
+        return `${days}일 ${hours}시간 ${minutes}분 ${seconds}초`;
+    }
+
+    /**
+     * 서버 Snapshot에 포함된 선택 종의 이름을 반환합니다.
+     * 활성 목록에서 찾지 못할 때는 종 ID를 표시합니다.
+     * 이미 확정된 종이 비활성 목록에서 빠져도 표시를 유지합니다.
+     *
+     * @returns {string} 현재 선택 상태
+     */
+    function getCurrentCreatureName() {
+        const speciesId =
+            creatureHomeData?.creature?.creatureSpeciesId;
+
+        if (speciesId === null || speciesId === undefined) {
+            return '아직 선택하지 않았습니다.';
+        }
+
+        const species = creatureSpeciesList.find(
+            item => String(item.creatureSpeciesId) === String(speciesId)
+        );
+
+        return species?.name ?? `크리처 종 ID ${speciesId}`;
+    }
+
+    /**
+     * 선택 마감 상태와 저장 버튼을 갱신합니다.
+     * 이 함수는 매초 호출되지만 종 목록 자체는 다시 만들지 않습니다.
+     * 라디오 버튼 선택과 키보드 포커스가 유지되도록 합니다.
+     */
+    function renderCreatureStatus() {
+        const creature = creatureHomeData?.creature;
+        const season = creatureHomeData?.season;
+
+        const editable =
+            isCreatureSelectionOpen() &&
+            !creatureLoading &&
+            !creatureSaving &&
+            !busy &&
+            !rotatingInvitation;
+
+        creatureRefresh.disabled = creatureLoading || creatureSaving;
+
+        if (!creature || !season) {
+            creatureDeadline.textContent = '-';
+            creatureRemaining.textContent = '-';
+            creatureCurrent.textContent = '확인할 수 없음';
+
+            creatureStatus.textContent = creatureLoading
+                ? '크리처 정보를 조회 중입니다.'
+                : '크리처 정보를 조회해 주세요.';
+
+        } else {
+            const deadlineAt = Date.parse(creature.selectionDeadlineAt);
+
+            creatureDeadline.textContent =
+                formatDateTime(creature.selectionDeadlineAt);
+            creatureCurrent.textContent = getCurrentCreatureName();
+
+            if (Number.isFinite(deadlineAt)) {
+                const remaining = deadlineAt - Date.now();
+
+                creatureRemaining.textContent = remaining > 0
+                    ? formatCreatureRemaining(remaining)
+                    : '선택 마감';
+            } else {
+                creatureRemaining.textContent = '기한 확인 불가';
+            }
+
+            const hasSelection =
+                creature.creatureSpeciesId !== null &&
+                creature.creatureSpeciesId !== undefined;
+
+            if (creature.growthStage !== 'EGG') {
+                creatureStatus.textContent =
+                    '부화가 완료되어 종 선택을 변경할 수 없습니다.';
+
+            } else if (
+                !Number.isFinite(deadlineAt) ||
+                Date.now() >= deadlineAt
+            ) {
+                creatureStatus.textContent =
+                    '선택이 마감되었습니다. ' +
+                    '아직 알 상태라면 서버의 부화 처리를 기다리는 중입니다.';
+
+            } else if (!isCreatureSelectionOpen()) {
+                creatureStatus.textContent =
+                    '현재 시즌에서는 종 선택을 사용할 수 없습니다.';
+
+            } else {
+                creatureStatus.textContent = hasSelection
+                    ? '선택이 저장되어 있습니다. 마감 전까지 변경할 수 있습니다.'
+                    : '아직 선택하지 않았습니다. 마감 시 무작위 종이 결정됩니다.';
+            }
+        }
+
+        const currentId =
+            creature?.creatureSpeciesId == null
+                ? ''
+                : String(creature.creatureSpeciesId);
+
+        const selectedIsValid = creatureSpeciesList.some(
+            item => String(item.creatureSpeciesId) === creatureSelectedId
+        );
+
+        // 변경 사항이 있고 서버상 선택 가능할 때만 저장합니다.
+        creatureSave.disabled = !(
+            editable &&
+            selectedIsValid &&
+            creatureSelectedId !== currentId
+        );
+
+        creatureSave.textContent = currentId
+            ? '선택 변경 저장'
+            : '크리처 종 선택 저장';
+
+        // 마감 또는 저장 중에는 기존 라디오 버튼을 모두 잠급니다.
+        creatureOptions.querySelectorAll('input[type="radio"]')
+            .forEach(input => {
+                if (input instanceof HTMLInputElement) {
+                    input.disabled = !editable;
+                }
+            });
+    }
+
+    /**
+     * 활성 크리처 종을 라디오 카드 목록으로 표시합니다.
+     * 닉네임이나 종 이름은 textContent로 처리합니다.
+     * 이미지가 없는 종은 기존 공통 알 이미지를 사용합니다.
+     */
+    function renderCreatureOptions() {
+        creatureOptions.replaceChildren();
+
+        if (creatureSpeciesList.length === 0) {
+            const message = document.createElement('p');
+            message.className = 'text-app-muted mb-0';
+            message.textContent = '선택 가능한 크리처 종이 없습니다.';
+            creatureOptions.append(message);
+            renderCreatureStatus();
+            return;
+        }
+
+        for (const species of creatureSpeciesList) {
+            const col = document.createElement('div');
+            col.className = 'col-12 col-md-6 col-xl-4';
+
+            const label = document.createElement('label');
+            label.className =
+                'border border-app rounded-3 p-3 d-flex ' +
+                'align-items-center gap-3 h-100';
+
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'group-admin-creature-species';
+            radio.value = String(species.creatureSpeciesId);
+            radio.checked = radio.value === creatureSelectedId;
+            radio.className = 'form-check-input flex-shrink-0 m-0';
+
+            // Vite가 빌드 시 수집한 로컬 이미지에서만 선택합니다.
+            const assetPath =
+                `../../assets/creature/${species.assetKey}/lv1.png`;
+
+            const image = document.createElement('img');
+            image.src = CREATURE_EGG_IMAGES[assetPath] ?? creatureLv0;
+            image.alt = '';
+            image.loading = 'lazy';
+            image.style.width = '76px';
+            image.style.height = '76px';
+            image.style.objectFit = 'contain';
+
+            const textArea = document.createElement('div');
+            const name = document.createElement('strong');
+            name.textContent = species.name;
+
+            textArea.append(name);
+
+            const currentId =
+                creatureHomeData?.creature?.creatureSpeciesId;
+
+            if (
+                currentId !== null &&
+                currentId !== undefined &&
+                String(currentId) === radio.value
+            ) {
+                const currentLabel = document.createElement('div');
+                currentLabel.className = 'small text-app-muted mt-1';
+                currentLabel.textContent = '현재 선택된 종';
+                textArea.append(currentLabel);
+            }
+
+            label.append(radio, image, textArea);
+            col.append(label);
+            creatureOptions.append(col);
+        }
+
+        renderCreatureStatus();
+    }
+
+    /**
+     * 현재 그룹의 크리처 Snapshot과 활성 종 목록을 조회합니다.
+     * 두 API를 병렬 호출하고 성공한 최신 결과만 화면에 적용합니다.
+     * 이전 페이지나 이전 요청의 응답은 무시합니다.
+     *
+     * @param {{afterSave?: boolean}} options 저장 후 재조회 여부
+     * @returns {Promise<boolean>} 최신 정보 조회 성공 여부
+     */
+    async function loadCreatureSelection({afterSave = false} = {}) {
+        if (
+            !mounted ||
+            !canManageCreature() ||
+            creatureLoading ||
+            busy ||
+            rotatingInvitation ||
+            (creatureSaving && !afterSave)
+        ) {
+            return false;
+        }
+
+        const version = ++creatureLoadVersion;
+        creatureLoading = true;
+
+        // 이전 정보로 다시 저장하지 못하도록 상태를 비웁니다.
+        creatureHomeData = null;
+        creatureSpeciesList = [];
+        creatureSelectedId = '';
+
+        creatureOptions.replaceChildren();
+        creatureError.classList.add('d-none');
+
+        if (!afterSave) {
+            creatureFeedback.classList.add('d-none');
+        }
+
+        renderCreatureStatus();
+
+        try {
+            // 기존 크리처 홈 API와 종 목록 API를 재사용합니다.
+            const [home, species] = await Promise.all([
+                getCreatureHome(),
+                getActiveCreatureSpecies()
+            ]);
+
+            if (!mounted || version !== creatureLoadVersion) {
+                return false;
+            }
+
+            if (
+                !home?.creature ||
+                !home?.season ||
+                !Array.isArray(species)
+            ) {
+                throw new Error(
+                    '크리처 선택 화면의 응답 형식이 올바르지 않습니다.'
+                );
+            }
+
+            creatureHomeData = home;
+            creatureSpeciesList = species;
+
+            const savedId = home.creature.creatureSpeciesId;
+
+            // 현재 서버에 저장된 선택을 라디오 버튼의 초기값으로 사용합니다.
+            creatureSelectedId =
+                savedId === null || savedId === undefined
+                    ? ''
+                    : String(savedId);
+
+            // 최초 조회 시 이미 마감된 경우 중복 자동 조회하지 않습니다.
+            const deadlineAt = Date.parse(
+                home.creature.selectionDeadlineAt
+            );
+
+            creatureDeadlineChecked =
+                Number.isFinite(deadlineAt) &&
+                Date.now() >= deadlineAt;
+
+            renderCreatureOptions();
+            return true;
+
+        } catch (error) {
+            if (!mounted || version !== creatureLoadVersion) {
+                return false;
+            }
+
+            if (
+                error instanceof ApiError &&
+                error.code === 'ROLE_FORBIDDEN'
+            ) {
+                navigate('/group');
+                return false;
+            }
+
+            creatureError.textContent = formatActionError(error);
+            creatureError.classList.remove('d-none');
+
+            return false;
+
+        } finally {
+            if (mounted && version === creatureLoadVersion) {
+                creatureLoading = false;
+                renderCreatureStatus();
+            }
+        }
+    }
+
+    /**
+     * 마감 시각을 기준으로 현재 선택 가능 상태를 갱신합니다.
+     * 기한에 도달하면 서버 Snapshot을 한 번 다시 조회합니다.
+     * 브라우저 시계만으로 부화 완료를 확정하지 않습니다.
+     */
+    function tickCreatureDeadline() {
+        if (!mounted || activeTab !== 'creature') return;
+
+        renderCreatureStatus();
+
+        const deadlineAt = Date.parse(
+            creatureHomeData?.creature?.selectionDeadlineAt
+        );
+
+        if (
+            Number.isFinite(deadlineAt) &&
+            Date.now() >= deadlineAt &&
+            !creatureDeadlineChecked &&
+            !creatureLoading &&
+            !creatureSaving
+        ) {
+            // 시간이 지난 후에는 서버의 실제 상태를 확인합니다.
+            creatureDeadlineChecked = true;
+            void loadCreatureSelection();
+        }
+    }
+
+    /**
+     * 사용자가 크리처 종 라디오 버튼을 변경했을 때 실행합니다.
+     * 아직 서버에는 저장하지 않고 선택된 ID만 갱신합니다.
+     * 저장 가능한 경우에만 버튼을 활성화합니다.
+     *
+     * @param {Event} event 변경 이벤트
+     */
+    function onCreatureOptionChange(event) {
+        const input = event.target;
+
+        if (!(input instanceof HTMLInputElement)) return;
+
+        if (
+            input.name !== 'group-admin-creature-species' ||
+            !input.checked ||
+            !isCreatureSelectionOpen() ||
+            creatureLoading ||
+            creatureSaving
+        ) {
+            return;
+        }
+
+        creatureSelectedId = input.value;
+        renderCreatureStatus();
+    }
+
+    /**
+     * 사용자가 선택한 크리처 종을 서버에 저장합니다.
+     * 중복 제출을 막고 서버에서 시즌과 선택 가능 기간을 다시 검증합니다.
+     * 저장 성공 후 최신 Snapshot을 재조회해 화면을 동기화합니다.
+     */
+    async function onCreatureSave() {
+        if (
+            !mounted ||
+            creatureSaving ||
+            creatureLoading ||
+            busy ||
+            rotatingInvitation ||
+            !isCreatureSelectionOpen()
+        ) {
+            return;
+        }
+
+        const speciesId = Number(creatureSelectedId);
+        const currentId =
+            creatureHomeData?.creature?.creatureSpeciesId;
+
+        if (
+            !Number.isSafeInteger(speciesId) ||
+            speciesId <= 0 ||
+            !creatureSpeciesList.some(
+                item => Number(item.creatureSpeciesId) === speciesId
+            ) ||
+            String(currentId ?? '') === creatureSelectedId
+        ) {
+            return;
+        }
+
+        creatureSaving = true;
+        creatureFeedback.classList.add('d-none');
+        creatureError.classList.add('d-none');
+        renderCreatureStatus();
+
+        try {
+            // 서버에서 부화 기한·권한·활성 종을 최종 확인합니다.
+            await selectCreatureSpecies(speciesId);
+
+            if (!mounted) return;
+
+            // 요청 성공 직후 서버의 실제 선택 상태를 다시 조회합니다.
+            const refreshed = await loadCreatureSelection({
+                afterSave: true
+            });
+
+            if (!mounted) return;
+
+            creatureFeedback.className = refreshed
+                ? 'alert alert-success mt-3'
+                : 'alert alert-warning mt-3';
+
+            if (refreshed) {
+                const latestId =
+                    creatureHomeData?.creature?.creatureSpeciesId;
+
+                creatureFeedback.textContent =
+                    String(latestId) === String(speciesId)
+                        ? '크리처 종 선택이 저장되었습니다.'
+                        : '저장 요청은 성공했지만 다른 관리자의 변경이 ' +
+                        '최신 상태에 반영되었을 수 있습니다.';
+
+            } else {
+                creatureFeedback.textContent =
+                    '선택 요청은 성공했지만 최신 상태를 확인하지 못했습니다. ' +
+                    '최신 정보 조회 버튼으로 다시 확인해 주세요.';
+            }
+
+            creatureFeedback.classList.remove('d-none');
+
+        } catch (error) {
+            if (!mounted) return;
+
+            if (
+                error instanceof ApiError &&
+                error.code === 'ROLE_FORBIDDEN'
+            ) {
+                navigate('/group');
+                return;
+            }
+
+            const hasStateChanged =
+                error instanceof ApiError &&
+                (
+                    error.code === 'CREATURE_SELECTION_CLOSED' ||
+                    error.code === 'CONCURRENT_MODIFICATION'
+                );
+
+            // 마감 또는 동시성 오류 시 최신 서버 상태를 다시 확인합니다.
+            if (hasStateChanged) {
+                await loadCreatureSelection({afterSave: true});
+            }
+
+            if (!mounted) return;
+
+            creatureError.textContent =
+                error instanceof ApiError &&
+                error.code === 'CREATURE_SELECTION_CLOSED'
+                    ? '크리처 종 선택 시간이 종료되었습니다. ' +
+                    '최신 상태를 확인해 주세요.'
+                    : formatActionError(error);
+
+            creatureError.classList.remove('d-none');
+
+        } finally {
+            creatureSaving = false;
+
+            if (mounted) {
+                renderCreatureStatus();
+            }
+        }
+    }
+
+    /**
      * 조회된 구성원과 현재 권한을 기준으로 관리 버튼을 구성합니다.
      * 활동 기록이 없는 대상에게는 강퇴 버튼을 활성화하지 않습니다.
      * PRIMARY만 역할 변경과 관리자 이전 대상을 선택할 수 있습니다.
@@ -742,6 +1475,12 @@ export function adminPage({navigate, currentUser}) {
 
         const myRole = groupData.myMembership.role;
         transferPanel.classList.toggle('d-none', myRole !== 'PRIMARY');
+
+        // 종 선택은 주·부 관리자 모두 사용할 수 있습니다.
+        const canSelectCreature =
+            myRole === 'PRIMARY' || myRole === 'DEPUTY';
+
+        creatureTab.classList.toggle('d-none', !canSelectCreature);
 
         // PRIMARY만 초대 링크 관리 탭을 사용할 수 있습니다.
         invitationTab.classList.toggle('d-none', myRole !== 'PRIMARY');
@@ -907,6 +1646,17 @@ export function adminPage({navigate, currentUser}) {
                 `주 관리자 ${group.primaryAdmin?.nickname ?? '-'}`;
 
             renderMembers();
+
+            // 그룹 조회에 성공한 뒤 초기 탭을 한 번만 선택합니다.
+            // 서버에서 확인한 관리자 역할이 반영된 상태이므로 안전합니다.
+            if (!initialTabHandled) {
+                initialTabHandled = true;
+
+                if (requestedInitialTab === 'creature') {
+                    showAdminTab('creature');
+                }
+            }
+
             return true;
 
         } catch (error) {
@@ -1184,11 +1934,11 @@ export function adminPage({navigate, currentUser}) {
     };
 
     /**
-     * 그룹 관리자 탭 클릭을 처리합니다.
-     * 클릭한 버튼의 종류에 따라 구성원·초대 관리 화면을 전환합니다.
-     * 권한이 없는 탭은 showAdminTab에서 다시 차단합니다.
+     * 그룹 관리자 탭의 클릭 이벤트를 처리합니다.
+     * 구성원, 초대 링크, 크리처 선택 탭을 구분합니다.
+     * 접근 권한과 요청 중 상태는 showAdminTab에서 확인합니다.
      *
-     * @param {MouseEvent} event 탭 메뉴 클릭 이벤트
+     * @param {MouseEvent} event 클릭 이벤트
      */
     function onAdminTabClick(event) {
         if (!(event.target instanceof Element)) return;
@@ -1198,8 +1948,12 @@ export function adminPage({navigate, currentUser}) {
 
         if (tab.dataset.adminTab === 'members') {
             showAdminTab('members');
+
         } else if (tab.dataset.adminTab === 'invitation') {
             showAdminTab('invitation');
+
+        } else if (tab.dataset.adminTab === 'creature') {
+            showAdminTab('creature');
         }
     }
 
@@ -1233,6 +1987,42 @@ export function adminPage({navigate, currentUser}) {
     dialog.addEventListener('cancel', onDialogCancel);
     dialog.addEventListener('close', onDialogClose);
 
+    /**
+     * 최신 크리처 정보를 다시 조회하는 버튼의 이벤트입니다.
+     * 중복 요청 차단은 loadCreatureSelection에서 처리합니다.
+     * 부화 처리 대기 중에도 사용자가 직접 상태를 재확인할 수 있습니다.
+     */
+    function onCreatureRefresh() {
+        void loadCreatureSelection();
+    }
+
+    /**
+     * 비활성 브라우저 탭에서 돌아왔을 때 시간을 다시 계산합니다.
+     * 백그라운드에서 타이머 호출이 지연되는 경우를 보완합니다.
+     * 마감 시각에 도달했다면 서버 상태를 확인합니다.
+     */
+    function onCreatureVisibilityChange() {
+        if (!document.hidden) {
+            tickCreatureDeadline();
+        }
+    }
+
+    // 크리처 종 선택·조회·저장 이벤트
+    creatureRefresh.addEventListener('click', onCreatureRefresh);
+    creatureOptions.addEventListener('change', onCreatureOptionChange);
+    creatureSave.addEventListener('click', onCreatureSave);
+
+    // 초 단위 카운트다운은 현재 페이지가 살아 있는 동안만 실행합니다.
+    creatureTimerId = window.setInterval(
+        tickCreatureDeadline,
+        1000
+    );
+
+    document.addEventListener(
+        'visibilitychange',
+        onCreatureVisibilityChange
+    );
+
     // 최초 서버 데이터 조회
     void loadGroup();
 
@@ -1240,6 +2030,28 @@ export function adminPage({navigate, currentUser}) {
         element,
         cleanup: () => {
             mounted = false;
+
+            // 이전 페이지의 비동기 크리처 조회 결과를 무효화합니다.
+            creatureLoadVersion++;
+
+            if (creatureTimerId !== null) {
+                window.clearInterval(creatureTimerId);
+                creatureTimerId = null;
+            }
+
+            document.removeEventListener(
+                'visibilitychange',
+                onCreatureVisibilityChange
+            );
+
+            creatureRefresh.removeEventListener('click', onCreatureRefresh);
+            creatureOptions.removeEventListener('change', onCreatureOptionChange);
+            creatureSave.removeEventListener('click', onCreatureSave);
+
+            // 이동한 페이지에 이전 크리처 상태를 남기지 않습니다.
+            creatureHomeData = null;
+            creatureSpeciesList = [];
+            creatureSelectedId = '';
 
             // 페이지가 종료된 후 도착하는 초대 조회 응답을 무시합니다.
             invitationLoadVersion++;
