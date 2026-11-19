@@ -1,4 +1,11 @@
-# QA-01 · 가입·초대·그룹 테스트 결과
+# QA-01 · 가입·초대·그룹 제한 테스트 결과
+
+- **관련 이슈:** [#35](https://github.com/heebaek200/shared-creature-game/issues/35)
+- **작성자:** 이수현
+- **테스트 날짜:** 2026-11-19
+- **테스트 대상(브랜치/커밋):** (기입)
+- **환경:** Windows / Chrome, Naver Whale (수동 테스트) / 로컬 MySQL / Gradle (동시성 자동화 테스트)
+- **로그인 공급자:** Google , Naver
 
 ## TC-35-01 / PASS — 로그인
 
