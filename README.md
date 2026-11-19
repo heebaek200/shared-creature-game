@@ -1,10 +1,16 @@
-# 공동 육성 게임 — 다 같이 키우는 생명체
-
-- [프로젝트 설계 문서 보기](docs/index.md)
-- [GitHub Projects 보기](https://github.com/heebaek200/shared-creature-game/projects)
-- [팀 프로젝트 일일 리포트 보기](https://github.com/heebaek200/shared-creature-game/discussions)
+# 다 같이 키우는 생명체
 
 ## 프로젝트 정보
+
+### 개요
+
+**다 같이 키우는 생명체**는 일상 속 작은 활동을 게임으로 연결하고, 여러 사용자가 하나의 생명체를 함께 성장시키는 **웹 기반 소셜 육성 서비스**입니다.
+
+규칙적인 생활이나 가벼운 야외 활동은 혼자 꾸준히 실천하기 어렵고, 새로운 사람과 적극적으로 교류하는 일도 부담스러울 수 있습니다. 이 프로젝트는 이러한 일상적인 어려움에 주목하여, 거창한 목표나 적극적인 소통 없이도 다른 사람들과 자연스럽게 협력할 수 있는 경험을 제공하고자 기획했습니다.
+
+사용자는 공개 그룹에 자유롭게 가입하거나 새로운 그룹을 만들고, 기상 체크인이나 사진 인증 등 일일·주간 퀘스트를 수행합니다. 개인의 활동은 기여도로 기록되고 그룹이 함께 육성하는 **크리처**의 성장에 반영됩니다. 또한 그룹 내 개인 랭킹과 그룹 간 경쟁을 통해 지속적인 참여 동기를 제공합니다.
+
+**이 프로젝트가 제공하고자 하는 가치는 일상의 작은 실천을 눈에 보이는 성취로 바꾸고, 공동의 목표를 통해 느슨한 사회적 연결을 만드는 것입니다.** 다만 실제 생활 습관 개선이나 사회적 교류 증대 효과는 아직 검증되지 않은 기대 효과입니다.
 
 ### 팀 구성 및 역할
 
@@ -18,6 +24,72 @@
 | **김희성** | [asd27429697-design](https://github.com/asd27429697-design) | **기술 검증:** 크리처·아바타의 브라우저 표현 방식<br>**백엔드:** Naver OAuth, Gemini AI 교정<br>**프론트엔드:** 회원가입·그룹 관리, Naver OAuth, Gemini AI 교정 등 |
 
 ※ 담당 역할은 주요 구현 및 기여 영역을 중심으로 요약했습니다.
+
+### 설계 문서
+
+이 프로젝트는 **팀원들이 함께 설계를 수립한 뒤, 확정된 설계를 기준으로 기능별 구현을 진행하는 워터폴 방식에 가까운 개발 프로세스**를 채택했습니다.
+
+구현에 앞서 서비스 기획, 요구사항, 사용자 시나리오와 업무 규칙, 데이터베이스, REST API 및 화면 구조를 문서화했습니다. 이를 통해 팀원들이 각자의 기능을 독립적으로 개발하더라도 공통된 업무 규칙과 인터페이스를 따를 수 있도록 했습니다.
+
+구현 과정에서 발견된 문제나 변경 사항은 설계 문서에 다시 반영하여 문서와 실제 구현 사이의 차이를 줄이고자 했습니다.
+
+주요 설계 자료는 다음과 같습니다.
+
+- [프로젝트 기획안](docs/project_plan.md)
+- [요구사항 정의서](docs/requirements.md)
+- [사용자 시나리오 및 업무 규칙](docs/business-rules.md)
+- [데이터베이스 설계서 및 ERD](docs/database-design.md)
+- [REST API 설계서](docs/api-design.md)
+- [화면 설계서](docs/screen-design.md)
+- [클래스 다이어그램](docs/class-diagram.md)
+
+**[전체 설계 문서 보기](docs/index.md)**
+
+### GitHub Projects
+
+이 프로젝트는 **GitHub Projects와 Issues를 중심으로 업무를 관리**했습니다.
+
+설계 단계에서 정의한 기능을 구현 가능한 작업 단위의 Issue로 나누고, 담당자와 구현 범위, 업무 규칙, API 계약 및 완료 조건을 정리했습니다. 팀원들은 각자 담당 Issue를 기준으로 작업하고, Pull Request를 통해 구현 내용을 공유했습니다.
+
+GitHub Projects의 칸반 보드를 이용하여 업무의 진행 상태를 시각화하고, 각 팀원이 현재 어떤 작업을 담당하고 있으며 다음에 무엇을 진행해야 하는지 확인할 수 있도록 했습니다.
+
+이러한 방식을 통해 별도의 업무 관리 도구 없이도 **설계 문서 → Issue → 구현 및 Pull Request**로 이어지는 작업 이력을 관리하고, 여러 기능을 병렬로 개발하는 과정에서 업무 범위와 진행 상황을 명확히 공유하고자 했습니다.
+
+**[GitHub Projects 보기](https://github.com/heebaek200/shared-creature-game/projects)**
+
+![GitHub Projects 칸반 보드](docs/images/github-projects-kanban.png)
+
+### 일일 리포트
+
+이 프로젝트는 팀원들이 개발 기간 동안 **매일 자신의 작업을 돌아보고 공유하는 일일 리포트 제도**를 운영했습니다.
+
+각 팀원은 그날 진행한 작업, 다음에 진행할 작업, 작업 과정에서 느낀 점 등을 GitHub Discussions에 기록했습니다. 단순한 업무 완료 보고뿐만 아니라 개발 과정에서 겪은 어려움과 새롭게 알게 된 내용, 자유로운 소감도 공유할 수 있도록 했습니다.
+
+일일 리포트는 다음과 같은 목적을 가지고 운영했습니다.
+
+- **진행 상황 공유:** 각자의 작업 현황과 다음 작업을 파악하여 팀 전체의 진행 상황을 확인
+- **문제 조기 발견:** 작업 중 발생한 어려움이나 지연 요소를 공유하여 필요한 지원과 조율을 진행
+- **업무 회고:** 하루 동안 수행한 작업과 판단을 되돌아보고, 다음 작업의 방향을 스스로 정리
+- **개발 과정 기록:** 최종 결과물뿐만 아니라 프로젝트가 만들어지는 과정과 팀원들의 경험을 보존
+
+이러한 기록을 통해 팀원 각자가 자신의 업무를 정리하는 습관을 만들고, 서로의 작업 진행 상황을 이해하는 데 도움을 얻고자 했습니다.
+
+**[전체 일일 리포트 보기](https://github.com/heebaek200/shared-creature-game/discussions)**
+#### 일일 리포트 기록
+
+- [2026-11-02 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/2)
+- [2026-11-03 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/49)
+- [2026-11-04 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/59)
+- [2026-11-05 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/65)
+- [2026-11-06 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/69)
+- [2026-11-09 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/73)
+- [2026-11-10 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/79)
+- [2026-11-11 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/82)
+- [2026-11-12 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/91)
+- [2026-11-13 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/96)
+- [2026-11-16 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/101)
+- [2026-11-17 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/105)
+- [2026-11-18 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/111)
 
 ## 주요 기술 스택
 
