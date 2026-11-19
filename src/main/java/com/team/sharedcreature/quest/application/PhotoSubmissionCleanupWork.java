@@ -224,7 +224,7 @@ public class PhotoSubmissionCleanupWork implements PhotoRetentionWork {
     ) {
         Instant controlNow = clock.instant();
         try {
-            var resolution = transactions.deferAfterClaimFailure(
+            PhotoSubmissionCleanupTransactionService.ClaimFailureResolution resolution = transactions.deferAfterClaimFailure(
                     id,
                     kind,
                     attemptedClaimToken,

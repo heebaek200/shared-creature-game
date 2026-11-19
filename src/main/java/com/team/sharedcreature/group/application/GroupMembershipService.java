@@ -10,6 +10,7 @@ import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.api.*;
 import com.team.sharedcreature.group.domain.*;
 import com.team.sharedcreature.group.infrastructure.*;
+import com.team.sharedcreature.group.api.CreateGroupResponse;
 import com.team.sharedcreature.season.application.SeasonContributionMembershipService;
 import com.team.sharedcreature.season.application.SeasonQueryService;
 import com.team.sharedcreature.season.domain.GroupCreature;
@@ -133,11 +134,11 @@ public class GroupMembershipService {
         groupCreatureRepository.save(GroupCreature.egg(groupSeason, now));
         groupScoreRepository.save(SeasonGroupScore.zero(groupSeason, now));
 
-        var summary = new CreateGroupResponse.GroupSummaryResponse(
+        CreateGroupResponse.GroupSummaryResponse summary = new CreateGroupResponse.GroupSummaryResponse(
                 group.getId(), group.getName(), group.getDescription(), 1, 20, 19, true, null);
-        var primary = new CreateGroupResponse.GroupMemberResponse(
+        CreateGroupResponse.GroupMemberResponse primary = new CreateGroupResponse.GroupMemberResponse(
                 creator.getId(), loginUser.nickname(), "PRIMARY", membership.getJoinedAt());
-        var myMembership = new CreateGroupResponse.MembershipResponse(
+        CreateGroupResponse.MembershipResponse myMembership = new CreateGroupResponse.MembershipResponse(
                 membership.getId(), group.getId(), membership.getRole(), membership.getJoinedAt(), membership.getStatus());
         return new CreateGroupResponse(
                 new CreateGroupResponse.GroupDetailResponse(summary, primary, myMembership),

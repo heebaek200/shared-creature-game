@@ -112,7 +112,7 @@ class SeasonCreationServiceTest {
     void waitsForUnfinishedClosingSeason() {
         arrange(first("CLOSING"), first("CLOSING"));
 
-        var result = service.createCurrentScheduledIfMissing();
+        SeasonCreationService.CreationResult result = service.createCurrentScheduledIfMissing();
 
         assertEquals(SeasonCreationService.Outcome.WAITING_FOR_CLOSURE, result.outcome());
         verify(repository, never()).saveAndFlush(any());
@@ -142,7 +142,7 @@ class SeasonCreationServiceTest {
         Season current = make(2L, 2, SECOND_START, SECOND_END, "SCHEDULED");
         arrange(first("ENDED"), current);
 
-        var result = service.createCurrentScheduledIfMissing();
+        SeasonCreationService.CreationResult result = service.createCurrentScheduledIfMissing();
 
         assertEquals(SeasonCreationService.Outcome.ALREADY_EXISTS, result.outcome());
         assertEquals(2L, result.seasonId());

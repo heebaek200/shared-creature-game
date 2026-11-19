@@ -3,6 +3,7 @@ package com.team.sharedcreature.group.integration;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.security.Hashing;
 import com.team.sharedcreature._core.security.LoginUser;
+import com.team.sharedcreature.group.api.LeaveMyGroupResponse;
 import com.team.sharedcreature.group.application.GroupAdminService;
 import com.team.sharedcreature.group.application.GroupInvitationManagementService;
 import com.team.sharedcreature.group.application.GroupMembershipService;
@@ -337,7 +338,7 @@ class GroupManagementConsistencyIntegrationTest {
         long inviteId = insertInvitation(f.group(), f.actor());
 
         // 실제 Service를 실행해 1인 그룹 종료의 DB 변경을 확인합니다.
-        var result = membershipService.leaveMyGroup(f.actor());
+        LeaveMyGroupResponse result = membershipService.leaveMyGroup(f.actor());
         assertThat(result.groupDeactivated()).isTrue();
         assertThat(membershipStatus(f.actor())).isEqualTo("LEFT");
         assertThat(count("SELECT current_member_count FROM game_groups WHERE id = ?", f.group())).isZero();

@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 class PersistenceScaffoldTest {
@@ -17,14 +18,14 @@ class PersistenceScaffoldTest {
         Path source = Path.of("src/main/java");
         long entities;
         long repositories;
-        try (var files = Files.walk(source)) {
+        try (Stream<Path> files = Files.walk(source)) {
             entities = files.filter(path -> path.toString().endsWith(".java"))
                     // @EntityGraph를 제외하고 실제 엔티티 선언만 집계합니다.
                     .filter(path -> java.util.regex.Pattern.compile("(?m)^\\s*@Entity(?:\\s|\\(|$)")
                             .matcher(read(path)).find())
                     .count();
         }
-        try (var files = Files.walk(source)) {
+        try (Stream<Path> files = Files.walk(source)) {
             repositories = files.filter(path -> path.toString().endsWith("Repository.java"))
                     .filter(path -> read(path).contains("extends JpaRepository"))
                     .count();

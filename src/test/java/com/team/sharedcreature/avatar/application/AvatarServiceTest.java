@@ -3,6 +3,8 @@ package com.team.sharedcreature.avatar.application;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
+import com.team.sharedcreature.avatar.api.AvatarResponse;
+import com.team.sharedcreature.avatar.api.OwnedItemResponse;
 import com.team.sharedcreature.avatar.domain.AvatarEquipment;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
 import com.team.sharedcreature.avatar.domain.AvatarSlot;
@@ -22,6 +24,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -66,7 +69,7 @@ class AvatarServiceTest {
         stubLockedItem(item, List.of());
         when(equipmentRepository.findByUserIdAndSlotCodeForUpdate(1L, AvatarSlot.HEAD))
                 .thenReturn(Optional.empty());
-        var savedSlot = new AtomicReference<AvatarEquipment>();
+        AtomicReference<AvatarEquipment> savedSlot = new AtomicReference<>();
         when(equipmentRepository.save(any(AvatarEquipment.class))).thenAnswer(invocation -> {
             AvatarEquipment equipment = invocation.getArgument(0);
             savedSlot.set(equipment);
@@ -76,13 +79,13 @@ class AvatarServiceTest {
                 .thenAnswer(invocation -> List.of(savedSlot.get()));
         when(membershipRepository.findActiveGroupIdByUserId(1L)).thenReturn(Optional.of(7L));
 
-        var response = service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true);
+        AvatarResponse response = service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true);
 
         assertThat(item.getStatus()).isEqualTo(OwnedItemStatus.OWNED_USED);
         assertThat(item.getUsedAt()).isEqualTo(NOW);
         assertThat(response.equipments().HEAD().ownedItemId()).isEqualTo(10L);
         assertThat(response.equipments().FACE()).isNull();
-        var event = ArgumentCaptor.forClass(AvatarEquipmentChangedEvent.class);
+        ArgumentCaptor<AvatarEquipmentChangedEvent> event = ArgumentCaptor.forClass(AvatarEquipmentChangedEvent.class);
         verify(eventPublisher).publishAfterCommit(event.capture());
         assertThat(event.getValue().groupId()).isEqualTo(7L);
         assertThat(event.getValue().userId()).isEqualTo(1L);
@@ -91,7 +94,7 @@ class AvatarServiceTest {
         assertThat(event.getValue().occurredAt()).isEqualTo(NOW);
 
         // 실제 DB의 경합 재현과 구분해 업무 코드의 잠금 획득 순서를 검증합니다.
-        var order = inOrder(userRepository, purchaseRepository, ownedItemRepository,
+        InOrder order = inOrder(userRepository, purchaseRepository, ownedItemRepository,
                 refundRepository, equipmentRepository, eventPublisher);
         order.verify(userRepository).findByIdForUpdate(1L);
         order.verify(purchaseRepository).findByIdForUpdate(item.getPurchase().getId());
@@ -177,7 +180,7 @@ class AvatarServiceTest {
         stubLockedItem(item, List.of());
         stubExistingSlot(equipment);
 
-        var response = service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, false);
+        AvatarResponse response = service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, false);
 
         assertThat(response.equipments().HEAD().ownedItemId()).isEqualTo(10L);
         assertThat(item.getUsedAt()).isEqualTo(CREATED_AT);
@@ -193,7 +196,7 @@ class AvatarServiceTest {
         stubExistingSlot(equipment);
         when(membershipRepository.findActiveGroupIdByUserId(1L)).thenReturn(Optional.empty());
 
-        var response = service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true);
+        AvatarResponse response = service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true);
 
         assertThat(response.equipments().HEAD().ownedItemId()).isEqualTo(10L);
         assertThat(item.getStatus()).isEqualTo(OwnedItemStatus.OWNED_USED);
@@ -209,12 +212,12 @@ class AvatarServiceTest {
         stubExistingSlot(equipment);
         when(membershipRepository.findActiveGroupIdByUserId(1L)).thenReturn(Optional.of(7L));
 
-        var response = service.unequipAvatarItem(1L, AvatarSlot.HEAD);
+        AvatarResponse response = service.unequipAvatarItem(1L, AvatarSlot.HEAD);
 
         assertThat(response.equipments().HEAD()).isNull();
         assertThat(item.getStatus()).isEqualTo(OwnedItemStatus.OWNED_USED);
         assertThat(item.getUsedAt()).isEqualTo(CREATED_AT);
-        var event = ArgumentCaptor.forClass(AvatarEquipmentChangedEvent.class);
+        ArgumentCaptor<AvatarEquipmentChangedEvent> event = ArgumentCaptor.forClass(AvatarEquipmentChangedEvent.class);
         verify(eventPublisher).publishAfterCommit(event.capture());
         assertThat(event.getValue().equippedItem()).isNull();
         assertThat(event.getValue().slot()).isEqualTo(AvatarSlot.HEAD);
@@ -229,7 +232,7 @@ class AvatarServiceTest {
                 .thenReturn(Optional.empty());
         when(equipmentRepository.findAllByUserId(1L)).thenReturn(List.of());
 
-        var response = service.unequipAvatarItem(1L, AvatarSlot.HEAD);
+        AvatarResponse response = service.unequipAvatarItem(1L, AvatarSlot.HEAD);
 
         assertThat(response.equipments().HEAD()).isNull();
         assertThat(response.equipments().FACE()).isNull();
@@ -281,7 +284,7 @@ class AvatarServiceTest {
                 .thenReturn(new PageImpl<>(List.of(item)));
         when(equipmentRepository.findAllByUserId(1L)).thenReturn(List.of());
 
-        var response = service.listOwnedItems(1L, 0, 20, AvatarSlot.HEAD, status);
+        Page<OwnedItemResponse> response = service.listOwnedItems(1L, 0, 20, AvatarSlot.HEAD, status);
 
         assertThat(response.getContent().getFirst().slot()).isEqualTo(AvatarSlot.HEAD);
         assertThat(response.getContent().getFirst().status()).isEqualTo(status);

@@ -5,6 +5,8 @@ import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
 import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
+import com.team.sharedcreature.payment.api.PurchaseResponse;
+import com.team.sharedcreature.payment.api.PurchaseSummaryResponse;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
 import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.domain.PurchaseStatus;
@@ -21,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.test.util.ReflectionTestUtils;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
@@ -48,15 +51,15 @@ class PurchaseQueryServiceTest {
     @ParameterizedTest
     @EnumSource(PurchaseStatus.class)
     void 목록은_Enum필터로_조회하고_상태문자열과_null정보를_유지한다(PurchaseStatus status) {
-        var purchase = purchase(status);
+        Purchase purchase = purchase(status);
         when(purchases.findByUserIdAndStatus(eq(1L), eq(status), any()))
                 .thenReturn(new PageImpl<>(List.of(purchase)));
         when(items.findByPurchaseId(20L)).thenReturn(Optional.empty());
         when(refunds.findFirstByPurchaseIdOrderByRequestedAtDesc(20L)).thenReturn(Optional.empty());
 
-        var result = service.list(1L, 0, 20, status);
+        Page<PurchaseSummaryResponse> result = service.list(1L, 0, 20, status);
 
-        var summary = result.getContent().getFirst();
+        PurchaseSummaryResponse summary = result.getContent().getFirst();
         assertThat(summary.status()).isEqualTo(status);
         assertThat(new ObjectMapper().writeValueAsString(summary))
                 .contains("\"status\":\"" + status.name() + "\"", "\"ownedItemStatus\":null", "\"latestRefundStatus\":null");
@@ -74,7 +77,7 @@ class PurchaseQueryServiceTest {
         when(refunds.findByPurchaseIdOrderByRequestedAtAsc(20L)).thenReturn(List.of());
         when(transactions.findByPurchaseIdOrderByCreatedAtAsc(20L)).thenReturn(List.of());
 
-        var result = service.get(1L, 20L);
+        PurchaseResponse result = service.get(1L, 20L);
 
         assertThat(result.status()).isEqualTo(status);
         assertThat(new ObjectMapper().writeValueAsString(result))
@@ -88,19 +91,19 @@ class PurchaseQueryServiceTest {
     @ParameterizedTest
     @EnumSource(OwnedItemStatus.class)
     void purchaseResponsesSerializeOwnedItemStatusAsString(OwnedItemStatus status) {
-        var item = mock(OwnedItem.class);
+        OwnedItem item = mock(OwnedItem.class);
         when(item.getStatus()).thenReturn(status);
-        var purchase = purchase(PurchaseStatus.PAID);
+        Purchase purchase = purchase(PurchaseStatus.PAID);
         when(purchases.findByIdAndUserId(20L, 1L)).thenReturn(Optional.of(purchase));
         when(purchases.findByUserId(eq(1L), any())).thenReturn(new PageImpl<>(List.of(purchase)));
         when(items.findByPurchaseId(20L)).thenReturn(Optional.of(item));
 
-        var detail = service.get(1L, 20L);
-        var summary = service.list(1L, 0, 20, null).getContent().getFirst();
+        PurchaseResponse detail = service.get(1L, 20L);
+        PurchaseSummaryResponse summary = service.list(1L, 0, 20, null).getContent().getFirst();
 
         assertThat(detail.ownedItemStatus()).isEqualTo(status);
         assertThat(summary.ownedItemStatus()).isEqualTo(status);
-        var mapper = new ObjectMapper();
+        ObjectMapper mapper = new ObjectMapper();
         String expectedJson = "\"ownedItemStatus\":\"" + status.name() + "\"";
         assertThat(mapper.writeValueAsString(detail)).contains(expectedJson);
         assertThat(mapper.writeValueAsString(summary)).contains(expectedJson);
@@ -108,17 +111,17 @@ class PurchaseQueryServiceTest {
 
     @Test
     void purchaseHistorySerializesProviderAsString() {
-        var purchase = purchase(PurchaseStatus.PAID);
-        var approval = PaymentTransaction.approved(purchase, "approval", purchase.getPriceKrwSnapshot(), NOW, NOW);
+        Purchase purchase = purchase(PurchaseStatus.PAID);
+        PaymentTransaction approval = PaymentTransaction.approved(purchase, "approval", purchase.getPriceKrwSnapshot(), NOW, NOW);
         when(purchases.findByIdAndUserId(20L, 1L)).thenReturn(Optional.of(purchase));
         when(transactions.findByPurchaseIdOrderByCreatedAtAsc(20L)).thenReturn(List.of(approval));
 
-        var response = service.get(1L, 20L);
+        PurchaseResponse response = service.get(1L, 20L);
 
         assertThat(response.transactions()).singleElement().satisfies(transaction ->
                 assertThat(transaction.provider()).isEqualTo("PORTONE"));
-        var mapper = new ObjectMapper();
-        var provider = mapper.readTree(mapper.writeValueAsString(response)).at("/transactions/0/provider");
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode provider = mapper.readTree(mapper.writeValueAsString(response)).at("/transactions/0/provider");
         assertThat(provider.isString()).isTrue();
         assertThat(provider.asString()).isEqualTo("PORTONE");
     }
@@ -143,8 +146,8 @@ class PurchaseQueryServiceTest {
 
     /** 실제 도메인 전환으로 각 결제 상태의 구매를 준비합니다. */
     private Purchase purchase(PurchaseStatus status) {
-        var item = unusedItem(10L, 1L, "HEAD");
-        var purchase = Purchase.ready("test-order", item.getUser(), item.getShopItem(), CREATED_AT);
+        OwnedItem item = unusedItem(10L, 1L, "HEAD");
+        Purchase purchase = Purchase.ready("test-order", item.getUser(), item.getShopItem(), CREATED_AT);
         ReflectionTestUtils.setField(purchase, "id", 20L);
         switch (status) {
             case READY -> { }

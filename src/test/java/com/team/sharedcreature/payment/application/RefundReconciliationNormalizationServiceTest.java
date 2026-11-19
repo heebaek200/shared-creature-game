@@ -45,7 +45,7 @@ class RefundReconciliationNormalizationServiceTest {
      */
     @Test
     void successUsesUtcFiveMinuteBucketAndJsonSummary() {
-        var summary = summary(4, 1, 1, 1, 0, 1, 0);
+        RefundRecoveryWork.RecoverySummary summary = summary(4, 1, 1, 1, 0, 1, 0);
         when(work.recoverStaleRefunds(any(Runnable.class))).thenReturn(summary);
         AtomicReference<String> json = new AtomicReference<>();
         stubRunner(invocation -> {
@@ -53,7 +53,7 @@ class RefundReconciliationNormalizationServiceTest {
             return SchedulerJobRunner.ExecutionResult.SUCCEEDED;
         });
 
-        var result = service.normalize();
+        RefundReconciliationNormalizationService.Result result = service.normalize();
         assertEquals(BUCKET, result.scheduledFor());
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, result.execution());
         assertSame(summary, result.summary());
@@ -71,7 +71,7 @@ class RefundReconciliationNormalizationServiceTest {
     @Test
     void skippedClaimDoesNotRunRefundWork() {
         stubRunner(invocation -> SchedulerJobRunner.ExecutionResult.SKIPPED);
-        var result = service.normalize();
+        RefundReconciliationNormalizationService.Result result = service.normalize();
         assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, result.execution());
         assertNull(result.summary());
         verifyNoInteractions(work, lifecycle);
@@ -119,7 +119,7 @@ class RefundReconciliationNormalizationServiceTest {
             invocation.apply(ticket());
             return SchedulerJobRunner.ExecutionResult.SUCCEEDED;
         });
-        var result = service.normalize();
+        RefundReconciliationNormalizationService.Result result = service.normalize();
         assertNull(result.execution());
         assertTrue(result.error().contains("기술 오류"));
     }
@@ -231,7 +231,7 @@ class RefundReconciliationNormalizationServiceTest {
         worker.start();
         try {
             assertTrue(entered.await(5, TimeUnit.SECONDS));
-            var skipped = service.normalize();
+            RefundReconciliationNormalizationService.Result skipped = service.normalize();
             assertTrue(skipped.alreadyRunning());
             assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, skipped.execution());
         } finally {

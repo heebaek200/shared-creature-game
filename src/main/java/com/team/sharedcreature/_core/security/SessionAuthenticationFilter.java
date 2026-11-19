@@ -14,6 +14,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -22,6 +23,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -90,7 +92,7 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            var currentRoles = new HashSet<String>();
+            Set<String> currentRoles = new HashSet<>();
 
             // 전역 관리자 권한을 유지합니다.
             if (user.getGlobalRole() == GlobalRole.SUPER_ADMIN) {
@@ -115,11 +117,11 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
                 request.getSession(false).setAttribute(LOGIN_USER, loginUser);
             }
 
-            var authorities = roles.stream()
+            List<SimpleGrantedAuthority> authorities = roles.stream()
                     .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
                     .toList();
 
-            var authentication = UsernamePasswordAuthenticationToken.authenticated(
+            Authentication authentication = UsernamePasswordAuthenticationToken.authenticated(
                     loginUser,
                     "N/A",
                     authorities

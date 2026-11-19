@@ -81,7 +81,7 @@ public class GroupController {
     }
 
     private void updateSessionRole(LoginUser loginUser, GroupRole role, HttpSession session) {
-        var roles = new HashSet<>(loginUser.roles());
+        Set<String> roles = new HashSet<>(loginUser.roles());
         roles.add(role.name());
         session.setAttribute(
                 SessionAuthenticationFilter.LOGIN_USER,

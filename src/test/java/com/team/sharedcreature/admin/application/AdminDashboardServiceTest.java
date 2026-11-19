@@ -3,6 +3,7 @@ package com.team.sharedcreature.admin.application;
 import com.team.sharedcreature.group.domain.GroupStatus;
 
 import com.team.sharedcreature.admin.infrastructure.AdminAnalyticsRepository;
+import com.team.sharedcreature.admin.api.AdminDashboardResponse;
 import com.team.sharedcreature.admin.api.OperationalWarningResponse;
 import com.team.sharedcreature.admin.domain.OperationalWarningSeverity;
 import com.team.sharedcreature.admin.domain.OperationalWarningType;
@@ -16,6 +17,7 @@ import com.team.sharedcreature.season.infrastructure.SeasonRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
@@ -67,7 +69,7 @@ class AdminDashboardServiceTest {
                 analytics, warnings, seasons, groups, Clock.fixed(now, ZoneOffset.UTC)
         );
 
-        var response = service.get(range, null);
+        AdminDashboardResponse response = service.get(range, null);
 
         assertThat(response.summary().questCompletionRate()).isEqualByComparingTo("50.00");
         assertThat(response.summary().capacityUsageRate()).isEqualByComparingTo("25.00");
@@ -81,11 +83,11 @@ class AdminDashboardServiceTest {
                 new GrowthStagePoint(CreatureGrowthStage.MATURE, 0),
                 new GrowthStagePoint(CreatureGrowthStage.COMPLETE, 1)
         );
-        var mapper = new ObjectMapper();
-        var json = mapper.readTree(mapper.writeValueAsString(response));
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode json = mapper.readTree(mapper.writeValueAsString(response));
         assertThat(json.get("range").isString()).isTrue();
         assertThat(json.get("range").asString()).isEqualTo(range);
-        var stage = json.at("/growthStages/0/stage");
+        JsonNode stage = json.at("/growthStages/0/stage");
         assertThat(stage.isString()).isTrue();
         assertThat(stage.asString()).isEqualTo("EGG");
         assertThat(response.queues().pendingReports()).isEqualTo(2);
@@ -127,12 +129,12 @@ class AdminDashboardServiceTest {
                 analytics, warnings, seasons, groups, Clock.fixed(now, ZoneOffset.UTC)
         );
 
-        var response = service.get("7_DAYS", 10L);
+        AdminDashboardResponse response = service.get("7_DAYS", 10L);
 
         assertThat(response.summary().operationalWarningCount()).isOne();
         assertThat(response.queues().operationalWarnings()).containsExactly(otherGroupWarning);
-        var mapper = new ObjectMapper();
-        var warningJson = mapper.readTree(mapper.writeValueAsString(response)).at("/queues/operationalWarnings/0");
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode warningJson = mapper.readTree(mapper.writeValueAsString(response)).at("/queues/operationalWarnings/0");
         assertThat(warningJson.get("type").asString()).isEqualTo("MEMBER_COUNT_MISMATCH");
         assertThat(warningJson.get("severity").asString()).isEqualTo("WARNING");
     }

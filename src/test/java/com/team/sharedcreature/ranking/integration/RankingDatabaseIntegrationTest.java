@@ -9,12 +9,15 @@ import com.team.sharedcreature.quest.domain.UserActivitySourceType;
 import com.team.sharedcreature.quest.domain.QuestPeriodType;
 import com.team.sharedcreature.season.domain.CreatureGrowthStage;
 
+import com.team.sharedcreature.season.domain.SeasonGroupScore;
+import com.team.sharedcreature.season.domain.SeasonMemberContribution;
 import com.team.sharedcreature.season.domain.SeasonStatus;
 
 import com.team.sharedcreature.auth.domain.GlobalRole;
 
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.UserProfile;
+import com.team.sharedcreature.group.api.GroupMemberResponse;
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.domain.GroupVisibility;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
@@ -32,10 +35,12 @@ import com.team.sharedcreature.group.domain.UserReport;
 import com.team.sharedcreature.group.domain.UserReportStatus;
 import com.team.sharedcreature.group.domain.UserReportCategory;
 import com.team.sharedcreature.group.infrastructure.UserReportRepository;
+import com.team.sharedcreature.admin.api.AdminReportResponse;
 import com.team.sharedcreature.admin.application.AdminReportQueryService;
 import com.team.sharedcreature.admin.infrastructure.AdminAnalyticsRepository;
 import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
+import com.team.sharedcreature.ranking.api.RankingResponse;
 import com.team.sharedcreature.ranking.application.RankingService;
 import com.team.sharedcreature.season.domain.*;
 import com.team.sharedcreature.season.infrastructure.CreatureSpeciesRepository;
@@ -72,6 +77,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
@@ -82,7 +88,10 @@ import tools.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -153,7 +162,7 @@ class RankingDatabaseIntegrationTest {
     void questPeriodTypeRoundTripsAndFiltersCurrentPeriod(QuestPeriodType expectedType) {
         Instant start = season.getStartAt();
         Long seasonId = season.getId();
-        var date = start.atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalDate();
+        LocalDate date = start.atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalDate();
         QuestPeriod expected = null;
         for (QuestPeriodType type : QuestPeriodType.values()) {
             int days = type == QuestPeriodType.DAILY ? 1 : 7;
@@ -187,7 +196,7 @@ class RankingDatabaseIntegrationTest {
             String storedEventType, String storedSourceType
     ) {
         GroupMembership membership = memberships.findActiveWithGroupByUserId(owner.getId()).orElseThrow();
-        var date = NOW.atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalDate();
+        LocalDate date = NOW.atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalDate();
         UserActivityEvent event = UserActivityEvent.create(
                 owner, eventType, sourceType, owner.getId(), membership, groupSeason, date, NOW, null, null);
         em.persist(event);
@@ -233,7 +242,7 @@ class RankingDatabaseIntegrationTest {
     void oauthReturnRouteRoundTrips(String route) {
         String hash = com.team.sharedcreature._core.security.Hashing.sha256(UUID.randomUUID().toString());
         OauthLoginIntent intent = "INVITE".equals(route) ? OauthLoginIntent.INVITE : OauthLoginIntent.LOGIN;
-        var attempt = OauthLoginAttempt.start(hash, hash, SocialProvider.GOOGLE, intent, null, route, NOW);
+        OauthLoginAttempt attempt = OauthLoginAttempt.start(hash, hash, SocialProvider.GOOGLE, intent, null, route, NOW);
         em.persist(attempt);
         em.flush();
         Long id = attempt.getId();
@@ -288,8 +297,8 @@ class RankingDatabaseIntegrationTest {
                 .isEqualTo(expectedReason == null ? null : expectedReason.name());
         assertThat(em.createNativeQuery("SELECT verification_status FROM photo_submissions WHERE id = :id", String.class)
                 .setParameter("id", photoId).getSingleResult()).isEqualTo(status.name());
-        var stalePending = photos.findFreshStalePendingIds(NOW.minusSeconds(3_600), NOW, PageRequest.of(0, 1_000));
-        var invalid = photos.findFreshInvalidIds(NOW, PageRequest.of(0, 1_000));
+        List<Long> stalePending = photos.findFreshStalePendingIds(NOW.minusSeconds(3_600), NOW, PageRequest.of(0, 1_000));
+        List<Long> invalid = photos.findFreshInvalidIds(NOW, PageRequest.of(0, 1_000));
         if (status == PhotoVerificationStatus.PENDING) {
             assertThat(stalePending).contains(photoId);
             assertThat(invalid).doesNotContain(photoId);
@@ -331,7 +340,7 @@ class RankingDatabaseIntegrationTest {
         Long ownerId = owner.getId();
         Long membershipId = membership.getId();
         Long groupSeasonId = groupSeason.getId();
-        var date = assignment.getQuestPeriod().getPeriodDate();
+        LocalDate date = assignment.getQuestPeriod().getPeriodDate();
         em.clear();
 
         assertThat(em.find(QuestTemplateVersion.class, versionId).getVerificationType()).isEqualTo(type);
@@ -362,7 +371,7 @@ class RankingDatabaseIntegrationTest {
     void 퀘스트_난이도는_DB_코드와_배정_기록_집계를_유지한다(QuestDifficulty difficulty) {
         QuestAssignment assignment = questAssignment(difficulty, QuestVerificationType.SELF_CHECK);
         QuestTemplate template = assignment.getQuestTemplate();
-        var date = assignment.getQuestPeriod().getPeriodDate();
+        LocalDate date = assignment.getQuestPeriod().getPeriodDate();
         GroupMembership membership = memberships.findByUserIdAndStatus(owner.getId(), GroupMembershipStatus.ACTIVE)
                 .orElseThrow();
         em.persist(QuestCompletion.create(owner, assignment, groupSeason, membership, NOW));
@@ -418,7 +427,7 @@ class RankingDatabaseIntegrationTest {
                         QuestTemplate.class).setParameter("code", code).getSingleResult();
         assertThat(template.getStatus()).isEqualTo(status);
         assertThat(template.getPeriodType()).isEqualTo(QuestPeriodType.DAILY);
-        var selected = templates.findActiveByPeriodType(QuestPeriodType.DAILY);
+        List<QuestTemplate> selected = templates.findActiveByPeriodType(QuestPeriodType.DAILY);
         assertThat(selected).allSatisfy(row -> assertThat(row.getStatus()).isEqualTo(QuestTemplateStatus.ACTIVE));
         if (status == QuestTemplateStatus.ACTIVE) {
             assertThat(selected).extracting(QuestTemplate::getId).contains(template.getId());
@@ -454,7 +463,7 @@ class RankingDatabaseIntegrationTest {
         assertThat(periods.findByPeriodTypeAndStartAt(QuestPeriodType.DAILY, start).orElseThrow().getId()).isEqualTo(periodId);
         assertThat(em.createNativeQuery("SELECT status FROM quest_periods WHERE id = :id", String.class)
                 .setParameter("id", periodId).getSingleResult()).isEqualTo(status.name());
-        var current = periods.findCurrentBySeasonAndType(seasonId, QuestPeriodType.DAILY, NOW);
+        Optional<QuestPeriod> current = periods.findCurrentBySeasonAndType(seasonId, QuestPeriodType.DAILY, NOW);
         if (status == QuestPeriodStatus.ACTIVE) {
             assertThat(current).contains(reloaded);
         } else {
@@ -660,7 +669,7 @@ class RankingDatabaseIntegrationTest {
         } else {
             assertThat(groupSeasons.findOpenByGroupIdForUpdate(groupId, NOW)).contains(reloaded);
         }
-        var dueIds = groupSeasons.findDueForHatching(seasonId, NOW, 0L, PageRequest.of(0, 100));
+        List<Long> dueIds = groupSeasons.findDueForHatching(seasonId, NOW, 0L, PageRequest.of(0, 100));
         if (status == GroupSeasonStatus.PREPARING) {
             assertThat(dueIds).contains(groupSeasonId);
         } else {
@@ -759,7 +768,7 @@ class RankingDatabaseIntegrationTest {
                 .setParameter("id", reportId).getSingleResult()).isEqualTo(category.name());
         assertThat(com.team.sharedcreature.group.application.UserReportService.toResponse(reloaded).category())
                 .isEqualTo(category);
-        var response = reportQueries.get(reportId);
+        AdminReportResponse response = reportQueries.get(reportId);
         assertThat(response.category()).isEqualTo(category);
         assertThat(new ObjectMapper().writeValueAsString(response)).contains("\"category\":\"" + category.name() + "\"");
     }
@@ -787,7 +796,7 @@ class RankingDatabaseIntegrationTest {
         assertThat(reports.findByStatusOrderByCreatedAtDescIdDesc(status, PageRequest.of(0, 50)).getContent())
                 .extracting(UserReport::getId).contains(reportId);
         assertThat(reports.countByStatus(status)).isPositive();
-        var response = reportQueries.get(reportId);
+        AdminReportResponse response = reportQueries.get(reportId);
         assertThat(response.status()).isEqualTo(status);
         assertThat(new ObjectMapper().writeValueAsString(response)).contains("\"status\":\"" + status.name() + "\"");
         assertThat(reportQueries.list(status, 0, 50).getContent())
@@ -939,7 +948,7 @@ class RankingDatabaseIntegrationTest {
                 .setParameter("id", membershipId).getSingleResult()).isEqualTo(role.name());
 
         // JPQL 조회 결과는 역할과 상태를 enum으로 전달합니다.
-        var page = memberships.findActiveMemberResponsesByGroupId(groupId, PageRequest.of(0, 20));
+        Page<GroupMemberResponse> page = memberships.findActiveMemberResponsesByGroupId(groupId, PageRequest.of(0, 20));
         assertThat(page.getContent()).filteredOn(row -> row.membershipId().equals(membershipId))
                 .singleElement().satisfies(row -> {
                     assertThat(row.role()).isEqualTo(role);
@@ -964,13 +973,13 @@ class RankingDatabaseIntegrationTest {
         em.persist(otherSeason);
         GroupMembership otherMembership = GroupMembership.primary(otherGroup, outsider, NOW);
         em.persist(otherMembership);
-        var other = SeasonMemberContribution.zero(otherSeason, outsider, otherMembership, NOW);
+        SeasonMemberContribution other = SeasonMemberContribution.zero(otherSeason, outsider, otherMembership, NOW);
         other.addContribution(999, otherMembership, NOW);
         em.persist(other);
         flushAndClear();
 
-        var firstPage = service.getMemberRanking(owner.getId(), season.getId(), 0, 2);
-        var secondPage = service.getMemberRanking(owner.getId(), season.getId(), 1, 2);
+        RankingResponse.PageDto<RankingResponse.MemberDto> firstPage = service.getMemberRanking(owner.getId(), season.getId(), 0, 2);
+        RankingResponse.PageDto<RankingResponse.MemberDto> secondPage = service.getMemberRanking(owner.getId(), season.getId(), 1, 2);
 
         assertThat(firstPage.data()).extracting(row -> row.userId())
                 .containsExactly(first.getId(), second.getId());
@@ -993,7 +1002,7 @@ class RankingDatabaseIntegrationTest {
         contribution(user(), 50, NOW, "REMOVED");
         contribution(owner, 10, NOW, "ACTIVE");
         flushAndClear();
-        var response = service.getMemberRanking(owner.getId(), season.getId(), page, size);
+        RankingResponse.PageDto<RankingResponse.MemberDto> response = service.getMemberRanking(owner.getId(), season.getId(), page, size);
         assertThat(response.data()).hasSize(expectedSize);
         if (expectedSize > 0) {
             assertThat(response.data().getFirst().rank()).isEqualTo(expectedFirstRank);
@@ -1017,12 +1026,12 @@ class RankingDatabaseIntegrationTest {
         score(laterZero, 0, null, NOW.minusSeconds(20));
         flushAndClear();
 
-        var response = service.getGroupRanking(owner.getId(), season.getId(), 0, 3);
+        RankingResponse.PageDto<RankingResponse.GroupDto> response = service.getGroupRanking(owner.getId(), season.getId(), 0, 3);
         assertThat(response.data()).extracting(row -> row.groupId())
                 .containsExactly(earlier.getId(), first.getId(), second.getId());
         assertThat(response.meta().totalElements()).isEqualTo(5);
         assertThat(response.meta().currentSubject().rank()).isEqualTo(4);
-        var secondPage = service.getGroupRanking(owner.getId(), season.getId(), 1, 3);
+        RankingResponse.PageDto<RankingResponse.GroupDto> secondPage = service.getGroupRanking(owner.getId(), season.getId(), 1, 3);
         assertThat(secondPage.data().getFirst().scoreReachedAt()).isEqualTo(NOW.minusSeconds(30));
         // 조회가 0점 원본 행을 갱신하지 않았는지 실제 DB 값으로 확인합니다.
         Object reachedAt = em.createNativeQuery("select score_reached_at from season_group_scores where group_season_id = :id")
@@ -1039,7 +1048,7 @@ class RankingDatabaseIntegrationTest {
                 new SeasonRankingCalculator.MemberRank(1, owner.getId(), 80, NOW.minusSeconds(10)), NOW));
         ReflectionTestUtils.setField(season, "status", SeasonStatus.ENDED);
         flushAndClear();
-        var before = service.getMemberRanking(owner.getId(), season.getId(), 0, 20);
+        RankingResponse.PageDto<RankingResponse.MemberDto> before = service.getMemberRanking(owner.getId(), season.getId(), 0, 20);
 
         em.createQuery("update UserProfile p set p.nickname = :name where p.user.id = :id")
                 .setParameter("name", "변경한닉네임").setParameter("id", owner.getId()).executeUpdate();
@@ -1047,7 +1056,7 @@ class RankingDatabaseIntegrationTest {
                 .setParameter("id", original.getId()).executeUpdate();
         flushAndClear();
 
-        var after = service.getMemberRanking(owner.getId(), season.getId(), 0, 20);
+        RankingResponse.PageDto<RankingResponse.MemberDto> after = service.getMemberRanking(owner.getId(), season.getId(), 0, 20);
         assertThat(after).isEqualTo(before);
         assertThat(after.data().getFirst().contributionScore()).isEqualTo(80);
         assertThat(after.data().getFirst().participantStatus()).isEqualTo(GroupMembershipStatus.ACTIVE);
@@ -1063,13 +1072,13 @@ class RankingDatabaseIntegrationTest {
                 new SeasonRankingCalculator.GroupRank(1, group.getId(), 120, NOW.minusSeconds(10)), NOW));
         ReflectionTestUtils.setField(season, "status", SeasonStatus.ENDED);
         flushAndClear();
-        var before = service.getGroupRanking(owner.getId(), season.getId(), 0, 20);
+        RankingResponse.PageDto<RankingResponse.GroupDto> before = service.getGroupRanking(owner.getId(), season.getId(), 0, 20);
         em.createQuery("update Group g set g.name = :name where g.id = :id")
                 .setParameter("name", "변경한그룹명").setParameter("id", group.getId()).executeUpdate();
         em.createQuery("update SeasonGroupScore s set s.score = 999 where s.groupSeason.id = :id")
                 .setParameter("id", groupSeason.getId()).executeUpdate();
         flushAndClear();
-        var after = service.getGroupRanking(owner.getId(), season.getId(), 0, 20);
+        RankingResponse.PageDto<RankingResponse.GroupDto> after = service.getGroupRanking(owner.getId(), season.getId(), 0, 20);
         assertThat(after).isEqualTo(before);
         assertThat(after.data().getFirst().score()).isEqualTo(120);
         assertThat(after.data().getFirst().groupName()).isNotEqualTo("변경한그룹명");
@@ -1102,7 +1111,7 @@ class RankingDatabaseIntegrationTest {
         ReflectionTestUtils.setField(version, "contributionScore", 10L);
         ReflectionTestUtils.setField(version, "createdAt", NOW);
         em.persist(version);
-        var date = NOW.atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalDate();
+        LocalDate date = NOW.atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalDate();
         QuestPeriod period = QuestPeriod.pending(season, QuestPeriodType.DAILY, date,
                 season.getStartAt(), NOW.plusSeconds(3600), NOW);
         period.activate(NOW);
@@ -1172,7 +1181,7 @@ class RankingDatabaseIntegrationTest {
             }
             em.persist(membership);
         }
-        var result = SeasonMemberContribution.zero(groupSeason, user, membership, reachedAt);
+        SeasonMemberContribution result = SeasonMemberContribution.zero(groupSeason, user, membership, reachedAt);
         if (amount > 0) {
             result.addContribution(amount, membership, reachedAt);
         }
@@ -1187,7 +1196,7 @@ class RankingDatabaseIntegrationTest {
         if (targetSeason != groupSeason) {
             em.persist(targetSeason);
         }
-        var result = SeasonGroupScore.zero(targetSeason, createdAt);
+        SeasonGroupScore result = SeasonGroupScore.zero(targetSeason, createdAt);
         if (amount > 0) {
             result.addScore(amount, reachedAt);
         }

@@ -5,6 +5,7 @@ import com.team.sharedcreature.group.domain.GroupJoinBlockedReason;
 
 import com.team.sharedcreature.group.domain.GroupMembershipStatus;
 import com.team.sharedcreature.group.domain.GroupRole;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import com.team.sharedcreature.group.domain.GroupStatus;
@@ -15,6 +16,9 @@ import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.api.CreateGroupRequest;
+import com.team.sharedcreature.group.api.CreateGroupResponse;
+import com.team.sharedcreature.group.api.GroupSummaryResponse;
+import com.team.sharedcreature.group.api.MembershipResponse;
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.domain.GroupVisibility;
 import com.team.sharedcreature.group.domain.GroupInviteLink;
@@ -34,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
@@ -126,7 +131,7 @@ class GroupMembershipServiceTest {
         when(membershipRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(groupSeasonRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        var result = service.createGroup(
+        CreateGroupResponse result = service.createGroup(
                 new LoginUser(1L, "새싹지기", Set.of("USER")),
                 new CreateGroupRequest("새싹모임", "함께 걸어요")
         );
@@ -136,10 +141,10 @@ class GroupMembershipServiceTest {
         assertThat(result.initialInvitationUrl()).startsWith("http://localhost:5173/invite/");
         assertThat(result.group().myMembership().role()).isEqualTo(GroupRole.PRIMARY);
         assertThat(result.group().myMembership().status()).isEqualTo(GroupMembershipStatus.ACTIVE);
-        var mapper = new ObjectMapper();
-        var json = mapper.readTree(mapper.writeValueAsString(result));
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode json = mapper.readTree(mapper.writeValueAsString(result));
         assertThat(json.at("/group/group/joinBlockedReason").isNull()).isTrue();
-        var membershipJson = json.at("/group/myMembership");
+        JsonNode membershipJson = json.at("/group/myMembership");
         assertThat(membershipJson.get("role").asString()).isEqualTo("PRIMARY");
         assertThat(membershipJson.get("status").asString()).isEqualTo("ACTIVE");
         verify(seasonQueryService).findCurrentSeasonForShare();
@@ -245,7 +250,7 @@ class GroupMembershipServiceTest {
         when(membershipRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         // 정상 가입 요청의 결과를 확인합니다.
-        var result = service.joinGroup(new LoginUser(1L, "가입자", Set.of()), 10L);
+        MembershipResponse result = service.joinGroup(new LoginUser(1L, "가입자", Set.of()), 10L);
 
         assertThat(result.groupId()).isEqualTo(10L);
         assertThat(result.role()).isEqualTo(GroupRole.MEMBER);
@@ -301,7 +306,7 @@ class GroupMembershipServiceTest {
                 .thenReturn(Optional.empty());
 
         // 가입의 최종 단계에서 무효 초대가 발견됩니다.
-        var result = service.tryJoinInvitation(1L, "가입자", 20L);
+        GroupMembershipService.InvitationJoinResult result = service.tryJoinInvitation(1L, "가입자", 20L);
 
         assertThat(result.joined()).isFalse();
         assertThat(result.failureCode()).isEqualTo("INVITE_INVALID");
@@ -327,7 +332,7 @@ class GroupMembershipServiceTest {
                 .thenReturn(new PageImpl<>(List.of(group)));
 
         // 이미 가입한 사용자에게는 목록을 보여주되 가입은 막습니다.
-        var result = service.listPublicGroups(
+        Page<GroupSummaryResponse> result = service.listPublicGroups(
                 new LoginUser(1L, "구성원", Set.of("MEMBER")), "공개", 0, 20
         );
 

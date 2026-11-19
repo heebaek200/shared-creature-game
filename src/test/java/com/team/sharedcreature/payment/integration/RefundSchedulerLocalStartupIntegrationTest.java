@@ -8,6 +8,7 @@ import com.team.sharedcreature.avatar.domain.ShopItem;
 import com.team.sharedcreature.avatar.domain.AvatarSlot;
 import com.team.sharedcreature.avatar.domain.ShopItemStatus;
 import com.team.sharedcreature.payment.application.*;
+import com.team.sharedcreature.payment.application.RefundApprovalTransactionService;
 import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.domain.RefundRequest;
 import com.team.sharedcreature.payment.scheduler.RefundReconciliationScheduler;
@@ -87,23 +88,23 @@ class RefundSchedulerLocalStartupIntegrationTest {
 
         fixture = new TransactionTemplate(transactionManager).execute(tx -> {
             Instant now = Instant.now();
-            var user = User.register(GlobalRole.SUPER_ADMIN, now);
+            User user = User.register(GlobalRole.SUPER_ADMIN, now);
             em.persist(user);
-            var shop = BeanUtils.instantiateClass(ShopItem.class);
+            ShopItem shop = BeanUtils.instantiateClass(ShopItem.class);
             set(shop, "code", "startup-" + UUID.randomUUID());
             set(shop, "name", "자동 복구 상품"); set(shop, "description", "이슈 22 테스트");
             set(shop, "priceKrw", 1000L); set(shop, "slotCode", AvatarSlot.HEAD);
             set(shop, "assetKey", "startup-test"); set(shop, "status", ShopItemStatus.ACTIVE);
             set(shop, "createdAt", now); set(shop, "updatedAt", now);
             em.persist(shop);
-            var purchase = Purchase.ready(UUID.randomUUID().toString(), user, shop, now);
+            Purchase purchase = Purchase.ready(UUID.randomUUID().toString(), user, shop, now);
             purchase.markPaid(now); em.persist(purchase);
-            var item = OwnedItem.grant(purchase, now); em.persist(item);
-            var refund = RefundRequest.create(purchase, user, "자동 복구", now); em.persist(refund);
+            OwnedItem item = OwnedItem.grant(purchase, now); em.persist(item);
+            RefundRequest refund = RefundRequest.create(purchase, user, "자동 복구", now); em.persist(refund);
             em.flush();
             return new Fixture(user.getId(), shop.getId(), purchase.getId(), item.getId(), refund.getId());
         });
-        var command = approval.prepare(fixture.userId(), fixture.refundId(), "승인", UUID.randomUUID().toString()).command();
+        RefundApprovalTransactionService.CancellationCommand command = approval.prepare(fixture.userId(), fixture.refundId(), "승인", UUID.randomUUID().toString()).command();
         results.apply(command, new RefundGateway.CancellationResult(RefundGateway.Outcome.UNKNOWN,
                 command.paymentId(), "startup-cancel-" + fixture.refundId(), 1000L, null, 200, "UNKNOWN"), "startup");
         when(lookup.getPayment(command.paymentId())).thenAnswer(call -> new PaymentSnapshot(
@@ -155,7 +156,7 @@ class RefundSchedulerLocalStartupIntegrationTest {
     }
 
     private String jobStatus(Instant slot) {
-        var rows = jdbc.queryForList("SELECT status FROM scheduler_executions WHERE job_type = 'REFUND_RECONCILIATION' AND scheduled_for = ?",
+        List<String> rows = jdbc.queryForList("SELECT status FROM scheduler_executions WHERE job_type = 'REFUND_RECONCILIATION' AND scheduled_for = ?",
                 String.class, Timestamp.from(slot));
         return rows.isEmpty() ? null : rows.getFirst();
     }

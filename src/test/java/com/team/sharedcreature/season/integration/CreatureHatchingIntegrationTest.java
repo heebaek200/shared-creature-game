@@ -8,6 +8,7 @@ import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
+import com.team.sharedcreature.season.api.CreatureSelectionResponse;
 import com.team.sharedcreature.season.application.CreatureHatchingNormalizationService;
 import com.team.sharedcreature.season.application.CreatureSelectionService;
 import com.team.sharedcreature.season.application.SeasonTransitionService;
@@ -205,7 +206,7 @@ class CreatureHatchingIntegrationTest {
         clock.set(DEADLINE);
 
         // 정상화가 실제 JPA 트랜잭션에서 부화와 커밋을 수행합니다.
-        var first = hatching.normalizeForActiveSeason(seasonId);
+        CreatureHatchingNormalizationService.Result first = hatching.normalizeForActiveSeason(seasonId);
         assertEquals(1, first.inspected());
         assertEquals(1, first.hatched());
         assertEquals(0, first.failed());
@@ -221,7 +222,7 @@ class CreatureHatchingIntegrationTest {
 
         // 5분 뒤 재실행해도 종·부화 시각·행 개수를 유지합니다.
         clock.set(DEADLINE.plus(Duration.ofMinutes(5)));
-        var repeated = hatching.normalizeForActiveSeason(seasonId);
+        CreatureHatchingNormalizationService.Result repeated = hatching.normalizeForActiveSeason(seasonId);
         assertEquals(0, repeated.inspected());
         assertTrue(selection.hatchIfDue(f.groupSeasonId()).isEmpty());
         assertEquals(DEADLINE, timestamp("SELECT hatched_at FROM group_creatures WHERE group_season_id = ?", f.groupSeasonId()).toInstant());
@@ -241,7 +242,7 @@ class CreatureHatchingIntegrationTest {
         clock.set(chosenAt);
 
         // 실제 관리자 권한과 그룹 가입 기록을 이용해 종을 선택합니다.
-        var chosen = selection.selectSpecies(f.ownerId(), speciesB);
+        CreatureSelectionResponse chosen = selection.selectSpecies(f.ownerId(), speciesB);
         assertEquals(speciesB, chosen.creatureSpeciesId());
         assertEquals(f.ownerId(), chosen.selectedByUserId());
         assertEquals(chosenAt, chosen.selectedAt());
@@ -276,7 +277,7 @@ class CreatureHatchingIntegrationTest {
         assertEquals("EGG", creatureStage(complete));
 
         clock.set(DEADLINE);
-        var result = hatching.normalizeForActiveSeason(seasonId);
+        CreatureHatchingNormalizationService.Result result = hatching.normalizeForActiveSeason(seasonId);
         assertEquals(3, result.hatched());
         assertEquals(0, result.failed());
         assertStageAndExperience(growing, "GROWING", GroupCreature.GROWING_THRESHOLD);
@@ -331,7 +332,7 @@ class CreatureHatchingIntegrationTest {
         jdbc.update("DELETE FROM group_creatures WHERE group_season_id = ?", broken.groupSeasonId());
         clock.set(DEADLINE);
 
-        var first = hatching.normalizeForActiveSeason(seasonId);
+        CreatureHatchingNormalizationService.Result first = hatching.normalizeForActiveSeason(seasonId);
         assertEquals(2, first.inspected());
         assertEquals(1, first.hatched());
         assertEquals(1, first.failed());
@@ -343,7 +344,7 @@ class CreatureHatchingIntegrationTest {
         GroupSeason original = groupSeasons.findById(broken.groupSeasonId()).orElseThrow();
         creatures.saveAndFlush(GroupCreature.egg(original, CREATED));
         clock.set(DEADLINE.plus(Duration.ofMinutes(5)));
-        var recovered = hatching.normalizeForActiveSeason(seasonId);
+        CreatureHatchingNormalizationService.Result recovered = hatching.normalizeForActiveSeason(seasonId);
         assertEquals(1, recovered.inspected());
         assertEquals(1, recovered.hatched());
         assertEquals(0, recovered.failed());
@@ -362,7 +363,7 @@ class CreatureHatchingIntegrationTest {
         jdbc.update("UPDATE creature_species SET status = 'INACTIVE' WHERE id IN (?, ?)", speciesA, speciesB);
         clock.set(DEADLINE);
 
-        var failed = hatching.normalizeForActiveSeason(seasonId);
+        CreatureHatchingNormalizationService.Result failed = hatching.normalizeForActiveSeason(seasonId);
         assertEquals(1, failed.inspected());
         assertEquals(0, failed.hatched());
         assertEquals(1, failed.failed());
@@ -373,7 +374,7 @@ class CreatureHatchingIntegrationTest {
         // 외부 종 카탈로그가 정상화되면 기존 알로 부화를 다시 시도합니다.
         jdbc.update("UPDATE creature_species SET status = 'ACTIVE' WHERE id = ?", speciesA);
         clock.set(DEADLINE.plus(Duration.ofMinutes(5)));
-        var recovered = hatching.normalizeForActiveSeason(seasonId);
+        CreatureHatchingNormalizationService.Result recovered = hatching.normalizeForActiveSeason(seasonId);
         assertEquals(1, recovered.hatched());
         assertEquals(0, recovered.failed());
         assertEquals(speciesA, number("SELECT species_id FROM group_creatures WHERE group_season_id = ?", f.groupSeasonId()));

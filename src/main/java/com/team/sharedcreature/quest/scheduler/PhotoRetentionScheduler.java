@@ -58,7 +58,7 @@ public class PhotoRetentionScheduler {
      */
     private void runSafely(String trigger) {
         try {
-            var result = normalizer.normalize();
+            PhotoRetentionNormalizationService.Result result = normalizer.normalize();
             if (result.error() != null) {
                 log.error("사진 정리 실패. trigger={}, result={}", trigger, result);
             } else {

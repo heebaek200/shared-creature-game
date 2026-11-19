@@ -35,7 +35,7 @@ class AdminAuditServiceTest {
 
         service.recordFailure(7L, AdminAuditActionType.DISMISS_REPORT, AdminAuditTargetType.USER_REPORT, 21L, "USER_NOT_FOUND");
 
-        var captor = ArgumentCaptor.forClass(AdminAuditLog.class);
+        ArgumentCaptor<AdminAuditLog> captor = ArgumentCaptor.forClass(AdminAuditLog.class);
         verify(logs).save(captor.capture());
         AdminAuditLog log = captor.getValue();
         assertThat(log.getResult()).isEqualTo(AdminAuditResult.FAILED);

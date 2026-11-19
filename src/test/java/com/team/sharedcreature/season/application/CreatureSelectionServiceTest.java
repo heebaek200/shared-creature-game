@@ -1,5 +1,6 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.api.CreatureSelectionResponse;
 import com.team.sharedcreature.season.domain.CreatureGrowthStage;
 
 import com.team.sharedcreature.season.domain.GroupSeasonStatus;
@@ -135,7 +136,7 @@ class CreatureSelectionServiceTest {
         when(speciesRepository.findByIdAndStatus(5L, CreatureSpeciesStatus.ACTIVE)).thenReturn(Optional.of(species));
         when(groupCreatureRepository.findSnapshotByGroupSeasonId(100L)).thenReturn(Optional.of(creature));
 
-        var response = service.selectSpecies(7L, 5L);
+        CreatureSelectionResponse response = service.selectSpecies(7L, 5L);
 
         assertThat(response.groupId()).isEqualTo(10L);
         assertThat(response.seasonId()).isEqualTo(1L);
@@ -172,7 +173,7 @@ class CreatureSelectionServiceTest {
             return Optional.of(creature);
         });
 
-        var result = service.hatchIfDue(100L);
+        Optional<CreatureSelectionService.HatchResult> result = service.hatchIfDue(100L);
 
         assertThat(result).isPresent();
         assertThat(result.orElseThrow().groupSeasonId()).isEqualTo(100L);

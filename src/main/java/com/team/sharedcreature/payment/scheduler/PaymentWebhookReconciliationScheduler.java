@@ -53,7 +53,7 @@ public class PaymentWebhookReconciliationScheduler {
      */
     private void runSafely(String trigger) {
         try {
-            var result = normalizer.normalize();
+            PaymentWebhookReconciliationNormalizationService.Result result = normalizer.normalize();
             if (result.error() != null) {
                 log.error("결제 Webhook 복구 오류. trigger={}, result={}", trigger, result);
             } else {

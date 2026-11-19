@@ -40,7 +40,7 @@ class SchedulerJobRunnerTicketTest {
         AtomicReference<SchedulerClaimTicket> seen = new AtomicReference<>();
 
         // 인자가 있는 lambda는 Function 오버로드를 선택합니다.
-        var result = runner.run("SEASON_CLOSE", SCHEDULED_FOR, "server-a", LEASE,
+        SchedulerJobRunner.ExecutionResult result = runner.run("SEASON_CLOSE", SCHEDULED_FOR, "server-a", LEASE,
                 ticket -> {
                     seen.set(ticket);
                     return "{\"ok\":true}";
@@ -62,7 +62,7 @@ class SchedulerJobRunnerTicketTest {
                 .thenReturn(Optional.of(TICKET));
 
         // 인자가 없는 lambda는 Supplier 오버로드를 선택합니다.
-        var result = runner.run("SEASON_CLOSE", SCHEDULED_FOR, "server-a", LEASE,
+        SchedulerJobRunner.ExecutionResult result = runner.run("SEASON_CLOSE", SCHEDULED_FOR, "server-a", LEASE,
                 () -> "{}");
 
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, result);
@@ -80,7 +80,7 @@ class SchedulerJobRunnerTicketTest {
                 .thenReturn(Optional.empty());
 
         // 콜백을 호출하면 즉시 테스트에 실패하도록 구성합니다.
-        var result = runner.run("SEASON_CLOSE", SCHEDULED_FOR, "server-a", LEASE,
+        SchedulerJobRunner.ExecutionResult result = runner.run("SEASON_CLOSE", SCHEDULED_FOR, "server-a", LEASE,
                 ticket -> {
                     fail("선점 실패 후 업무 실행됨");
                     return "{}";

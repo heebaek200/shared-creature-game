@@ -21,7 +21,7 @@ class InitialSuperAdminValidatorTest {
     void 소문자_Google_설정도_기존처럼_허용하고_Enum으로_조회한다() {
         UserRepository users = mock(UserRepository.class);
         SocialAccountRepository accounts = mock(SocialAccountRepository.class);
-        var validator = new InitialSuperAdminValidator(
+        InitialSuperAdminValidator validator = new InitialSuperAdminValidator(
                 users, accounts, new InitialSuperAdminProperties("google", "provider-user-id")
         );
 
@@ -40,7 +40,7 @@ class InitialSuperAdminValidatorTest {
     void Enum에_있어도_현재_지원하지_않는_Naver_설정은_거절한다() {
         UserRepository users = mock(UserRepository.class);
         SocialAccountRepository accounts = mock(SocialAccountRepository.class);
-        var validator = new InitialSuperAdminValidator(
+        InitialSuperAdminValidator validator = new InitialSuperAdminValidator(
                 users, accounts, new InitialSuperAdminProperties("NAVER", "provider-user-id")
         );
 
@@ -55,7 +55,7 @@ class InitialSuperAdminValidatorTest {
     void 최초_관리자_대상이_이미_가입한_경우_기동_설정_오류로_거절한다() {
         UserRepository users = mock(UserRepository.class);
         SocialAccountRepository accounts = mock(SocialAccountRepository.class);
-        var validator = new InitialSuperAdminValidator(
+        InitialSuperAdminValidator validator = new InitialSuperAdminValidator(
                 users, accounts, new InitialSuperAdminProperties("GOOGLE", "provider-user-id")
         );
         when(accounts.findByProviderAndProviderUserId(SocialProvider.GOOGLE, "provider-user-id"))

@@ -69,7 +69,7 @@ class QuestTemplateSelectionServiceTest {
         prepareCatalog("DAILY", 5, 4, 3);
         stubLatestVersions();
 
-        var batch = service.select(window(QuestPeriodType.DAILY, 0));
+        QuestTemplateSelectionService.SelectionBatch batch = service.select(window(QuestPeriodType.DAILY, 0));
 
         // 슬롯은 난이도 순서로 부여하고 버전 스냅샷을 반환합니다.
         assertEquals(3, batch.slots().size());
@@ -92,7 +92,7 @@ class QuestTemplateSelectionServiceTest {
         prepareCatalog("WEEKLY", 6, 4, 4);
         stubLatestVersions();
 
-        var batch = service.select(window(QuestPeriodType.WEEKLY, 0));
+        QuestTemplateSelectionService.SelectionBatch batch = service.select(window(QuestPeriodType.WEEKLY, 0));
 
         // 기준 주차 0의 난이도별 시작 오프셋은 0·1·2입니다.
         assertEquals(List.of("W-L-01", "W-L-02", "W-L-03",
@@ -112,7 +112,7 @@ class QuestTemplateSelectionServiceTest {
         prepareCatalog("WEEKLY", 6, 4, 4);
         stubLatestVersions();
 
-        var batch = service.select(window(QuestPeriodType.WEEKLY, 1));
+        QuestTemplateSelectionService.SelectionBatch batch = service.select(window(QuestPeriodType.WEEKLY, 1));
 
         // HIGH 4개 중 시작점 3에서 두 개를 선택해 4→1로 되돌아옵니다.
         assertEquals(List.of("W-L-02", "W-L-03", "W-L-04",
@@ -129,7 +129,7 @@ class QuestTemplateSelectionServiceTest {
         prepareCatalog("DAILY", 5, 4, 3);
         stubLatestVersions();
 
-        var batch = service.select(window(QuestPeriodType.DAILY, 28));
+        QuestTemplateSelectionService.SelectionBatch batch = service.select(window(QuestPeriodType.DAILY, 28));
 
         // 28을 각각 5·4·3으로 나눈 나머지와 오프셋을 적용합니다.
         assertEquals(List.of("D-L-04", "D-M-02", "D-H-01"), codes(batch));
@@ -145,7 +145,7 @@ class QuestTemplateSelectionServiceTest {
     void dailyInsufficientLowCatalogFailsInsteadOfPartialAssignment() {
         prepareCatalog("DAILY", 4, 4, 3);
 
-        var exception = assertThrows(QuestTemplateSelectionService.SelectionException.class,
+        QuestTemplateSelectionService.SelectionException exception = assertThrows(QuestTemplateSelectionService.SelectionException.class,
                 () -> service.select(window(QuestPeriodType.DAILY, 0)));
 
         // 요구되는 최소 수는 선정 슬롯 수보다 큽니다.
@@ -163,7 +163,7 @@ class QuestTemplateSelectionServiceTest {
     void weeklyInsufficientHighCatalogFails() {
         prepareCatalog("WEEKLY", 6, 4, 3);
 
-        var exception = assertThrows(QuestTemplateSelectionService.SelectionException.class,
+        QuestTemplateSelectionService.SelectionException exception = assertThrows(QuestTemplateSelectionService.SelectionException.class,
                 () -> service.select(window(QuestPeriodType.WEEKLY, 0)));
 
         // HIGH 최소 활성 수는 4개로 고정돼 있습니다.
@@ -185,7 +185,7 @@ class QuestTemplateSelectionServiceTest {
         latestVersions.remove(missingId);
         stubLatestVersions();
 
-        var exception = assertThrows(QuestTemplateSelectionService.SelectionException.class,
+        QuestTemplateSelectionService.SelectionException exception = assertThrows(QuestTemplateSelectionService.SelectionException.class,
                 () -> service.select(window(QuestPeriodType.DAILY, 0)));
 
         // 최신 버전을 조회하지 못한 슬롯을 임의 기본값으로 메우지 않습니다.
@@ -202,8 +202,8 @@ class QuestTemplateSelectionServiceTest {
     void selectedSnapshotDoesNotChangeWhenVersionEntityChanges() {
         prepareCatalog("DAILY", 5, 4, 3);
         stubLatestVersions();
-        var batch = service.select(window(QuestPeriodType.DAILY, 0));
-        var selected = batch.slots().getFirst();
+        QuestTemplateSelectionService.SelectionBatch batch = service.select(window(QuestPeriodType.DAILY, 0));
+        QuestTemplateSelectionService.SelectedQuest selected = batch.slots().getFirst();
 
         // 선정 후 원본 버전 객체의 제목을 바꿔도 Snapshot은 유지됩니다.
         QuestTemplateVersion version = latestVersions.get(selected.templateId());
@@ -224,7 +224,7 @@ class QuestTemplateSelectionServiceTest {
                 .filter(t -> "D-L-02".equals(t.getCode())).findFirst().orElseThrow();
         ReflectionTestUtils.setField(secondLow, "rotationOrder", 1);
 
-        var exception = assertThrows(QuestTemplateSelectionService.SelectionException.class,
+        QuestTemplateSelectionService.SelectionException exception = assertThrows(QuestTemplateSelectionService.SelectionException.class,
                 () -> service.select(window(QuestPeriodType.DAILY, 0)));
 
         // 정렬의 비결정성을 만드는 중복 카탈로그를 거부합니다.
@@ -258,7 +258,7 @@ class QuestTemplateSelectionServiceTest {
         prepareCatalog("DAILY", 5, 4, 3);
         ReflectionTestUtils.setField(catalog.getFirst(), "status", status);
 
-        var exception = assertThrows(QuestTemplateSelectionService.SelectionException.class,
+        QuestTemplateSelectionService.SelectionException exception = assertThrows(QuestTemplateSelectionService.SelectionException.class,
                 () -> service.select(window(QuestPeriodType.DAILY, 0)));
         assertEquals(QuestTemplateSelectionService.FailureCode.INVALID_TEMPLATE_CATALOG, exception.failureCode());
     }

@@ -1,5 +1,6 @@
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.group.api.InvitationManagementResponse;
 import com.team.sharedcreature.group.domain.GroupInviteLinkStatus;
 
 import com.team.sharedcreature.group.domain.GroupRole;
@@ -96,7 +97,7 @@ class GroupInvitationManagementRegressionTest {
                 .thenReturn(Optional.of(fixture.link()));
 
         // 정상적인 초대 관리 조회 결과만 검사합니다.
-        var response = service.getInvitationManagement(USER_ID);
+        InvitationManagementResponse response = service.getInvitationManagement(USER_ID);
 
         assertThat(response.groupId()).isEqualTo(GROUP_ID);
         assertThat(response.issuedAt()).isEqualTo(NOW.minusSeconds(60));

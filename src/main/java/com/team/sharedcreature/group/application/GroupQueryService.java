@@ -91,12 +91,12 @@ public class GroupQueryService {
         );
 
         // 주 관리자 표시 정보와 내 멤버십을 구성합니다.
-        var primary = new MyGroupResponse.PrimaryAdminResponse(
+        MyGroupResponse.PrimaryAdminResponse primary = new MyGroupResponse.PrimaryAdminResponse(
                 primaryAdmin.getId(),
                 profile.getNickname()
         );
 
-        var myMembership = new MyGroupResponse.MyMembershipResponse(
+        MyGroupResponse.MyMembershipResponse myMembership = new MyGroupResponse.MyMembershipResponse(
                 membership.getId(),
                 group.getId(),
                 membership.getRole(),

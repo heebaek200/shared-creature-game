@@ -57,7 +57,7 @@ class SchedulerJobRunnerTest {
         AtomicBoolean executed = new AtomicBoolean(false);
 
         // 실행권이 없으므로 작업 함수는 호출되지 않습니다.
-        var result = run(() -> {
+        SchedulerJobRunner.ExecutionResult result = run(() -> {
             executed.set(true);
             return "{}";
         });
@@ -91,7 +91,7 @@ class SchedulerJobRunnerTest {
                 eq("{\"processed\":1}")
         );
 
-        var result = run(() -> {
+        SchedulerJobRunner.ExecutionResult result = run(() -> {
             businessFinished.set(true);
             return "{\"processed\":1}";
         });

@@ -1,5 +1,6 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.api.CreatureHomeResponse;
 import com.team.sharedcreature.season.domain.CreatureGrowthStage;
 
 import com.team.sharedcreature.season.domain.SeasonStatus;
@@ -70,7 +71,7 @@ class CreatureHomeQueryServiceTest {
         when(supplementProvider.getSupplement(creature, 1L, now)).thenReturn(
                 new CreatureHomeSupplementProvider.Supplement(0, List.of(), List.of(), streamId, 0));
 
-        var response = service.getCreatureHome(1L);
+        CreatureHomeResponse response = service.getCreatureHome(1L);
 
         assertThat(response.groupId()).isEqualTo(10L);
         assertThat(response.groupName()).isEqualTo("테스트 그룹");
@@ -135,8 +136,8 @@ class CreatureHomeQueryServiceTest {
         when(supplementProvider.getSupplement(creature, 1L, now)).thenReturn(
                 new CreatureHomeSupplementProvider.Supplement(100L, List.of(), List.of(), streamId, 1L));
 
-        var firstResponse = service.getCreatureHome(1L);
-        var changedResponse = service.getCreatureHome(1L);
+        CreatureHomeResponse firstResponse = service.getCreatureHome(1L);
+        CreatureHomeResponse changedResponse = service.getCreatureHome(1L);
 
         assertThat(firstResponse.season().status()).isEqualTo(SeasonStatus.ACTIVE);
         assertThat(changedResponse.season().status()).isEqualTo(SeasonStatus.ACTIVE);
@@ -194,7 +195,7 @@ class CreatureHomeQueryServiceTest {
         when(supplementProvider.getSupplement(creature, 1L, now)).thenReturn(
                 new CreatureHomeSupplementProvider.Supplement(100L, List.of(), List.of(), streamId, 2L));
 
-        var response = service.getCreatureHome(1L);
+        CreatureHomeResponse response = service.getCreatureHome(1L);
 
         assertThat(response.season().status()).isEqualTo(SeasonStatus.ACTIVE);
         assertThat(response.creature().creatureSpeciesId()).isEqualTo(50L);

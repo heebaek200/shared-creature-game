@@ -2,9 +2,11 @@ package com.team.sharedcreature.payment.application;
 
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
+import com.team.sharedcreature.avatar.domain.OwnedItem;
 import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
 import com.team.sharedcreature.payment.api.AdminRefundResponse;
+import com.team.sharedcreature.payment.api.RefundResponse;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
 import com.team.sharedcreature.payment.domain.PaymentTransactionStatus;
 import com.team.sharedcreature.payment.domain.PurchaseStatus;
@@ -23,6 +25,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.test.util.ReflectionTestUtils;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
@@ -48,8 +51,8 @@ class RefundQueryServiceTest {
     @ParameterizedTest
     @EnumSource(RefundStatus.class)
     void 내목록과_관리자목록은_Enum으로_조회하고_상태문자열을_반환한다(RefundStatus status) {
-        var item = unusedItem(10L, 1L, "HEAD");
-        var refund = RefundRequest.create(item.getPurchase(), item.getUser(), "조회 테스트", CREATED_AT);
+        OwnedItem item = unusedItem(10L, 1L, "HEAD");
+        RefundRequest refund = RefundRequest.create(item.getPurchase(), item.getUser(), "조회 테스트", CREATED_AT);
         ReflectionTestUtils.setField(refund, "id", 20L);
         if (status == RefundStatus.REJECTED) {
             refund.reject(user(9L), "거절", NOW);
@@ -67,8 +70,8 @@ class RefundQueryServiceTest {
         when(refunds.findAdminRefunds(eq(status), any()))
                 .thenReturn(new PageImpl<>(List.of(refund)));
 
-        var mine = service.listMyRefunds(1L, 0, 20, status);
-        var admin = service.listAdminRefunds(0, 20, status);
+        Page<RefundResponse> mine = service.listMyRefunds(1L, 0, 20, status);
+        Page<RefundResponse> admin = service.listAdminRefunds(0, 20, status);
 
         assertThat(mine.getContent().getFirst().status()).isEqualTo(status);
         assertThat(mine.getContent().getFirst().requestedByUserId()).isEqualTo(1L);
@@ -102,18 +105,18 @@ class RefundQueryServiceTest {
 
     @Test
     void adminRefundDetailSerializesNestedStatusesAsStringsAndReadsThemBack() {
-        var item = unusedItem(10L, 1L, "HEAD");
-        var refund = RefundRequest.create(item.getPurchase(), item.getUser(), "test refund", CREATED_AT);
-        var cancellation = PaymentTransaction.cancellationRequested(item.getPurchase(), NOW);
-        var mapper = new ObjectMapper();
+        OwnedItem item = unusedItem(10L, 1L, "HEAD");
+        RefundRequest refund = RefundRequest.create(item.getPurchase(), item.getUser(), "test refund", CREATED_AT);
+        PaymentTransaction cancellation = PaymentTransaction.cancellationRequested(item.getPurchase(), NOW);
+        ObjectMapper mapper = new ObjectMapper();
 
         String json = mapper.writeValueAsString(AdminRefundResponse.from(refund, item, cancellation));
-        var tree = mapper.readTree(json);
+        JsonNode tree = mapper.readTree(json);
         assertThat(tree.at("/purchase/status").asString()).isEqualTo("PAID");
         assertThat(tree.at("/ownedItem/status").asString()).isEqualTo("OWNED_UNUSED");
         assertThat(tree.at("/latestCancellation/status").asString()).isEqualTo("REQUESTED");
 
-        var decoded = mapper.readValue(json, AdminRefundResponse.class);
+        AdminRefundResponse decoded = mapper.readValue(json, AdminRefundResponse.class);
         assertThat(decoded.purchase().status()).isEqualTo(PurchaseStatus.PAID);
         assertThat(decoded.ownedItem().status()).isEqualTo(OwnedItemStatus.OWNED_UNUSED);
         assertThat(decoded.latestCancellation().status()).isEqualTo(PaymentTransactionStatus.REQUESTED);

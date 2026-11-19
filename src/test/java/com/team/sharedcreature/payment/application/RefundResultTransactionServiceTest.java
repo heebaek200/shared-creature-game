@@ -48,7 +48,7 @@ class RefundResultTransactionServiceTest {
 
     @BeforeEach
     void 준비() {
-        var user = BeanUtils.instantiateClass(User.class);
+        User user = BeanUtils.instantiateClass(User.class);
         set(user, "id", 7L);
         purchase = BeanUtils.instantiateClass(Purchase.class);
         set(purchase, "id", 2L);
@@ -82,7 +82,7 @@ class RefundResultTransactionServiceTest {
     @ParameterizedTest
     @EnumSource(RefundGateway.Outcome.class)
     void PG결과별_상태와_회수여부와_최초응답을_저장한다(RefundGateway.Outcome outcome) {
-        var result = service.apply(command, pgResult(outcome), "trace");
+        RefundApprovalTransactionService.CommandResponse result = service.apply(command, pgResult(outcome), "trace");
         String expected = switch (outcome) {
             case SUCCESS -> "COMPLETED";
             case DEFINITIVE_FAILURE -> "FAILED";
@@ -120,7 +120,7 @@ class RefundResultTransactionServiceTest {
         String snapshot = record.getResponseSnapshot();
         assertThat(snapshot).contains("\"status\":\"COMPLETED\"");
         Instant revokedAt = item.getRevokedAt();
-        var replay = service.apply(command, pgResult(RefundGateway.Outcome.UNKNOWN), "second");
+        RefundApprovalTransactionService.CommandResponse replay = service.apply(command, pgResult(RefundGateway.Outcome.UNKNOWN), "second");
         assertThat(replay.httpStatus()).isEqualTo(200);
         assertThat(replay.data().status()).isEqualTo(RefundStatus.COMPLETED);
         assertThat(replay.data().purchase().status()).isEqualTo(PurchaseStatus.CANCELLED);
@@ -136,7 +136,7 @@ class RefundResultTransactionServiceTest {
         service.apply(command, pgResult(RefundGateway.Outcome.UNKNOWN), "first");
         // 후속 정합화로 환불이 완료된 상황에서도 최초 멱등 응답은 보존합니다.
         refund.completeCancellation(NOW, NOW);
-        var replay = service.apply(command, pgResult(RefundGateway.Outcome.SUCCESS), "second");
+        RefundApprovalTransactionService.CommandResponse replay = service.apply(command, pgResult(RefundGateway.Outcome.SUCCESS), "second");
         assertThat(replay.httpStatus()).isEqualTo(409);
         assertThat(replay.error().traceId()).isEqualTo("first");
         assertThat(replay.error().code()).isEqualTo("PG_CANCEL_RESULT_UNKNOWN");

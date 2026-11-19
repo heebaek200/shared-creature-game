@@ -111,8 +111,8 @@ class SeasonCreationIntegrationTest {
      */
     @Test
     void currentWindowIsCreatedOnlyOnce() {
-        var first = service.createCurrentScheduledIfMissing();
-        var second = service.createCurrentScheduledIfMissing();
+        SeasonCreationService.CreationResult first = service.createCurrentScheduledIfMissing();
+        SeasonCreationService.CreationResult second = service.createCurrentScheduledIfMissing();
 
         assertEquals(SeasonCreationService.Outcome.CREATED, first.outcome());
         assertEquals(SeasonCreationService.Outcome.ALREADY_EXISTS, second.outcome());
@@ -148,7 +148,7 @@ class SeasonCreationIntegrationTest {
         jdbc.update("UPDATE seasons SET status = 'CLOSING' WHERE season_number = ?",
                 firstSeasonNumber);
 
-        var result = service.createCurrentScheduledIfMissing();
+        SeasonCreationService.CreationResult result = service.createCurrentScheduledIfMissing();
 
         assertEquals(SeasonCreationService.Outcome.WAITING_FOR_CLOSURE, result.outcome());
         assertEquals(1L, countSeasons());
@@ -178,7 +178,7 @@ class SeasonCreationIntegrationTest {
             });
             start.countDown();
 
-            var results = List.of(a.get(15, TimeUnit.SECONDS), b.get(15, TimeUnit.SECONDS));
+            List<SeasonCreationService.CreationResult> results = List.of(a.get(15, TimeUnit.SECONDS), b.get(15, TimeUnit.SECONDS));
             assertEquals(1L, results.stream().filter(result ->
                     result.outcome() == SeasonCreationService.Outcome.CREATED).count());
             assertEquals(1L, results.stream().filter(result ->

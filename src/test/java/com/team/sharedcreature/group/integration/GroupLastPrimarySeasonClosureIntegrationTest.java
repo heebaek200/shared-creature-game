@@ -1,6 +1,7 @@
 package com.team.sharedcreature.group.integration;
 
 import com.team.sharedcreature._core.security.Hashing;
+import com.team.sharedcreature.group.api.LeaveMyGroupResponse;
 import com.team.sharedcreature.group.application.GroupMembershipService;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
@@ -147,7 +148,7 @@ class GroupLastPrimarySeasonClosureIntegrationTest {
                 """, groupId, Hashing.sha256("last-primary-" + UUID.randomUUID()), userId);
 
         // 5. 실제 Service가 모든 종료 상태를 처리하도록 호출합니다.
-        var result = membershipService.leaveMyGroup(userId);
+        LeaveMyGroupResponse result = membershipService.leaveMyGroup(userId);
         entityManager.flush();
 
         // 6. 상태 전환뿐 아니라 기존 성장 이력이 보존되는지 DB에서 검사합니다.

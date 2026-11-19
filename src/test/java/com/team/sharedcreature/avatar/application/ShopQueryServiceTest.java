@@ -2,7 +2,9 @@ package com.team.sharedcreature.avatar.application;
 
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
+import com.team.sharedcreature.avatar.api.ShopItemResponse;
 import com.team.sharedcreature.avatar.domain.AvatarSlot;
+import com.team.sharedcreature.avatar.domain.ShopItem;
 import com.team.sharedcreature.avatar.domain.ShopItemStatus;
 import com.team.sharedcreature.avatar.infrastructure.ShopItemRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,11 +39,11 @@ class ShopQueryServiceTest {
     @ParameterizedTest
     @EnumSource(AvatarSlot.class)
     void 슬롯은_Enum으로_조회하고_응답은_문자열로_반환한다(AvatarSlot slot) {
-        var shop = unusedItem(10L, 1L, slot.name()).getShopItem();
+        ShopItem shop = unusedItem(10L, 1L, slot.name()).getShopItem();
         when(repository.findAllByStatusAndSlotCode(eq(ShopItemStatus.ACTIVE), eq(slot), any()))
                 .thenReturn(new PageImpl<>(List.of(shop)));
 
-        var result = service.list(0, 20, slot).getContent().getFirst();
+        ShopItemResponse result = service.list(0, 20, slot).getContent().getFirst();
 
         assertThat(result.slot()).isEqualTo(slot);
         assertThat(result.status()).isEqualTo(ShopItemStatus.ACTIVE);
@@ -57,7 +59,7 @@ class ShopQueryServiceTest {
 
     @Test
     void 상품상세도_판매중인_조건으로_조회한다() {
-        var shop = unusedItem(10L, 1L, "HEAD").getShopItem();
+        ShopItem shop = unusedItem(10L, 1L, "HEAD").getShopItem();
         when(repository.findByIdAndStatus(110L, ShopItemStatus.ACTIVE)).thenReturn(Optional.of(shop));
 
         assertThat(service.get(110L).status()).isEqualTo(ShopItemStatus.ACTIVE);

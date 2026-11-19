@@ -1,5 +1,7 @@
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.group.api.NavigationResponse;
+import com.team.sharedcreature.group.api.PublicInvitationResponse;
 import com.team.sharedcreature.group.domain.GroupInviteLinkStatus;
 
 import com.team.sharedcreature.group.domain.GroupStatus;
@@ -73,7 +75,7 @@ class GroupInvitationServiceTest {
                 Instant.parse("2026-11-03T01:00:00Z")
         ));
 
-        var result = service.acceptInvitation(VALID_TOKEN, session);
+        NavigationResponse result = service.acceptInvitation(VALID_TOKEN, session);
 
         assertThat(result.nextRoute()).isEqualTo("/signup");
         assertThat(((InvitationSessionContext) session.getAttribute(
@@ -95,7 +97,7 @@ class GroupInvitationServiceTest {
                 new LoginUser(1L, "기존회원", Set.of("MEMBER"))
         );
 
-        var result = service.acceptInvitation(VALID_TOKEN, session);
+        NavigationResponse result = service.acceptInvitation(VALID_TOKEN, session);
 
         assertThat(result.nextRoute()).isEqualTo("/creature");
         verify(membershipService, never()).joinInvitation(
@@ -141,7 +143,7 @@ class GroupInvitationServiceTest {
                 Instant.parse("2026-11-03T00:00:00Z")
         ));
 
-        var result = service.acceptInvitation(VALID_TOKEN, session);
+        NavigationResponse result = service.acceptInvitation(VALID_TOKEN, session);
 
         assertThat(result.nextRoute()).isEqualTo("/login");
         assertThat(session.getAttribute(AuthService.PENDING_SIGNUP)).isNull();
@@ -164,7 +166,7 @@ class GroupInvitationServiceTest {
         GroupInviteLink invitation = invitation(20L, 3L, 20, 20);
         when(inviteLinkRepository.findByTokenHash(anyString())).thenReturn(Optional.of(invitation));
 
-        var response = service.getPublicInvitation(VALID_TOKEN, new MockHttpSession());
+        PublicInvitationResponse response = service.getPublicInvitation(VALID_TOKEN, new MockHttpSession());
 
         assertThat(response.joinable()).isFalse();
         assertThat(response.joinBlockedReason()).isEqualTo(GroupJoinBlockedReason.GROUP_FULL);

@@ -20,6 +20,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -76,11 +77,11 @@ class PaymentWebhookLeaseMySqlIntegrationTest {
     @Timeout(20)
     void heartbeatMaintainsLeaseBeyondInitialExpiry() {
         Duration lease = Duration.ofSeconds(2);
-        var heartbeats = new PaymentWebhookLeaseHeartbeat(lifecycle, Duration.ofMillis(150));
+        PaymentWebhookLeaseHeartbeat heartbeats = new PaymentWebhookLeaseHeartbeat(lifecycle, Duration.ofMillis(150));
 
-        var result = runner.run(JOB_TYPE, scheduledFor, ownerId, lease,
+        SchedulerJobRunner.ExecutionResult result = runner.run(JOB_TYPE, scheduledFor, ownerId, lease,
                 (Function<SchedulerClaimTicket, String>) ticket -> {
-                    try (var scope = heartbeats.start(ticket, lease)) {
+                    try (PaymentWebhookLeaseHeartbeat.Scope scope = heartbeats.start(ticket, lease)) {
                         // 2초 초기 Lease를 넘기도록 PG 지연을 시뮬레이션합니다.
                         sleep(Duration.ofMillis(2_600));
                         assertTrue(claims.tryClaim(JOB_TYPE, scheduledFor, "competitor", lease).isEmpty(),
@@ -91,7 +92,7 @@ class PaymentWebhookLeaseMySqlIntegrationTest {
                 });
 
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, result);
-        var timestamps = jdbc.queryForMap("""
+        Map<String, Object> timestamps = jdbc.queryForMap("""
                 SELECT started_at, heartbeat_at, completed_at, status, attempt_count
                   FROM scheduler_executions
                  WHERE job_type = ?

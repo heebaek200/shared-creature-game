@@ -3,6 +3,9 @@ package com.team.sharedcreature.group.integration;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.security.Hashing;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
+import com.team.sharedcreature.group.api.InvitationManagementResponse;
+import com.team.sharedcreature.group.api.PublicInvitationResponse;
+import com.team.sharedcreature.group.api.RotateInvitationResponse;
 import com.team.sharedcreature.group.application.GroupInvitationManagementService;
 import com.team.sharedcreature.group.application.GroupInvitationService;
 import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
@@ -69,11 +72,11 @@ class GroupInvitationRotationIntegrationTest {
 
         // 최초 링크가 활성 상태인 것을 확인한 뒤 회전합니다.
         assertThat(activeCount(groupId)).isEqualTo(1);
-        var first = managementService.rotateInvitation(fixture.userId());
+        RotateInvitationResponse first = managementService.rotateInvitation(fixture.userId());
         assertThat(activeCount(groupId)).isEqualTo(1);
 
         // 첫 번째 신규 링크도 다시 회전하여 변경 순서를 검증합니다.
-        var second = managementService.rotateInvitation(fixture.userId());
+        RotateInvitationResponse second = managementService.rotateInvitation(fixture.userId());
         assertThat(activeCount(groupId)).isEqualTo(1);
         assertThat(totalCount(groupId)).isEqualTo(3);
 
@@ -95,7 +98,7 @@ class GroupInvitationRotationIntegrationTest {
                 exception -> assertThat(exception.code()).isEqualTo("INVITE_INVALID"));
 
         // 마지막 링크만 정상적으로 공개 초대 정보를 반환합니다.
-        var publicInvitation = invitationService.getPublicInvitation(
+        PublicInvitationResponse publicInvitation = invitationService.getPublicInvitation(
                 secondToken, new MockHttpSession()
         );
         assertThat(publicInvitation.groupId()).isEqualTo(groupId);
@@ -112,7 +115,7 @@ class GroupInvitationRotationIntegrationTest {
         Fixture fixture = createFixture();
 
         // 응답은 기존 원문 토큰이 아니라 메타데이터만 제공합니다.
-        var result = managementService.getInvitationManagement(fixture.userId());
+        InvitationManagementResponse result = managementService.getInvitationManagement(fixture.userId());
         assertThat(result.groupId()).isEqualTo(fixture.groupId());
         assertThat(result.issuedByUserId()).isEqualTo(fixture.userId());
         assertThat(result.issuedAt()).isNotNull();
@@ -152,13 +155,13 @@ class GroupInvitationRotationIntegrationTest {
                         "http://localhost:5173"
                 );
 
-        var rotated = preciseClockService.rotateInvitation(fixture.userId());
+        RotateInvitationResponse rotated = preciseClockService.rotateInvitation(fixture.userId());
 
         // 영속성 컨텍스트의 원본 Instant가 아니라 실제 MySQL 저장값을 다시 읽습니다.
         entityManager.flush();
         entityManager.clear();
 
-        var reloaded = managementService.getInvitationManagement(fixture.userId());
+        InvitationManagementResponse reloaded = managementService.getInvitationManagement(fixture.userId());
 
         assertThat(reloaded.issuedAt()).isEqualTo(rotated.issuedAt());
     }

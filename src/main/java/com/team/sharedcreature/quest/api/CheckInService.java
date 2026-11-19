@@ -1,5 +1,7 @@
 package com.team.sharedcreature.quest.api;
 
+import com.team.sharedcreature.quest.domain.QuestCompletion;
+import com.team.sharedcreature.quest.domain.QuestPeriod;
 import com.team.sharedcreature.quest.domain.QuestPeriodType;
 import com.team.sharedcreature.season.domain.GroupSeasonStatus;
 
@@ -28,6 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.*;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -92,7 +96,7 @@ public class CheckInService {
 
         // 일일퀘스트 기간 조회
         Long seasonId = seasonQueryService.findCurrentSeason().getId();
-        var currentPeriod = periodRepository.findCurrentBySeasonAndType(
+        Optional<QuestPeriod> currentPeriod = periodRepository.findCurrentBySeasonAndType(
                 seasonId,
                 QuestPeriodType.DAILY,
                 now
@@ -103,7 +107,7 @@ public class CheckInService {
         }
 
         // 기간내 할당 퀘스트 조회
-        var assignments = assignmentRepository.findAllWithSnapshotByPeriodId(
+        List<QuestAssignment> assignments = assignmentRepository.findAllWithSnapshotByPeriodId(
                 currentPeriod.get().getId()
         );
 
@@ -127,7 +131,7 @@ public class CheckInService {
 
         // 주간 기간 조회
         Long seasonId = seasonQueryService.findCurrentSeason().getId();
-        var currentPeriod = periodRepository.findCurrentBySeasonAndType(
+        Optional<QuestPeriod> currentPeriod = periodRepository.findCurrentBySeasonAndType(
                 seasonId,
                 QuestPeriodType.WEEKLY,
                 now
@@ -138,7 +142,7 @@ public class CheckInService {
         }
 
         // 해당 기간의 퀘스트 할당 정보 전체 조회
-        var assignments = assignmentRepository.findAllWithSnapshotByPeriodId(
+        List<QuestAssignment> assignments = assignmentRepository.findAllWithSnapshotByPeriodId(
                 currentPeriod.get().getId()
         );
 
@@ -268,7 +272,7 @@ public class CheckInService {
         currentAssignments.addAll(questCompletionService.findCurrentAssignments(QuestPeriodType.DAILY));
         currentAssignments.addAll(questCompletionService.findCurrentAssignments(QuestPeriodType.WEEKLY));
 
-        var completionsBefore =
+        Map<Long, QuestCompletion> completionsBefore =
                 questCompletionService.findCompletionsByAssignmentId(
                         userId,
                         currentAssignments
@@ -323,14 +327,14 @@ public class CheckInService {
         }
 
         // 체크인 처리 전에는 없었고 처리 후에는 존재하는 완료 기록만 응답합니다.
-        var completionsAfter =
+        Map<Long, QuestCompletion> completionsAfter =
                 questCompletionService.findCompletionsByAssignmentId(
                         userId,
                         currentAssignments
                 );
 
         ArrayList<Long> completedQuestIds = new ArrayList<>();
-        for (var entry : completionsAfter.entrySet()) {
+        for (Map.Entry<Long, QuestCompletion> entry : completionsAfter.entrySet()) {
             if (!completionsBefore.containsKey(entry.getKey())) {
                 completedQuestIds.add(entry.getValue().getId());
             }

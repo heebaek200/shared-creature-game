@@ -25,6 +25,7 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.csrf.CsrfToken;
@@ -135,7 +136,7 @@ class SecurityFilterChainTest {
     @Test
     void CSRF_조회는_WebSocket이_검증할_세션_원본_토큰을_반환한다() throws Exception {
         MockHttpSession session = authenticatedSession(2L, "MEMBER");
-        var response = mockMvc.perform(get("/api/v1/auth/csrf").session(session))
+        MockHttpServletResponse response = mockMvc.perform(get("/api/v1/auth/csrf").session(session))
                 .andExpect(status().isOk())
                 .andReturn().getResponse();
         String responseToken = objectMapper.readTree(response.getContentAsString())

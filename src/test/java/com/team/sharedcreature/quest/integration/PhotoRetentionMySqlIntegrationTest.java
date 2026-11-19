@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Clock;
@@ -58,6 +59,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -277,7 +279,7 @@ class PhotoRetentionMySqlIntegrationTest {
             if (userId != null) jdbc.update("DELETE FROM users WHERE id = ?", userId);
         } finally {
             // 남은 파일은 이 테스트 전용 디렉터리에 한정하여 삭제합니다.
-            try (var paths = Files.list(DIRECTORY)) {
+            try (Stream<Path> paths = Files.list(DIRECTORY)) {
                 for (Path photo : paths.toList()) Files.deleteIfExists(photo);
             }
         }
@@ -290,7 +292,7 @@ class PhotoRetentionMySqlIntegrationTest {
      */
     @AfterAll
     static void deleteTemporaryDirectory() throws IOException {
-        try (var files = Files.walk(DIRECTORY)) {
+        try (Stream<Path> files = Files.walk(DIRECTORY)) {
             for (Path path : files.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(path);
         }
     }
@@ -746,11 +748,11 @@ class PhotoRetentionMySqlIntegrationTest {
         PhotoRetentionWork fails = now -> new PhotoRetentionWork.Summary(0, 0, 0, 1, false);
         PhotoRetentionNormalizationService firstAttempt = new PhotoRetentionNormalizationService(
                 jobRunner, lifecycle, fails, Clock.fixed(NOW, ZoneOffset.UTC));
-        var failed = firstAttempt.normalize();
+        PhotoRetentionNormalizationService.Result failed = firstAttempt.normalize();
         assertNotNull(failed.error());
         assertEquals("FAILED", schedulerStatus());
 
-        var succeeded = normalizer.normalize();
+        PhotoRetentionNormalizationService.Result succeeded = normalizer.normalize();
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, succeeded.execution());
         assertEquals("SUCCEEDED", schedulerStatus());
         assertEquals(2L, count("SELECT attempt_count FROM scheduler_executions WHERE job_type = ?",
@@ -856,7 +858,7 @@ class PhotoRetentionMySqlIntegrationTest {
     private Long insert(String sql, Object... values) {
         GeneratedKeyHolder keys = new GeneratedKeyHolder();
         jdbc.update(connection -> {
-            var statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+            PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
             for (int index = 0; index < values.length; index++) {
                 statement.setObject(index + 1, values[index]);
             }

@@ -4,6 +4,7 @@ package com.team.sharedcreature._core.time;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -21,7 +22,7 @@ class SeasonCalendarTest {
      */
     @Test
     void firstSeasonWindow() {
-        var window = calendar.currentWindow(
+        SeasonCalendar.SeasonWindow window = calendar.currentWindow(
                 FIRST_START,
                 Instant.parse("2026-11-06T03:00:00Z")
         ).orElseThrow();
@@ -42,7 +43,7 @@ class SeasonCalendarTest {
      */
     @Test
     void justBeforeNextSeason() {
-        var window = calendar.currentWindow(
+        SeasonCalendar.SeasonWindow window = calendar.currentWindow(
                 FIRST_START,
                 Instant.parse("2026-11-29T14:59:59Z")
         ).orElseThrow();
@@ -58,7 +59,7 @@ class SeasonCalendarTest {
      */
     @Test
     void exactlyAtNextSeason() {
-        var window = calendar.currentWindow(
+        SeasonCalendar.SeasonWindow window = calendar.currentWindow(
                 FIRST_START,
                 Instant.parse("2026-11-29T15:00:00Z")
         ).orElseThrow();
@@ -82,7 +83,7 @@ class SeasonCalendarTest {
      */
     @Test
     void skipsElapsedCalendarWindows() {
-        var window = calendar.currentWindow(
+        SeasonCalendar.SeasonWindow window = calendar.currentWindow(
                 FIRST_START,
                 Instant.parse("2027-02-01T03:00:00Z")
         ).orElseThrow();
@@ -106,7 +107,7 @@ class SeasonCalendarTest {
      */
     @Test
     void beforeFirstSeasonReturnsEmpty() {
-        var result = calendar.currentWindow(
+        Optional<SeasonCalendar.SeasonWindow> result = calendar.currentWindow(
                 FIRST_START,
                 Instant.parse("2026-11-01T14:59:59Z")
         );

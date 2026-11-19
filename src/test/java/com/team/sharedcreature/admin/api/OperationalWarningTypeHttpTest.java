@@ -40,10 +40,10 @@ class OperationalWarningTypeHttpTest {
         validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
 
-        var methodValidation = new MethodValidationPostProcessor();
+        MethodValidationPostProcessor methodValidation = new MethodValidationPostProcessor();
         methodValidation.setValidator(validator);
         methodValidation.afterPropertiesSet();
-        var controller = methodValidation.postProcessAfterInitialization(
+        Object controller = methodValidation.postProcessAfterInitialization(
                 new AdminOperationsController(warnings), "adminOperationsController");
         mvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new RestApiExceptionHandler(new ErrorResponseFactory(Clock.systemUTC())))

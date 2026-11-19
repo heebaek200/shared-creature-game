@@ -2,6 +2,7 @@ package com.team.sharedcreature.group.application;
 
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature.auth.domain.User;
+import com.team.sharedcreature.group.api.UserReportResponse;
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.domain.ChatMessage;
@@ -54,7 +55,7 @@ class UserReportServiceTest {
                 Clock.fixed(Instant.parse("2026-11-10T00:00:00Z"), ZoneOffset.UTC)
         );
 
-        var response = service.create(1L, 2L, category, " 반복 광고 ");
+        UserReportResponse response = service.create(1L, 2L, category, " 반복 광고 ");
 
         assertThat(response.status()).isEqualTo(UserReportStatus.RECEIVED);
         assertThat(response.category()).isEqualTo(category);

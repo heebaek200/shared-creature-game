@@ -1,11 +1,14 @@
 package com.team.sharedcreature.payment.application;
 
+import com.team.sharedcreature.payment.domain.PaymentWebhookEvent;
 import com.team.sharedcreature.payment.infrastructure.PaymentWebhookEventRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 
 /** 공통 Scheduler가 호출하는 결제 Webhook 배치 복구 업무를 제공합니다. */
 @Service
@@ -31,8 +34,8 @@ public class PaymentWebhookRecoveryService {
 
     /** 현재 시각에 복구 가능한 결제 이벤트를 최대 100건 처리하고 결과 건수를 반환합니다. */
     public PaymentWebhookRecoveryResult recoverStaleWebhooks() {
-        var staleBefore = clock.instant().minus(STALE_AFTER);
-        var events = eventRepository.findRecoverable(
+        Instant staleBefore = clock.instant().minus(STALE_AFTER);
+        List<PaymentWebhookEvent> events = eventRepository.findRecoverable(
                 PaymentWebhookService.reconcilableTypes(),
                 staleBefore,
                 PageRequest.of(0, BATCH_SIZE)
@@ -40,7 +43,7 @@ public class PaymentWebhookRecoveryService {
         int processed = 0;
         int skipped = 0;
         int failed = 0;
-        for (var event : events) {
+        for (PaymentWebhookEvent event : events) {
             switch (webhookService.recover(event.getId(), staleBefore)) {
                 case PROCESSED -> processed++;
                 case SKIPPED -> skipped++;

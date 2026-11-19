@@ -122,7 +122,7 @@ public class RestApiExceptionHandler {
             MethodArgumentTypeMismatchException exception,
             HttpServletRequest request
     ) {
-        var fieldError = new FieldErrorResponse(exception.getName(), "올바른 형식의 값을 입력해 주세요.");
+        FieldErrorResponse fieldError = new FieldErrorResponse(exception.getName(), "올바른 형식의 값을 입력해 주세요.");
         return response(ErrorCode.INVALID_FIELD_VALUE, null, List.of(fieldError), request);
     }
 

@@ -1,8 +1,95 @@
-# 공동 육성 게임 — 다 같이 키우는 생명체
+# 다 같이 키우는 생명체
 
-- [프로젝트 설계 문서 보기](docs/index.md)
-- [GitHub Projects 보기](https://github.com/heebaek200/shared-creature-game/projects)
-- [팀 프로젝트 일일 리포트 보기](https://github.com/heebaek200/shared-creature-game/discussions)
+## 프로젝트 정보
+
+### 개요
+
+**다 같이 키우는 생명체**는 일상 속 작은 활동을 게임으로 연결하고, 여러 사용자가 하나의 생명체를 함께 성장시키는 **웹 기반 소셜 육성 서비스**입니다.
+
+규칙적인 생활이나 가벼운 야외 활동은 혼자 꾸준히 실천하기 어렵고, 새로운 사람과 적극적으로 교류하는 일도 부담스러울 수 있습니다. 이 프로젝트는 이러한 일상적인 어려움에 주목하여, 거창한 목표나 적극적인 소통 없이도 다른 사람들과 자연스럽게 협력할 수 있는 경험을 제공하고자 기획했습니다.
+
+사용자는 공개 그룹에 자유롭게 가입하거나 새로운 그룹을 만들고, 기상 체크인이나 사진 인증 등 일일·주간 퀘스트를 수행합니다. 개인의 활동은 기여도로 기록되고 그룹이 함께 육성하는 **크리처**의 성장에 반영됩니다. 또한 그룹 내 개인 랭킹과 그룹 간 경쟁을 통해 지속적인 참여 동기를 제공합니다.
+
+**이 프로젝트가 제공하고자 하는 가치는 일상의 작은 실천을 눈에 보이는 성취로 바꾸고, 공동의 목표를 통해 느슨한 사회적 연결을 만드는 것입니다.** 다만 실제 생활 습관 개선이나 사회적 교류 증대 효과는 아직 검증되지 않은 기대 효과입니다.
+
+### 팀 구성 및 역할
+
+- **개발 인원:** 4명
+
+| 이름 | GitHub | 주요 담당 역할 |
+|---|---|---|
+| **이희백** | [heebaek200](https://github.com/heebaek200) | **프로젝트 관리:** GitHub Projects 운영, 설계 문서 관리 및 보완<br>**백엔드:** 프로젝트 기반 구현, Scheduler, WebSocket, 그룹, 관리자 등<br>**프론트엔드:** 퀘스트, WebSocket 연동, 상점·결제, 관리자 등 |
+| **이수현** | [is-hyun](https://github.com/is-hyun) | **기술 검증:** 그래픽 리소스 확보 및 활용 가능성 검토<br>**프론트엔드:** 크리처 홈, 공통 레이아웃·테마, 아바타 화면 등 |
+| **양현재** | [a67286268-oss](https://github.com/a67286268-oss) | **기술 검증:** JPEG EXIF 기반 사진 인증<br>**백엔드:** 퀘스트, EXIF 인증, 아바타·아이템, 랭킹, 환불, 리팩터링 등 |
+| **김희성** | [asd27429697-design](https://github.com/asd27429697-design) | **기술 검증:** 크리처·아바타의 브라우저 표현 방식<br>**백엔드:** Naver OAuth, Gemini AI 교정<br>**프론트엔드:** 회원가입·그룹 관리, Naver OAuth, Gemini AI 교정 등 |
+
+※ 담당 역할은 주요 구현 및 기여 영역을 중심으로 요약했습니다.
+
+### 설계 문서
+
+이 프로젝트는 **팀원들이 함께 설계를 수립한 뒤, 확정된 설계를 기준으로 기능별 구현을 진행하는 워터폴 방식에 가까운 개발 프로세스**를 채택했습니다.
+
+구현에 앞서 서비스 기획, 요구사항, 사용자 시나리오와 업무 규칙, 데이터베이스, REST API 및 화면 구조를 문서화했습니다. 이를 통해 팀원들이 각자의 기능을 독립적으로 개발하더라도 공통된 업무 규칙과 인터페이스를 따를 수 있도록 했습니다.
+
+구현 과정에서 발견된 문제나 변경 사항은 설계 문서에 다시 반영하여 문서와 실제 구현 사이의 차이를 줄이고자 했습니다.
+
+주요 설계 자료는 다음과 같습니다.
+
+- [프로젝트 기획안](docs/project_plan.md)
+- [요구사항 정의서](docs/requirements.md)
+- [사용자 시나리오 및 업무 규칙](docs/business-rules.md)
+- [데이터베이스 설계서 및 ERD](docs/database-design.md)
+- [REST API 설계서](docs/api-design.md)
+- [화면 설계서](docs/screen-design.md)
+- [클래스 다이어그램](docs/class-diagram.md)
+
+**[전체 설계 문서 보기](docs/index.md)**
+
+### GitHub Projects
+
+이 프로젝트는 **GitHub Projects와 Issues를 중심으로 업무를 관리**했습니다.
+
+설계 단계에서 정의한 기능을 구현 가능한 작업 단위의 Issue로 나누고, 담당자와 구현 범위, 업무 규칙, API 계약 및 완료 조건을 정리했습니다. 팀원들은 각자 담당 Issue를 기준으로 작업하고, Pull Request를 통해 구현 내용을 공유했습니다.
+
+GitHub Projects의 칸반 보드를 이용하여 업무의 진행 상태를 시각화하고, 각 팀원이 현재 어떤 작업을 담당하고 있으며 다음에 무엇을 진행해야 하는지 확인할 수 있도록 했습니다.
+
+이러한 방식을 통해 별도의 업무 관리 도구 없이도 **설계 문서 → Issue → 구현 및 Pull Request**로 이어지는 작업 이력을 관리하고, 여러 기능을 병렬로 개발하는 과정에서 업무 범위와 진행 상황을 명확히 공유하고자 했습니다.
+
+**[GitHub Projects 보기](https://github.com/heebaek200/shared-creature-game/projects)**
+
+![GitHub Projects 칸반 보드](docs/images/github-projects-kanban.png)
+
+### 일일 리포트
+
+이 프로젝트는 팀원들이 개발 기간 동안 **매일 자신의 작업을 돌아보고 공유하는 일일 리포트 제도**를 운영했습니다.
+
+각 팀원은 그날 진행한 작업, 다음에 진행할 작업, 작업 과정에서 느낀 점 등을 GitHub Discussions에 기록했습니다. 단순한 업무 완료 보고뿐만 아니라 개발 과정에서 겪은 어려움과 새롭게 알게 된 내용, 자유로운 소감도 공유할 수 있도록 했습니다.
+
+일일 리포트는 다음과 같은 목적을 가지고 운영했습니다.
+
+- **진행 상황 공유:** 각자의 작업 현황과 다음 작업을 파악하여 팀 전체의 진행 상황을 확인
+- **문제 조기 발견:** 작업 중 발생한 어려움이나 지연 요소를 공유하여 필요한 지원과 조율을 진행
+- **업무 회고:** 하루 동안 수행한 작업과 판단을 되돌아보고, 다음 작업의 방향을 스스로 정리
+- **개발 과정 기록:** 최종 결과물뿐만 아니라 프로젝트가 만들어지는 과정과 팀원들의 경험을 보존
+
+이러한 기록을 통해 팀원 각자가 자신의 업무를 정리하는 습관을 만들고, 서로의 작업 진행 상황을 이해하는 데 도움을 얻고자 했습니다.
+
+**[전체 일일 리포트 보기](https://github.com/heebaek200/shared-creature-game/discussions)**
+#### 일일 리포트 기록
+
+- [2026-11-02 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/2)
+- [2026-11-03 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/49)
+- [2026-11-04 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/59)
+- [2026-11-05 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/65)
+- [2026-11-06 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/69)
+- [2026-11-09 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/73)
+- [2026-11-10 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/79)
+- [2026-11-11 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/82)
+- [2026-11-12 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/91)
+- [2026-11-13 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/96)
+- [2026-11-16 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/101)
+- [2026-11-17 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/105)
+- [2026-11-18 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/111)
 
 ## 주요 기술 스택
 
@@ -647,3 +734,142 @@ Webhook 수신 시 서버는 원본 요청 본문과 서명 Header를 검증합�
 - [PortOne V2 결제 연동 준비](https://developers.portone.io/opi/ko/integration/ready/readme?v=v2)
 - [카카오페이 V2 개발 가이드](https://developers.portone.io/opi/ko/integration/pg/v2/kakaopay?v=v2)
 - [PortOne V2 Webhook 연동](https://developers.portone.io/opi/ko/integration/webhook/readme-v2)
+
+
+### 9. Gemini API 그룹 소개 교정 설정
+
+이 프로젝트는 **Google Gemini API**를 이용하여 그룹 소개 문장의 맞춤법과 문법을 교정합니다.
+
+사용자가 그룹 생성 화면에서 직접 교정을 요청하면 Backend가 Gemini API를 호출하고, 교정 결과를 제안합니다. 사용자가 적용을 선택하기 전까지 원문은 변경되지 않습니다.
+
+현재 사용 모델은 `gemini-3.5-flash-lite`이며, API 호출은 Backend에서 처리합니다.
+
+#### 9.1. 준비물
+
+- [Google AI Studio](https://aistudio.google.com/)에 로그인할 Google 계정
+- Gemini API Key
+- Spring Boot와 Vite가 실행되는 로컬 개발 환경
+- Google 또는 Naver 로그인 테스트 계정
+
+Gemini API는 무료 사용 범위를 제공하지만, 모델별 호출 한도와 요금 정책이 다를 수 있습니다. API 사용 전에 [공식 요금 안내](https://ai.google.dev/gemini-api/docs/pricing)를 확인합니다.
+
+#### 9.2. Gemini API Key 발급
+
+1. [Google AI Studio](https://aistudio.google.com/)에 접속하여 Google 계정으로 로그인합니다.
+2. **API Keys** 메뉴로 이동합니다.
+3. 기존 API Key를 사용하거나 **Create API key**를 선택하여 새로운 키를 발급합니다.
+4. 필요한 경우 API Key를 연결할 Google Cloud 프로젝트를 선택하거나 생성합니다.
+5. 발급된 API Key를 복사하여 안전하게 보관합니다.
+
+API Key는 외부에 노출되면 다른 사람이 API를 호출하는 데 악용할 수 있으므로 GitHub, Discord 등에 공유하지 않습니다.
+
+공식 안내: [Gemini API Key 관리](https://ai.google.dev/gemini-api/docs/api-key)
+
+#### 9.3. 로컬 환경변수 설정
+
+프로젝트 루트의 `.env.example`을 참고하여 `.env` 파일에 발급받은 API Key를 설정합니다.
+
+```dotenv
+GEMINI_API_KEY=your_gemini_api_key
+```
+
+`your_gemini_api_key`를 실제 발급받은 값으로 변경합니다.
+
+Backend의 `application.yaml`에는 다음 설정이 이미 정의되어 있습니다.
+
+```yaml
+gemini:
+  api-key: ${GEMINI_API_KEY:}
+```
+
+따라서 별도로 Java 코드나 YAML 파일을 수정할 필요는 없습니다.
+
+API Key는 Backend에서만 사용합니다. `frontend/.env.local`이나 `VITE_`로 시작하는 환경변수에 등록하지 않습니다.
+
+`.env` 파일은 `.gitignore`에 포함되어 있으며 Git 저장소에 커밋하지 않습니다.
+
+#### 9.4. Backend 및 Frontend 실행
+
+환경변수 설정을 완료한 뒤 프로젝트 루트에서 Backend를 실행합니다.
+
+```powershell
+.\gradlew.bat bootRun
+```
+
+다른 터미널에서 Frontend를 실행합니다.
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+환경변수를 변경했다면 Backend를 재시작해야 합니다.
+
+`frontend/.env.local`에 `VITE_USE_MOCK_API=true`가 설정되어 있다면 제거하거나 `false`로 변경합니다.
+
+**실제 Gemini 연동 검증은 Mock API가 아닌 Backend API를 사용해야 합니다.**
+
+#### 9.5. 그룹 소개 문장 교정 테스트
+
+1. 브라우저에서 `http://localhost:5173`에 접속합니다.
+2. Google 또는 Naver 계정으로 로그인합니다.
+3. `/groups/select` 화면으로 이동합니다.
+4. **+ 새 그룹 생성** 버튼을 클릭합니다.
+5. 그룹 소개 입력란에 교정할 문장을 입력합니다.
+
+   예시: `우리 그룹은 매일 같이 성장하는것을 목표로 합니다.`
+
+6. **AI 맞춤형 교정** 버튼을 클릭합니다.
+7. AI 교정 제안 영역에 원문과 교정 결과가 각각 표시되는지 확인합니다.
+8. **교정 결과 적용** 버튼을 클릭하여 그룹 소개 입력란에 교정 문장이 반영되는지 확인합니다.
+
+교정 결과는 Gemini 응답에 따라 달라질 수 있습니다. 특정 문장으로 정확히 변경되는지보다는 원문과 제안이 구분되어 표시되고 선택 적용이 가능한지 확인합니다.
+
+교정 API의 주요 규칙은 다음과 같습니다.
+
+| 항목 | 조건 |
+|---|---|
+| API Endpoint | `POST /api/v1/ai/proofreads` |
+| 요청 데이터 | `{"text":"교정할 문장"}` |
+| 인증 | 로그인 세션 필요 |
+| 입력 길이 | 공백 제거 후 1~500자 |
+| 사용자별 요청 제한 | 분당 5회, KST 기준 하루 30회 |
+| 서버 전체 동시 요청 | 최대 2건 |
+| 외부 API Timeout | 10초 |
+
+교정 결과는 자동으로 그룹 소개에 적용되거나 DB에 저장되지 않습니다.
+
+Gemini API를 사용할 수 없는 경우에도 사용자는 원문으로 그룹을 생성할 수 있습니다.
+
+#### 9.6. 자주 발생하는 문제
+
+| 증상 | 확인할 내용 |
+|---|---|
+| AI 교정 서비스를 사용할 수 없음 (503) | `GEMINI_API_KEY` 설정 여부, API Key 유효성, 모델 접근 권한, Backend 로그 |
+| 호출 제한 오류 (429) | 사용자별 분당·일일 제한, 서버 동시 처리 제한, 공급자 호출 한도 |
+| 인증 오류 (401) | 로그인 여부 및 세션 만료 |
+| CSRF 오류 (403) | 로그인 세션과 CSRF 토큰 상태 |
+| 입력값 오류 (400) | 그룹 소개가 비어 있거나 500자를 초과하지 않았는지 |
+| 교정 요청이 오래 걸리거나 실패함 | 인터넷 연결, Gemini API 상태, 10초 Timeout |
+
+Gemini API 호출 실패 시 Backend는 `AI_PROVIDER_UNAVAILABLE` 오류를 반환할 수 있습니다.
+
+API Key가 비어 있거나 잘못 설정된 경우에도 같은 오류가 발생할 수 있으므로 `.env` 설정을 먼저 확인합니다.
+
+#### 9.7. 테스트 종료 및 주의사항
+
+- 각 개발자는 가능하면 자신의 Gemini API Key를 발급받아 사용합니다.
+- API Key는 Backend에서만 사용하며 브라우저나 GitHub 저장소에 공개하지 않습니다.
+- 실제 개인정보나 비밀 정보가 포함된 문장을 테스트용으로 전송하지 않습니다.
+- 교정 요청에는 사용자가 입력한 그룹 소개 문장이 외부 Gemini API로 전송됩니다.
+- API 이용량과 요금은 Google AI Studio에서 확인합니다.
+- 무료 사용 범위 또는 외부 API 장애가 그룹 생성 기능의 가용성에 영향을 주지 않도록 교정 기능을 선택적으로 사용합니다.
+
+공식 문서:
+
+- [Google AI Studio](https://aistudio.google.com/)
+- [Gemini API 시작하기](https://ai.google.dev/gemini-api/docs/get-started)
+- [Gemini API Key 관리](https://ai.google.dev/gemini-api/docs/api-key)
+- [Gemini API 요금 및 무료 사용 범위](https://ai.google.dev/gemini-api/docs/pricing)
+

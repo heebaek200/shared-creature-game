@@ -2,10 +2,13 @@ package com.team.sharedcreature.payment.application;
 
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
+import com.team.sharedcreature.avatar.domain.OwnedItem;
 import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
 import com.team.sharedcreature.payment.api.AdminRefundResponse;
 import com.team.sharedcreature.payment.api.RefundResponse;
+import com.team.sharedcreature.payment.domain.PaymentTransaction;
 import com.team.sharedcreature.payment.domain.PaymentTransactionType;
+import com.team.sharedcreature.payment.domain.RefundRequest;
 import com.team.sharedcreature.payment.domain.RefundStatus;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
 import com.team.sharedcreature.payment.infrastructure.RefundRequestRepository;
@@ -85,7 +88,7 @@ public class RefundQueryService {
             );
         }
 
-        var refund = refundRequestRepository.findDetailById(requestId)
+        RefundRequest refund = refundRequestRepository.findDetailById(requestId)
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.RESOURCE_NOT_FOUND
                 ));
@@ -93,11 +96,11 @@ public class RefundQueryService {
         Long purchaseId = refund.getPurchase().getId();
 
         // 미지급 아이템과 취소 시도 전 거래는 null을 허용합니다.
-        var item = ownedItemRepository.findByPurchaseId(purchaseId)
+        OwnedItem item = ownedItemRepository.findByPurchaseId(purchaseId)
                 .orElse(null);
 
         // 승인 거래가 아닌 취소 거래만 선택합니다.
-        var cancellation = transactionRepository
+        PaymentTransaction cancellation = transactionRepository
                 .findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
                         purchaseId,
                         PaymentTransactionType.CANCELLATION

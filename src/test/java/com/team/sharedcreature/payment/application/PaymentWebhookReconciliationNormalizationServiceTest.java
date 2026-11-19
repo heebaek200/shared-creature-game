@@ -43,7 +43,7 @@ class PaymentWebhookReconciliationNormalizationServiceTest {
      */
     @Test
     void succeedsWithCurrentUtcBucketAndExactSummary() {
-        var summary = new PaymentWebhookRecoveryService.PaymentWebhookRecoveryResult(3, 2, 1, 0);
+        PaymentWebhookRecoveryService.PaymentWebhookRecoveryResult summary = new PaymentWebhookRecoveryService.PaymentWebhookRecoveryResult(3, 2, 1, 0);
         when(recovery.recoverStaleWebhooks()).thenReturn(summary);
         AtomicReference<String> json = new AtomicReference<>();
         when(runner.run(eq(PaymentWebhookReconciliationNormalizationService.JOB_TYPE),
@@ -55,7 +55,7 @@ class PaymentWebhookReconciliationNormalizationServiceTest {
                     return SchedulerJobRunner.ExecutionResult.SUCCEEDED;
                 });
 
-        var result = normalizer.normalize();
+        PaymentWebhookReconciliationNormalizationService.Result result = normalizer.normalize();
         assertEquals(BUCKET, result.scheduledFor());
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, result.execution());
         assertSame(summary, result.summary());
@@ -77,7 +77,7 @@ class PaymentWebhookReconciliationNormalizationServiceTest {
                 org.mockito.ArgumentMatchers.<Function<SchedulerClaimTicket, String>>any()))
                 .thenReturn(SchedulerJobRunner.ExecutionResult.SKIPPED);
 
-        var result = normalizer.normalize();
+        PaymentWebhookReconciliationNormalizationService.Result result = normalizer.normalize();
         assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, result.execution());
         assertNull(result.summary());
         assertNull(result.error());
@@ -91,11 +91,11 @@ class PaymentWebhookReconciliationNormalizationServiceTest {
      */
     @Test
     void failedEventForcesFailedSchedulerRun() {
-        var summary = new PaymentWebhookRecoveryService.PaymentWebhookRecoveryResult(4, 2, 1, 1);
+        PaymentWebhookRecoveryService.PaymentWebhookRecoveryResult summary = new PaymentWebhookRecoveryService.PaymentWebhookRecoveryResult(4, 2, 1, 1);
         when(recovery.recoverStaleWebhooks()).thenReturn(summary);
         mockRunnerExecutesCallback();
 
-        var result = normalizer.normalize();
+        PaymentWebhookReconciliationNormalizationService.Result result = normalizer.normalize();
         assertNull(result.execution());
         assertSame(summary, result.summary());
         assertTrue(result.error().contains("실패 건수: 1"));
@@ -111,7 +111,7 @@ class PaymentWebhookReconciliationNormalizationServiceTest {
         when(recovery.recoverStaleWebhooks()).thenThrow(new IllegalStateException("DB offline"));
         mockRunnerExecutesCallback();
 
-        var result = normalizer.normalize();
+        PaymentWebhookReconciliationNormalizationService.Result result = normalizer.normalize();
         assertNull(result.execution());
         assertNull(result.summary());
         assertTrue(result.error().contains("DB offline"));
@@ -181,7 +181,7 @@ class PaymentWebhookReconciliationNormalizationServiceTest {
      */
     @Test
     void computesNextBoundaryWithoutTimezoneConversion() {
-        var atBoundary = new PaymentWebhookReconciliationNormalizationService(
+        PaymentWebhookReconciliationNormalizationService atBoundary = new PaymentWebhookReconciliationNormalizationService(
                 runner,
                 recovery,
                 heartbeat, // 추가: 4-J-3에서 도입한 Heartbeat 의존성
@@ -231,7 +231,7 @@ class PaymentWebhookReconciliationNormalizationServiceTest {
 
         try {
             assertTrue(entered.await(5, TimeUnit.SECONDS));
-            var skipped = normalizer.normalize();
+            PaymentWebhookReconciliationNormalizationService.Result skipped = normalizer.normalize();
             assertTrue(skipped.alreadyRunning());
             assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, skipped.execution());
             verifyNoInteractions(recovery);
@@ -252,14 +252,14 @@ class PaymentWebhookReconciliationNormalizationServiceTest {
      */
     @Test
     void asynchronousLeaseFailureMakesNormalizationFail() throws Exception {
-        var lifecycle = mock(SchedulerExecutionLifecycleService.class);
+        SchedulerExecutionLifecycleService lifecycle = mock(SchedulerExecutionLifecycleService.class);
         CountDownLatch tried = new CountDownLatch(1);
         doAnswer(invocation -> {
             tried.countDown();
             throw new IllegalStateException("lease lost");
         }).when(lifecycle).renewLease(any(SchedulerClaimTicket.class), eq(Duration.ofMinutes(3)));
-        var fastHeartbeat = new PaymentWebhookLeaseHeartbeat(lifecycle, Duration.ofMillis(10));
-        var service = new PaymentWebhookReconciliationNormalizationService(
+        PaymentWebhookLeaseHeartbeat fastHeartbeat = new PaymentWebhookLeaseHeartbeat(lifecycle, Duration.ofMillis(10));
+        PaymentWebhookReconciliationNormalizationService service = new PaymentWebhookReconciliationNormalizationService(
                 runner, recovery, fastHeartbeat, Clock.fixed(NOW, ZoneOffset.UTC));
         when(recovery.recoverStaleWebhooks()).thenAnswer(invocation -> {
             assertTrue(tried.await(2, TimeUnit.SECONDS));
@@ -267,7 +267,7 @@ class PaymentWebhookReconciliationNormalizationServiceTest {
         });
         mockRunnerExecutesCallback();
 
-        var result = service.normalize();
+        PaymentWebhookReconciliationNormalizationService.Result result = service.normalize();
         assertNull(result.execution());
         assertNotNull(result.error());
         assertTrue(result.error().contains("Lease 갱신에 실패"));

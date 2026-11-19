@@ -11,6 +11,7 @@ import com.team.sharedcreature.payment.domain.PgApiAttempt;
 import com.team.sharedcreature.payment.domain.PgApiOperation;
 import com.team.sharedcreature.payment.domain.PgApiResultType;
 import com.team.sharedcreature.payment.domain.Purchase;
+import com.team.sharedcreature.payment.domain.RefundRequest;
 import com.team.sharedcreature.payment.domain.RefundStatus;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
 import com.team.sharedcreature.payment.infrastructure.PgApiAttemptRepository;
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
+import com.team.sharedcreature._core.api.ErrorResponse;
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
 import com.team.sharedcreature.admin.domain.ApiIdempotencyRecord;
 import com.team.sharedcreature.admin.domain.ApiIdempotencyStatus;
@@ -28,6 +30,7 @@ import com.team.sharedcreature.payment.infrastructure.RefundIdempotencyRepositor
 
 import java.util.List;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -68,12 +71,12 @@ public class RefundResultTransactionService {
         Objects.requireNonNull(command, "command");
 
         // 구매 → 아이템 → 환불 요청을 먼저 잠급니다.
-        var locked = refundLockService.lock(command.refundRequestId());
-        var purchase = locked.purchase();
-        var refund = locked.refund();
+        RefundLockService.LockedRefund locked = refundLockService.lock(command.refundRequestId());
+        Purchase purchase = locked.purchase();
+        RefundRequest refund = locked.refund();
 
         // PG 시도 이력은 환불 요청 다음에 잠급니다.
-        var attempt = pgApiAttemptRepository
+        PgApiAttempt attempt = pgApiAttemptRepository
                 .findByIdAndRefundRequestIdForUpdate(
                         command.pgApiAttemptId(),
                         command.refundRequestId()
@@ -86,7 +89,7 @@ public class RefundResultTransactionService {
         validateCommand(command, purchase, attempt);
 
         // 환불과 PG 시도 이력을 잠근 다음 멱등 기록을 잠급니다.
-        var idempotencyRecord = refundIdempotencyRepository
+        ApiIdempotencyRecord idempotencyRecord = refundIdempotencyRepository
                 .findForUpdateByIdAndRefundRequestId(
                         command.idempotencyRecordId(),
                         refund.getId()
@@ -170,14 +173,14 @@ public class RefundResultTransactionService {
         Objects.requireNonNull(command, "command");
 
         // 구매 → 보유 아이템 → 환불 순서로 다시 잠급니다.
-        var locked = refundLockService.lock(command.refundRequestId());
-        var purchase = locked.purchase();
-        var refund = locked.refund();
+        RefundLockService.LockedRefund locked = refundLockService.lock(command.refundRequestId());
+        Purchase purchase = locked.purchase();
+        RefundRequest refund = locked.refund();
 
-        var history = pgApiAttemptRepository
+        List<PgApiAttempt> history = pgApiAttemptRepository
                 .findCancellationHistoryForUpdate(refund.getId());
 
-        var cancellation = history.stream()
+        PgApiAttempt cancellation = history.stream()
                 .filter(item ->
                         Objects.equals(item.getId(), command.cancellationAttemptId())
                 )
@@ -186,7 +189,7 @@ public class RefundResultTransactionService {
                         "복구 대상의 기존 취소 요청 이력이 없습니다."
                 ));
 
-        var lookup = history.stream()
+        PgApiAttempt lookup = history.stream()
                 .filter(item ->
                         Objects.equals(item.getId(), command.lookupAttemptId())
                 )
@@ -240,7 +243,7 @@ public class RefundResultTransactionService {
                 .reduce((previous, current) -> current)
                 .orElse(null);
 
-        var result = recoveryResultResolver.resolve(
+        RefundGateway.CancellationResult result = recoveryResultResolver.resolve(
                 command,
                 payment,
                 cancellationId
@@ -250,10 +253,10 @@ public class RefundResultTransactionService {
         applyOutcome(locked, lookup, result);
 
         // 최신 복구 결과를 반영한 뒤 연결된 미완료 요청의 응답도 확정합니다.
-        var processingRecords = refundIdempotencyRepository
+        List<ApiIdempotencyRecord> processingRecords = refundIdempotencyRepository
                 .findProcessingByRefundRequestIdForUpdate(refund.getId());
 
-        for (var processingRecord : processingRecords) {
+        for (ApiIdempotencyRecord processingRecord : processingRecords) {
             // 현재 수동 요청은 실제 요청의 traceId로 별도 확정합니다.
             if (Objects.equals(
                     processingRecord.getId(),
@@ -294,14 +297,14 @@ public class RefundResultTransactionService {
         Objects.requireNonNull(idempotencyRecordId, "idempotencyRecordId");
 
         // 구매 → 보유 아이템 → 환불 순서로 잠급니다.
-        var locked = refundLockService.lock(command.refundRequestId());
+        RefundLockService.LockedRefund locked = refundLockService.lock(command.refundRequestId());
 
         // 다른 결과 저장 흐름과 동일하게 PG 이력 다음에 멱등 기록을 잠급니다.
         pgApiAttemptRepository.findCancellationHistoryForUpdate(
                 command.refundRequestId()
         );
 
-        var record = refundIdempotencyRepository
+        ApiIdempotencyRecord record = refundIdempotencyRepository
                 .findForUpdateByIdAndRefundRequestId(
                         idempotencyRecordId,
                         command.refundRequestId()
@@ -356,12 +359,12 @@ public class RefundResultTransactionService {
             PgApiAttempt attempt,
             RefundGateway.CancellationResult received
     ) {
-        var purchase = locked.purchase();
-        var refund = locked.refund();
+        Purchase purchase = locked.purchase();
+        RefundRequest refund = locked.refund();
 
-        var result = normalizeResult(purchase, received);
-        var transaction = resolveTransaction(purchase, attempt, result);
-        var now = clock.instant();
+        RefundGateway.CancellationResult result = normalizeResult(purchase, received);
+        PaymentTransaction transaction = resolveTransaction(purchase, attempt, result);
+        Instant now = clock.instant();
 
         PaymentTransactionStatus nextStatus = switch (result.outcome()) {
             case SUCCESS -> PaymentTransactionStatus.SUCCESS;
@@ -444,7 +447,7 @@ public class RefundResultTransactionService {
 
         if (data.status() == RefundStatus.CANCEL_UNKNOWN) {
             // 결과 불명은 상태를 저장한 뒤 HTTP 409로 전달합니다.
-            var error = errorResponseFactory.create(
+            ErrorResponse error = errorResponseFactory.create(
                     ErrorCode.PG_CANCEL_RESULT_UNKNOWN,
                     null,
                     List.of(),

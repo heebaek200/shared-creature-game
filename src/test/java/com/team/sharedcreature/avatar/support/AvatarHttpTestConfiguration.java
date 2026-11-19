@@ -48,7 +48,7 @@ public class AvatarHttpTestConfiguration implements WebMvcConfigurer {
     /** 테스트에서도 Controller의 @Validated 검증을 실제 프록시로 실행합니다. */
     @Bean
     static MethodValidationPostProcessor methodValidationPostProcessor() {
-        var processor = new MethodValidationPostProcessor();
+        MethodValidationPostProcessor processor = new MethodValidationPostProcessor();
         processor.setProxyTargetClass(true);
         return processor;
     }

@@ -8,6 +8,7 @@ import com.team.sharedcreature.season.infrastructure.SeasonRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -62,13 +63,13 @@ class SeasonActivationServiceTest {
         Season season = scheduledSeason();
         when(inspectionRepository.inspect(SEASON_ID)).thenReturn(complete(3));
 
-        var result = service.activateIfInitializationComplete(SEASON_ID);
+        SeasonActivationService.ActivationResult result = service.activateIfInitializationComplete(SEASON_ID);
 
         assertEquals(SeasonActivationService.Outcome.ACTIVATED, result.outcome());
         assertEquals(SeasonStatus.ACTIVE, season.getStatus());
         assertEquals(NOW, season.getUpdatedAt());
         assertEquals(3, result.inspection().activeGroups());
-        var order = inOrder(seasonRepository, inspectionRepository);
+        InOrder order = inOrder(seasonRepository, inspectionRepository);
         order.verify(seasonRepository).findForUpdateById(SEASON_ID);
         order.verify(inspectionRepository).inspect(SEASON_ID);
     }
@@ -164,7 +165,7 @@ class SeasonActivationServiceTest {
         Season season = scheduledSeason();
         ReflectionTestUtils.setField(season, "status", SeasonStatus.ACTIVE);
 
-        var result = service.activateIfInitializationComplete(SEASON_ID);
+        SeasonActivationService.ActivationResult result = service.activateIfInitializationComplete(SEASON_ID);
 
         assertEquals(SeasonActivationService.Outcome.ALREADY_ACTIVE, result.outcome());
         assertEquals(NOW, season.getUpdatedAt());
@@ -260,7 +261,7 @@ class SeasonActivationServiceTest {
         Season season = scheduledSeason();
         when(inspectionRepository.inspect(SEASON_ID)).thenReturn(inspection);
 
-        var result = service.activateIfInitializationComplete(SEASON_ID);
+        SeasonActivationService.ActivationResult result = service.activateIfInitializationComplete(SEASON_ID);
 
         assertEquals(SeasonActivationService.Outcome.INCOMPLETE, result.outcome());
         assertSame(inspection, result.inspection());
