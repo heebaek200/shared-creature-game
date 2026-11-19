@@ -660,14 +660,22 @@ UPDATE game_groups
 
 **주요 규칙**
 
-`code` UNIQUE; `status=ACTIVE/INACTIVE`; `(status,display_order)` INDEX.
+`code` UNIQUE; `status=ACTIVE/INACTIVE`; `(status,display_order)` INDEX. ACTIVE 종은 `asset_key`에 대응하는 성장 이미지 5개를 보유해야 한다. INACTIVE 종의 기존 `group_seasons.selected_species_id`와 `group_creatures.species_id` 참조는 이력으로 보존하며 신규 선택·무작위 부화 대상에서만 제외한다.
+
+| `code` | `name` | `asset_key` | `status` | `display_order` |
+|---|---|---|---|---|
+| `MOSS_GOLEM` | 이끼 낀 바위 골렘 | `moss-golem` | `ACTIVE` | 1 |
+| `ABYSS_JELLYFISH` | 공허 속 우주 해파리 | `abyss-jellyfish` | `ACTIVE` | 2 |
+| `SPROUT` | 새싹이 | `creatures/sprout` | `INACTIVE` | 1 |
+| `CLOUD` | 구름이 | `creatures/cloud` | `INACTIVE` | 2 |
+| `EMBER` | 불씨 | `creatures/ember` | `INACTIVE` | 3 |
 
 | 컬럼 | 자료형 | 역할·제약 |
 |---|---|---|
 | `id` | `BIGINT` | PK, AUTO_INCREMENT |
 | `code` | `VARCHAR(50)` | — |
 | `name` | `VARCHAR(50)` | — |
-| `asset_key` | `VARCHAR(255)` | — |
+| `asset_key` | `VARCHAR(255)` | API `assetKey` 원본 |
 | `status` | `VARCHAR(30)` | — |
 | `display_order` | `INT` | — |
 | `created_at` | `DATETIME(6)` | — |
@@ -1052,7 +1060,16 @@ UPDATE game_groups
 
 **주요 규칙**
 
-`code` UNIQUE; `price_krw>0`; `slot_code=HEAD/FACE/BODY/ACCESSORY`; 판매 상태 `ACTIVE/INACTIVE`.
+`code` UNIQUE; `price_krw>0`; `slot_code=HEAD/FACE/BODY/ACCESSORY`; 판매 상태 `ACTIVE/INACTIVE`. `asset_key`는 파일 경로나 DB ID가 아닌 상품 파츠의 논리 키다.
+
+| `code` | `slot_code` | `asset_key` | 렌더링 파츠 | `status` |
+|---|---|---|---|---|
+| `RIBBON_HAIRBAND` | `ACCESSORY` | `ribbon-hairband` | `accessory` | `ACTIVE` |
+| `BLUE_SHIRT` | `BODY` | `blue-shirt` | `body` | `ACTIVE` |
+| `YELLOW_SMILE` | `FACE` | `yellow-smile` | `face` | `ACTIVE` |
+| `BROWN_LOB` | `HEAD` | `brown-lob` | `head` | `ACTIVE` |
+| `HAT_LEAF` | `HEAD` | `hat-leaf` | — | `INACTIVE` |
+| `BODY_CAPE` | `BODY` | `body-cape` | — | `INACTIVE` |
 
 | 컬럼 | 자료형 | 역할·제약 |
 |---|---|---|
@@ -1062,7 +1079,7 @@ UPDATE game_groups
 | `description` | `VARCHAR(500)` | — |
 | `price_krw` | `BIGINT` | — |
 | `slot_code` | `VARCHAR(30)` | — |
-| `asset_key` | `VARCHAR(255)` | — |
+| `asset_key` | `VARCHAR(255)` | 상품 파츠 논리 키 |
 | `status` | `VARCHAR(30)` | — |
 | `created_at` | `DATETIME(6)` | — |
 | `updated_at` | `DATETIME(6)` | — |

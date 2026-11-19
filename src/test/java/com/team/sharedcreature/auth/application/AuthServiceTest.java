@@ -16,19 +16,20 @@ import com.team.sharedcreature.group.infrastructure.GroupJoinRestrictionReposito
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.session.FindByIndexNameSessionRepository;
+import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.TransactionStatus;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.function.Consumer;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 class AuthServiceTest {
 
@@ -84,10 +85,11 @@ class AuthServiceTest {
                 mock(GroupInviteLinkRepository.class),
                 mock(GroupJoinRestrictionRepository.class),
                 mock(GroupMembershipService.class),
-                mock(SocialLoginClient.class),
+                List.of(mock(SocialLoginClient.class)),
                 mock(InitialSuperAdminProperties.class),
                 mock(TransactionTemplate.class),
-                mock(Clock.class)
+                mock(Clock.class),
+                mock(FindByIndexNameSessionRepository.class)
         );
         MockHttpSession session = new MockHttpSession();
         session.setAttribute(AuthService.ONBOARDING_REASON, "ALREADY_IN_GROUP");
@@ -103,11 +105,9 @@ class AuthServiceTest {
         TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
         when(attemptRepository.findByStateHash(Hashing.sha256("state"))).thenReturn(java.util.Optional.of(attempt));
         doAnswer(invocation -> {
-            Consumer<org.springframework.transaction.TransactionStatus> action = invocation.getArgument(0);
-            action.accept(mock(org.springframework.transaction.TransactionStatus.class));
-            return null;
-        }).when(transactionTemplate).executeWithoutResult(any());
-
+            TransactionCallback<?> action = invocation.getArgument(0);
+            return action.doInTransaction(mock(TransactionStatus.class));
+        }).when(transactionTemplate).execute(any(TransactionCallback.class));
         return new AuthService(
                 attemptRepository,
                 mock(SocialAccountRepository.class),
@@ -117,10 +117,11 @@ class AuthServiceTest {
                 mock(GroupInviteLinkRepository.class),
                 mock(GroupJoinRestrictionRepository.class),
                 mock(GroupMembershipService.class),
-                mock(SocialLoginClient.class),
+                List.of(mock(SocialLoginClient.class)),
                 mock(InitialSuperAdminProperties.class),
                 transactionTemplate,
-                Clock.fixed(now, ZoneOffset.UTC)
+                Clock.fixed(now, ZoneOffset.UTC),
+                mock(FindByIndexNameSessionRepository.class)
         );
     }
 }

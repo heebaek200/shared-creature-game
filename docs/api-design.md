@@ -65,7 +65,7 @@
 |---|---|
 | 200 | 일반 조회·수정·삭제 성공 |
 | 201 | OAuth 시도·회원가입·그룹 생성·그룹 가입·구매 생성·환불 요청·신고 생성 |
-| 202 | PortOne Webhook 정상 수신/무시/중복 수신 |
+| 200 | PortOne Webhook 정상 수신/무시/중복 수신 |
 | 302 | OAuth Callback CSR 이동 |
 | 400 | 요청 포맷·필드 검증 실패 |
 | 401 | 인증 필요/세션 만료 |
@@ -235,6 +235,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | `OAUTH_INVALID_STATE` | 미등록·재사용 State 또는 잘못된 Callback 입력 |
 | `OAUTH_SESSION_EXPIRED` | OAuth 시도 만료 또는 시작 세션 불일치·소실 |
 | `OAUTH_AUTHENTICATION_FAILED` | Token·Nonce·계정 검증 실패 또는 공급자 장애 |
+| `OAUTH_EMAIL_CONFLICT` | 동일 이메일이 다른 소셜 공급자 계정에 이미 등록되어 신규 가입이 차단된 경우 |
 
 ### getSignupContext — `GET /api/v1/auth/signup-context`
 
@@ -1002,6 +1003,36 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
 | 409 | `CONCURRENT_MODIFICATION` | 현재 시즌 정상화 중 또는 시간 경계와 상태 불일치 |
 
+### listRankableSeasons — `GET /api/v1/seasons`
+
+- **Operation ID:** `listRankableSeasons` · **요구사항:** `REQ-RNK-001, REQ-RNK-002` · **인증·권한:** `AUTHENTICATED` · **성공 HTTP:** `200`
+- **엔드포인트 조건:** 랭킹에서 선택할 수 있는 유효한 현재 시즌과 `ACTIVE`에서 정상 종료되어 Snapshot이 확정된 시즌을 시즌 번호 내림차순으로 반환합니다. `SCHEDULED`, `CLOSING`, 시간 범위를 벗어난 `ACTIVE`, 활성화되지 않고 종료된 시즌은 제외합니다.
+
+**요청 필드**
+
+| 위치 | 필드명 | 타입 | 필수 | null | 검증·기본값 |
+|---|---|---|---|---|---|
+| Header | Cookie | string | Y | N | Spring Session 세션 쿠키; HttpOnly / SameSite=Lax |
+
+**성공 응답 필드**
+
+| 응답 경로 | JSON 타입 | 필수 | null | 값·범위 | 의미 |
+|---|---|---|---|---|---|
+| data | array(object) | Y | N | 없으면 [] | 선택 가능한 시즌 목록 |
+| data[].seasonId | integer(int64) | Y | N | 1 이상 | 시즌 ID |
+| data[].seasonNumber | integer | Y | N | 1 이상 | 시즌 번호 |
+| data[].status | string(enum) | Y | N | ACTIVE \| ENDED | 랭킹 확정 상태 |
+| data[].startAt | string(date-time) | Y | N | UTC ISO 8601 | 시작 시각 |
+| data[].endAt | string(date-time) | Y | N | UTC ISO 8601 | 종료 시각 |
+
+**오류 응답**
+
+| HTTP | code | 조건 |
+|---|---|---|
+| 401 | `AUTH_REQUIRED` | 세션 인증 없음 |
+| 401 | `SESSION_EXPIRED` | 인증 세션 만료 |
+| 400 | `INVALID_REQUEST` | 중복 또는 미등록 입력 |
+
 ### getCreatureHome — `GET /api/v1/groups/me/creature-home`
 
 - **Operation ID:** `getCreatureHome` · **요구사항:** `REQ-SEA-001, REQ-SEA-002, REQ-SEA-003, REQ-AVA-002, REQ-RT-001` · **인증·권한:** `GROUP_MEMBER` · **성공 HTTP:** `200`
@@ -1083,6 +1114,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 ### listActiveCreatureSpecies — `GET /api/v1/creature-species`
 
 - **Operation ID:** `listActiveCreatureSpecies` · **요구사항:** `REQ-SEA-002` · **인증·권한:** `GROUP_MEMBER` · **성공 HTTP:** `200`
+- `assetKey`는 `frontend/assets/creature/` 직하위 종 디렉터리명이다. `/`, `creatures/` 접두어, 파일명과 확장자를 포함하지 않으며, 성장 이미지는 `{assetKey}/lv1.png`~`lv5.png`를 사용한다. 미선택 알은 종 키와 무관한 공통 `lv0.png`를 사용한다.
 
 **요청 필드**
 
@@ -1098,7 +1130,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data[].creatureSpeciesId | integer(int64) | Y | N | 1 이상 | 크리처 종 ID |
 | data[].code | string | Y | N | 1~50자 | 코드 |
 | data[].name | string | Y | N | 1~50자 | 성공 데이터 이름 |
-| data[].assetKey | string | Y | N | 1~255자 | 이미지/리소스 키 |
+| data[].assetKey | string | Y | N | 1~255자 | 크리처 종 이미지 디렉터리의 논리 키 |
 | data[].displayOrder | integer | Y | N | 0 이상 | 표시 순서 |
 
 **오류 응답**
@@ -1301,11 +1333,13 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | data.assignmentId | integer(int64) | Y | N | 1 이상 | 퀘스트 배정 ID |
 | data.attemptNumber | integer | Y | N | 1~5 | 제출 시도 번호 |
 | data.verificationStatus | string(enum) | Y | N | PENDING \| VALID \| INVALID | 사진 검증 상태 |
-| data.failureReason | string | Y | Y | EXIF_GPS_MISSING \| EXIF_GPS_OUT_OF_RANGE \| EXIF_CAPTURED_AT_MISSING \| PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD \| PHOTO_PROCESSING_TIMEOUT \| QUEST_PERIOD_ENDED \| QUEST_COMPLETION_FAILED \| PHOTO_PROCESSING_FAILED; 실패 외 null | 사진 제출·퀘스트 인증 실패 사유 |
+| data.failureReason | string | Y | Y | EXIF_GPS_MISSING \| EXIF_GPS_OUT_OF_RANGE \| EXIF_CAPTURED_AT_MISSING \| PHOTO_CAPTURED_AFTER_UPLOAD \| PHOTO_CAPTURED_BEFORE_MEMBERSHIP \| PHOTO_CAPTURED_OUTSIDE_ASSIGNMENT_PERIOD \| PHOTO_PROCESSING_TIMEOUT \| QUEST_PERIOD_ENDED \| QUEST_COMPLETION_FAILED \| PHOTO_PROCESSING_FAILED; 실패 외 null | 사진 제출·퀘스트 인증 실패 사유 |
 | data.uploadedAt | string(date-time) | Y | N | UTC ISO 8601 | 업로드 접수 시각 |
 | data.capturedAt | string(date-time) | Y | Y | EXIF 누락 시 null | 사진 촬영 시각 |
 | data.completionId | integer(int64) | Y | Y | 확정된 보상 없으면 null | 완료 기록 ID |
 
+- `PHOTO_CAPTURED_AFTER_UPLOAD`: EXIF 촬영 시각이 서버 업로드 접수 시각보다 미래인 경우입니다.
+- `PHOTO_CAPTURED_BEFORE_MEMBERSHIP`: EXIF 촬영 시각이 현재 활성 멤버십 가입 시각보다 이전인 경우입니다.
 - `QUEST_COMPLETION_FAILED`: EXIF는 정상이지만 기간 종료 외의 확정된 업무 조건 위반으로 완료·보상이 거절된 경우입니다.
 - `PHOTO_PROCESSING_FAILED`: 결과가 확정되지 않은 `PENDING` 제출을 1시간 뒤 Scheduler가 내부 정리한 경우입니다.
 - `PHOTO_PROCESSING_TIMEOUT`: EXIF 파싱의 5초 제한을 초과한 경우입니다.
@@ -1420,6 +1454,8 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | 409 | `CONCURRENT_MODIFICATION` | `seasonId` 미지정 시 현재 시즌 정상화 중 또는 상태 불일치 |
 
 ## 7. 상점·아바타 API
+
+- 상점·아바타의 `assetKey`는 DB 숫자 ID나 경로가 아닌 소문자 kebab-case 논리 키다. 프론트엔드는 `docs/spikes/asset-sourcing.md`의 파일명 계약으로 상품 파츠를 조회한다.
 
 ### listShopItems — `GET /api/v1/shop-items`
 
@@ -1914,8 +1950,8 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 
 ### receivePortOneWebhook — `POST /api/v1/payments/webhooks/portone`
 
-- **Operation ID:** `receivePortOneWebhook` · **요구사항:** `REQ-PAY-001, REQ-PAY-002` · **인증·권한:** `PORTONE_SIGNATURE` · **성공 HTTP:** `202`
-- **엔드포인트 조건:** 서명 검증은 JSON 파싱 전 원본 바이트 기준. 외부 공급자는 미지의 필드를 추가할 수 있으므로 이 Operation만 미지 필드 허용. 서명 오류는 400 빈 Body; 성공은 202 data={}. 공식 문서 https://developers.portone.io/opi/ko/integration/webhook/readme-v2?v=v2
+- **Operation ID:** `receivePortOneWebhook` · **요구사항:** `REQ-PAY-001, REQ-PAY-002` · **인증·권한:** `PORTONE_SIGNATURE` · **성공 HTTP:** `200`
+- **엔드포인트 조건:** 서명 검증은 JSON 파싱 전 원본 바이트 기준. 외부 공급자는 미지의 필드를 추가할 수 있으므로 이 Operation만 미지 필드 허용. 서명 오류는 400 빈 Body; 성공은 200 data={}. 공식 문서 https://developers.portone.io/opi/ko/integration/webhook/readme-v2?v=v2
 
 **요청 필드**
 
@@ -1938,7 +1974,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 |---|---|---|---|---|---|
 | data | object | Y | N | 빈 응답은 {} | 성공 DTO |
 
-서명 실패 및 변조된 전송은 `400` **빈 응답 본문**. 검증 후 알 수 없는 `type`과 재수신은 업무를 반복하지 않고 `202` + `{"data":{}}`를 반환합니다. 미등록 주문도 같은 응답을 반환하되 공급자 이벤트·결제 식별자를 보존하고 복구 대상으로 유지합니다. 검증된 이벤트의 결제 상태는 포트원 최신 조회 후 반영합니다. 공급자 서버 오류 시 `5xx` 가능.
+서명 실패 및 변조된 전송은 `400` **빈 응답 본문**. 검증 후 알 수 없는 `type`과 재수신은 업무를 반복하지 않고 `200` + `{"data":{}}`를 반환합니다. 미등록 주문도 같은 응답을 반환하되 공급자 이벤트·결제 식별자를 보존하고 복구 대상으로 유지합니다. 검증된 이벤트의 결제 상태는 포트원 최신 조회 후 반영합니다. 공급자 서버 오류 시 `5xx` 가능.
 
 ### createRefundRequest — `POST /api/v1/purchases/{purchaseId}/refund-requests`
 

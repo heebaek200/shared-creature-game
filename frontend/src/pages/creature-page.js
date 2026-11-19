@@ -1,11 +1,16 @@
 // @ts-check
-import { getActiveCreatureSpecies, getCreatureHome } from '../features/creature/api.js';
+import { getActiveCreatureSpecies } from '../features/creature/api.js';
 import { renderCreatureGrowth } from '../features/creature/render.js';
 import { getCurrentSeason } from '../features/season/api.js';
 import { ApiError } from '../api/client.js';
+import { getShopItem } from '../features/shop/api.js';
+import { createAvatarField } from '../features/creature/avatar-field.js';
+import { creatureAccessErrorRoute } from '../features/creature/access-error-policy.js';
+import { groupLiveManager } from '../realtime/group-live-manager.js';
 
 import creatureLv0 from '../../assets/creature/lv0.png';
 import { createAppShell } from '../components/app-shell.js';
+
 /**
  * 크리처 홈 페이지 마운트 및 렌더링합니다.
  * @param {{ navigate: (path: string) => void }} context
@@ -50,7 +55,9 @@ export function creaturePage(context) {
               <div class="d-flex flex-column flex-grow-1">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                   <h2 class="h5 card-title mb-0 fw-bold text-app" id="creature-title-name">시즌 크리처 - ???</h2>
-                  <span class="badge rounded-pill py-2 px-3 online-count-badge" id="online-count">접속 0명</span>
+                  <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                    <span class="badge rounded-pill py-2 px-3 online-count-badge" id="online-count">접속 0명</span>
+                  </div>
                 </div>
         
                 <!-- 크리처 및 아바타 이동 구역 -->
@@ -74,7 +81,7 @@ export function creaturePage(context) {
                 </div>
                 <div class="progress mb-3" style="height: 12px;">
                   <!-- 부드러운 바 차오름을 위한 CSS 트랜지션 추가 -->
-                  <div class="progress-bar" role="progressbar" id="exp-bar" aria-label="크리처 성장 경험치 진행률" aria-valuetext="경험치 정보 불러오는 중" style="width: 0%; transition: width 2.8s ease-in-out;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                  <div class="progress-bar" role="progressbar" id="exp-bar" aria-label="크리처 성장 경험치 진행률" aria-valuetext="경험치 정보 불러오는 중" style="width: 0; transition: width 2.8s ease-in-out;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                 </div>
                 <div class="text-center">
                   <button type="button" class="btn btn-primary fw-bold px-4 py-2" id="btn-quest">오늘 퀘스트 확인</button>
@@ -133,7 +140,7 @@ export function creaturePage(context) {
                   </table>
                 </div>
                 <div class="card-footer bg-transparent border-0 pt-0 pb-3 text-center">
-                  <button type="button" class="btn btn-sm px-3 fw-bold w-100 py-1.5 text-app-primary bg-app-background border-app" id="btn-goto-shop">상점에서 보기</button>
+                  <button type="button" class="btn btn-sm px-3 fw-bold w-100 py-1.5 text-app-primary bg-app-background border-app" id="btn-goto-shop" disabled>판매 상품 보기</button>
                 </div>
               </div>
         
@@ -235,7 +242,9 @@ export function creaturePage(context) {
     btnQuest?.addEventListener('click', onQuestClick);
 
     const onShopClick = () => {
-        context.navigate('/shop');
+        if (selectedShopItemId !== null) {
+            context.navigate(`/shop?itemId=${selectedShopItemId}`);
+        }
     };
     btnGotoShop?.addEventListener('click', onShopClick);
 
@@ -248,6 +257,7 @@ export function creaturePage(context) {
         );
 
         updateMovementButton();
+        avatarField.setMovementEnabled(isAvatarMoving);
     };
     btnToggleMovement?.addEventListener('click', onToggleMovement);
 
@@ -264,56 +274,97 @@ export function creaturePage(context) {
     btnToggleMovement?.addEventListener('focus', onMovementFocus);
     btnToggleMovement?.addEventListener('blur', onMovementBlur);
 
-    const avatarSpotMembers = new WeakMap();
+    const shopAvailabilityCache = new Map();
+    let selectedAvatarUserId = null;
+    let selectedShopItemId = null;
+    let avatarSelectionVersion = 0;
 
-    const onAvatarContainerClick = (event) => {
-        if (!(event.target instanceof Element)) return;
-
-        const spot = event.target.closest('.avatar-spot');
-
-        if (spot && avatarContainer?.contains(spot)) {
-            const member = avatarSpotMembers.get(spot);
-            if (!member) return;
-
-            const avatarInfoHeader = element.querySelector('#avatar-info-header');
-            const slotHead = element.querySelector('#slot-head');
-            const slotFace = element.querySelector('#slot-face');
-            const slotBody = element.querySelector('#slot-body');
-            const slotAccessory = element.querySelector('#slot-accessory');
-
-            if (avatarToggleTitle) {
-                avatarToggleTitle.textContent = `USER - [${member.nickname}]`;
-            }
-            if (avatarInfoHeader) {
-                avatarInfoHeader.textContent =
-                    `그룹 ${member.rank}위 · ${member.contributionScore}점`;
-            }
-
-            const equipment = member.avatar?.equipments || {};
-            if (slotHead) slotHead.textContent = equipment.HEAD ? equipment.HEAD.name : '-';
-            if (slotFace) slotFace.textContent = equipment.FACE ? equipment.FACE.name : '-';
-            if (slotBody) slotBody.textContent = equipment.BODY ? equipment.BODY.name : '-';
-            if (slotAccessory) {
-                slotAccessory.textContent = equipment.ACCESSORY
-                    ? equipment.ACCESSORY.name
-                    : '-';
-            }
-
-            avatarInfoCard?.classList.remove('d-none');
-            return;
+    async function isActiveShopItem(shopItemId) {
+        if (shopAvailabilityCache.has(shopItemId)) {
+            return shopAvailabilityCache.get(shopItemId);
         }
 
+        const request = getShopItem(shopItemId)
+            .then(() => true)
+            .catch((error) => {
+                if (error instanceof ApiError && error.code === 'RESOURCE_NOT_FOUND') {
+                    return false;
+                }
+                shopAvailabilityCache.delete(shopItemId);
+                return false;
+            });
+        shopAvailabilityCache.set(shopItemId, request);
+        return request;
+    }
+
+    async function renderEquipmentCell(cell, equipment, selectionVersion) {
+        if (!(cell instanceof HTMLElement)) return;
+        cell.textContent = equipment?.name ?? '-';
+        if (!equipment?.shopItemId) return;
+
+        const active = await isActiveShopItem(equipment.shopItemId);
+        if (!isMounted || selectionVersion !== avatarSelectionVersion || !active) return;
+
+        const link = document.createElement('a');
+        link.href = `/shop?itemId=${equipment.shopItemId}`;
+        link.dataset.link = '';
+        link.textContent = equipment.name;
+        link.className = 'text-app-primary';
+        cell.replaceChildren(link);
+
+        if (selectedShopItemId === null) {
+            selectedShopItemId = equipment.shopItemId;
+            if (btnGotoShop instanceof HTMLButtonElement) {
+                btnGotoShop.disabled = false;
+            }
+        }
+    }
+
+    function selectAvatar(member, scrollToDetails = false) {
+        selectedAvatarUserId = member.userId;
+        selectedShopItemId = null;
+        avatarSelectionVersion += 1;
+        const selectionVersion = avatarSelectionVersion;
+        const avatarInfoHeader = element.querySelector('#avatar-info-header');
+        const equipment = member.avatar?.equipments || {};
+
+        if (avatarToggleTitle) {
+            avatarToggleTitle.textContent = `USER - [${member.nickname}]`;
+        }
+        if (avatarInfoHeader) {
+            const rank = member.rank === null ? '집계 중' : `${member.rank}위`;
+            avatarInfoHeader.textContent =
+                `그룹 ${rank} · ${member.contributionScore}점`;
+        }
+        if (btnGotoShop instanceof HTMLButtonElement) {
+            btnGotoShop.disabled = true;
+        }
+
+        void renderEquipmentCell(element.querySelector('#slot-head'), equipment.HEAD, selectionVersion);
+        void renderEquipmentCell(element.querySelector('#slot-face'), equipment.FACE, selectionVersion);
+        void renderEquipmentCell(element.querySelector('#slot-body'), equipment.BODY, selectionVersion);
+        void renderEquipmentCell(element.querySelector('#slot-accessory'), equipment.ACCESSORY, selectionVersion);
+        avatarInfoCard?.classList.remove('d-none');
         if (
-            event.target === avatarContainer ||
-            event.target.closest(
-                '.d-flex.flex-column.align-items-center.justify-content-center',
-            )
+            scrollToDetails
+            && avatarInfoCard instanceof HTMLElement
+            && window.matchMedia('(max-width: 1032px)').matches
         ) {
-            avatarInfoCard?.classList.add('d-none');
+            avatarInfoCard.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+            });
         }
-    };
+    }
 
-    avatarContainer?.addEventListener('click', onAvatarContainerClick);
+    if (!(avatarContainer instanceof HTMLElement)) {
+        throw new Error('아바타 표시 영역을 찾을 수 없습니다.');
+    }
+    const avatarField = createAvatarField({
+        container: avatarContainer,
+        onSelect: (member) => selectAvatar(member, true),
+    });
+    avatarField.setMovementEnabled(isAvatarMoving);
 
     // 3. API 조회, 크리처 성장 렌더링 및 마감 감시 로직
     let isMounted = true;
@@ -413,16 +464,19 @@ export function creaturePage(context) {
             if (!isMounted) return;
 
             try {
-                const [creatureRes, seasonRes, speciesRes] = await Promise.all([
-                    getCreatureHome(),
+                const [refreshed, seasonRes, speciesRes] = await Promise.all([
+                    groupLiveManager.refresh(),
                     getCurrentSeason(),
                     getActiveCreatureSpecies()
                 ]);
 
                 if (!isMounted) return;
 
-                const creatureData = creatureRes.data || creatureRes;
-                const currentSeasonData = seasonRes.data || seasonRes;
+                const creatureData = groupLiveManager.getSnapshot();
+                if (!refreshed || !creatureData) {
+                    throw new Error('크리처 상태를 불러오지 못했습니다.');
+                }
+                const refreshedSeasonData = seasonRes.data || seasonRes;
                 const speciesList = speciesRes.data || speciesRes;
 
                 const refreshedCreature = creatureData.creature || {};
@@ -469,7 +523,9 @@ export function creaturePage(context) {
                     return;
                 }
 
-                updateUI(creatureData, currentSeasonData, speciesList);
+                currentSeasonData = refreshedSeasonData;
+                currentSpeciesList = speciesList;
+                applySnapshot(creatureData);
             } catch (error) {
                 showLoadError(error);
                 if (isMounted && isRetryableError(error) && retryCount < maxAssignmentRetries) {
@@ -492,7 +548,12 @@ export function creaturePage(context) {
     }
 
     // snapshot 데이터를 그룹/경험치/기여/아바타 화면에 반영
-    function updateUI(creatureData, seasonData, speciesList = []) {
+    function updateUI(
+        creatureData,
+        seasonData,
+        speciesList = [],
+        options = { renderGrowth: true },
+    ) {
         if (!creatureData) return;
         clearLoadError();
 
@@ -504,19 +565,23 @@ export function creaturePage(context) {
             && userId !== undefined
             && String(userId) === String(currentUserId);
 
-        const growthUnlockAt = renderCreatureGrowth({
-            element,
-            creatureData,
-            seasonData,
-            speciesList,
-            currentUserId,
-            isMounted: () => isMounted,
-            scheduleTimeout: scheduleGrowthAnimationTimeout,
-        });
+        if (options.renderGrowth) {
+            growthAnimationTimeoutIds.forEach((timeoutId) => clearTimeout(timeoutId));
+            growthAnimationTimeoutIds.clear();
+            const growthUnlockAt = renderCreatureGrowth({
+                element,
+                creatureData,
+                seasonData,
+                speciesList,
+                currentUserId,
+                isMounted: () => isMounted,
+                scheduleTimeout: scheduleGrowthAnimationTimeout,
+            });
 
-        const growthStage = creatureData.creature?.growthStage;
-        const groupSeasonStatus = creatureData.season?.status;
-        startRemainingTimeUpdates(growthUnlockAt, growthStage, groupSeasonStatus);
+            const growthStage = creatureData.creature?.growthStage;
+            const groupSeasonStatus = creatureData.season?.status;
+            startRemainingTimeUpdates(growthUnlockAt, growthStage, groupSeasonStatus);
+        }
 
         const todayExp = element.querySelector('#today-exp');
         // 기타 UI (온라인 멤버 및 최근 기여 목록 렌더링)
@@ -548,103 +613,99 @@ export function creaturePage(context) {
             });
         }
 
-        // TODO - 추후 테두리 삭제. 현재는 개발 편의성을 위해 영역 테두리 표기
-        // 공동 영역에 10개 구역 테두리를 표시하고, 각 구역에 최대 2명씩 배치합니다.
-        avatarContainer?.querySelectorAll('.avatar-zone').forEach(el => el.remove());
+        avatarField.render(onlineMembers, currentUserId);
 
-        // 아바타 영역을 10분할, 각 영역에 이름표 배치 TODO - 추후 아바타 구현 필요
-        const avatarZones = [
-            { top: '1%', left: '1%' },
-            { top: '1%', left: '34%' },
-            { top: '1%', left: '67%' },
-            { top: '27%', left: '1%' },
-            { top: '51%', left: '1%' },
-            { top: '27%', right: '1%' },
-            { top: '51%', right: '1%' },
-            { top: '76%', left: '1%' },
-            { top: '76%', left: '34%' },
-            { top: '76%', left: '67%' }
-        ];
-
-        avatarZones.forEach((position, zoneIndex) => {
-            const zone = document.createElement('div');
-            zone.className = 'avatar-zone position-absolute d-flex flex-column justify-content-start p-2';
-            zone.dataset.zone = String(zoneIndex + 1);
-            zone.style.top = position.top || 'auto';
-            zone.style.bottom = position.bottom || 'auto';
-            zone.style.left = position.left || 'auto';
-            zone.style.right = position.right || 'auto';
-
-            const zoneLabel = document.createElement('span');
-            zoneLabel.textContent = `구역 ${zoneIndex + 1}`;
-            zoneLabel.className = 'small fw-bold align-self-start px-1 avatar-zone-label';
-            zone.appendChild(zoneLabel);
-
-            const membersRow = document.createElement('div');
-            membersRow.className = 'avatar-zone-members d-flex flex-row align-items-center gap-2';
-            zone.appendChild(membersRow);
-            avatarContainer?.appendChild(zone);
-        });
-
-        onlineMembers.slice(0, 20).forEach((member, idx) => {
-            const isMe = isCurrentUser(member.userId);
-            const zone = avatarContainer?.querySelector(`[data-zone="${(idx % 10) + 1}"]`);
-            if (!zone) return;
-
-            const spot = document.createElement('button');
-            spot.type = 'button';
-            spot.className = `btn border rounded-pill px-3 py-1.5 shadow-sm avatar-spot d-flex align-items-center gap-2${isMe ? ' is-current-user' : ''}`;
-            spot.setAttribute('aria-label', `${member.nickname}${isMe ? ' (나)' : ''} 아바타 정보 보기`);
-
-            const dot = document.createElement('span');
-            dot.className = `rounded-circle d-inline-block flex-shrink-0 avatar-spot__dot${isMe ? ' is-current-user' : ''}`;
-
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'avatar-spot__name';
-            nameSpan.textContent = isMe ? `나` : member.nickname;
-
-            avatarSpotMembers.set(spot, member);
-            spot.appendChild(dot);
-            spot.appendChild(nameSpan);
-
-            zone.querySelector('.avatar-zone-members')?.appendChild(spot);
-        });
-    }
-
-    // 크리처 홈에 필요한 API 데이터 병렬 조회 및 첫 화면 갱신
-    async function loadCreaturePageData() {
-        if (retryButton) retryButton.disabled = true;
-        try {
-            const authenticatedUser =
-                context.currentUser?.data || context.currentUser;
-
-            currentUserId = authenticatedUser?.user?.userId ?? null;
-
-            const [creatureData, seasonData, speciesList] = await Promise.all([
-                getCreatureHome(),
-                getCurrentSeason(),
-                getActiveCreatureSpecies(),
-            ]);
-
-            if (!isMounted) return;
-
-            updateUI(
-                creatureData.data || creatureData,
-                seasonData.data || seasonData,
-                speciesList.data || speciesList,
-            );
-        } catch (error) {
-            if (isMounted) showLoadError(error);
-        } finally {
-            if (retryButton && isMounted) retryButton.disabled = false;
+        if (selectedAvatarUserId !== null) {
+            const selectedMember = onlineMembers.find((member) =>
+                String(member.userId) === String(selectedAvatarUserId));
+            if (selectedMember) selectAvatar(selectedMember);
+            else {
+                selectedAvatarUserId = null;
+                avatarInfoCard?.classList.add('d-none');
+            }
         }
     }
 
-    const onRetryLoad = () => { void loadCreaturePageData(); };
+    let currentCreatureData = null;
+    let currentSeasonData = null;
+    let currentSpeciesList = [];
+    let unsubscribeSnapshots = null;
+    let unsubscribeSyncErrors = null;
+
+    function handleSnapshotError(error) {
+        // 인증·권한 오류의 이동은 공통 라우터가 처리합니다.
+        if (!creatureAccessErrorRoute(error)) showLoadError(error);
+    }
+
+    function applySnapshot(snapshot) {
+        const previousCreature = currentCreatureData?.creature;
+        currentCreatureData = structuredClone(snapshot);
+        currentSeasonData = currentCreatureData.season ?? currentSeasonData;
+        const nextCreature = currentCreatureData.creature;
+        const creatureChanged = !previousCreature || [
+            'groupCreatureId',
+            'creatureSpeciesId',
+            'growthStage',
+            'totalExperience',
+            'nextStageAtExperience',
+            'selectionDeadlineAt',
+        ].some((key) => previousCreature[key] !== nextCreature?.[key]);
+        updateUI(
+            currentCreatureData,
+            currentSeasonData,
+            currentSpeciesList,
+            { renderGrowth: creatureChanged },
+        );
+    }
+
+    async function initializeCreaturePage() {
+        if (retryButton instanceof HTMLButtonElement) retryButton.disabled = true;
+        const authenticatedUser = context.currentUser?.data || context.currentUser;
+        currentUserId = authenticatedUser?.user?.userId ?? null;
+        const groupId = authenticatedUser?.membership?.groupId;
+
+        try {
+            const [season, species] = await Promise.all([
+                getCurrentSeason(),
+                getActiveCreatureSpecies(),
+            ]);
+            if (!isMounted) return;
+            currentSeasonData = season?.data || season;
+            currentSpeciesList = species?.data || species;
+        } catch (error) {
+            if (isMounted) showLoadError(error);
+        }
+
+        if (!isMounted || !groupId) return;
+
+        unsubscribeSnapshots = groupLiveManager.subscribeSnapshots((snapshot) => {
+            if (!isMounted || String(snapshot.groupId) !== String(groupId)) return;
+            applySnapshot(snapshot);
+        });
+        unsubscribeSyncErrors = groupLiveManager.subscribeErrors((error) => {
+            if (isMounted) handleSnapshotError(error);
+        });
+
+        // 화면 재진입 시에도 조회를 요청하며 중복 조회는 공통 모듈에서 합칩니다.
+        void groupLiveManager.refresh();
+        if (retryButton instanceof HTMLButtonElement) retryButton.disabled = false;
+    }
+
+    const onRetryLoad = () => {
+        if (retryButton instanceof HTMLButtonElement) retryButton.disabled = true;
+        void Promise.allSettled([
+            groupLiveManager.refresh(),
+            groupLiveManager.reconnect(),
+        ]).finally(() => {
+            if (isMounted && retryButton instanceof HTMLButtonElement) {
+                retryButton.disabled = false;
+            }
+        });
+    };
     const onLoginFromError = () => context.navigate('/login');
     retryButton?.addEventListener('click', onRetryLoad);
     loginButton?.addEventListener('click', onLoginFromError);
-    void loadCreaturePageData();
+    void initializeCreaturePage();
 
     return {
         element,
@@ -662,7 +723,9 @@ export function creaturePage(context) {
             btnToggleMovement?.removeEventListener('click', onToggleMovement);
             btnToggleMovement?.removeEventListener('focus', onMovementFocus);
             btnToggleMovement?.removeEventListener('blur', onMovementBlur);
-            avatarContainer?.removeEventListener('click', onAvatarContainerClick);
+            avatarField.dispose();
+            unsubscribeSnapshots?.();
+            unsubscribeSyncErrors?.();
         },
     };
 }

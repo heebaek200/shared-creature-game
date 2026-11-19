@@ -14,6 +14,7 @@ import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
 import com.team.sharedcreature.payment.infrastructure.PortOneProperties;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -21,6 +22,7 @@ import java.time.Clock;
 import java.util.Objects;
 
 /** 브라우저·Webhook·복구 경로가 공유하는 결제 검증과 1회 지급을 처리합니다. */
+@Slf4j
 @Service
 public class PaymentReconciliationService {
 
@@ -59,12 +61,18 @@ public class PaymentReconciliationService {
         Purchase expected = purchaseRepository.findByIdAndUserId(purchaseId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         if (!expected.getOrderNumber().equals(paymentId)) {
+            log.warn("결제 검증 요청의 paymentId 불일치: purchaseId={}", purchaseId);
             throw new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN);
         }
         PaymentSnapshot actual;
         try {
             actual = paymentGateway.getPayment(paymentId);
         } catch (PaymentGatewayException exception) {
+            log.warn(
+                    "결제 상태 조회 실패: purchaseId={}, kind={}",
+                    purchaseId,
+                    exception.kind()
+            );
             recordUnknown(expected.getId());
             throw new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN);
         }
@@ -98,7 +106,7 @@ public class PaymentReconciliationService {
             PaymentSnapshot actual
     ) {
         try {
-            validate(expected, actual);
+            validate(purchaseId, expected, actual);
         } catch (BusinessException exception) {
             if (exception.errorCode() == ErrorCode.PAYMENT_RESULT_UNKNOWN) {
                 recordUnknown(purchaseId);
@@ -111,6 +119,11 @@ public class PaymentReconciliationService {
         if (actual.status() == PaymentSnapshot.Status.UNKNOWN
                 || actual.status() == PaymentSnapshot.Status.CANCELLED
                 || actual.status() == PaymentSnapshot.Status.PARTIAL_CANCELLED) {
+            log.warn(
+                    "결제 확정 불가 상태 수신: purchaseId={}, status={}",
+                    purchaseId,
+                    actual.status()
+            );
             recordUnknown(purchaseId);
             throw new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN);
         }
@@ -146,9 +159,17 @@ public class PaymentReconciliationService {
                             PaymentTransactionType.APPROVAL
                     )
                     .filter(candidate -> isFailureConsistent(locked, candidate))
-                    .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN));
+                    .orElseThrow(() -> {
+                        log.warn("실패 결제 거래 원장 불일치: purchaseId={}", locked.getId());
+                        return new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN);
+                    });
             return result(locked, transaction);
         }
+        log.warn(
+                "실패 결제의 구매 상태 불일치: purchaseId={}, purchaseStatus={}",
+                locked.getId(),
+                locked.getStatus()
+        );
         throw new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN);
     }
 
@@ -158,6 +179,7 @@ public class PaymentReconciliationService {
                     PaymentProvider.PORTONE,
                     actual.transactionId()
             ).isPresent() || ownedItemRepository.findByPurchaseId(locked.getId()).isPresent()) {
+                log.warn("신규 결제의 중복 거래 또는 아이템 지급 감지: purchaseId={}", locked.getId());
                 throw new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN);
             }
             locked.markPaid(clock.instant());
@@ -175,12 +197,23 @@ public class PaymentReconciliationService {
             PaymentTransaction transaction = transactionRepository
                     .findByProviderAndProviderTransactionId(PaymentProvider.PORTONE, actual.transactionId())
                     .filter(candidate -> isApprovalConsistent(locked, candidate, actual))
-                    .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN));
+                    .orElseThrow(() -> {
+                        log.warn("완료 결제 거래 원장 불일치: purchaseId={}", locked.getId());
+                        return new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN);
+                    });
             ownedItemRepository.findByPurchaseId(locked.getId())
                     .filter(item -> isGrantConsistent(locked, item))
-                    .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN));
+                    .orElseThrow(() -> {
+                        log.warn("완료 결제의 아이템 지급 내역 불일치: purchaseId={}", locked.getId());
+                        return new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN);
+                    });
             return result(locked, transaction);
         }
+        log.warn(
+                "완료 결제의 구매 상태 불일치: purchaseId={}, purchaseStatus={}",
+                locked.getId(),
+                locked.getStatus()
+        );
         throw new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN);
     }
 
@@ -243,23 +276,43 @@ public class PaymentReconciliationService {
         );
     }
 
-    private void validate(ExpectedPurchase expected, PaymentSnapshot actual) {
+    private void validate(Long purchaseId, ExpectedPurchase expected, PaymentSnapshot actual) {
         if (actual.totalAmount() != expected.amount()) {
+            log.warn("결제 금액 불일치: purchaseId={}", purchaseId);
             throw new BusinessException(ErrorCode.PAYMENT_AMOUNT_MISMATCH);
         }
-        boolean identityValid = expected.paymentId().equals(actual.paymentId())
-                && properties.storeId().equals(actual.storeId())
-                && expected.currency().equals(actual.currency());
+        boolean paymentIdMatches = expected.paymentId().equals(actual.paymentId());
+        boolean storeIdMatches = properties.storeId().equals(actual.storeId());
+        boolean currencyMatches = expected.currency().equals(actual.currency());
+        boolean identityValid = paymentIdMatches && storeIdMatches && currencyMatches;
         if (!identityValid) {
+            log.warn(
+                    "결제 식별정보 불일치: purchaseId={}, paymentIdMatches={}, storeIdMatches={}, currencyMatches={}",
+                    purchaseId,
+                    paymentIdMatches,
+                    storeIdMatches,
+                    currencyMatches
+            );
             throw new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN);
         }
         if (actual.status() == PaymentSnapshot.Status.PAID) {
-            boolean approvalValid = "EASY_PAY".equals(actual.payMethod())
-                    && "KAKAOPAY".equals(actual.easyPayProvider())
-                    && "TEST".equals(actual.channelType())
-                    && actual.transactionId() != null
-                    && !actual.transactionId().isBlank();
+            boolean payMethodMatches = "EASY_PAY".equals(actual.payMethod());
+            boolean easyPayProviderMatches = "KAKAOPAY".equals(actual.easyPayProvider());
+            boolean channelTypeMatches = "TEST".equals(actual.channelType());
+            boolean transactionIdPresent = actual.transactionId() != null && !actual.transactionId().isBlank();
+            boolean approvalValid = payMethodMatches
+                    && easyPayProviderMatches
+                    && channelTypeMatches
+                    && transactionIdPresent;
             if (!approvalValid) {
+                log.warn(
+                        "결제 승인정보 불일치: purchaseId={}, payMethodMatches={}, easyPayProviderMatches={}, channelTypeMatches={}, transactionIdPresent={}",
+                        purchaseId,
+                        payMethodMatches,
+                        easyPayProviderMatches,
+                        channelTypeMatches,
+                        transactionIdPresent
+                );
                 throw new BusinessException(ErrorCode.PAYMENT_RESULT_UNKNOWN);
             }
         }

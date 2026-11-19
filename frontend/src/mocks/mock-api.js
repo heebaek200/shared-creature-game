@@ -1,6 +1,7 @@
 // @ts-check
 import { ApiError } from '../api/client.js';
 import { mockCreatureHomeData } from './mock-creature-page.js';
+import { completeMockRefund, reconcileMockRefundState } from './mock-payment-state.js';
 
 const MOCK_STATE_KEY = 'shared-creature-mock-state';
 
@@ -16,7 +17,7 @@ function loadMockState() {
 const savedMockState = loadMockState();
 
 const MOCK_SIDEBAR_ROLE_KEY = 'shared-creature-mock-sidebar-role';
-const MOCK_SIDEBAR_ROLES = ['MEMBER', 'PRIMARY', 'DEPUTY'];
+const MOCK_SIDEBAR_ROLES = ['MEMBER', 'PRIMARY', 'DEPUTY', 'SUPER_ADMIN'];
 const requestedSidebarRole = new URLSearchParams(location.search).get('mockSidebarRole');
 
 if (requestedSidebarRole && MOCK_SIDEBAR_ROLES.includes(requestedSidebarRole)) {
@@ -114,10 +115,320 @@ const mockGroups = [
   }
 ];
 
+const AVATAR_MOCK_KEY = 'shared-creature-avatar-mock';
+
+const AVATAR_SLOTS = ['HEAD', 'FACE', 'BODY', 'ACCESSORY'];
+
+function createAvatarMockState() {
+  const products = [
+    ['HEAD', '단발(갈색)', 'brown-lob'],
+    ['FACE', '웃는 얼굴(노랑)', 'yellow-smile'],
+    ['BODY', '티셔츠 세트(파랑)', 'blue-shirt'],
+    ['BODY', '멜빵 세트(하양)', 'white-overalls'],
+    ['ACCESSORY', '리본 머리띠', 'ribbon-hairband'],
+  ];
+
+  return {
+    avatar: {
+      userId: 1,
+      equipments: {
+        HEAD: null,
+        FACE: null,
+        BODY: null,
+        ACCESSORY: null,
+      },
+    },
+    items: products.map(([slot, name, assetKey], index) => ({
+      ownedItemId: index + 1,
+      purchaseId: index + 1,
+      shopItemId: index + 1,
+      name,
+      slot,
+      assetKey,
+      status: 'OWNED_UNUSED',
+      usedAt: null,
+      revokedAt: null,
+      equipped: false,
+    })),
+  };
+}
+
+function loadAvatarMockState() {
+  try {
+    const saved = sessionStorage.getItem(AVATAR_MOCK_KEY);
+
+    return saved
+        ? JSON.parse(saved)
+        : createAvatarMockState();
+  } catch {
+    return createAvatarMockState();
+  }
+}
+
+const avatarMockState = loadAvatarMockState();
+
+function saveAvatarMockState() {
+  sessionStorage.setItem(
+      AVATAR_MOCK_KEY,
+      JSON.stringify(avatarMockState)
+  );
+}
+
+// 호출자가 반환값을 변경해도 Mock 내부 상태는 변경되지 않습니다.
+function copyAvatarMock(value) {
+  return structuredClone(value);
+}
+
+function throwAvatarMockError(status, code, message) {
+  throw new ApiError(status, {
+    code,
+    message,
+    fieldErrors: [],
+    traceId: 'mock-avatar',
+  });
+}
+
+function validateAvatarSlot(slot) {
+  if (!AVATAR_SLOTS.includes(slot)) {
+    throwAvatarMockError(
+        400,
+        'INVALID_FIELD_VALUE',
+        '올바르지 않은 슬롯입니다.'
+    );
+  }
+}
+
+const mockShopItems = [
+  { shopItemId: 1, code: 'RIBBON_HAIRBAND', name: '리본 헤어밴드', description: '포인트가 되는 리본 액세서리입니다.', priceKrw: 1000, slot: 'ACCESSORY', assetKey: 'ribbon-hairband', status: 'ACTIVE' },
+  { shopItemId: 2, code: 'BLUE_SHIRT', name: '파란 셔츠', description: '산뜻한 파란색 상의입니다.', priceKrw: 2000, slot: 'BODY', assetKey: 'blue-shirt', status: 'ACTIVE' },
+  { shopItemId: 3, code: 'YELLOW_SMILE', name: '노란 미소', description: '밝은 표정의 얼굴 아이템입니다.', priceKrw: 1000, slot: 'FACE', assetKey: 'yellow-smile', status: 'ACTIVE' },
+  { shopItemId: 4, code: 'BROWN_LOB', name: '갈색 단발', description: '차분한 갈색 단발 머리입니다.', priceKrw: 2000, slot: 'HEAD', assetKey: 'brown-lob', status: 'ACTIVE' },
+];
+
+let nextMockPurchaseId = 104;
+let nextMockRefundId = 203;
+const mockPurchases = [
+  {
+    purchaseId: 101,
+    orderNumber: '00000000-0000-4000-8000-000000000101',
+    shopItemId: 1,
+    itemName: '리본 헤어밴드',
+    priceKrw: 1000,
+    currency: 'KRW',
+    status: 'PAID',
+    createdAt: '2026-11-16T02:00:00Z',
+    ownedItemStatus: 'OWNED_UNUSED',
+    latestRefundStatus: null,
+    transactions: [{ transactionId: 301, provider: 'PORTONE', providerTransactionId: 'mock-tx-101', transactionType: 'APPROVAL', amountKrw: 1000, status: 'SUCCESS', processedAt: '2026-11-16T02:01:00Z' }],
+    refundRequests: [],
+  },
+  {
+    purchaseId: 102,
+    orderNumber: '00000000-0000-4000-8000-000000000102',
+    shopItemId: 2,
+    itemName: '파란 셔츠',
+    priceKrw: 2000,
+    currency: 'KRW',
+    status: 'PAID',
+    createdAt: '2026-11-15T04:00:00Z',
+    ownedItemStatus: 'OWNED_USED',
+    latestRefundStatus: null,
+    transactions: [{ transactionId: 302, provider: 'PORTONE', providerTransactionId: 'mock-tx-102', transactionType: 'APPROVAL', amountKrw: 2000, status: 'SUCCESS', processedAt: '2026-11-15T04:01:00Z' }],
+    refundRequests: [],
+  },
+  {
+    purchaseId: 103,
+    orderNumber: '00000000-0000-4000-8000-000000000103',
+    shopItemId: 3,
+    itemName: '노란 미소',
+    priceKrw: 1000,
+    currency: 'KRW',
+    status: 'PAID',
+    createdAt: '2026-11-14T06:00:00Z',
+    ownedItemStatus: 'OWNED_UNUSED',
+    latestRefundStatus: 'CANCEL_UNKNOWN',
+    transactions: [{ transactionId: 303, provider: 'PORTONE', providerTransactionId: null, transactionType: 'CANCELLATION', amountKrw: 1000, status: 'UNKNOWN', processedAt: null }],
+    refundRequests: [{ refundRequestId: 201, purchaseId: 103, requestedByUserId: 101, requestReason: '사용하지 않은 상품입니다.', decisionReason: '환불 승인', status: 'CANCEL_UNKNOWN', requestedAt: '2026-11-14T07:00:00Z', reviewedAt: '2026-11-14T08:00:00Z', completedAt: null }],
+  },
+];
+
+function pageResult(items, { page = 0, size = 20 } = {}) {
+  const start = page * size;
+  return {
+    data: items.slice(start, start + size).map((item) => structuredClone(item)),
+    meta: {
+      page,
+      size,
+      totalElements: items.length,
+      totalPages: Math.ceil(items.length / size),
+    },
+  };
+}
+
+function findMockPurchase(purchaseId) {
+  const purchase = mockPurchases.find((item) => item.purchaseId === Number(purchaseId));
+  if (!purchase) throw new ApiError(404, { code: 'RESOURCE_NOT_FOUND', message: '구매 내역을 찾을 수 없습니다.' });
+  return purchase;
+}
+
+function allMockRefunds() {
+  return mockPurchases.flatMap((purchase) => purchase.refundRequests);
+}
+
 /** 실제 API 계약과 같은 정상·오류 시나리오를 제공합니다. */
 export const mockApi = {
+  async getAvatar() {
+    await delay(200);
+
+    return copyAvatarMock(avatarMockState.avatar);
+  },
+
+  async listOwnedItems({
+                         page = 0,
+                         size = 20,
+                         slot,
+                         status,
+                       } = {}) {
+    await delay(200);
+
+    const validStatuses = [
+      'OWNED_UNUSED',
+      'OWNED_USED',
+      'REVOKED',
+    ];
+
+    if (
+        !Number.isInteger(page) ||
+        page < 0 ||
+        !Number.isInteger(size) ||
+        size < 1 ||
+        size > 50 ||
+        (slot !== undefined && !AVATAR_SLOTS.includes(slot)) ||
+        (status !== undefined && !validStatuses.includes(status))
+    ) {
+      throwAvatarMockError(
+          400,
+          'INVALID_FIELD_VALUE',
+          '조회 조건이 올바르지 않습니다.'
+      );
+    }
+
+    const filtered = avatarMockState.items.filter((item) =>
+        (!slot || item.slot === slot) &&
+        (!status || item.status === status)
+    );
+
+    return {
+      data: copyAvatarMock(
+          filtered.slice(page * size, (page + 1) * size)
+      ),
+      meta: {
+        page,
+        size,
+        totalElements: filtered.length,
+        totalPages: Math.ceil(filtered.length / size),
+      },
+    };
+  },
+
+  async equipAvatarItem(
+      slot,
+      { ownedItemId, confirmFirstUse = false }
+  ) {
+    await delay(200);
+    validateAvatarSlot(slot);
+
+    if (
+        !Number.isSafeInteger(ownedItemId) ||
+        ownedItemId < 1 ||
+        typeof confirmFirstUse !== 'boolean'
+    ) {
+      throwAvatarMockError(
+          400,
+          'INVALID_FIELD_VALUE',
+          '장착 요청 값이 올바르지 않습니다.'
+      );
+    }
+
+    const item = avatarMockState.items.find(
+        (candidate) => candidate.ownedItemId === ownedItemId
+    );
+
+    if (!item || item.status === 'REVOKED') {
+      throwAvatarMockError(
+          404,
+          'RESOURCE_NOT_FOUND',
+          '장착할 수 있는 보유 아이템을 찾지 못했습니다.'
+      );
+    }
+
+    if (item.slot !== slot) {
+      throwAvatarMockError(
+          400,
+          'SLOT_MISMATCH',
+          '아이템과 장착 슬롯이 일치하지 않습니다.'
+      );
+    }
+
+    if (
+        item.status === 'OWNED_UNUSED' &&
+        !confirmFirstUse
+    ) {
+      throwAvatarMockError(
+          409,
+          'FIRST_USE_CONFIRMATION_REQUIRED',
+          '최초 사용 및 환불 불가 전환에 동의해야 합니다.'
+      );
+    }
+
+    // 같은 슬롯에 장착된 기존 아이템의 장착 표시를 해제합니다.
+    for (const ownedItem of avatarMockState.items) {
+      if (ownedItem.slot === slot) {
+        ownedItem.equipped = false;
+      }
+    }
+
+    // 최초 장착일 때만 사용 상태와 최초 사용 시각을 변경합니다.
+    if (item.status === 'OWNED_UNUSED') {
+      item.status = 'OWNED_USED';
+      item.usedAt = new Date().toISOString();
+    }
+
+    item.equipped = true;
+
+    avatarMockState.avatar.equipments[slot] = {
+      ownedItemId: item.ownedItemId,
+      shopItemId: item.shopItemId,
+      name: item.name,
+      assetKey: item.assetKey,
+    };
+
+    saveAvatarMockState();
+
+    return copyAvatarMock(avatarMockState.avatar);
+  },
+
+  async unequipAvatarItem(slot) {
+    await delay(200);
+    validateAvatarSlot(slot);
+
+    for (const item of avatarMockState.items) {
+      if (item.slot === slot) {
+        item.equipped = false;
+      }
+    }
+
+    avatarMockState.avatar.equipments[slot] = null;
+
+    // 장착을 해제해도 사용 상태와 최초 사용 시각은 유지합니다.
+    saveAvatarMockState();
+
+    return copyAvatarMock(avatarMockState.avatar);
+  },
+
   async getCurrentUser() {
     if (mockSidebarRole) {
+      const isSidebarSuperAdmin = mockSidebarRole === 'SUPER_ADMIN';
       return {
         authenticationState: 'AUTHENTICATED',
         onboardingState: 'COMPLETED',
@@ -125,7 +436,7 @@ export const mockApi = {
           userId: 101,
           nickname: mockSignupNickname,
         },
-        membership: {
+        membership: isSidebarSuperAdmin ? null : {
           membershipId: 501,
           groupId: 501,
           role: mockSidebarRole,
@@ -560,6 +871,145 @@ export const mockApi = {
   async getCurrentSeason() {
     await delay(150);
     return mockCreatureHomeData.season;
+  },
+
+  /** 판매 중인 Mock 상품 목록을 반환합니다. */
+  async listShopItems({ page = 0, size = 20, slot } = {}) {
+    await delay(120);
+    const items = slot ? mockShopItems.filter((item) => item.slot === slot) : mockShopItems;
+    return pageResult(items, { page, size });
+  },
+
+  /** 판매 중인 Mock 상품 상세를 반환합니다. */
+  async getShopItem(shopItemId) {
+    await delay(100);
+    const item = mockShopItems.find((candidate) => candidate.shopItemId === Number(shopItemId));
+
+    if (!item) {
+      throw new ApiError(404, {
+        code: 'RESOURCE_NOT_FOUND',
+        message: '판매 중인 상품을 찾을 수 없습니다.',
+        fieldErrors: [],
+        traceId: 'mock-shop-item-not-found',
+      });
+    }
+
+    return structuredClone(item);
+  },
+
+  /** 서버 가격으로 Mock 결제 주문을 생성합니다. */
+  async createPurchase(shopItemId) {
+    await delay(180);
+    const item = mockShopItems.find((candidate) => candidate.shopItemId === Number(shopItemId));
+    if (!item) throw new ApiError(404, { code: 'RESOURCE_NOT_FOUND', message: '상품을 찾을 수 없습니다.' });
+    const purchaseId = nextMockPurchaseId++;
+    const paymentId = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+    mockPurchases.unshift({
+      purchaseId, orderNumber: paymentId, shopItemId: item.shopItemId, itemName: item.name,
+      priceKrw: item.priceKrw, currency: 'KRW', status: 'READY', createdAt,
+      ownedItemStatus: null, latestRefundStatus: null, transactions: [], refundRequests: [],
+    });
+    return {
+      purchaseId, orderNumber: paymentId, shopItemId: item.shopItemId, itemName: item.name,
+      totalAmount: item.priceKrw, currency: 'KRW', createdAt,
+      payment: {
+        storeId: 'store-mock', channelKey: 'channel-mock', paymentId,
+        orderName: item.name, totalAmount: item.priceKrw, currency: 'KRW', payMethod: 'EASY_PAY',
+        easyPay: { easyPayProvider: 'KAKAOPAY' },
+        windowType: { pc: 'IFRAME', mobile: 'REDIRECTION' },
+      },
+    };
+  },
+
+  /** Mock 결제를 성공으로 확정합니다. */
+  async verifyPurchasePayment(purchaseId, paymentId) {
+    await delay(180);
+    const purchase = findMockPurchase(purchaseId);
+    if (purchase.orderNumber !== paymentId) {
+      throw new ApiError(409, { code: 'PAYMENT_AMOUNT_MISMATCH', message: '주문과 결제 정보가 일치하지 않습니다.' });
+    }
+    if (purchase.status === 'READY') {
+      purchase.status = 'PAID';
+      purchase.ownedItemStatus = 'OWNED_UNUSED';
+      purchase.transactions.push({ transactionId: Date.now(), provider: 'PORTONE', providerTransactionId: `mock-${paymentId}`, transactionType: 'APPROVAL', amountKrw: purchase.priceKrw, status: 'SUCCESS', processedAt: new Date().toISOString() });
+    }
+    return structuredClone(purchase);
+  },
+
+  async listPurchases({ page = 0, size = 20, status } = {}) {
+    await delay(140);
+    const items = status ? mockPurchases.filter((item) => item.status === status) : mockPurchases;
+    return pageResult(items.map(({ transactions, refundRequests, ...summary }) => summary), { page, size });
+  },
+
+  async getPurchase(purchaseId) {
+    await delay(100);
+    return structuredClone(findMockPurchase(purchaseId));
+  },
+
+  async createRefundRequest(purchaseId, reason) {
+    await delay(180);
+    const purchase = findMockPurchase(purchaseId);
+    if (purchase.status !== 'PAID' || purchase.ownedItemStatus !== 'OWNED_UNUSED') {
+      throw new ApiError(409, { code: 'REFUND_NOT_ALLOWED_USED_ITEM', message: '미사용 결제 완료 상품만 환불할 수 있습니다.' });
+    }
+    if (['REQUESTED', 'CANCEL_PENDING', 'CANCEL_UNKNOWN'].includes(purchase.latestRefundStatus)) {
+      throw new ApiError(409, { code: 'REFUND_ALREADY_ACTIVE', message: '진행 중인 환불이 있습니다.' });
+    }
+    const refund = { refundRequestId: nextMockRefundId++, purchaseId: purchase.purchaseId, requestedByUserId: 101, requestReason: reason.trim(), decisionReason: null, status: 'REQUESTED', requestedAt: new Date().toISOString(), reviewedAt: null, completedAt: null };
+    purchase.refundRequests.push(refund);
+    purchase.latestRefundStatus = 'REQUESTED';
+    return structuredClone(refund);
+  },
+
+  async listMyRefundRequests({ page = 0, size = 20, status } = {}) {
+    await delay(120);
+    const items = status ? allMockRefunds().filter((item) => item.status === status) : allMockRefunds();
+    return pageResult(items, { page, size });
+  },
+
+  async listAdminRefundRequests(filters = {}) {
+    return this.listMyRefundRequests(filters);
+  },
+
+  async getAdminRefundRequest(requestId) {
+    await delay(100);
+    const refund = allMockRefunds().find((item) => item.refundRequestId === Number(requestId));
+    if (!refund) throw new ApiError(404, { code: 'RESOURCE_NOT_FOUND', message: '환불 요청을 찾을 수 없습니다.' });
+    const purchase = findMockPurchase(refund.purchaseId);
+    const cancellation = [...purchase.transactions].reverse().find((item) => item.transactionType === 'CANCELLATION') ?? null;
+    return {
+      ...structuredClone(refund), reviewedByUserId: refund.reviewedAt ? 1 : null,
+      purchase: { orderNumber: purchase.orderNumber, itemName: purchase.itemName, priceKrw: purchase.priceKrw, status: purchase.status },
+      ownedItem: purchase.ownedItemStatus ? { ownedItemId: purchase.purchaseId + 1000, status: purchase.ownedItemStatus, usedAt: purchase.ownedItemStatus === 'OWNED_USED' ? purchase.createdAt : null } : null,
+      latestCancellation: cancellation ? { providerTransactionId: cancellation.providerTransactionId, status: cancellation.status, processedAt: cancellation.processedAt } : null,
+    };
+  },
+
+  async approveRefund(requestId, decisionReason) {
+    const refund = allMockRefunds().find((item) => item.refundRequestId === Number(requestId));
+    if (!refund || refund.status !== 'REQUESTED') throw new ApiError(409, { code: 'CONCURRENT_MODIFICATION', message: '이미 처리된 요청입니다.' });
+    refund.decisionReason = decisionReason.trim(); refund.reviewedAt = new Date().toISOString();
+    const purchase = findMockPurchase(refund.purchaseId);
+    completeMockRefund(purchase, refund, refund.reviewedAt);
+    return this.getAdminRefundRequest(requestId);
+  },
+
+  async rejectRefund(requestId, decisionReason) {
+    const refund = allMockRefunds().find((item) => item.refundRequestId === Number(requestId));
+    if (!refund || refund.status !== 'REQUESTED') throw new ApiError(409, { code: 'CONCURRENT_MODIFICATION', message: '이미 처리된 요청입니다.' });
+    refund.status = 'REJECTED'; refund.decisionReason = decisionReason.trim(); refund.reviewedAt = new Date().toISOString();
+    findMockPurchase(refund.purchaseId).latestRefundStatus = 'REJECTED';
+    return this.getAdminRefundRequest(requestId);
+  },
+
+  async reconcileRefund(requestId) {
+    const refund = allMockRefunds().find((item) => item.refundRequestId === Number(requestId));
+    if (!refund || !['CANCEL_PENDING', 'CANCEL_UNKNOWN'].includes(refund.status)) throw new ApiError(409, { code: 'CONCURRENT_MODIFICATION', message: '복구할 수 없는 상태입니다.' });
+    const purchase = findMockPurchase(refund.purchaseId);
+    reconcileMockRefundState(purchase, refund);
+    return this.getAdminRefundRequest(requestId);
   },
 };
 

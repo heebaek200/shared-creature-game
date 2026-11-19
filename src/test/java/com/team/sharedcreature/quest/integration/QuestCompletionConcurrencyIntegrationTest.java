@@ -1,5 +1,6 @@
 package com.team.sharedcreature.quest.integration;
 
+import com.team.sharedcreature.quest.api.CurrentQuestResponse;
 import com.team.sharedcreature.quest.api.QuestCompletionResponse;
 import com.team.sharedcreature.quest.api.QuestCompletionService;
 import org.junit.jupiter.api.AfterEach;
@@ -12,6 +13,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.math.BigDecimal;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -20,6 +22,7 @@ import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -123,30 +126,30 @@ class QuestCompletionConcurrencyIntegrationTest {
     @Test
     void 같은_사용자가_같은_사진배정을_동시에_완료해도_보상은_한번만_지급된다()
             throws Exception {
-        // 기존 fixture의 배정을 PHOTO_EXIF 유형으로 바꿉니다.
-        jdbcTemplate.update(
-                "UPDATE quest_assignments "
-                        + "SET verification_type_snapshot = 'PHOTO_EXIF' "
-                        + "WHERE id = ?",
-                assignmentId
-        );
+        configurePhotoAssignment("W-X-01", "WEEKLY", 2);
+
+        Long firstSubmissionId = insertPhotoSubmission(userIds.get(0), 1);
+        Long secondSubmissionId = insertPhotoSubmission(userIds.get(0), 2);
+        Instant firstCapturedAt = Instant.now().minusSeconds(60 * 60 * 24);
+        Instant secondCapturedAt = Instant.now();
 
         CountDownLatch start = new CountDownLatch(1);
-        Future<QuestCompletionResponse> first =
-                submitPhotoCompletion(userIds.get(0), start);
-        Future<QuestCompletionResponse> second =
-                submitPhotoCompletion(userIds.get(0), start);
+        Future<Optional<QuestCompletionResponse>> first = submitPhotoCompletion(
+                userIds.get(0), firstSubmissionId, firstCapturedAt, start);
+        Future<Optional<QuestCompletionResponse>> second = submitPhotoCompletion(
+                userIds.get(0), secondSubmissionId, secondCapturedAt, start);
 
         start.countDown();
 
-        QuestCompletionResponse firstResult =
+        Optional<QuestCompletionResponse> firstResult =
                 first.get(10, TimeUnit.SECONDS);
-        QuestCompletionResponse secondResult =
+        Optional<QuestCompletionResponse> secondResult =
                 second.get(10, TimeUnit.SECONDS);
 
-        // 두 요청은 동일한 완료 이력을 반환해야 합니다.
-        assertThat(firstResult.getCompletionId())
-                .isEqualTo(secondResult.getCompletionId());
+        // 첫 번째 확정은 진행도만, 두 번째 확정은 완료·보상을 반환해야 합니다.
+        assertThat(List.of(firstResult, secondResult))
+                .filteredOn(Optional::isPresent)
+                .hasSize(1);
 
         // 완료 1건과 보상 원장 2건만 생성되어야 합니다.
         assertThat(jdbcTemplate.queryForObject(
@@ -169,17 +172,207 @@ class QuestCompletionConcurrencyIntegrationTest {
         assertThat(groupScore()).isEqualTo(30L);
     }
 
-    private Future<QuestCompletionResponse> submitPhotoCompletion(
+    @Test
+    void 주간_사진의_첫번째_VALID는_진행도만_1_2로_반영한다() {
+        configurePhotoAssignment("W-X-01", "WEEKLY", 2);
+        Long submissionId = insertPhotoSubmission(userIds.get(0), 1);
+        Instant capturedAt = Instant.now();
+
+        Optional<QuestCompletionResponse> result =
+                questCompletionService.completePhotoExifAssignment(
+                        userIds.get(0),
+                        assignmentId,
+                        submissionId,
+                        capturedAt,
+                        new BigDecimal("37.5665000"),
+                        new BigDecimal("126.9780000")
+                );
+        List<CurrentQuestResponse> currentQuests =
+                questCompletionService.listCurrentQuests(userIds.get(0), "WEEKLY");
+
+        assertThat(result).isEmpty();
+        assertThat(photoStatus(submissionId)).isEqualTo("VALID");
+        assertThat(completionCount()).isZero();
+        assertThat(currentQuests).singleElement().satisfies(quest -> {
+            assertThat(quest.getProgress().getCurrent()).isEqualTo(1);
+            assertThat(quest.getProgress().getTarget()).isEqualTo(2);
+            assertThat(quest.getPhotoAttemptsRemaining()).isEqualTo(4);
+        });
+    }
+
+    @Test
+    void 같은_KST_날짜의_VALID_사진은_여러장이어도_1_2를_유지한다() {
+        configurePhotoAssignment("W-X-01", "WEEKLY", 2);
+        Long firstSubmissionId = insertPhotoSubmission(userIds.get(0), 1);
+        Long secondSubmissionId = insertPhotoSubmission(userIds.get(0), 2);
+        Instant sameDayMorning = LocalDate.now(ZoneId.of("Asia/Seoul"))
+                .minusDays(1)
+                .atTime(10, 0)
+                .atZone(ZoneId.of("Asia/Seoul"))
+                .toInstant();
+
+        Optional<QuestCompletionResponse> first =
+                completePhoto(userIds.get(0), firstSubmissionId, sameDayMorning);
+        Optional<QuestCompletionResponse> second =
+                completePhoto(userIds.get(0), secondSubmissionId, sameDayMorning.plusSeconds(3600));
+        List<CurrentQuestResponse> currentQuests =
+                questCompletionService.listCurrentQuests(userIds.get(0), "WEEKLY");
+
+        assertThat(first).isEmpty();
+        assertThat(second).isEmpty();
+        assertThat(completionCount()).isZero();
+        assertThat(currentQuests).singleElement().satisfies(quest -> {
+            assertThat(quest.getProgress().getCurrent()).isEqualTo(1);
+            assertThat(quest.getProgress().getTarget()).isEqualTo(2);
+        });
+    }
+
+    @Test
+    void 일일_사진은_첫번째_VALID에서_기존처럼_완료된다() {
+        configurePhotoAssignment("D-X-01", "DAILY", 1);
+        Long submissionId = insertPhotoSubmission(userIds.get(0), 1);
+
+        Optional<QuestCompletionResponse> result =
+                completePhoto(userIds.get(0), submissionId, Instant.now());
+
+        assertThat(result).isPresent();
+        assertThat(photoStatus(submissionId)).isEqualTo("VALID");
+        assertThat(completionCount()).isEqualTo(1);
+        assertThat(creatureExperience()).isEqualTo(300L);
+        assertThat(groupScore()).isEqualTo(30L);
+    }
+
+    @Test
+    void 현재_멤버십_가입전의_VALID_사진은_주간_진행도에서_제외한다() {
+        configurePhotoAssignment("W-X-01", "WEEKLY", 2);
+        jdbcTemplate.update(
+                "UPDATE group_memberships SET joined_at = ? WHERE id = ?",
+                Timestamp.from(Instant.now().minusSeconds(60 * 60 * 24)),
+                membershipIds.get(0)
+        );
+        Long previousMembershipSubmissionId = insertPhotoSubmission(userIds.get(0), 1);
+        jdbcTemplate.update(
+                "UPDATE photo_submissions "
+                        + "SET captured_at = ?, latitude = 37.5665000, longitude = 126.9780000, "
+                        + "verification_status = 'VALID' WHERE id = ?",
+                Timestamp.from(Instant.now().minusSeconds(60 * 60 * 36)),
+                previousMembershipSubmissionId
+        );
+        Long currentSubmissionId = insertPhotoSubmission(userIds.get(0), 2);
+
+        Optional<QuestCompletionResponse> result =
+                completePhoto(userIds.get(0), currentSubmissionId, Instant.now());
+        List<CurrentQuestResponse> currentQuests =
+                questCompletionService.listCurrentQuests(userIds.get(0), "WEEKLY");
+
+        assertThat(result).isEmpty();
+        assertThat(completionCount()).isZero();
+        assertThat(currentQuests).singleElement().satisfies(quest -> {
+            assertThat(quest.getProgress().getCurrent()).isEqualTo(1);
+            assertThat(quest.getProgress().getTarget()).isEqualTo(2);
+        });
+    }
+
+    private Future<Optional<QuestCompletionResponse>> submitPhotoCompletion(
             Long userId,
+            Long photoSubmissionId,
+            Instant capturedAt,
             CountDownLatch start
     ) {
         return executor.submit(() -> {
             await(start);
             return questCompletionService.completePhotoExifAssignment(
                     userId,
-                    assignmentId
+                    assignmentId,
+                    photoSubmissionId,
+                    capturedAt,
+                    new BigDecimal("37.5665000"),
+                    new BigDecimal("126.9780000")
             );
         });
+    }
+
+    private Optional<QuestCompletionResponse> completePhoto(
+            Long userId,
+            Long photoSubmissionId,
+            Instant capturedAt
+    ) {
+        return questCompletionService.completePhotoExifAssignment(
+                userId,
+                assignmentId,
+                photoSubmissionId,
+                capturedAt,
+                new BigDecimal("37.5665000"),
+                new BigDecimal("126.9780000")
+        );
+    }
+
+    private void configurePhotoAssignment(String templateCode, String periodType, int target) {
+        jdbcTemplate.update(
+                "UPDATE quest_templates SET code = ?, period_type = ? WHERE id = ?",
+                templateCode,
+                periodType,
+                templateId
+        );
+        jdbcTemplate.update(
+                "UPDATE quest_periods SET period_type = ? WHERE id = ?",
+                periodType,
+                periodId
+        );
+        jdbcTemplate.update(
+                "UPDATE quest_assignments "
+                        + "SET verification_type_snapshot = 'PHOTO_EXIF', "
+                        + "verification_parameters_snapshot = JSON_OBJECT('target', ?) "
+                        + "WHERE id = ?",
+                target,
+                assignmentId
+        );
+    }
+
+    private Long insertPhotoSubmission(Long userId, int attemptNumber) {
+        return insertAndGetId(
+                """
+                INSERT INTO photo_submissions (
+                    user_id
+                  , quest_assignment_id
+                  , storage_key
+                  , attempt_number
+                  , captured_at
+                  , uploaded_at
+                  , latitude
+                  , longitude
+                  , verification_status
+                  , failure_reason
+                  , file_deleted_at
+                  , cleanup_next_attempt_at
+                  , cleanup_claim_token
+                  , cleanup_claim_expires_at
+                  , created_at
+                  , updated_at
+                ) VALUES (
+                    ?
+                  , ?
+                  , ?
+                  , ?
+                  , NULL
+                  , UTC_TIMESTAMP(6)
+                  , NULL
+                  , NULL
+                  , 'PENDING'
+                  , NULL
+                  , NULL
+                  , NULL
+                  , NULL
+                  , NULL
+                  , UTC_TIMESTAMP(6)
+                  , UTC_TIMESTAMP(6)
+                )
+                """,
+                userId,
+                assignmentId,
+                "integration/" + UUID.randomUUID() + ".jpg",
+                attemptNumber
+        );
     }
 
     private Future<QuestCompletionResponse> submitCompletion(Long userId, CountDownLatch start) {
@@ -247,7 +440,8 @@ class QuestCompletionConcurrencyIntegrationTest {
                 """
                 INSERT INTO group_memberships (
                     group_id, user_id, role, status, joined_at, version, created_at, updated_at
-                ) VALUES (?, ?, ?, 'ACTIVE', UTC_TIMESTAMP(6), 0, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+                ) VALUES (?, ?, ?, 'ACTIVE', DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 3 DAY),
+                          0, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
                 """,
                 fixtureGroupId,
                 userId,
@@ -346,7 +540,7 @@ class QuestCompletionConcurrencyIntegrationTest {
                 """,
                 fixtureSeasonId,
                 periodDate,
-                Timestamp.from(now.minusSeconds(60)),
+                Timestamp.from(now.minusSeconds(60 * 60 * 24 * 2)),
                 Timestamp.from(now.plusSeconds(60 * 60 * 24 * 7))
         );
     }
@@ -389,6 +583,22 @@ class QuestCompletionConcurrencyIntegrationTest {
         );
     }
 
+    private String photoStatus(Long submissionId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT verification_status FROM photo_submissions WHERE id = ?",
+                String.class,
+                submissionId
+        );
+    }
+
+    private int completionCount() {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM quest_completions WHERE quest_assignment_id = ?",
+                Integer.class,
+                assignmentId
+        );
+    }
+
     private Long groupScore() {
         return jdbcTemplate.queryForObject(
                 "SELECT score FROM season_group_scores WHERE id = ?",
@@ -409,6 +619,7 @@ class QuestCompletionConcurrencyIntegrationTest {
 
     private void deleteFixture() {
         if (assignmentId != null) {
+            jdbcTemplate.update("DELETE FROM photo_submissions WHERE quest_assignment_id = ?", assignmentId);
             jdbcTemplate.update(
                     "DELETE ledger FROM quest_reward_ledgers ledger "
                             + "JOIN quest_completions completion ON completion.id = ledger.quest_completion_id "

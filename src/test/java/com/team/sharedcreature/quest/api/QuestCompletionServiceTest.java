@@ -91,6 +91,7 @@ class QuestCompletionServiceTest {
     @Mock private QuestPeriodRepository periodRepository;
     @Mock private QuestAssignmentRepository assignmentRepository;
     @Mock private QuestCompletionRepository completionRepository;
+    @Mock private PhotoSubmissionRepository photoSubmissionRepository;
 
     private QuestCompletionService service;
     private User user;
@@ -123,6 +124,7 @@ class QuestCompletionServiceTest {
                 periodRepository,
                 assignmentRepository,
                 completionRepository,
+                photoSubmissionRepository,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 mock(ObjectMapper.class)
         );

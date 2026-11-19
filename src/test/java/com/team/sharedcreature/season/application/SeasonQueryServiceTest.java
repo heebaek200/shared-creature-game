@@ -4,6 +4,7 @@ package com.team.sharedcreature.season.application;
 import com.team.sharedcreature.season.domain.SeasonStatus;
 
 import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature.season.api.SeasonResponse;
 import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.SeasonRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +49,38 @@ class SeasonQueryServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         service = new SeasonQueryService(repository, clock);
+    }
+
+    @Test
+    void 랭킹선택용_시즌은_유효한_현재시즌과_종료시즌만_반환한다() {
+        Season active = mock(Season.class);
+        Season expiredActive = mock(Season.class);
+        Season ended = mock(Season.class);
+
+        when(active.getStatus()).thenReturn("ACTIVE");
+        when(active.isActiveAt(NOW)).thenReturn(true);
+        when(active.getId()).thenReturn(3L);
+        when(active.getSeasonNumber()).thenReturn(3);
+        when(active.getStartAt()).thenReturn(NOW.minusSeconds(60));
+        when(active.getEndAt()).thenReturn(NOW.plusSeconds(60));
+
+        when(expiredActive.getStatus()).thenReturn("ACTIVE");
+        when(expiredActive.isActiveAt(NOW)).thenReturn(false);
+
+        when(ended.getStatus()).thenReturn("ENDED");
+        when(ended.getId()).thenReturn(1L);
+        when(ended.getSeasonNumber()).thenReturn(1);
+        when(ended.getStartAt()).thenReturn(NOW.minusSeconds(180));
+        when(ended.getEndAt()).thenReturn(NOW.minusSeconds(120));
+
+        when(repository.findAllRankableOrderBySeasonNumberDesc())
+                .thenReturn(List.of(active, expiredActive, ended));
+
+        List<SeasonResponse> result = service.listRankableSeasons();
+
+        assertEquals(List.of(3, 1), result.stream()
+                .map(SeasonResponse::seasonNumber)
+                .toList());
     }
 
     /**
