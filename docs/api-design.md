@@ -2262,6 +2262,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | 404 | `RESOURCE_NOT_FOUND` | 없거나 요청자에게 노출하지 않는 리소스 |
 | 409 | `REFUND_NOT_ALLOWED_USED_ITEM` | 사용된 아이템 환불 불가 |
 | 409 | `PG_CANCEL_RESULT_UNKNOWN` | PG 취소 결과 불명 |
+| 409 | `CONCURRENT_MODIFICATION` | 사용자 철회 또는 다른 관리자 처리로 요청 상태가 변경되어 승인할 수 없음 |
 | 409 | `IDEMPOTENCY_REQUEST_IN_PROGRESS` | 같은 멱등 키 처리 중 |
 
 ### rejectRefund — `POST /api/v1/admin/refund-requests/{requestId}/rejections`
