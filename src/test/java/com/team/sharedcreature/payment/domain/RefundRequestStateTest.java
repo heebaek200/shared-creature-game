@@ -35,7 +35,7 @@ class RefundRequestStateTest {
         assertThat(refund.getDecisionReason()).isEqualTo("승인 사유");
         assertThat(refund.getReviewedByUser()).isSameAs(reviewer);
         assertThat(refund.getReviewedAt()).isEqualTo(START);
-        assertThat(refund.getStatus()).isEqualTo("CANCEL_PENDING");
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.CANCEL_PENDING);
         assertThat(refund.getCompletedAt()).isNull();
     }
 
@@ -50,7 +50,7 @@ class RefundRequestStateTest {
     void 거절하면_재승인할_수_없고_취소_선점시각은_없다() {
         var refund = requested();
         refund.reject(reviewer, "  거절 사유  ", START);
-        assertThat(refund.getStatus()).isEqualTo("REJECTED");
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.REJECTED);
         assertThat(refund.getDecisionReason()).isEqualTo("거절 사유");
         assertThat(refund.getCancelClaimedAt()).isNull();
         assertConflict(() -> refund.claimCancellation(reviewer, "승인", START));
@@ -63,7 +63,7 @@ class RefundRequestStateTest {
         assertThatThrownBy(() -> refund.claimCancellation(reviewer, reason, START))
                 .isInstanceOfSatisfying(BusinessException.class,
                         error -> assertThat(error.errorCode()).isEqualTo(ErrorCode.INVALID_FIELD_VALUE));
-        assertThat(refund.getStatus()).isEqualTo("REQUESTED");
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
         assertThat(refund.getReviewedAt()).isNull();
     }
 
@@ -84,7 +84,7 @@ class RefundRequestStateTest {
         refund.markCancellationUnknown(START.plusSeconds(1));
         assertThat(refund.tryClaimRecovery(START.plusSeconds(2))).isFalse();
         assertThat(refund.tryClaimRecovery(START.plusSeconds(2), true)).isTrue();
-        assertThat(refund.getStatus()).isEqualTo("CANCEL_UNKNOWN");
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.CANCEL_UNKNOWN);
         assertThat(refund.getReviewedAt()).isEqualTo(START);
         assertThat(refund.getCompletedAt()).isNull();
     }
@@ -97,7 +97,7 @@ class RefundRequestStateTest {
         assertThat(refund.failCancellation(START.plusSeconds(12))).isFalse();
         assertThat(refund.completeCancellation(START.plusSeconds(20), START.plusSeconds(21))).isFalse();
         assertThat(refund.tryClaimRecovery(START.plusSeconds(600), true)).isFalse();
-        assertThat(refund.getStatus()).isEqualTo("COMPLETED");
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.COMPLETED);
         assertThat(refund.getCompletedAt()).isEqualTo(pgTime);
         assertThat(refund.getUpdatedAt()).isEqualTo(START.plusSeconds(11));
     }
@@ -107,7 +107,7 @@ class RefundRequestStateTest {
         var refund = pending();
         assertThat(refund.failCancellation(START.plusSeconds(10))).isTrue();
         assertThat(refund.completeCancellation(START.plusSeconds(11), START.plusSeconds(12))).isFalse();
-        assertThat(refund.getStatus()).isEqualTo("FAILED");
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.FAILED);
         assertThat(refund.getCompletedAt()).isNull();
     }
 

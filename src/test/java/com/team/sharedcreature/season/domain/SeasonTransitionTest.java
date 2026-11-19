@@ -35,7 +35,7 @@ class SeasonTransitionTest {
 
         // 시작 경계에서 ACTIVE로 정상 전환합니다.
         assertTrue(season.activateAfterInitialization(START));
-        assertEquals("ACTIVE", season.getStatus());
+        assertEquals(SeasonStatus.ACTIVE, season.getStatus());
         assertEquals(START, season.getUpdatedAt());
     }
 
@@ -54,7 +54,7 @@ class SeasonTransitionTest {
                 )
         );
 
-        assertEquals("SCHEDULED", season.getStatus());
+        assertEquals(SeasonStatus.SCHEDULED, season.getStatus());
     }
 
     /**
@@ -70,7 +70,7 @@ class SeasonTransitionTest {
                 season.activateAfterInitialization(END)
         );
 
-        assertEquals("SCHEDULED", season.getStatus());
+        assertEquals(SeasonStatus.SCHEDULED, season.getStatus());
     }
 
     /**
@@ -108,7 +108,7 @@ class SeasonTransitionTest {
                 )
         );
 
-        assertEquals("ACTIVE", season.getStatus());
+        assertEquals(SeasonStatus.ACTIVE, season.getStatus());
         assertEquals(CREATED, season.getUpdatedAt());
     }
 
@@ -123,7 +123,7 @@ class SeasonTransitionTest {
 
         // 종료 경계에 도달하면 종료 절차를 시작합니다.
         assertTrue(season.beginClosingIfExpired(END));
-        assertEquals("CLOSING", season.getStatus());
+        assertEquals(SeasonStatus.CLOSING, season.getStatus());
         assertEquals(END, season.getUpdatedAt());
     }
 
@@ -142,7 +142,7 @@ class SeasonTransitionTest {
                 )
         );
 
-        assertEquals("CLOSING", season.getStatus());
+        assertEquals(SeasonStatus.CLOSING, season.getStatus());
     }
 
     /**
@@ -160,7 +160,7 @@ class SeasonTransitionTest {
                 season.finishClosingAfterSnapshot(completedAt)
         );
 
-        assertEquals("ENDED", season.getStatus());
+        assertEquals(SeasonStatus.ENDED, season.getStatus());
         assertEquals(completedAt, season.getUpdatedAt());
     }
 
@@ -183,7 +183,7 @@ class SeasonTransitionTest {
                 )
         );
 
-        assertEquals("ENDED", season.getStatus());
+        assertEquals(SeasonStatus.ENDED, season.getStatus());
         assertEquals(completedAt, season.getUpdatedAt());
     }
 
@@ -200,7 +200,7 @@ class SeasonTransitionTest {
                 season.finishClosingAfterSnapshot(END)
         );
 
-        assertEquals("SCHEDULED", season.getStatus());
+        assertEquals(SeasonStatus.SCHEDULED, season.getStatus());
     }
 
     /**
@@ -218,7 +218,7 @@ class SeasonTransitionTest {
                 )
         );
 
-        assertEquals("ENDED", season.getStatus());
+        assertEquals(SeasonStatus.ENDED, season.getStatus());
     }
 
     /**
@@ -233,7 +233,7 @@ class SeasonTransitionTest {
         Season season = new Season();
 
         // 기존 엔티티 구조를 변경하지 않고 테스트를 구성합니다.
-        ReflectionTestUtils.setField(season, "status", status);
+        ReflectionTestUtils.setField(season, "status", status == null ? null : SeasonStatus.valueOf(status));
         ReflectionTestUtils.setField(season, "startAt", START);
         ReflectionTestUtils.setField(season, "endAt", END);
         ReflectionTestUtils.setField(season, "createdAt", CREATED);
@@ -254,7 +254,7 @@ class SeasonTransitionTest {
 
         assertTrue(season.beginClosingIfExpired(END));
 
-        assertEquals("ACTIVE", season.getClosingFromStatus());
+        assertEquals(SeasonStatus.ACTIVE, season.getClosingFromStatus());
         assertTrue(season.requiresRankingSnapshotOnClosing());
     }
 
@@ -269,7 +269,7 @@ class SeasonTransitionTest {
 
         assertTrue(season.beginClosingIfExpired(END));
 
-        assertEquals("SCHEDULED", season.getClosingFromStatus());
+        assertEquals(SeasonStatus.SCHEDULED, season.getClosingFromStatus());
         assertFalse(season.requiresRankingSnapshotOnClosing());
     }
 
@@ -287,7 +287,7 @@ class SeasonTransitionTest {
         );
 
         assertNull(season.getClosingFromStatus());
-        assertEquals("ACTIVE", season.getStatus());
+        assertEquals(SeasonStatus.ACTIVE, season.getStatus());
     }
 
     /**
@@ -306,7 +306,7 @@ class SeasonTransitionTest {
                 season.beginClosingIfExpired(END.plusSeconds(60))
         );
 
-        assertEquals("ACTIVE", season.getClosingFromStatus());
+        assertEquals(SeasonStatus.ACTIVE, season.getClosingFromStatus());
         assertEquals(END, season.getUpdatedAt());
     }
 

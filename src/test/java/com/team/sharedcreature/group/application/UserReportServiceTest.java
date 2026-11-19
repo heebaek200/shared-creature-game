@@ -2,12 +2,16 @@ package com.team.sharedcreature.group.application;
 
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature.auth.domain.User;
-import com.team.sharedcreature.group.api.CreateUserReportRequest;
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.domain.GroupMembership;
+import com.team.sharedcreature.group.domain.UserReportCategory;
+import com.team.sharedcreature.group.domain.UserReportStatus;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.infrastructure.UserReportRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -22,8 +26,9 @@ import static org.mockito.Mockito.when;
 
 class UserReportServiceTest {
 
-    @Test
-    void 같은_그룹의_활성_회원_신고를_RECEIVED로_접수한다() {
+    @ParameterizedTest
+    @EnumSource(UserReportCategory.class)
+    void 같은_그룹의_활성_회원_신고를_RECEIVED로_접수한다(UserReportCategory category) {
         GroupMembershipRepository membershipRepository = mock(GroupMembershipRepository.class);
         UserReportRepository reportRepository = mock(UserReportRepository.class);
         Group group = mock(Group.class);
@@ -43,9 +48,12 @@ class UserReportServiceTest {
                 Clock.fixed(Instant.parse("2026-11-10T00:00:00Z"), ZoneOffset.UTC)
         );
 
-        var response = service.create(1L, new CreateUserReportRequest(2L, "SPAM", " 반복 광고 "));
+        var response = service.create(1L, 2L, category, " 반복 광고 ");
 
-        assertThat(response.status()).isEqualTo("RECEIVED");
+        assertThat(response.status()).isEqualTo(UserReportStatus.RECEIVED);
+        assertThat(response.category()).isEqualTo(category);
+        assertThat(new ObjectMapper().writeValueAsString(response))
+                .contains("\"category\":\"" + category.name() + "\"", "\"status\":\"RECEIVED\"");
         assertThat(response.content()).isEqualTo("반복 광고");
         assertThat(response.groupId()).isEqualTo(10L);
         verify(reportRepository).save(org.mockito.ArgumentMatchers.any());
@@ -72,7 +80,7 @@ class UserReportServiceTest {
         );
 
         assertThatThrownBy(() -> service.create(
-                1L, new CreateUserReportRequest(2L, "OTHER", "내용")
+                1L, 2L, UserReportCategory.OTHER, "내용"
         )).isInstanceOf(BusinessException.class);
     }
 

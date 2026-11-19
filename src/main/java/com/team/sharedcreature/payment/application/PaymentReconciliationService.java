@@ -1,5 +1,6 @@
 package com.team.sharedcreature.payment.application;
 
+import com.team.sharedcreature.payment.domain.PaymentProvider;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
@@ -142,7 +143,7 @@ public class PaymentReconciliationService {
     }
 
     private ReconciliationResult reconcileFailed(Purchase locked) {
-        if (PurchaseStatus.READY.name().equals(locked.getStatus())) {
+        if (locked.getStatus() == PurchaseStatus.READY) {
             locked.markFailed(clock.instant());
             PaymentTransaction transaction = transactionRepository.save(PaymentTransaction.failed(
                     locked,
@@ -151,11 +152,11 @@ public class PaymentReconciliationService {
             ));
             return result(locked, transaction);
         }
-        if (PurchaseStatus.FAILED.name().equals(locked.getStatus())) {
+        if (locked.getStatus() == PurchaseStatus.FAILED) {
             PaymentTransaction transaction = transactionRepository
                     .findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
                             locked.getId(),
-                            PaymentTransactionType.APPROVAL.name()
+                            PaymentTransactionType.APPROVAL
                     )
                     .filter(candidate -> isFailureConsistent(locked, candidate))
                     .orElseThrow(() -> {
@@ -173,9 +174,9 @@ public class PaymentReconciliationService {
     }
 
     private ReconciliationResult reconcilePaid(Purchase locked, PaymentSnapshot actual) {
-        if (PurchaseStatus.READY.name().equals(locked.getStatus())) {
+        if (locked.getStatus() == PurchaseStatus.READY) {
             if (transactionRepository.findByProviderAndProviderTransactionId(
-                    "PORTONE",
+                    PaymentProvider.PORTONE,
                     actual.transactionId()
             ).isPresent() || ownedItemRepository.findByPurchaseId(locked.getId()).isPresent()) {
                 log.warn("신규 결제의 중복 거래 또는 아이템 지급 감지: purchaseId={}", locked.getId());
@@ -192,9 +193,9 @@ public class PaymentReconciliationService {
             ownedItemRepository.save(OwnedItem.grant(locked, clock.instant()));
             return result(locked, transaction);
         }
-        if (PurchaseStatus.PAID.name().equals(locked.getStatus())) {
+        if (locked.getStatus() == PurchaseStatus.PAID) {
             PaymentTransaction transaction = transactionRepository
-                    .findByProviderAndProviderTransactionId("PORTONE", actual.transactionId())
+                    .findByProviderAndProviderTransactionId(PaymentProvider.PORTONE, actual.transactionId())
                     .filter(candidate -> isApprovalConsistent(locked, candidate, actual))
                     .orElseThrow(() -> {
                         log.warn("완료 결제 거래 원장 불일치: purchaseId={}", locked.getId());
@@ -218,8 +219,8 @@ public class PaymentReconciliationService {
 
     private boolean isFailureConsistent(Purchase purchase, PaymentTransaction transaction) {
         return Objects.equals(transaction.getPurchase().getId(), purchase.getId())
-                && PaymentTransactionType.APPROVAL.name().equals(transaction.getTransactionType())
-                && PaymentTransactionStatus.DEFINITIVE_FAILURE.name().equals(transaction.getStatus())
+                && transaction.getTransactionType() == PaymentTransactionType.APPROVAL
+                && transaction.getStatus() == PaymentTransactionStatus.DEFINITIVE_FAILURE
                 && Objects.equals(transaction.getAmountKrw(), purchase.getPriceKrwSnapshot());
     }
 
@@ -227,15 +228,16 @@ public class PaymentReconciliationService {
         transactionTemplate.execute(status -> {
             Purchase locked = purchaseRepository.findByIdForUpdate(purchaseId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-            if (!PurchaseStatus.READY.name().equals(locked.getStatus())) {
+            if (locked.getStatus() != PurchaseStatus.READY) {
                 return null;
             }
             boolean alreadyUnknown = transactionRepository
                     .findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
                             purchaseId,
-                            PaymentTransactionType.APPROVAL.name()
+                            PaymentTransactionType.APPROVAL
                     )
-                    .filter(transaction -> PaymentTransactionStatus.UNKNOWN.name().equals(transaction.getStatus()))
+                    .filter(transaction ->
+                            transaction.getStatus() == PaymentTransactionStatus.UNKNOWN)
                     .isPresent();
             if (!alreadyUnknown) {
                 transactionRepository.save(PaymentTransaction.unknown(
@@ -254,9 +256,9 @@ public class PaymentReconciliationService {
             PaymentSnapshot actual
     ) {
         return Objects.equals(transaction.getPurchase().getId(), purchase.getId())
-                && "PORTONE".equals(transaction.getProvider())
-                && PaymentTransactionType.APPROVAL.name().equals(transaction.getTransactionType())
-                && PaymentTransactionStatus.SUCCESS.name().equals(transaction.getStatus())
+                && transaction.getProvider() == PaymentProvider.PORTONE
+                && transaction.getTransactionType() == PaymentTransactionType.APPROVAL
+                && transaction.getStatus() == PaymentTransactionStatus.SUCCESS
                 && Objects.equals(transaction.getAmountKrw(), actual.totalAmount());
     }
 
@@ -267,7 +269,11 @@ public class PaymentReconciliationService {
     }
 
     private ReconciliationResult result(Purchase purchase, PaymentTransaction transaction) {
-        return new ReconciliationResult(purchase.getId(), transaction.getId(), purchase.getStatus());
+        return new ReconciliationResult(
+                purchase.getId(),
+                transaction.getId(),
+                purchase.getStatus()
+        );
     }
 
     private void validate(Long purchaseId, ExpectedPurchase expected, PaymentSnapshot actual) {
@@ -316,6 +322,6 @@ public class PaymentReconciliationService {
     }
 
     /** 정합화된 구매와 승인 거래 식별자입니다. */
-    public record ReconciliationResult(Long purchaseId, Long transactionId, String purchaseStatus) {
+    public record ReconciliationResult(Long purchaseId, Long transactionId, PurchaseStatus purchaseStatus) {
     }
 }

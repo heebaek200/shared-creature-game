@@ -2,6 +2,7 @@ package com.team.sharedcreature.payment.api;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.team.sharedcreature.payment.domain.RefundRequest;
+import com.team.sharedcreature.payment.domain.RefundStatus;
 
 import java.time.Instant;
 
@@ -16,7 +17,7 @@ public record RefundResponse(
         Long requestedByUserId,
         String requestReason,
         String decisionReason,
-        String status,
+        RefundStatus status,
         Instant requestedAt,
         Instant reviewedAt,
         Instant completedAt
@@ -36,6 +37,7 @@ public record RefundResponse(
                 refund.getRequestedByUser().getId(),
                 refund.getRequestReason(),
                 refund.getDecisionReason(),
+                // 환불 상태 enum은 JSON에 이름으로 전달합니다.
                 refund.getStatus(),
                 refund.getRequestedAt(),
                 refund.getReviewedAt(),

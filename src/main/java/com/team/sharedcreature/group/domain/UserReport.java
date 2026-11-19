@@ -2,6 +2,8 @@ package com.team.sharedcreature.group.domain;
 
 import com.team.sharedcreature.auth.domain.User;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -36,14 +38,20 @@ public class UserReport {
     @JoinColumn(name = "group_id", nullable = false)
     private Group group;
 
+    /** 신고 분류는 기존 문자열 코드로 저장합니다. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "category", length = 30, nullable = false)
-    private String category;
+    private UserReportCategory category;
 
     @Column(name = "content", length = 1000, nullable = false)
     private String content;
 
+    /** 신고 상태는 이름 그대로 저장하며 접수 상태에서만 심사할 수 있습니다. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    private UserReportStatus status;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "handled_by_user_id")
@@ -66,7 +74,7 @@ public class UserReport {
             User reporter,
             User reported,
             Group group,
-            String category,
+            UserReportCategory category,
             String content,
             Instant now
     ) {
@@ -76,7 +84,7 @@ public class UserReport {
         report.group = group;
         report.category = category;
         report.content = content;
-        report.status = "RECEIVED";
+        report.status = UserReportStatus.RECEIVED;
         report.createdAt = now;
         report.updatedAt = now;
         return report;
@@ -85,7 +93,7 @@ public class UserReport {
     /** 접수 중인 신고를 기각하고 처리 사유를 보존합니다. */
     public void reject(User handler, String reason, Instant now) {
         requireReceived();
-        status = "REJECTED";
+        status = UserReportStatus.REJECTED;
         handledByUser = handler;
         handledAt = now;
         resolution = reason;
@@ -95,7 +103,7 @@ public class UserReport {
     /** 접수 중인 신고를 강퇴 조치 완료로 확정합니다. */
     public void resolve(User handler, String reason, Instant now) {
         requireReceived();
-        status = "RESOLVED";
+        status = UserReportStatus.RESOLVED;
         handledByUser = handler;
         handledAt = now;
         resolution = reason;
@@ -103,7 +111,7 @@ public class UserReport {
     }
 
     private void requireReceived() {
-        if (!"RECEIVED".equals(status)) {
+        if (status != UserReportStatus.RECEIVED) {
             throw new IllegalStateException("이미 처리된 신고입니다.");
         }
     }

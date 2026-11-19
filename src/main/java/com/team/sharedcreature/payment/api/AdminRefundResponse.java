@@ -2,8 +2,12 @@ package com.team.sharedcreature.payment.api;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
+import com.team.sharedcreature.payment.domain.PaymentTransactionStatus;
+import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import com.team.sharedcreature.payment.domain.RefundRequest;
+import com.team.sharedcreature.payment.domain.RefundStatus;
 
 import java.time.Instant;
 
@@ -18,7 +22,7 @@ public record AdminRefundResponse(
         Long requestedByUserId,
         String requestReason,
         String decisionReason,
-        String status,
+        RefundStatus status,
         Instant requestedAt,
         Instant reviewedAt,
         Instant completedAt,
@@ -49,6 +53,7 @@ public record AdminRefundResponse(
                 refund.getRequestedByUser().getId(),
                 refund.getRequestReason(),
                 refund.getDecisionReason(),
+                // 환불 상태 enum은 JSON에 이름으로 전달합니다.
                 refund.getStatus(),
                 refund.getRequestedAt(),
                 refund.getReviewedAt(),
@@ -84,7 +89,7 @@ public record AdminRefundResponse(
             String orderNumber,
             String itemName,
             Long priceKrw,
-            String status
+            PurchaseStatus status
     ) {
     }
 
@@ -94,7 +99,7 @@ public record AdminRefundResponse(
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record OwnedItemInfo(
             Long ownedItemId,
-            String status,
+            OwnedItemStatus status,
             Instant usedAt
     ) {
     }
@@ -105,7 +110,7 @@ public record AdminRefundResponse(
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record CancellationInfo(
             String providerTransactionId,
-            String status,
+            PaymentTransactionStatus status,
             Instant processedAt
     ) {
     }

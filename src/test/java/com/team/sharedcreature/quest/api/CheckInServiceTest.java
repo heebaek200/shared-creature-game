@@ -1,5 +1,8 @@
 package com.team.sharedcreature.quest.api;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
+import com.team.sharedcreature.season.domain.GroupSeasonStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
@@ -8,6 +11,8 @@ import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.quest.domain.ServiceCheckIn;
 import com.team.sharedcreature.quest.domain.UserActivityEvent;
+import com.team.sharedcreature.quest.domain.UserActivityEventType;
+import com.team.sharedcreature.quest.domain.UserActivitySourceType;
 import com.team.sharedcreature.quest.infrastructure.QuestAssignmentRepository;
 import com.team.sharedcreature.quest.infrastructure.QuestPeriodRepository;
 import com.team.sharedcreature.quest.infrastructure.ServiceCheckInRepository;
@@ -18,6 +23,7 @@ import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.GroupSeasonRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
@@ -96,6 +102,13 @@ class CheckInServiceTest {
         assertThat(response.getCheckInDate()).isEqualTo(LocalDate.of(2026, 11, 5));
         assertThat(response.isMorning()).isTrue();
         assertThat(response.getCompletedQuestIds()).isEmpty();
+
+        var eventCaptor = ArgumentCaptor.forClass(UserActivityEvent.class);
+        verify(activityEventRepository).save(eventCaptor.capture());
+        UserActivityEvent event = eventCaptor.getValue();
+        assertThat(event.getEventType()).isEqualTo(UserActivityEventType.CHECK_IN);
+        assertThat(event.getSourceType()).isEqualTo(UserActivitySourceType.SERVICE_CHECK_IN);
+        assertThat(event.getDeduplicationKey()).isEqualTo("check_in:1:2026-11-05");
     }
 
     @Test
@@ -142,7 +155,7 @@ class CheckInServiceTest {
         when(season.getId()).thenReturn(9L);
         when(groupSeasonRepository.findForUpdateByGroupIdAndSeasonId(5L, 9L))
                 .thenReturn(Optional.of(groupSeason));
-        when(groupSeason.getStatus()).thenReturn("ACTIVE");
+        when(groupSeason.getStatus()).thenReturn(GroupSeasonStatus.ACTIVE);
         when(serviceCheckInRepository.existsByUserIdAndCheckInDate(
                 1L,
                 now.atZone(ZoneId.of("Asia/Seoul")).toLocalDate()
@@ -160,18 +173,18 @@ class CheckInServiceTest {
         Season season = mock(Season.class);
         when(seasonQueryService.findCurrentSeason()).thenReturn(season);
         when(season.getId()).thenReturn(9L);
-        when(periodRepository.findCurrentBySeasonAndType(9L, "WEEKLY", now))
+        when(periodRepository.findCurrentBySeasonAndType(9L, QuestPeriodType.WEEKLY, now))
                 .thenReturn(Optional.empty());
 
         if (now.atZone(ZoneId.of("Asia/Seoul")).toLocalTime().isBefore(java.time.LocalTime.of(9, 0))
                 && !now.atZone(ZoneId.of("Asia/Seoul")).toLocalTime().isBefore(java.time.LocalTime.of(5, 0))) {
-            when(periodRepository.findCurrentBySeasonAndType(9L, "DAILY", now))
+            when(periodRepository.findCurrentBySeasonAndType(9L, QuestPeriodType.DAILY, now))
                     .thenReturn(Optional.empty());
         }
 
-        when(questCompletionService.findCurrentAssignments("DAILY"))
+        when(questCompletionService.findCurrentAssignments(QuestPeriodType.DAILY))
                 .thenReturn(new ArrayList<>());
-        when(questCompletionService.findCurrentAssignments("WEEKLY"))
+        when(questCompletionService.findCurrentAssignments(QuestPeriodType.WEEKLY))
                 .thenReturn(new ArrayList<>());
         when(questCompletionService.findCompletionsByAssignmentId(eq(1L), anyList()))
                 .thenReturn(new HashMap<>());

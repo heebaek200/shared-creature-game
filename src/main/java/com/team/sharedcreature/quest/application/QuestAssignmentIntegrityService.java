@@ -1,6 +1,12 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
+import com.team.sharedcreature.quest.domain.QuestDifficulty;
+
+import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
+
 import com.team.sharedcreature.admin.domain.SchedulerExecution;
+import com.team.sharedcreature.admin.domain.SchedulerExecutionStatus;
 import com.team.sharedcreature.admin.infrastructure.SchedulerExecutionRepository;
 import com.team.sharedcreature.quest.domain.QuestAssignment;
 import com.team.sharedcreature.quest.domain.QuestPeriod;
@@ -77,7 +83,8 @@ public class QuestAssignmentIntegrityService {
         // RUNNING에 의한 정상 경합은 성공 데이터 누락으로 오판하지 않습니다.
         Optional<SchedulerExecution> execution = executionRepository.findByJobTypeAndScheduledFor(
                 jobType, window.startAt());
-        if (execution.isEmpty() || !"SUCCEEDED".equals(execution.orElseThrow().getStatus())) {
+        if (execution.isEmpty() || execution.orElseThrow().getStatus()
+                != SchedulerExecutionStatus.SUCCEEDED) {
             return new ExecutionAudit(AuditOutcome.NOT_SUCCEEDED, null);
         }
 
@@ -99,7 +106,7 @@ public class QuestAssignmentIntegrityService {
         if (period == null) {
             return invalid("PERIOD_MISSING", window);
         }
-        if (!"ACTIVE".equals(period.getStatus())) {
+        if (period.getStatus() != QuestPeriodStatus.ACTIVE) {
             return invalid("PERIOD_NOT_ACTIVE:" + period.getStatus(), window);
         }
         if (period.getSeason() == null || !seasonId.equals(period.getSeason().getId())) {
@@ -114,9 +121,8 @@ public class QuestAssignmentIntegrityService {
         }
 
         int expected = switch (window.periodType()) {
-            case "DAILY" -> 3;
-            case "WEEKLY" -> 7;
-            default -> throw new IllegalArgumentException("지원하지 않는 기간: " + window.periodType());
+            case DAILY -> 3;
+            case WEEKLY -> 7;
         };
         List<QuestAssignment> assignments = assignmentRepository.findAllWithSnapshotByPeriodId(period.getId());
         if (assignments.size() != expected) {
@@ -150,8 +156,8 @@ public class QuestAssignmentIntegrityService {
             }
 
             // Snapshot의 난이도는 일일 1/1/1, 주간 3/2/2의 고정 슬롯 순서와 비교합니다.
-            String difficulty = expectedDifficulty(window.periodType(), slotNumber);
-            if (!difficulty.equals(assignment.getDifficultySnapshot())) {
+            QuestDifficulty difficulty = expectedDifficulty(window.periodType(), slotNumber);
+            if (difficulty != assignment.getDifficultySnapshot()) {
                 return invalid("DIFFICULTY_SLOT_MISMATCH:slot=" + slotNumber
                         + ",expected=" + difficulty
                         + ",actual=" + assignment.getDifficultySnapshot(), window);
@@ -173,19 +179,19 @@ public class QuestAssignmentIntegrityService {
      * DAILY는 1 LOW / 1 MEDIUM / 1 HIGH, WEEKLY는 3 LOW / 2 MEDIUM / 2 HIGH입니다.
      * 슬롯 번호가 범위를 벗어나면 예상하지 못한 검사 호출이므로 예외를 반환합니다.
      */
-    private String expectedDifficulty(String periodType, int slotNumber) {
-        if ("DAILY".equals(periodType)) {
+    private QuestDifficulty expectedDifficulty(QuestPeriodType periodType, int slotNumber) {
+        if (periodType == QuestPeriodType.DAILY) {
             return switch (slotNumber) {
-                case 1 -> "LOW";
-                case 2 -> "MEDIUM";
-                case 3 -> "HIGH";
+                case 1 -> QuestDifficulty.LOW;
+                case 2 -> QuestDifficulty.MEDIUM;
+                case 3 -> QuestDifficulty.HIGH;
                 default -> throw new IllegalArgumentException("DAILY 슬롯 범위 초과: " + slotNumber);
             };
         }
-        if ("WEEKLY".equals(periodType)) {
-            if (slotNumber >= 1 && slotNumber <= 3) return "LOW";
-            if (slotNumber >= 4 && slotNumber <= 5) return "MEDIUM";
-            if (slotNumber >= 6 && slotNumber <= 7) return "HIGH";
+        if (periodType == QuestPeriodType.WEEKLY) {
+            if (slotNumber >= 1 && slotNumber <= 3) return QuestDifficulty.LOW;
+            if (slotNumber >= 4 && slotNumber <= 5) return QuestDifficulty.MEDIUM;
+            if (slotNumber >= 6 && slotNumber <= 7) return QuestDifficulty.HIGH;
         }
         throw new IllegalArgumentException("지원하지 않는 기간 또는 슬롯: " + periodType + "/" + slotNumber);
     }

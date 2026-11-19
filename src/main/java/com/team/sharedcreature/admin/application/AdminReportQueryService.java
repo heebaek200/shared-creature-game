@@ -5,6 +5,7 @@ import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.admin.api.AdminReportResponse;
 import com.team.sharedcreature.auth.infrastructure.UserProfileRepository;
 import com.team.sharedcreature.group.domain.UserReport;
+import com.team.sharedcreature.group.domain.UserReportStatus;
 import com.team.sharedcreature.group.infrastructure.UserReportRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -29,7 +30,7 @@ public class AdminReportQueryService {
     }
 
     /** 상태 필터와 고정 최신순으로 신고를 페이지 조회합니다. */
-    public Page<AdminReportResponse> list(String status, int page, int size) {
+    public Page<AdminReportResponse> list(UserReportStatus status, int page, int size) {
         PageRequest pageable = PageRequest.of(page, size);
         Page<UserReport> reports = status == null
                 ? reportRepository.findAllByOrderByCreatedAtDescIdDesc(pageable)

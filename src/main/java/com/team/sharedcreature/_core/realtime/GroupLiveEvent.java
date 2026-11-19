@@ -8,7 +8,7 @@ public record GroupLiveEvent(
         UUID eventId,
         UUID streamInstanceId,
         long sequence,
-        String eventType,
+        GroupLiveEventType eventType,
         Long groupId,
         Instant occurredAt,
         Object payload

@@ -1,8 +1,12 @@
 package com.team.sharedcreature.avatar.support;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
 import com.team.sharedcreature.avatar.domain.ShopItem;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
+import com.team.sharedcreature.avatar.domain.ShopItemStatus;
 import com.team.sharedcreature.payment.domain.Purchase;
 import org.springframework.beans.BeanUtils;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -25,7 +29,7 @@ public final class AvatarTestFixtures {
      * @return 테스트 사용자
      */
     public static User user(Long id) {
-        User user = User.register("USER", CREATED_AT);
+        User user = User.register(GlobalRole.USER, CREATED_AT);
         ReflectionTestUtils.setField(user, "id", id);
         return user;
     }
@@ -47,9 +51,10 @@ public final class AvatarTestFixtures {
         ReflectionTestUtils.setField(shop, "name", "테스트 아이템 " + id);
         ReflectionTestUtils.setField(shop, "description", "아바타 테스트 상품");
         ReflectionTestUtils.setField(shop, "priceKrw", 1000L);
-        ReflectionTestUtils.setField(shop, "slotCode", slot);
+        // 요청 문자열과 구분하여 Entity에는 도메인 Enum을 설정합니다.
+        ReflectionTestUtils.setField(shop, "slotCode", AvatarSlot.valueOf(slot));
         ReflectionTestUtils.setField(shop, "assetKey", "avatar/test-" + id);
-        ReflectionTestUtils.setField(shop, "status", "ACTIVE");
+        ReflectionTestUtils.setField(shop, "status", ShopItemStatus.ACTIVE);
         Purchase purchase = Purchase.ready("ORDER_" + id, owner, shop, CREATED_AT);
         ReflectionTestUtils.setField(purchase, "id", id + 1000);
         purchase.markPaid(CREATED_AT);

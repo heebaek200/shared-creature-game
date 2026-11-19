@@ -81,7 +81,7 @@ public class RefundController {
                 loginUser.id(),
                 pageNumber,
                 pageSize,
-                status
+                RefundStatusFilter.parse(status)
         );
 
         // data 목록과 meta 페이지 정보를 함께 반환합니다.

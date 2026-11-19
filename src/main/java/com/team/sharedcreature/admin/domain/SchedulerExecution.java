@@ -1,6 +1,8 @@
 package com.team.sharedcreature.admin.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -38,8 +40,10 @@ public class SchedulerExecution {
     @Column(name = "scheduled_for", nullable = false)
     private Instant scheduledFor;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    private SchedulerExecutionStatus status;
 
     @Column(name = "attempt_count", nullable = false)
     private Integer attemptCount;
@@ -117,11 +121,11 @@ public class SchedulerExecution {
     public boolean canReclaim(Instant now) {
         Objects.requireNonNull(now, "now");
 
-        if ("FAILED".equals(status)) {
+        if (status == SchedulerExecutionStatus.FAILED) {
             return true;
         }
 
-        return "RUNNING".equals(status) && !now.isBefore(leaseExpiresAt);
+        return status == SchedulerExecutionStatus.RUNNING && !now.isBefore(leaseExpiresAt);
     }
 
     /**
@@ -177,7 +181,7 @@ public class SchedulerExecution {
     ) {
         requireActiveAttempt(ownerInstanceId, expectedAttemptCount, now);
 
-        status = "SUCCEEDED";
+        status = SchedulerExecutionStatus.SUCCEEDED;
         completedAt = now;
         this.resultSummary = resultSummary;
         updatedAt = now;
@@ -198,7 +202,7 @@ public class SchedulerExecution {
         requireActiveAttempt(ownerInstanceId, expectedAttemptCount, now);
 
         // 재선점 가능하도록 실패한 작업을 갱신함
-        status = "FAILED";
+        status = SchedulerExecutionStatus.FAILED;
         completedAt = now;
         this.errorCode = errorCode;
         this.errorDetail = errorDetail;
@@ -214,7 +218,7 @@ public class SchedulerExecution {
             Instant now,
             Duration leaseDuration
     ) {
-        status = "RUNNING";
+        status = SchedulerExecutionStatus.RUNNING;
         this.ownerInstanceId = ownerInstanceId;
         startedAt = now;
         heartbeatAt = now;
@@ -239,7 +243,7 @@ public class SchedulerExecution {
     ) {
         Objects.requireNonNull(now, "now");
 
-        if (! "RUNNING".equals(status) ||
+        if (status != SchedulerExecutionStatus.RUNNING ||
                 ! Objects.equals(this.ownerInstanceId, ownerInstanceId) ||
                 attemptCount != expectedAttemptCount ||
                 ! now.isBefore(leaseExpiresAt)

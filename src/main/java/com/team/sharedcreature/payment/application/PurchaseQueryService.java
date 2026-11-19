@@ -2,12 +2,16 @@ package com.team.sharedcreature.payment.application;
 
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
+import com.team.sharedcreature.avatar.domain.OwnedItem;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
 import com.team.sharedcreature.payment.api.PurchaseResponse;
 import com.team.sharedcreature.payment.api.PurchaseSummaryResponse;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
 import com.team.sharedcreature.payment.domain.Purchase;
+import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import com.team.sharedcreature.payment.domain.RefundRequest;
+import com.team.sharedcreature.payment.domain.RefundStatus;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
 import com.team.sharedcreature.payment.infrastructure.RefundRequestRepository;
@@ -48,19 +52,24 @@ public class PurchaseQueryService {
     }
 
     /** 생성 시각 내림차순으로 사용자 구매 목록을 조회합니다. */
-    public Page<PurchaseSummaryResponse> list(Long userId, int page, int size, String status) {
+    public Page<PurchaseSummaryResponse> list(Long userId, int page, int size, PurchaseStatus status) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt", "id"));
-        Page<Purchase> purchases = status == null || status.isBlank()
+
+        Page<Purchase> purchases = status == null
                 ? purchaseRepository.findByUserId(userId, pageable)
-                : purchaseRepository.findByUserIdAndStatus(userId, status, pageable);
+                : purchaseRepository.findByUserIdAndStatus(
+                userId,
+                status,
+                pageable
+        );
         return purchases.map(this::summary);
     }
 
     private PurchaseSummaryResponse summary(Purchase purchase) {
-        String ownedStatus = ownedItemRepository.findByPurchaseId(purchase.getId())
-                .map(item -> item.getStatus())
+        OwnedItemStatus ownedStatus = ownedItemRepository.findByPurchaseId(purchase.getId())
+                .map(OwnedItem::getStatus)
                 .orElse(null);
-        String latestRefundStatus = refundRequestRepository
+        RefundStatus latestRefundStatus = refundRequestRepository
                 .findFirstByPurchaseIdOrderByRequestedAtDesc(purchase.getId())
                 .map(RefundRequest::getStatus)
                 .orElse(null);
@@ -78,11 +87,14 @@ public class PurchaseQueryService {
     }
 
     private PurchaseResponse response(Purchase purchase, boolean includeDetails) {
-        String ownedStatus = ownedItemRepository.findByPurchaseId(purchase.getId())
-                .map(item -> item.getStatus())
+        OwnedItemStatus ownedStatus = ownedItemRepository.findByPurchaseId(purchase.getId())
+                .map(OwnedItem::getStatus)
                 .orElse(null);
         var refunds = refundRequestRepository.findByPurchaseIdOrderByRequestedAtAsc(purchase.getId());
-        String latestRefundStatus = refunds.isEmpty() ? null : refunds.get(refunds.size() - 1).getStatus();
+        // 환불 요청이 없으면 기존처럼 null을 반환합니다.
+        RefundStatus latestRefundStatus = refunds.isEmpty()
+                ? null
+                : refunds.get(refunds.size() - 1).getStatus();
         var transactions = includeDetails
                 ? transactionRepository.findByPurchaseIdOrderByCreatedAtAsc(purchase.getId()).stream()
                         .map(this::transaction)
@@ -97,6 +109,7 @@ public class PurchaseQueryService {
                 purchase.getItemNameSnapshot(),
                 purchase.getPriceKrwSnapshot(),
                 purchase.getCurrency(),
+                // 구매 상태 enum은 JSON에 이름으로 전달합니다.
                 purchase.getStatus(),
                 purchase.getCreatedAt(),
                 ownedStatus,
@@ -110,8 +123,9 @@ public class PurchaseQueryService {
     private PurchaseResponse.Transaction transaction(PaymentTransaction transaction) {
         return new PurchaseResponse.Transaction(
                 transaction.getId(),
-                transaction.getProvider(),
+                transaction.getProvider().name(),
                 transaction.getProviderTransactionId(),
+                // 거래 유형과 상태 enum은 JSON에 이름으로 전달합니다.
                 transaction.getTransactionType(),
                 transaction.getAmountKrw(),
                 transaction.getStatus(),
@@ -126,6 +140,7 @@ public class PurchaseQueryService {
                 refund.getRequestedByUser().getId(),
                 refund.getRequestReason(),
                 refund.getDecisionReason(),
+                // 환불 상태 enum은 JSON에 이름으로 전달합니다.
                 refund.getStatus(),
                 refund.getRequestedAt(),
                 refund.getReviewedAt(),

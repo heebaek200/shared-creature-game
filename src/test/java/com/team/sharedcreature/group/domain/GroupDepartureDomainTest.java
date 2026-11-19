@@ -1,5 +1,7 @@
 package com.team.sharedcreature.group.domain;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.domain.User;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -35,7 +37,7 @@ class GroupDepartureDomainTest {
         // ID가 다른 사용자를 실행자로 넘기면 즉시 차단합니다.
         assertThatThrownBy(() -> membership.leaveBySelf(stranger, NOW))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThat(membership.getStatus()).isEqualTo("ACTIVE");
+        assertThat(membership.getStatus()).isEqualTo(GroupMembershipStatus.ACTIVE);
         assertThat(membership.getEndedAt()).isNull();
     }
 
@@ -56,7 +58,7 @@ class GroupDepartureDomainTest {
         assertThatThrownBy(() -> membership.leaveBySelf(member, NOW.plusSeconds(10)))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(membership.getEndedAt()).isEqualTo(NOW);
-        assertThat(membership.getExitReason()).isEqualTo("SELF");
+        assertThat(membership.getExitReason()).isEqualTo(GroupMembershipExitReason.SELF);
     }
 
     /**
@@ -74,7 +76,7 @@ class GroupDepartureDomainTest {
 
         // 외부 API와 DB가 사용하는 정확한 종료 상태를 검사합니다.
         link.invalidate(NOW);
-        assertThat(link.getStatus()).isEqualTo("INVALIDATED");
+        assertThat(link.getStatus()).isEqualTo(GroupInviteLinkStatus.INVALIDATED);
         assertThat(link.getInvalidatedAt()).isEqualTo(NOW);
     }
 
@@ -128,7 +130,7 @@ class GroupDepartureDomainTest {
      */
     private User user(long id) {
         // ID 외 모든 값은 도메인 팩토리에서 초기화합니다.
-        User user = User.register("USER", CREATED);
+        User user = User.register(GlobalRole.USER, CREATED);
         ReflectionTestUtils.setField(user, "id", id);
         return user;
     }

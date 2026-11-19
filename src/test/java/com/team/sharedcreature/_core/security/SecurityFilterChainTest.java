@@ -1,5 +1,13 @@
 package com.team.sharedcreature._core.security;
 
+import com.team.sharedcreature.group.domain.GroupRole;
+
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
+import com.team.sharedcreature.auth.domain.UserStatus;
+
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
 import com.team.sharedcreature._core.exception.RestApiExceptionHandler;
 import com.team.sharedcreature._core.web.RequestIdFilter;
@@ -212,11 +220,11 @@ class SecurityFilterChainTest {
         User account = mock(User.class);
         GroupMembership membership = mock(GroupMembership.class);
         when(account.getId()).thenReturn(userId);
-        when(account.getStatus()).thenReturn("ACTIVE");
-        when(account.getGlobalRole()).thenReturn("USER");
-        when(membership.getRole()).thenReturn(role);
+        when(account.getStatus()).thenReturn(UserStatus.ACTIVE);
+        when(account.getGlobalRole()).thenReturn(GlobalRole.USER);
+        when(membership.getRole()).thenReturn(GroupRole.valueOf(role));
         when(userRepository.findById(userId)).thenReturn(Optional.of(account));
-        when(membershipRepository.findByUserIdAndStatus(userId, "ACTIVE"))
+        when(membershipRepository.findByUserIdAndStatus(userId, GroupMembershipStatus.ACTIVE))
                 .thenReturn(Optional.of(membership));
         MockHttpSession session = new MockHttpSession();
         session.setAttribute(

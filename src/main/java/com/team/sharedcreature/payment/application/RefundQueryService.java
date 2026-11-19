@@ -6,6 +6,7 @@ import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
 import com.team.sharedcreature.payment.api.AdminRefundResponse;
 import com.team.sharedcreature.payment.api.RefundResponse;
 import com.team.sharedcreature.payment.domain.PaymentTransactionType;
+import com.team.sharedcreature.payment.domain.RefundStatus;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
 import com.team.sharedcreature.payment.infrastructure.RefundRequestRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,8 +14,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.Set;
 
 /**
  * 사용자·관리자의 환불 목록과 관리자 상세 조회를 담당합니다.
@@ -24,15 +23,6 @@ import java.util.Set;
 @Service
 @Transactional(readOnly = true)
 public class RefundQueryService {
-
-    private static final Set<String> REFUND_STATUSES = Set.of(
-            "REQUESTED",
-            "REJECTED",
-            "CANCEL_PENDING",
-            "CANCEL_UNKNOWN",
-            "COMPLETED",
-            "FAILED"
-    );
 
     private final RefundRequestRepository refundRequestRepository;
     private final OwnedItemRepository ownedItemRepository;
@@ -51,10 +41,9 @@ public class RefundQueryService {
             Long userId,
             int page,
             int size,
-            String status
+            RefundStatus status
     ) {
         PageRequest pageable = pageRequest(page, size);
-        validateStatus(status);
 
         // 조회자 ID를 조건에 포함하여 다른 사용자의 요청을 제외합니다.
         return refundRequestRepository
@@ -73,10 +62,9 @@ public class RefundQueryService {
     public Page<RefundResponse> listAdminRefunds(
             int page,
             int size,
-            String status
+            RefundStatus status
     ) {
         PageRequest pageable = pageRequest(page, size);
-        validateStatus(status);
 
         return refundRequestRepository
                 .findAdminRefunds(status, pageable)
@@ -112,7 +100,7 @@ public class RefundQueryService {
         var cancellation = transactionRepository
                 .findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
                         purchaseId,
-                        PaymentTransactionType.CANCELLATION.name()
+                        PaymentTransactionType.CANCELLATION
                 )
                 .orElse(null);
 
@@ -131,17 +119,5 @@ public class RefundQueryService {
         }
 
         return PageRequest.of(page, size);
-    }
-
-    /**
-     * 상태 생략은 허용하고 명세에 없는 상태는 거절합니다.
-     */
-    private void validateStatus(String status) {
-        if (status != null && !REFUND_STATUSES.contains(status)) {
-            throw new BusinessException(
-                    ErrorCode.INVALID_FIELD_VALUE,
-                    "지원하지 않는 환불 상태입니다."
-            );
-        }
     }
 }

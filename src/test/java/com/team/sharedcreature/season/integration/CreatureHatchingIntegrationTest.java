@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.integration;
 
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.domain.Group;
@@ -423,7 +425,7 @@ class CreatureHatchingIntegrationTest {
      * 모든 행은 독립된 저장소 호출의 Commit이 끝난 뒤 업무 테스트로 전달됩니다.
      */
     private Fixture createEgg(Instant createdAt) {
-        User owner = users.saveAndFlush(User.register("USER", createdAt));
+        User owner = users.saveAndFlush(User.register(GlobalRole.USER, createdAt));
         userIds.add(owner.getId());
         Group group = groups.saveAndFlush(Group.create(
                 "부화검증-" + owner.getId(), "g2-hatch-" + owner.getId(), "", owner, createdAt));

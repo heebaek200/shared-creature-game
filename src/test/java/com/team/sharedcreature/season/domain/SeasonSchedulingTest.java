@@ -27,7 +27,7 @@ class SeasonSchedulingTest {
         Season season = Season.schedule(2, START, END, now);
 
         assertEquals(2, season.getSeasonNumber());
-        assertEquals("SCHEDULED", season.getStatus());
+        assertEquals(SeasonStatus.SCHEDULED, season.getStatus());
         assertEquals(START, season.getStartAt());
         assertEquals(END, season.getEndAt());
         assertEquals(now, season.getCreatedAt());

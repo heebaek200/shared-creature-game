@@ -1,5 +1,6 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,7 +25,7 @@ class QuestPeriodAssignmentServiceTest {
     @Mock private QuestPeriodPersistenceService persistence;
     private QuestPeriodAssignmentService service;
     private final QuestPeriodCalendar.PeriodWindow window = new QuestPeriodCalendar.PeriodWindow(
-            "DAILY", LocalDate.of(2026, 11, 3),
+            QuestPeriodType.DAILY, LocalDate.of(2026, 11, 3),
             Instant.parse("2026-11-02T15:00:00Z"),
             Instant.parse("2026-11-03T15:00:00Z"), 1);
 

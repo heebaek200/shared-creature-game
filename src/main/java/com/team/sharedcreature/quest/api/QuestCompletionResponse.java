@@ -1,5 +1,7 @@
 package com.team.sharedcreature.quest.api;
 
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
+
 import java.time.Instant;
 
 import lombok.Getter;
@@ -34,7 +36,7 @@ public class QuestCompletionResponse {
     private final Long creatureTotalExperience;
 
     /** 보상 반영 뒤 크리처 성장 단계입니다. */
-    private final String creatureGrowthStage;
+    private final CreatureGrowthStage creatureGrowthStage;
 
     /** 보상 반영 뒤 그룹 시즌 점수입니다. */
     private final Long groupSeasonScore;

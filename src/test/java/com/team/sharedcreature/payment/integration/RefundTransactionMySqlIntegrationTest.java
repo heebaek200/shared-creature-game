@@ -1,16 +1,42 @@
 package com.team.sharedcreature.payment.integration;
 
+import com.team.sharedcreature.admin.domain.ApiIdempotencyRecord;
+import com.team.sharedcreature.admin.domain.ApiIdempotencyStatus;
+
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
 import com.team.sharedcreature.avatar.domain.ShopItem;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
+import com.team.sharedcreature.avatar.domain.ShopItemStatus;
 import com.team.sharedcreature.avatar.application.AvatarService;
 import com.team.sharedcreature.admin.application.SchedulerJobRunner;
 import com.team.sharedcreature.admin.application.SchedulerExecutionLifecycleService;
 import com.team.sharedcreature.payment.application.*;
 import com.team.sharedcreature.payment.domain.Purchase;
+import com.team.sharedcreature.payment.domain.PgApiAttempt;
+import com.team.sharedcreature.payment.domain.PgApiOperation;
+import com.team.sharedcreature.payment.domain.PgApiResultType;
+import com.team.sharedcreature.payment.infrastructure.PgApiAttemptRepository;
+import com.team.sharedcreature.payment.domain.PaymentWebhookEvent;
+import com.team.sharedcreature.payment.domain.WebhookProcessingStatus;
+import com.team.sharedcreature.payment.infrastructure.PaymentWebhookEventRepository;
+import com.team.sharedcreature.payment.domain.PaymentTransaction;
+import com.team.sharedcreature.payment.domain.PaymentProvider;
+import com.team.sharedcreature.payment.domain.PaymentTransactionStatus;
+import com.team.sharedcreature.payment.domain.PaymentTransactionType;
+import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
+import com.team.sharedcreature.payment.domain.PurchaseStatus;
+import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
 import com.team.sharedcreature.payment.domain.RefundRequest;
+import com.team.sharedcreature.payment.domain.RefundStatus;
+import com.team.sharedcreature.payment.infrastructure.RefundRequestRepository;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.springframework.data.domain.PageRequest;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +53,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.ObjectMapper;
 
 import java.net.URI;
 import java.sql.Timestamp;
@@ -56,6 +83,14 @@ import static org.mockito.Mockito.*;
 @ContextConfiguration(initializers = RefundTransactionMySqlIntegrationTest.TestDatabaseOnly.class)
 class RefundTransactionMySqlIntegrationTest {
     @Autowired private EntityManager em;
+    @Autowired private PgApiAttemptRepository pgAttempts;
+    @Autowired private RefundLockService refundLocks;
+    @Autowired private PaymentWebhookEventRepository webhookRepository;
+    @Autowired private PurchaseRepository purchaseRepository;
+    @Autowired private PaymentTransactionRepository transactionRepository;
+    @Autowired private PurchaseQueryService purchaseQueries;
+    @Autowired private RefundRequestRepository refundRepository;
+    @Autowired private RefundQueryService refundQueries;
     @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private RefundApprovalTransactionService approval;
@@ -70,6 +105,7 @@ class RefundTransactionMySqlIntegrationTest {
     @Autowired private SchedulerExecutionLifecycleService schedulerLifecycle;
     private Instant schedulerBucket;
     private Fixture fixture;
+    private Long enumWebhookId;
     private RefundApprovalTransactionService.CancellationCommand command;
 
     @BeforeEach
@@ -77,8 +113,8 @@ class RefundTransactionMySqlIntegrationTest {
         // 테스트 전체에 트랜잭션을 걸지 않아 Service의 실제 Commit을 확인합니다.
         fixture = new TransactionTemplate(transactionManager).execute(status -> {
             Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-            var owner = User.register("USER", now);
-            var admin = User.register("SUPER_ADMIN", now);
+            var owner = User.register(GlobalRole.USER, now);
+            var admin = User.register(GlobalRole.SUPER_ADMIN, now);
             em.persist(owner);
             em.persist(admin);
             var shop = BeanUtils.instantiateClass(ShopItem.class);
@@ -86,9 +122,9 @@ class RefundTransactionMySqlIntegrationTest {
             set(shop, "name", "환불 검증 상품");
             set(shop, "description", "이슈 22 테스트");
             set(shop, "priceKrw", 1000L);
-            set(shop, "slotCode", "HEAD");
+            set(shop, "slotCode", AvatarSlot.HEAD);
             set(shop, "assetKey", "refund-test");
-            set(shop, "status", "ACTIVE");
+            set(shop, "status", ShopItemStatus.ACTIVE);
             set(shop, "createdAt", now);
             set(shop, "updatedAt", now);
             em.persist(shop);
@@ -107,6 +143,10 @@ class RefundTransactionMySqlIntegrationTest {
 
     @AfterEach
     void 정리() {
+        // Enum 호환성 검증에서 생성한 단일 Webhook만 정리합니다.
+        if (enumWebhookId != null) {
+            jdbc.update("DELETE FROM payment_webhook_events WHERE id = ?", enumWebhookId);
+        }
         if (fixture == null) {
             return;
         }
@@ -127,6 +167,263 @@ class RefundTransactionMySqlIntegrationTest {
     }
 
     @Test
+    void Enum은_기존_DB문자열과_호환되고_구매슬롯Snapshot은_상품변경과_분리된다() {
+        assertThat(jdbc.queryForObject("SELECT slot_code FROM shop_items WHERE id = ?",
+                String.class, fixture.shopId())).isEqualTo("HEAD");
+        assertThat(jdbc.queryForObject("SELECT status FROM shop_items WHERE id = ?",
+                String.class, fixture.shopId())).isEqualTo("ACTIVE");
+        assertThat(jdbc.queryForObject("SELECT slot_code_snapshot FROM purchases WHERE id = ?",
+                String.class, fixture.purchaseId())).isEqualTo("HEAD");
+
+        // 기존 문자열을 직접 저장해도 새 영속성 컨텍스트에서 Enum으로 읽혀야 합니다.
+        jdbc.update("UPDATE shop_items SET slot_code = 'FACE', status = 'INACTIVE' WHERE id = ?",
+                fixture.shopId());
+        new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
+            var shop = em.find(ShopItem.class, fixture.shopId());
+            var purchase = em.find(Purchase.class, fixture.purchaseId());
+            assertThat(shop.getSlotCode()).isEqualTo(AvatarSlot.FACE);
+            assertThat(shop.getStatus()).isEqualTo(ShopItemStatus.INACTIVE);
+            assertThat(purchase.getSlotCodeSnapshot()).isEqualTo(AvatarSlot.HEAD);
+        });
+    }
+
+    /** 기존 문자열을 읽고 실제 전환으로 저장한 구매 상태를 사용자 범위 안에서 조회합니다. */
+    @ParameterizedTest
+    @EnumSource(PurchaseStatus.class)
+    void 구매상태는_기존문자열과_호환되고_Enum필터와_사용자범위를_유지한다(PurchaseStatus status) {
+        // 이 테스트의 구매 행만 초기 문자열로 준비하여 기존 데이터 읽기를 검증합니다.
+        jdbc.update("UPDATE purchases SET status = 'READY' WHERE id = ?", fixture.purchaseId());
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
+            var purchase = em.find(Purchase.class, fixture.purchaseId());
+            assertThat(purchase.getStatus()).isEqualTo(PurchaseStatus.READY);
+            switch (status) {
+                case READY -> { }
+                case PAID -> purchase.markPaid(now);
+                case FAILED -> purchase.markFailed(now);
+                case CANCELLED -> {
+                    purchase.markPaid(now);
+                    purchase.markCancelledAfterRefund(now);
+                }
+            }
+        });
+
+        assertThat(jdbc.queryForObject("SELECT status FROM purchases WHERE id = ?",
+                String.class, fixture.purchaseId())).isEqualTo(status.name());
+        var mine = purchaseRepository.findByUserIdAndStatus(
+                fixture.ownerId(), status, PageRequest.of(0, 20));
+        assertThat(mine.getTotalElements()).isEqualTo(1);
+        assertThat(mine.getContent().getFirst().getStatus()).isEqualTo(status);
+        assertThat(purchaseQueries.get(fixture.ownerId(), fixture.purchaseId()).status()).isEqualTo(status);
+        assertThat(purchaseQueries.list(fixture.ownerId(), 0, 20, status).getContent())
+                .singleElement().satisfies(summary -> assertThat(summary.status()).isEqualTo(status));
+        assertThat(purchaseRepository.findByUserIdAndStatus(
+                fixture.adminId(), status, PageRequest.of(0, 20))).isEmpty();
+    }
+
+    /** 거래 Enum의 DB 문자열 호환성과 최근 취소 거래 조회·응답 계약을 검증합니다. */
+    @ParameterizedTest
+    @EnumSource(PaymentTransactionStatus.class)
+    void 거래는_문자열로_저장되고_승인과_취소를_구분하여_조회한다(PaymentTransactionStatus status) {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        Long cancellationId = new TransactionTemplate(transactionManager).execute(tx -> {
+            var purchase = em.find(Purchase.class, fixture.purchaseId());
+            var cancellation = PaymentTransaction.cancellationRequested(purchase, now);
+            if (status != PaymentTransactionStatus.REQUESTED) {
+                var processedAt = status == PaymentTransactionStatus.UNKNOWN ? null : now;
+                cancellation.applyCancellationResult(status, "cancel-" + fixture.refundId(), processedAt, "PG", now);
+            }
+            em.persist(cancellation);
+            // 더 최신 승인 거래가 있어도 취소 유형 조회에서는 제외되어야 합니다.
+            em.persist(PaymentTransaction.approved(purchase, "approval-" + fixture.purchaseId(),
+                    purchase.getPriceKrwSnapshot(), now, now.plusSeconds(1)));
+            em.flush();
+            return cancellation.getId();
+        });
+
+        assertThat(jdbc.queryForObject("SELECT transaction_type FROM payment_transactions WHERE id = ?",
+                String.class, cancellationId)).isEqualTo("CANCELLATION");
+        assertThat(jdbc.queryForObject("SELECT status FROM payment_transactions WHERE id = ?",
+                String.class, cancellationId)).isEqualTo(status.name());
+        assertThat(jdbc.queryForObject("SELECT provider FROM payment_transactions WHERE id = ?",
+                String.class, cancellationId)).isEqualTo("PORTONE");
+        var approval = transactionRepository.findByProviderAndProviderTransactionId(
+                PaymentProvider.PORTONE, "approval-" + fixture.purchaseId()).orElseThrow();
+        assertThat(approval.getTransactionType()).isEqualTo(PaymentTransactionType.APPROVAL);
+        var cancellation = transactionRepository.findFirstByPurchaseIdAndTransactionTypeOrderByCreatedAtDescIdDesc(
+                fixture.purchaseId(), PaymentTransactionType.CANCELLATION).orElseThrow();
+        assertThat(cancellation.getId()).isEqualTo(cancellationId);
+        assertThat(cancellation.getStatus()).isEqualTo(status);
+        assertThat(cancellation.getProvider()).isEqualTo(PaymentProvider.PORTONE);
+        assertThat(refundQueries.getAdminRefund(fixture.refundId()).latestCancellation().status())
+                .isEqualTo(status);
+        var purchaseResponse = purchaseQueries.get(fixture.ownerId(), fixture.purchaseId());
+        var mapper = new ObjectMapper();
+        assertThat(mapper.writeValueAsString(purchaseResponse)).contains("\"transactionType\":\"APPROVAL\"");
+        assertThat(purchaseResponse.transactions())
+                .anySatisfy(transaction -> {
+                    assertThat(transaction.transactionType()).isEqualTo(PaymentTransactionType.CANCELLATION);
+                    assertThat(transaction.status()).isEqualTo(status);
+                    assertThat(transaction.provider()).isEqualTo("PORTONE");
+                    assertThat(mapper.writeValueAsString(transaction))
+                            .contains("\"transactionType\":\"CANCELLATION\"", "\"status\":\"" + status.name() + "\"");
+                });
+
+        // 기존 문자열로 저장된 거래도 새 조회에서 Enum으로 읽힙니다.
+        jdbc.update("UPDATE payment_transactions SET status = 'UNKNOWN' WHERE id = ?", cancellationId);
+        assertThat(transactionRepository.findById(cancellationId).orElseThrow().getStatus())
+                .isEqualTo(PaymentTransactionStatus.UNKNOWN);
+    }
+
+    /** Webhook 상태 문자열·Enum 읽기와 JPQL 복구 조건의 일치를 실제 DB로 검증합니다. */
+    @ParameterizedTest
+    @EnumSource(WebhookProcessingStatus.class)
+    void Webhook상태는_기존문자열과_호환되고_복구대상조건을_유지한다(WebhookProcessingStatus status) {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        Instant startedAt = now.minusSeconds(600);
+        enumWebhookId = new TransactionTemplate(transactionManager).execute(tx -> {
+            var event = PaymentWebhookEvent.received("enum-62-" + UUID.randomUUID(), null, null,
+                    "Transaction.Paid", "a".repeat(64), "{}", startedAt);
+            switch (status) {
+                case PENDING -> { }
+                case FAILED -> event.fail("TEST_FAILURE", startedAt);
+                case PROCESSED -> event.complete(null, null, startedAt);
+                case IGNORED -> event.ignore(startedAt);
+            }
+            em.persist(event);
+            em.flush();
+            return event.getId();
+        });
+
+        assertThat(jdbc.queryForObject("SELECT processing_status FROM payment_webhook_events WHERE id = ?",
+                String.class, enumWebhookId)).isEqualTo(status.name());
+        assertThat(jdbc.queryForObject("SELECT provider FROM payment_webhook_events WHERE id = ?",
+                String.class, enumWebhookId)).isEqualTo("PORTONE");
+        var storedEvent = webhookRepository.findById(enumWebhookId).orElseThrow();
+        assertThat(storedEvent.getProcessingStatus()).isEqualTo(status);
+        assertThat(storedEvent.getProvider()).isEqualTo(PaymentProvider.PORTONE);
+        assertThat(webhookRepository.existsByProviderAndProviderEventId(
+                PaymentProvider.PORTONE, storedEvent.getProviderEventId())).isTrue();
+        var duplicate = webhookRepository.findByProviderAndProviderEventId(
+                PaymentProvider.PORTONE, storedEvent.getProviderEventId()).orElseThrow();
+        assertThat(duplicate.getId()).isEqualTo(enumWebhookId);
+        var candidates = webhookRepository.findRecoverable(List.of("Transaction.Paid"),
+                now.minusSeconds(300), PageRequest.of(0, 1000));
+        if (status == WebhookProcessingStatus.PENDING || status == WebhookProcessingStatus.FAILED) {
+            assertThat(candidates).extracting(PaymentWebhookEvent::getId).contains(enumWebhookId);
+        } else {
+            assertThat(candidates).extracting(PaymentWebhookEvent::getId).doesNotContain(enumWebhookId);
+        }
+
+        // 기존 DB 문자열도 새 조회에서 동일한 Enum으로 읽혀야 합니다.
+        jdbc.update("UPDATE payment_webhook_events SET processing_status = 'IGNORED' WHERE id = ?", enumWebhookId);
+        assertThat(webhookRepository.findById(enumWebhookId).orElseThrow().getProcessingStatus())
+                .isEqualTo(WebhookProcessingStatus.IGNORED);
+    }
+
+    /** PG 작업·결과 Enum의 저장 문자열과 잠금 조회 범위·정렬을 검증합니다. */
+    @ParameterizedTest
+    @EnumSource(PgApiResultType.class)
+    void PG이력은_기존문자열과_호환되고_취소와_조회작업을_구분한다(PgApiResultType result) {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        var ids = new TransactionTemplate(transactionManager).execute(tx -> {
+            var locked = refundLocks.lock(fixture.refundId());
+            locked.refund().claimCancellation(em.find(User.class, fixture.adminId()), "승인", now);
+            var cancellation = PgApiAttempt.prepareCancellation(locked.refund(), 1, now);
+            em.persist(cancellation);
+            em.flush();
+            var lookup = PgApiAttempt.prepareCancellationLookup(locked.refund(), cancellation, 2, now);
+            if (result != PgApiResultType.STARTED) {
+                lookup.complete(result, 200, "PG", "{}", null, now);
+            }
+            em.persist(lookup);
+            em.flush();
+            assertThat(lookup.getIdempotencyKey()).isEqualTo(cancellation.getIdempotencyKey());
+            return List.of(cancellation.getId(), lookup.getId());
+        });
+
+        assertThat(jdbc.queryForObject("SELECT operation FROM pg_api_attempts WHERE id = ?",
+                String.class, ids.getFirst())).isEqualTo("CANCELLATION");
+        assertThat(jdbc.queryForObject("SELECT operation FROM pg_api_attempts WHERE id = ?",
+                String.class, ids.getLast())).isEqualTo("CANCELLATION_LOOKUP");
+        assertThat(jdbc.queryForObject("SELECT result_type FROM pg_api_attempts WHERE id = ?",
+                String.class, ids.getLast())).isEqualTo(result.name());
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
+            refundLocks.lock(fixture.refundId());
+            var cancellations = pgAttempts.findCancellationAttemptsForUpdate(fixture.refundId());
+            assertThat(cancellations).extracting(PgApiAttempt::getId).containsExactly(ids.getFirst());
+            var history = pgAttempts.findCancellationHistoryForUpdate(fixture.refundId());
+            assertThat(history).extracting(PgApiAttempt::getId).containsExactlyElementsOf(ids);
+            assertThat(history.getFirst().getOperation()).isEqualTo(PgApiOperation.CANCELLATION);
+            assertThat(history.getLast().getOperation()).isEqualTo(PgApiOperation.CANCELLATION_LOOKUP);
+            assertThat(history.getLast().getResultType()).isEqualTo(result);
+        });
+
+        // 기존 저장 문자열도 새 영속성 컨텍스트에서 Enum으로 읽혀야 합니다.
+        jdbc.update("UPDATE pg_api_attempts SET result_type = 'UNKNOWN' WHERE id = ?", ids.getLast());
+        assertThat(pgAttempts.findById(ids.getLast()).orElseThrow().getResultType()).isEqualTo(PgApiResultType.UNKNOWN);
+    }
+
+    /** 모든 환불 상태의 문자열 저장·Enum 조회와 복구 대상 JPQL을 실제 MySQL로 검증합니다. */
+    @ParameterizedTest
+    @EnumSource(RefundStatus.class)
+    void 환불상태는_문자열로_저장하고_목록과_복구쿼리에_Enum으로_적용한다(RefundStatus status) {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        Instant claimedAt = now.minusSeconds(600);
+        new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
+            var refund = em.find(RefundRequest.class, fixture.refundId());
+            var admin = em.find(User.class, fixture.adminId());
+            if (status == RefundStatus.REJECTED) {
+                refund.reject(admin, "거절", claimedAt);
+            } else if (status != RefundStatus.REQUESTED) {
+                refund.claimCancellation(admin, "승인", claimedAt);
+                switch (status) {
+                    case CANCEL_UNKNOWN -> refund.markCancellationUnknown(claimedAt);
+                    case COMPLETED -> refund.completeCancellation(claimedAt, claimedAt);
+                    case FAILED -> refund.failCancellation(claimedAt);
+                    default -> { }
+                }
+            }
+        });
+
+        assertThat(jdbc.queryForObject("SELECT status FROM refund_requests WHERE id = ?",
+                String.class, fixture.refundId())).isEqualTo(status.name());
+        var mine = refundQueries.listMyRefunds(fixture.ownerId(), 0, 20, status);
+        assertThat(mine.getTotalElements()).isEqualTo(1);
+        assertThat(mine.getContent().getFirst().status()).isEqualTo(status);
+        assertThat(refundQueries.listMyRefunds(fixture.adminId(), 0, 20, status)).isEmpty();
+
+        var purchase = purchaseQueries.get(fixture.ownerId(), fixture.purchaseId());
+        assertThat(purchase.latestRefundStatus()).isEqualTo(status);
+        assertThat(purchase.refundRequests()).singleElement().satisfies(refund ->
+                assertThat(refund.status()).isEqualTo(status));
+        var summary = purchaseQueries.list(fixture.ownerId(), 0, 20, null).getContent().getFirst();
+        assertThat(summary.latestRefundStatus()).isEqualTo(status);
+        var mapper = new ObjectMapper();
+        var adminRefund = refundQueries.getAdminRefund(fixture.refundId());
+        assertThat(adminRefund.status()).isEqualTo(status);
+        assertThat(mapper.writeValueAsString(adminRefund)).contains("\"status\":\"" + status.name() + "\"");
+        assertThat(mapper.writeValueAsString(mine.getContent().getFirst()))
+                .contains("\"status\":\"" + status.name() + "\"");
+        var purchaseJson = mapper.readTree(mapper.writeValueAsString(purchase));
+        assertThat(purchaseJson.at("/latestRefundStatus").asString()).isEqualTo(status.name());
+        assertThat(purchaseJson.at("/refundRequests/0/status").asString()).isEqualTo(status.name());
+        assertThat(mapper.writeValueAsString(summary)).contains("\"latestRefundStatus\":\"" + status.name() + "\"");
+
+        // 목록과 전체 건수 계산에 같은 Enum 상태 조건이 적용되는지 확인합니다.
+        var all = refundRepository.findAdminRefunds(status, PageRequest.of(0, 100));
+        assertThat(all.getContent()).allSatisfy(refund -> assertThat(refund.getStatus()).isEqualTo(status));
+        assertThat(all.getTotalElements()).isGreaterThanOrEqualTo(1);
+        var stale = refundRepository.findStaleCancellationIds(now.minusSeconds(300), PageRequest.of(0, 100));
+        if (status == RefundStatus.CANCEL_PENDING || status == RefundStatus.CANCEL_UNKNOWN) {
+            assertThat(stale).contains(fixture.refundId());
+        } else {
+            assertThat(stale).doesNotContain(fixture.refundId());
+        }
+    }
+
+    @Test
     void 성공이면_환불_구매_회수_멱등응답을_함께_Commit하고_재반영하지_않는다() {
         prepareApproval();
         var response = results.apply(command, pgResult(RefundGateway.Outcome.SUCCESS), "first");
@@ -135,7 +432,7 @@ class RefundTransactionMySqlIntegrationTest {
         Timestamp revokedAt = jdbc.queryForObject("SELECT revoked_at FROM owned_items WHERE id = ?",
                 Timestamp.class, fixture.itemId());
         var replay = results.apply(command, pgResult(RefundGateway.Outcome.UNKNOWN), "second");
-        assertThat(replay.data().status()).isEqualTo("COMPLETED");
+        assertThat(replay.data().status()).isEqualTo(RefundStatus.COMPLETED);
         assertThat(jdbc.queryForObject("SELECT revoked_at FROM owned_items WHERE id = ?",
                 Timestamp.class, fixture.itemId())).isEqualTo(revokedAt);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payment_transactions WHERE purchase_id = ? AND transaction_type = 'CANCELLATION'",
@@ -204,7 +501,7 @@ class RefundTransactionMySqlIntegrationTest {
         jdbc.update("DELETE FROM refund_requests WHERE id = ?", fixture.refundId());
         var outcomes = race(
                 () -> refunds.createRefundRequest(fixture.ownerId(), fixture.purchaseId(), "동시 환불", UUID.randomUUID().toString()),
-                () -> avatars.equipAvatarItem(fixture.ownerId(), "HEAD", fixture.itemId(), true));
+                () -> avatars.equipAvatarItem(fixture.ownerId(), AvatarSlot.HEAD, fixture.itemId(), true));
         assertThat(outcomes.stream().filter(value -> value instanceof ErrorCode).count()).isEqualTo(1);
         Timestamp usedAt = jdbc.queryForObject("SELECT used_at FROM owned_items WHERE id = ?", Timestamp.class, fixture.itemId());
         int refundCount = jdbc.queryForObject("SELECT COUNT(*) FROM refund_requests WHERE purchase_id = ? AND status = 'REQUESTED'",
@@ -328,7 +625,7 @@ class RefundTransactionMySqlIntegrationTest {
         // 업무만 복구되고 멱등 키가 영구 PROCESSING으로 남으면 재요청이 막힙니다.
         var response = refunds.approveRefund(fixture.adminId(), fixture.refundId(), "중단 검증", key, "retry");
         assertThat(response.httpStatus()).isEqualTo(200);
-        assertThat(response.data().status()).isEqualTo("COMPLETED");
+        assertThat(response.data().status()).isEqualTo(RefundStatus.COMPLETED);
         verifyNoInteractions(gateway);
     }
 
@@ -413,6 +710,9 @@ class RefundTransactionMySqlIntegrationTest {
     private void prepareApproval() {
         command = approval.prepare(fixture.adminId(), fixture.refundId(), "검증 승인",
                 UUID.randomUUID().toString()).command();
+        // Native INSERT의 PROCESSING 문자열을 Enum으로 다시 읽는지 확인합니다.
+        assertThat(em.find(ApiIdempotencyRecord.class, command.idempotencyRecordId()).getStatus())
+                .isEqualTo(ApiIdempotencyStatus.PROCESSING);
     }
 
     private String status(String table, Long id) {
@@ -421,6 +721,8 @@ class RefundTransactionMySqlIntegrationTest {
     }
 
     private void assertState(String refund, String purchase, String item, String idempotency) {
+        assertThat(em.find(ApiIdempotencyRecord.class, command.idempotencyRecordId()).getStatus())
+                .isEqualTo(ApiIdempotencyStatus.valueOf(idempotency));
         assertThat(jdbc.queryForObject("SELECT status FROM refund_requests WHERE id = ?", String.class, fixture.refundId())).isEqualTo(refund);
         assertThat(jdbc.queryForObject("SELECT status FROM purchases WHERE id = ?", String.class, fixture.purchaseId())).isEqualTo(purchase);
         assertThat(jdbc.queryForObject("SELECT status FROM owned_items WHERE id = ?", String.class, fixture.itemId())).isEqualTo(item);

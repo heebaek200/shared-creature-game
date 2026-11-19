@@ -1,6 +1,13 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
+import com.team.sharedcreature.quest.domain.QuestDifficulty;
+import com.team.sharedcreature.quest.domain.QuestVerificationType;
+
+import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
+
 import com.team.sharedcreature.admin.domain.SchedulerExecution;
+import com.team.sharedcreature.admin.domain.SchedulerExecutionStatus;
 import com.team.sharedcreature.admin.infrastructure.SchedulerExecutionRepository;
 import com.team.sharedcreature.quest.domain.QuestAssignment;
 import com.team.sharedcreature.quest.domain.QuestPeriod;
@@ -29,10 +36,10 @@ class QuestAssignmentIntegrityServiceTest {
 
     private static final Instant START = Instant.parse("2026-11-09T15:00:00Z");
     private static final QuestPeriodCalendar.PeriodWindow WINDOW =
-            new QuestPeriodCalendar.PeriodWindow("DAILY", LocalDate.of(2026, 11, 10),
+            new QuestPeriodCalendar.PeriodWindow(QuestPeriodType.DAILY, LocalDate.of(2026, 11, 10),
                     START, START.plusSeconds(86400), 8);
     private static final QuestPeriodCalendar.PeriodWindow WEEKLY_WINDOW =
-            new QuestPeriodCalendar.PeriodWindow("WEEKLY", LocalDate.of(2026, 11, 9),
+            new QuestPeriodCalendar.PeriodWindow(QuestPeriodType.WEEKLY, LocalDate.of(2026, 11, 9),
                     Instant.parse("2026-11-08T15:00:00Z"),
                     Instant.parse("2026-11-15T15:00:00Z"), 1);
     private static final Long SEASON_ID = 7L;
@@ -51,7 +58,7 @@ class QuestAssignmentIntegrityServiceTest {
      */
     @Test
     void runningExecutionDoesNotReportFalseCorruption() {
-        allowExecution("RUNNING");
+        allowExecution(SchedulerExecutionStatus.RUNNING);
         var audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
         assertEquals(QuestAssignmentIntegrityService.AuditOutcome.NOT_SUCCEEDED, audit.outcome());
         assertNull(audit.detail());
@@ -65,7 +72,7 @@ class QuestAssignmentIntegrityServiceTest {
      */
     @Test
     void failedExecutionIsNotConfirmed() {
-        allowExecution("FAILED");
+        allowExecution(SchedulerExecutionStatus.FAILED);
         var audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
         assertEquals(QuestAssignmentIntegrityService.AuditOutcome.NOT_SUCCEEDED, audit.outcome());
         verifyNoInteractions(periods, assignments);
@@ -78,7 +85,7 @@ class QuestAssignmentIntegrityServiceTest {
      */
     @Test
     void succeededExecutionWithMissingPeriodIsCorrupt() {
-        allowExecution("SUCCEEDED");
+        allowExecution(SchedulerExecutionStatus.SUCCEEDED);
         var audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
         assertEquals(QuestAssignmentIntegrityService.AuditOutcome.INCONSISTENT, audit.outcome());
         assertTrue(audit.detail().contains("PERIOD_MISSING"));
@@ -92,10 +99,10 @@ class QuestAssignmentIntegrityServiceTest {
      */
     @Test
     void succeededExecutionWithFailedPeriodIsCorrupt() {
-        allowExecution("SUCCEEDED");
+        allowExecution(SchedulerExecutionStatus.SUCCEEDED);
         QuestPeriod p = mock(QuestPeriod.class);
-        when(p.getStatus()).thenReturn("FAILED");
-        when(periods.findByPeriodTypeAndStartAt("DAILY", START)).thenReturn(Optional.of(p));
+        when(p.getStatus()).thenReturn(QuestPeriodStatus.FAILED);
+        when(periods.findByPeriodTypeAndStartAt(QuestPeriodType.DAILY, START)).thenReturn(Optional.of(p));
         var audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
         assertEquals(QuestAssignmentIntegrityService.AuditOutcome.INCONSISTENT, audit.outcome());
         assertTrue(audit.detail().contains("PERIOD_NOT_ACTIVE"));
@@ -108,7 +115,7 @@ class QuestAssignmentIntegrityServiceTest {
      */
     @Test
     void succeededExecutionWithMissingAssignmentIsCorrupt() {
-        allowExecution("SUCCEEDED");
+        allowExecution(SchedulerExecutionStatus.SUCCEEDED);
         allowActivePeriod(101L, SEASON_ID, WINDOW);
         when(assignments.findAllWithSnapshotByPeriodId(101L)).thenReturn(List.of(mock(QuestAssignment.class)));
         var audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
@@ -123,7 +130,7 @@ class QuestAssignmentIntegrityServiceTest {
      */
     @Test
     void succeededExecutionWithCompleteSnapshotIsConsistent() {
-        allowExecution("SUCCEEDED");
+        allowExecution(SchedulerExecutionStatus.SUCCEEDED);
         allowActivePeriod(101L, SEASON_ID, WINDOW);
         List<QuestAssignment> valid = validAssignments(101L, "DAILY");
         when(assignments.findAllWithSnapshotByPeriodId(101L)).thenReturn(valid);
@@ -140,7 +147,7 @@ class QuestAssignmentIntegrityServiceTest {
      */
     @Test
     void nonConsecutiveSlotIsCorrupt() {
-        allowExecution("SUCCEEDED");
+        allowExecution(SchedulerExecutionStatus.SUCCEEDED);
         allowActivePeriod(101L, SEASON_ID, WINDOW);
         List<QuestAssignment> valid = validAssignments(101L, "DAILY");
         when(valid.get(1).getSlotNumber()).thenReturn(4);
@@ -156,7 +163,7 @@ class QuestAssignmentIntegrityServiceTest {
      */
     @Test
     void wrongSeasonIsCorrupt() {
-        allowExecution("SUCCEEDED");
+        allowExecution(SchedulerExecutionStatus.SUCCEEDED);
         allowActivePeriod(101L, 999L, WINDOW);
         var audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
         assertTrue(audit.detail().contains("SEASON_MISMATCH"));
@@ -184,10 +191,10 @@ class QuestAssignmentIntegrityServiceTest {
      */
     @Test
     void dailyIncorrectDifficultyDistributionIsCorrupt() {
-        allowExecution("SUCCEEDED");
+        allowExecution(SchedulerExecutionStatus.SUCCEEDED);
         allowActivePeriod(101L, SEASON_ID, WINDOW);
         List<QuestAssignment> valid = validAssignments(101L, "DAILY");
-        when(valid.get(1).getDifficultySnapshot()).thenReturn("HIGH");
+        when(valid.get(1).getDifficultySnapshot()).thenReturn(QuestDifficulty.HIGH);
         when(assignments.findAllWithSnapshotByPeriodId(101L)).thenReturn(valid);
         var audit = service.inspectSkippedExecution(JOB, WINDOW, SEASON_ID);
         assertEquals(QuestAssignmentIntegrityService.AuditOutcome.INCONSISTENT, audit.outcome());
@@ -201,7 +208,7 @@ class QuestAssignmentIntegrityServiceTest {
      */
     @Test
     void versionOwnedByAnotherTemplateIsCorrupt() {
-        allowExecution("SUCCEEDED");
+        allowExecution(SchedulerExecutionStatus.SUCCEEDED);
         allowActivePeriod(101L, SEASON_ID, WINDOW);
         List<QuestAssignment> valid = validAssignments(101L, "DAILY");
         QuestTemplateVersion firstVersion = valid.get(0).getQuestTemplateVersion();
@@ -237,7 +244,7 @@ class QuestAssignmentIntegrityServiceTest {
     void weeklyIncorrectDifficultyDistributionIsCorrupt() {
         allowActivePeriod(101L, SEASON_ID, WEEKLY_WINDOW);
         List<QuestAssignment> valid = validAssignments(101L, "WEEKLY");
-        when(valid.get(3).getDifficultySnapshot()).thenReturn("HIGH");
+        when(valid.get(3).getDifficultySnapshot()).thenReturn(QuestDifficulty.HIGH);
         when(assignments.findAllWithSnapshotByPeriodId(101L)).thenReturn(valid);
         var result = service.verifyCommittedAssignment(WEEKLY_WINDOW, SEASON_ID);
         assertFalse(result.valid());
@@ -249,7 +256,7 @@ class QuestAssignmentIntegrityServiceTest {
      * 상태 조회는 Scheduler 실행권을 선점하는 동작이 아닙니다.
      * 테스트마다 독립 Mock이므로 외부 DB를 사용하지 않습니다.
      */
-    private void allowExecution(String status) {
+    private void allowExecution(SchedulerExecutionStatus status) {
         SchedulerExecution execution = mock(SchedulerExecution.class);
         when(execution.getStatus()).thenReturn(status);
         when(executions.findByJobTypeAndScheduledFor(JOB, START)).thenReturn(Optional.of(execution));
@@ -263,7 +270,7 @@ class QuestAssignmentIntegrityServiceTest {
     private void allowActivePeriod(long id, long seasonId, QuestPeriodCalendar.PeriodWindow window) {
         QuestPeriod period = mock(QuestPeriod.class);
         Season season = mock(Season.class);
-        when(period.getStatus()).thenReturn("ACTIVE");
+        when(period.getStatus()).thenReturn(QuestPeriodStatus.ACTIVE);
         when(period.getSeason()).thenReturn(season);
         when(season.getId()).thenReturn(seasonId);
         when(period.getId()).thenReturn(id);
@@ -297,8 +304,8 @@ class QuestAssignmentIntegrityServiceTest {
             when(version.getQuestTemplate()).thenReturn(template);
             when(assignment.getTitleSnapshot()).thenReturn("title " + slot);
             when(assignment.getDescriptionSnapshot()).thenReturn("description");
-            when(assignment.getDifficultySnapshot()).thenReturn(difficulty(periodType, slot));
-            when(assignment.getVerificationTypeSnapshot()).thenReturn("SELF_CHECK");
+        when(assignment.getDifficultySnapshot()).thenReturn(QuestDifficulty.valueOf(difficulty(periodType, slot)));
+        when(assignment.getVerificationTypeSnapshot()).thenReturn(QuestVerificationType.SELF_CHECK);
             when(assignment.getVerificationParametersSnapshot()).thenReturn("{}");
             when(assignment.getCreatureExperienceSnapshot()).thenReturn(100L);
             when(assignment.getContributionScoreSnapshot()).thenReturn(10L);

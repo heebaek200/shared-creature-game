@@ -1,6 +1,8 @@
 package com.team.sharedcreature.quest.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -45,11 +47,16 @@ public class QuestAssignment {
     @Column(name = "description_snapshot", length = 500, nullable = false)
     private String descriptionSnapshot;
 
+    /** 배정 당시의 난이도를 복사하여 이후 템플릿 변경과 분리합니다. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "difficulty_snapshot", length = 30, nullable = false)
-    private String difficultySnapshot;
+    private QuestDifficulty difficultySnapshot;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "verification_type_snapshot", length = 30, nullable = false)
-    private String verificationTypeSnapshot;
+    private QuestVerificationType verificationTypeSnapshot;
 
     @Column(name = "verification_parameters_snapshot", columnDefinition = "JSON", nullable = false)
     private String verificationParametersSnapshot;
@@ -104,7 +111,7 @@ public class QuestAssignment {
      * 슬롯 순서는 별도 인자로 전달하여 UNIQUE 제약을 적용합니다.
      */
     public record Snapshot(
-            String title, String description, String difficulty, String verificationType,
+            String title, String description, QuestDifficulty difficulty, QuestVerificationType verificationType,
             String verificationParameters, long creatureExperience, long contributionScore
     ) {
     }

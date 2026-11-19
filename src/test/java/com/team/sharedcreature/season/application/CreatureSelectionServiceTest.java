@@ -1,11 +1,18 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
+
+import com.team.sharedcreature.season.domain.GroupSeasonStatus;
+
+import com.team.sharedcreature.group.domain.GroupRole;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.season.domain.CreatureSpecies;
+import com.team.sharedcreature.season.domain.CreatureSpeciesStatus;
 import com.team.sharedcreature.season.domain.GroupCreature;
 import com.team.sharedcreature.season.domain.GroupSeason;
 import com.team.sharedcreature.season.domain.Season;
@@ -82,7 +89,7 @@ class CreatureSelectionServiceTest {
         assertThatThrownBy(() -> service.selectSpecies(1L, 1L))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.code()).isEqualTo("CREATURE_SELECTION_CLOSED"));
-        verify(speciesRepository, never()).findByIdAndStatus(1L, "ACTIVE");
+        verify(speciesRepository, never()).findByIdAndStatus(1L, CreatureSpeciesStatus.ACTIVE);
     }
 
     @Test
@@ -91,7 +98,7 @@ class CreatureSelectionServiceTest {
         GroupMembership primary = membership("PRIMARY", group);
         GroupMembership deputy = membership("DEPUTY", group);
         GroupMembership member = membership("MEMBER", group);
-        when(speciesRepository.findAllByStatusOrderByDisplayOrderAscIdAsc("ACTIVE")).thenReturn(List.of());
+        when(speciesRepository.findAllByStatusOrderByDisplayOrderAscIdAsc(CreatureSpeciesStatus.ACTIVE)).thenReturn(List.of());
         when(membershipRepository.findActiveWithGroupByUserId(1L))
                 .thenReturn(Optional.of(primary));
         when(membershipRepository.findActiveWithGroupByUserId(2L))
@@ -125,7 +132,7 @@ class CreatureSelectionServiceTest {
         when(seasonQueryService.findCurrentSeasonForShare()).thenReturn(season);
         when(groupSeasonRepository.findForUpdateByGroupIdAndSeasonId(10L, 1L))
                 .thenReturn(Optional.of(groupSeason));
-        when(speciesRepository.findByIdAndStatus(5L, "ACTIVE")).thenReturn(Optional.of(species));
+        when(speciesRepository.findByIdAndStatus(5L, CreatureSpeciesStatus.ACTIVE)).thenReturn(Optional.of(species));
         when(groupCreatureRepository.findSnapshotByGroupSeasonId(100L)).thenReturn(Optional.of(creature));
 
         var response = service.selectSpecies(7L, 5L);
@@ -176,8 +183,8 @@ class CreatureSelectionServiceTest {
         locks.verify(seasonQueryService).findCurrentSeasonForShareIfPresent();
         locks.verify(groupSeasonRepository).findForUpdateById(100L);
         locks.verify(groupCreatureRepository).findForUpdateByGroupSeasonId(100L);
-        assertThat(groupSeason.getStatus()).isEqualTo("ACTIVE");
-        assertThat(creature.getGrowthStage()).isEqualTo("HATCHLING");
+        assertThat(groupSeason.getStatus()).isEqualTo(GroupSeasonStatus.ACTIVE);
+        assertThat(creature.getGrowthStage()).isEqualTo(CreatureGrowthStage.HATCHLING);
     }
 
     private Group group(Long id) {
@@ -229,7 +236,7 @@ class CreatureSelectionServiceTest {
     private GroupMembership membership(String role, Group group) {
         GroupMembership membership = org.mockito.Mockito.mock(GroupMembership.class);
         User user = org.mockito.Mockito.mock(User.class);
-        lenient().when(membership.getRole()).thenReturn(role);
+        lenient().when(membership.getRole()).thenReturn(GroupRole.valueOf(role));
         lenient().when(membership.getGroup()).thenReturn(group);
         lenient().when(membership.getUser()).thenReturn(user);
         return membership;
@@ -298,7 +305,7 @@ class CreatureSelectionServiceTest {
 
         // 종 선택이나 변경 이벤트는 발생하지 않아야 합니다.
         assertThat(groupSeason.getSelectedSpecies()).isNull();
-        verify(speciesRepository, never()).findByIdAndStatus(1L, "ACTIVE");
+        verify(speciesRepository, never()).findByIdAndStatus(1L, CreatureSpeciesStatus.ACTIVE);
         org.mockito.Mockito.verifyNoInteractions(eventPublisher);
     }
 
@@ -335,11 +342,11 @@ class CreatureSelectionServiceTest {
         assertThat(service.hatchIfDue(100L)).isEmpty();
 
         // 이전의 알 상태와 그룹 시즌 준비 상태를 그대로 유지합니다.
-        assertThat(groupSeason.getStatus()).isEqualTo("PREPARING");
-        assertThat(creature.getGrowthStage()).isEqualTo("EGG");
+        assertThat(groupSeason.getStatus()).isEqualTo(GroupSeasonStatus.PREPARING);
+        assertThat(creature.getGrowthStage()).isEqualTo(CreatureGrowthStage.EGG);
 
         verify(speciesRepository, never())
-                .findAllByStatusOrderByDisplayOrderAscIdAsc("ACTIVE");
+                .findAllByStatusOrderByDisplayOrderAscIdAsc(CreatureSpeciesStatus.ACTIVE);
         org.mockito.Mockito.verifyNoInteractions(eventPublisher);
     }
 

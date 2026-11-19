@@ -1,5 +1,6 @@
 package com.team.sharedcreature.payment.application;
 
+import com.team.sharedcreature.payment.domain.PaymentProvider;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.payment.api.AdminRefundResponse;
@@ -7,7 +8,10 @@ import com.team.sharedcreature.payment.domain.PaymentTransaction;
 import com.team.sharedcreature.payment.domain.PaymentTransactionStatus;
 import com.team.sharedcreature.payment.domain.PaymentTransactionType;
 import com.team.sharedcreature.payment.domain.PgApiAttempt;
+import com.team.sharedcreature.payment.domain.PgApiOperation;
+import com.team.sharedcreature.payment.domain.PgApiResultType;
 import com.team.sharedcreature.payment.domain.Purchase;
+import com.team.sharedcreature.payment.domain.RefundStatus;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
 import com.team.sharedcreature.payment.infrastructure.PgApiAttemptRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
 import com.team.sharedcreature.admin.domain.ApiIdempotencyRecord;
+import com.team.sharedcreature.admin.domain.ApiIdempotencyStatus;
 import com.team.sharedcreature.payment.application
         .RefundApprovalTransactionService.CommandResponse;
 import com.team.sharedcreature.payment.infrastructure.RefundIdempotencyRepository;
@@ -97,14 +102,14 @@ public class RefundResultTransactionService {
         }
 
         // 이미 응답을 저장했다면 현재 환불 상태로 다시 만들지 않습니다.
-        if ("COMPLETED".equals(idempotencyRecord.getStatus())) {
+        if (idempotencyRecord.getStatus() == ApiIdempotencyStatus.COMPLETED) {
             return objectMapper.readValue(
                     idempotencyRecord.getResponseSnapshot(),
                     CommandResponse.class
             );
         }
 
-        if (!"PROCESSING".equals(idempotencyRecord.getStatus())) {
+        if (idempotencyRecord.getStatus() != ApiIdempotencyStatus.PROCESSING) {
             throw new IllegalStateException(
                     "처리 중인 멱등 기록이 아닙니다."
             );
@@ -112,8 +117,8 @@ public class RefundResultTransactionService {
 
         // 동일 호출의 결과와 이미 확정한 환불을 다시 변경하지 않습니다.
         if (attempt.getCompletedAt() != null
-                || "COMPLETED".equals(refund.getStatus())
-                || "FAILED".equals(refund.getStatus())) {
+                || refund.getStatus() == RefundStatus.COMPLETED
+                || refund.getStatus() == RefundStatus.FAILED) {
             // 이미 처리된 결과도 최초 HTTP 응답으로 저장하여 반환합니다.
             return completeResponse(
                     idempotencyRecord,
@@ -122,8 +127,8 @@ public class RefundResultTransactionService {
             );
         }
 
-        if (!"CANCEL_PENDING".equals(refund.getStatus())
-                && !"CANCEL_UNKNOWN".equals(refund.getStatus())) {
+        if (refund.getStatus() != RefundStatus.CANCEL_PENDING
+                && refund.getStatus() != RefundStatus.CANCEL_UNKNOWN) {
             throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
         }
 
@@ -195,8 +200,8 @@ public class RefundResultTransactionService {
                 || !Objects.equals(command.paymentId(), purchase.getOrderNumber())
                 || !Objects.equals(command.amountKrw(), purchase.getPriceKrwSnapshot())
                 || !Objects.equals(command.currency(), purchase.getCurrency())
-                || !"CANCELLATION".equals(cancellation.getOperation())
-                || !"CANCELLATION_LOOKUP".equals(lookup.getOperation())
+                || cancellation.getOperation() != PgApiOperation.CANCELLATION
+                || lookup.getOperation() != PgApiOperation.CANCELLATION_LOOKUP
                 || !Objects.equals(
                 cancellation.getIdempotencyKey(),
                 command.pgIdempotencyKey()
@@ -211,8 +216,8 @@ public class RefundResultTransactionService {
         }
 
         // 이미 확정됐거나 같은 조회 결과를 처리했다면 다시 반영하지 않습니다.
-        if (!"CANCEL_PENDING".equals(refund.getStatus())
-                && !"CANCEL_UNKNOWN".equals(refund.getStatus())) {
+        if (refund.getStatus() != RefundStatus.CANCEL_PENDING
+                && refund.getStatus() != RefundStatus.CANCEL_UNKNOWN) {
             return Optional.empty();
         }
 
@@ -312,14 +317,14 @@ public class RefundResultTransactionService {
         }
 
         // 이미 응답을 저장했다면 상태 변경 없이 최초 응답을 재사용합니다.
-        if ("COMPLETED".equals(record.getStatus())) {
+        if (record.getStatus() == ApiIdempotencyStatus.COMPLETED) {
             return objectMapper.readValue(
                     record.getResponseSnapshot(),
                     CommandResponse.class
             );
         }
 
-        if (!"PROCESSING".equals(record.getStatus())) {
+        if (record.getStatus() != ApiIdempotencyStatus.PROCESSING) {
             throw new IllegalStateException(
                     "처리 중인 수동 복구 멱등 기록이 아닙니다."
             );
@@ -367,11 +372,10 @@ public class RefundResultTransactionService {
 
         // 연결된 거래가 이미 다른 결과로 확정됐다면 임의로 덮어쓰지 않습니다.
         boolean transactionFinal =
-                PaymentTransactionStatus.SUCCESS.name().equals(transaction.getStatus())
-                        || PaymentTransactionStatus.DEFINITIVE_FAILURE.name()
-                        .equals(transaction.getStatus());
+                transaction.getStatus() == PaymentTransactionStatus.SUCCESS
+                        || transaction.getStatus() == PaymentTransactionStatus.DEFINITIVE_FAILURE;
 
-        if (transactionFinal && !nextStatus.name().equals(transaction.getStatus())) {
+        if (transactionFinal && nextStatus != transaction.getStatus()) {
             throw new IllegalStateException("취소 거래와 PG 결과가 일치하지 않습니다.");
         }
 
@@ -409,7 +413,13 @@ public class RefundResultTransactionService {
         ));
 
         attempt.complete(
-                result.outcome().name(),
+                // PG 결과 분류를 호출 이력의 결과 타입으로 명시적으로 연결합니다.
+                switch (result.outcome()) {
+                    case SUCCESS -> PgApiResultType.SUCCESS;
+                    case DEFINITIVE_FAILURE -> PgApiResultType.DEFINITIVE_FAILURE;
+                    case PENDING -> PgApiResultType.PENDING;
+                    case UNKNOWN -> PgApiResultType.UNKNOWN;
+                },
                 result.httpStatus(),
                 result.providerResultCode(),
                 summary,
@@ -432,7 +442,7 @@ public class RefundResultTransactionService {
 
         CommandResponse response;
 
-        if ("CANCEL_UNKNOWN".equals(data.status())) {
+        if (data.status() == RefundStatus.CANCEL_UNKNOWN) {
             // 결과 불명은 상태를 저장한 뒤 HTTP 409로 전달합니다.
             var error = errorResponseFactory.create(
                     ErrorCode.PG_CANCEL_RESULT_UNKNOWN,
@@ -472,7 +482,7 @@ public class RefundResultTransactionService {
                 || !Objects.equals(command.amountKrw(), purchase.getPriceKrwSnapshot())
                 || !Objects.equals(command.currency(), purchase.getCurrency())
                 || !Objects.equals(command.pgIdempotencyKey(), attempt.getIdempotencyKey())
-                || !"CANCELLATION".equals(attempt.getOperation())) {
+                || attempt.getOperation() != PgApiOperation.CANCELLATION) {
             throw new BusinessException(
                     ErrorCode.CONCURRENT_MODIFICATION,
                     "취소 준비 정보와 현재 구매·PG 이력이 일치하지 않습니다."
@@ -547,7 +557,7 @@ public class RefundResultTransactionService {
         if (transaction == null && result.providerTransactionId() != null) {
             transaction = transactionRepository
                     .findByProviderAndProviderTransactionId(
-                            "PORTONE",
+                            PaymentProvider.PORTONE,
                             result.providerTransactionId()
                     )
                     .orElse(null);
@@ -563,8 +573,7 @@ public class RefundResultTransactionService {
         }
 
         if (!Objects.equals(purchase.getId(), transaction.getPurchase().getId())
-                || !PaymentTransactionType.CANCELLATION.name()
-                .equals(transaction.getTransactionType())) {
+                || transaction.getTransactionType() != PaymentTransactionType.CANCELLATION) {
             throw new IllegalStateException(
                     "동일 구매의 취소 거래만 환불 결과에 연결할 수 있습니다."
             );

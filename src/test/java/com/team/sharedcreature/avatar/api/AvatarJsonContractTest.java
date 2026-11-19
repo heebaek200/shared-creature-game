@@ -1,6 +1,10 @@
 package com.team.sharedcreature.avatar.api;
 
+import com.team.sharedcreature._core.realtime.GroupLivePayloads;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.exc.InvalidNullException;
 import tools.jackson.databind.exc.UnrecognizedPropertyException;
@@ -16,6 +20,17 @@ class AvatarJsonContractTest {
     private final JsonMapper mapper = JsonMapper.builder()
             .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
             .build();
+
+    @ParameterizedTest
+    @EnumSource(AvatarSlot.class)
+    void equipmentChangedPayloadSerializesSlotAsString(AvatarSlot slot) {
+        var payload = new GroupLivePayloads.AvatarEquipmentChanged(1L, slot, null);
+        var json = mapper.readTree(mapper.writeValueAsString(payload));
+
+        assertThat(json.get("slot").isString()).isTrue();
+        assertThat(json.get("slot").asString()).isEqualTo(slot.name());
+        assertThat(json.get("equippedItem").isNull()).isTrue();
+    }
 
     @Test
     void 최초_사용_동의_생략은_false로_처리한다() {

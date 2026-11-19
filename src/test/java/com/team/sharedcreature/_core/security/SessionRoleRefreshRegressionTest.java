@@ -1,5 +1,13 @@
 package com.team.sharedcreature._core.security;
 
+import com.team.sharedcreature.group.domain.GroupRole;
+
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
+import com.team.sharedcreature.auth.domain.UserStatus;
+
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.application.UserActivityService;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
@@ -57,11 +65,11 @@ class SessionRoleRefreshRegressionTest {
         GroupMembership membership = mock(GroupMembership.class);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(user.getId()).thenReturn(1L);
-        when(user.getStatus()).thenReturn("ACTIVE");
-        when(user.getGlobalRole()).thenReturn("USER");
-        when(membershipRepository.findByUserIdAndStatus(1L, "ACTIVE"))
+        when(user.getStatus()).thenReturn(UserStatus.ACTIVE);
+        when(user.getGlobalRole()).thenReturn(GlobalRole.USER);
+        when(membershipRepository.findByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE))
                 .thenReturn(Optional.of(membership));
-        when(membership.getRole()).thenReturn("PRIMARY");
+        when(membership.getRole()).thenReturn(GroupRole.PRIMARY);
 
         // DB와 달리 세션 및 이전 인증 객체에는 MEMBER만 있습니다.
         MockHttpSession session = new MockHttpSession();

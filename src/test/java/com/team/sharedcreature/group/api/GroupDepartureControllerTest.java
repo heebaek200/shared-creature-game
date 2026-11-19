@@ -6,8 +6,12 @@ import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature._core.security.SessionAuthenticationFilter;
 import com.team.sharedcreature.group.application.GroupMembershipService;
 import com.team.sharedcreature.group.application.GroupQueryService;
+import com.team.sharedcreature.group.domain.GroupMembershipExitReason;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.mock.web.MockHttpSession;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.util.Set;
@@ -39,7 +43,7 @@ class GroupDepartureControllerTest {
         LoginUser loginUser = new LoginUser(1L, "테스트", Set.of("PRIMARY", "SUPER_ADMIN"));
         session.setAttribute(SessionAuthenticationFilter.LOGIN_USER, loginUser);
         LeaveMyGroupResponse expected = new LeaveMyGroupResponse(
-                10L, 1L, NOW, "SELF", NOW.plusSeconds(86_400), false);
+                10L, 1L, NOW, GroupMembershipExitReason.SELF, NOW.plusSeconds(86_400), false);
         when(service.leaveMyGroup(1L)).thenReturn(expected);
 
         // Service의 정상 결과 뒤에만 세션 역할을 갱신합니다.
@@ -92,5 +96,19 @@ class GroupDepartureControllerTest {
                 .collect(java.util.stream.Collectors.toSet());
         assertThat(names).contains("restrictionUntil", "groupDeactivated", "endedAt");
         assertThat(names).doesNotContain("restrictionUtil");
+    }
+
+    @ParameterizedTest
+    @CsvSource({"SELF,SELF", "INACTIVE,INACTIVE", "REPORT,REPORTED"})
+    void exitReasonKeepsApiAndDatabaseCodes(String apiCode, String databaseCode) {
+        var converter = new GroupMembershipExitReason.JpaConverter();
+        var reason = converter.convertToEntityAttribute(databaseCode);
+        var response = new LeaveMyGroupResponse(10L, 1L, NOW, reason, NOW.plusSeconds(86_400), false);
+        var mapper = new ObjectMapper();
+        var value = mapper.readTree(mapper.writeValueAsString(response)).get("exitReason");
+
+        assertThat(value.isString()).isTrue();
+        assertThat(value.asString()).isEqualTo(apiCode);
+        assertThat(converter.convertToDatabaseColumn(reason)).isEqualTo(databaseCode);
     }
 }

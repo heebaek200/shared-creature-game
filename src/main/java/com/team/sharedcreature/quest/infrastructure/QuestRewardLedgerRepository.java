@@ -25,7 +25,7 @@ public interface QuestRewardLedgerRepository extends JpaRepository<QuestRewardLe
             SELECT COALESCE(SUM(l.amount), 0)
               FROM QuestRewardLedger l
              WHERE l.groupScore.groupSeason.id = :groupSeasonId
-               AND l.rewardType = 'CONTRIBUTION'
+               AND l.rewardType = com.team.sharedcreature.quest.domain.QuestRewardType.CONTRIBUTION
                AND (
                     l.appliedAt < :completedAt
                     OR (l.appliedAt = :completedAt AND l.questCompletion.id <= :completionId)

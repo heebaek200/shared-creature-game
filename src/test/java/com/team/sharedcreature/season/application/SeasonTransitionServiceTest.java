@@ -1,6 +1,8 @@
 
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.SeasonRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,7 +75,7 @@ class SeasonTransitionServiceTest {
         boolean changed = service.beginClosingIfExpired(SEASON_ID);
 
         assertTrue(changed);
-        assertEquals("CLOSING", season.getStatus());
+        assertEquals(SeasonStatus.CLOSING, season.getStatus());
         assertEquals(END, season.getUpdatedAt());
 
         verify(seasonRepository).findForUpdateById(SEASON_ID);
@@ -90,7 +92,7 @@ class SeasonTransitionServiceTest {
 
         assertTrue(service.beginClosingIfExpired(SEASON_ID));
 
-        assertEquals("CLOSING", season.getStatus());
+        assertEquals(SeasonStatus.CLOSING, season.getStatus());
     }
 
     /**
@@ -105,7 +107,7 @@ class SeasonTransitionServiceTest {
 
         assertFalse(service.beginClosingIfExpired(SEASON_ID));
 
-        assertEquals("ACTIVE", season.getStatus());
+        assertEquals(SeasonStatus.ACTIVE, season.getStatus());
         assertEquals(CREATED, season.getUpdatedAt());
     }
 
@@ -121,7 +123,7 @@ class SeasonTransitionServiceTest {
 
         assertFalse(service.beginClosingIfExpired(SEASON_ID));
 
-        assertEquals("SCHEDULED", season.getStatus());
+        assertEquals(SeasonStatus.SCHEDULED, season.getStatus());
         assertEquals(CREATED, season.getUpdatedAt());
     }
 
@@ -136,7 +138,7 @@ class SeasonTransitionServiceTest {
 
         assertFalse(service.beginClosingIfExpired(SEASON_ID));
 
-        assertEquals("CLOSING", season.getStatus());
+        assertEquals(SeasonStatus.CLOSING, season.getStatus());
         assertEquals(CREATED, season.getUpdatedAt());
     }
 
@@ -151,7 +153,7 @@ class SeasonTransitionServiceTest {
 
         assertFalse(service.beginClosingIfExpired(SEASON_ID));
 
-        assertEquals("ENDED", season.getStatus());
+        assertEquals(SeasonStatus.ENDED, season.getStatus());
         assertEquals(CREATED, season.getUpdatedAt());
     }
 
@@ -174,7 +176,7 @@ class SeasonTransitionServiceTest {
 
         assertTrue(service.beginClosingIfExpired(SEASON_ID));
 
-        assertEquals("CLOSING", season.getStatus());
+        assertEquals(SeasonStatus.CLOSING, season.getStatus());
         assertEquals(END, season.getUpdatedAt());
     }
 
@@ -206,7 +208,7 @@ class SeasonTransitionServiceTest {
 
         // JPA로 복원한 시즌 엔티티의 상태를 재현합니다.
         ReflectionTestUtils.setField(season, "id", SEASON_ID);
-        ReflectionTestUtils.setField(season, "status", status);
+        ReflectionTestUtils.setField(season, "status", status == null ? null : SeasonStatus.valueOf(status));
         ReflectionTestUtils.setField(season, "startAt", START);
         ReflectionTestUtils.setField(season, "endAt", END);
         ReflectionTestUtils.setField(season, "createdAt", CREATED);

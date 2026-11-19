@@ -48,8 +48,7 @@ public class SecurityErrorWriter {
         response.setStatus(errorCode.status().value());
         response.setCharacterEncoding("UTF-8");
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        Object requestId = request.getAttribute("requestId");
-        String traceId = requestId == null ? "unavailable" : requestId.toString();
+        String traceId = ErrorResponseFactory.requestTraceId(request);
         ErrorResponse body = responseFactory.create(errorCode, null, List.of(), traceId);
         objectMapper.writeValue(response.getWriter(), body);
     }

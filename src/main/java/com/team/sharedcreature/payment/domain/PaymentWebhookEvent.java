@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
@@ -26,8 +28,10 @@ public class PaymentWebhookEvent {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "provider", length = 30, nullable = false)
-    private String provider;
+    private PaymentProvider provider;
 
     @Column(name = "provider_event_id", length = 255, nullable = false)
     private String providerEventId;
@@ -52,8 +56,11 @@ public class PaymentWebhookEvent {
     @Column(name = "payload_summary", columnDefinition = "JSON", nullable = false)
     private String payloadSummary;
 
+    /** Webhook 접수 이후의 내부 처리 및 복구 상태입니다. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "processing_status", length = 30, nullable = false)
-    private String processingStatus;
+    private WebhookProcessingStatus processingStatus;
 
     @Column(name = "failure_detail", length = 1000)
     private String failureDetail;
@@ -90,14 +97,14 @@ public class PaymentWebhookEvent {
             String payloadSummary,
             Instant now
     ) {
-        this.provider = "PORTONE";
+        this.provider = PaymentProvider.PORTONE;
         this.providerEventId = providerEventId;
         this.providerPaymentId = providerPaymentId;
         this.purchase = purchase;
         this.eventType = eventType;
         this.payloadHash = payloadHash;
         this.payloadSummary = payloadSummary;
-        this.processingStatus = WebhookProcessingStatus.PENDING.name();
+        this.processingStatus = WebhookProcessingStatus.PENDING;
         this.receivedAt = now;
         this.processingStartedAt = now;
         this.attemptCount = 1;
@@ -130,7 +137,7 @@ public class PaymentWebhookEvent {
      * 최초 이벤트 ID와 Payload 요약은 보존합니다.
      */
     public void ignore(Instant now) {
-        processingStatus = WebhookProcessingStatus.IGNORED.name();
+        processingStatus = WebhookProcessingStatus.IGNORED;
         processedAt = now;
         updatedAt = now;
     }
@@ -143,7 +150,7 @@ public class PaymentWebhookEvent {
     public void complete(Purchase purchase, PaymentTransaction transaction, Instant now) {
         this.purchase = purchase;
         paymentTransaction = transaction;
-        processingStatus = WebhookProcessingStatus.PROCESSED.name();
+        processingStatus = WebhookProcessingStatus.PROCESSED;
         failureDetail = null;
         processedAt = now;
         updatedAt = now;
@@ -155,7 +162,7 @@ public class PaymentWebhookEvent {
      * 원본 Webhook ID와 실패 사유는 삭제하지 않습니다.
      */
     public void fail(String detail, Instant now) {
-        processingStatus = WebhookProcessingStatus.FAILED.name();
+        processingStatus = WebhookProcessingStatus.FAILED;
         failureDetail = detail == null ? null : detail.substring(0, Math.min(detail.length(), 1000));
         processedAt = now;
         updatedAt = now;
@@ -168,10 +175,10 @@ public class PaymentWebhookEvent {
      */
     public boolean isRecoverable(Instant staleBefore) {
         // 쿼리의 필터와 같은 조건을 적용해 행 잠금 뒤 상태 경합을 방어합니다.
-        if (WebhookProcessingStatus.FAILED.name().equals(processingStatus)) {
+        if (processingStatus == WebhookProcessingStatus.FAILED) {
             return updatedAt != null && !updatedAt.isAfter(staleBefore);
         }
-        return WebhookProcessingStatus.PENDING.name().equals(processingStatus)
+        return processingStatus == WebhookProcessingStatus.PENDING
                 && processingStartedAt != null
                 && !processingStartedAt.isAfter(staleBefore);
     }
@@ -182,7 +189,7 @@ public class PaymentWebhookEvent {
      * 다음 시도에서 이전 결과와 구분하도록 attemptCount를 증가시킵니다.
      */
     public void retry(Instant now) {
-        processingStatus = WebhookProcessingStatus.PENDING.name();
+        processingStatus = WebhookProcessingStatus.PENDING;
         processingStartedAt = now;
         attemptCount++;
         processedAt = null;

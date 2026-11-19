@@ -1,5 +1,12 @@
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.group.domain.GroupRole;
+
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+import com.team.sharedcreature.group.domain.GroupJoinBlockedReason;
+
+import com.team.sharedcreature.group.domain.GroupStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.UserProfile;
@@ -61,8 +68,8 @@ class GroupQueryServiceTest {
         when(group.getCurrentMemberCount()).thenReturn(3);
         when(group.getCapacity()).thenReturn(20);
         when(membership.getId()).thenReturn(100L);
-        when(membership.getRole()).thenReturn("DEPUTY");
-        when(membership.getStatus()).thenReturn("ACTIVE");
+        when(membership.getRole()).thenReturn(GroupRole.DEPUTY);
+        when(membership.getStatus()).thenReturn(GroupMembershipStatus.ACTIVE);
 
         Instant joinedAt = Instant.parse("2026-11-03T00:00:00Z");
         when(membership.getJoinedAt()).thenReturn(joinedAt);
@@ -84,10 +91,11 @@ class GroupQueryServiceTest {
         assertThat(result.group().remainingCapacity()).isEqualTo(17);
         assertThat(result.group().joinable()).isFalse();
         assertThat(result.group().joinBlockedReason())
-                .isEqualTo("ALREADY_IN_GROUP");
+                .isEqualTo(GroupJoinBlockedReason.ALREADY_IN_GROUP);
 
         assertThat(result.primaryAdmin().nickname()).isEqualTo("그룹장");
-        assertThat(result.myMembership().role()).isEqualTo("DEPUTY");
+        assertThat(result.myMembership().role()).isEqualTo(GroupRole.DEPUTY);
+        assertThat(result.myMembership().status()).isEqualTo(GroupMembershipStatus.ACTIVE);
         assertThat(result.myMembership().joinedAt()).isEqualTo(joinedAt);
     }
 
@@ -123,7 +131,7 @@ class GroupQueryServiceTest {
 
         Instant now = Instant.parse("2026-11-04T00:00:00Z");
         GroupMemberResponse member = new GroupMemberResponse(
-                2L, "일반회원", 102L, "MEMBER", "ACTIVE", now, now
+                2L, "일반회원", 102L, GroupRole.MEMBER, GroupMembershipStatus.ACTIVE, now, now
         );
 
         var pageable = PageRequest.of(0, 20);
@@ -162,7 +170,7 @@ class GroupQueryServiceTest {
                 .thenReturn(Optional.of(membership));
         when(membership.getGroup()).thenReturn(group);
         when(group.getId()).thenReturn(groupId);
-        when(group.getStatus()).thenReturn("ACTIVE");
+        when(group.getStatus()).thenReturn(GroupStatus.ACTIVE);
 
         return membership;
     }
@@ -182,7 +190,7 @@ class GroupQueryServiceTest {
         when(membershipRepository.findActiveWithGroupByUserId(1L))
                 .thenReturn(Optional.of(membership));
         when(membership.getGroup()).thenReturn(group);
-        when(group.getStatus()).thenReturn("INACTIVE");
+        when(group.getStatus()).thenReturn(GroupStatus.INACTIVE);
 
         // 비활성 그룹의 내부 데이터는 노출하지 않아야 합니다.
         assertThatThrownBy(() -> service.getMyGroup(1L))

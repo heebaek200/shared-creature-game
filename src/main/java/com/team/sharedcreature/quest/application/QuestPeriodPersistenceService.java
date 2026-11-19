@@ -1,5 +1,8 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
+import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
+
 import com.team.sharedcreature.quest.domain.QuestAssignment;
 import com.team.sharedcreature.quest.domain.QuestPeriod;
 import com.team.sharedcreature.quest.infrastructure.QuestAssignmentRepository;
@@ -87,7 +90,7 @@ public class QuestPeriodPersistenceService {
             return new QuestPeriodAssignmentService.Result(
                     QuestPeriodAssignmentService.Outcome.NOT_READY, null, 0);
         }
-        if (period != null && "ACTIVE".equals(period.getStatus())) {
+        if (period != null && period.getStatus() == QuestPeriodStatus.ACTIVE) {
             return new QuestPeriodAssignmentService.Result(
                     QuestPeriodAssignmentService.Outcome.ALREADY_ACTIVE, period.getId(),
                     assignmentRepository.countByQuestPeriodId(period.getId()));
@@ -98,8 +101,8 @@ public class QuestPeriodPersistenceService {
 
         // 선정 실패는 외부 조정 서비스에 전파해 롤백 후 별도 FAILED 이력을 기록합니다.
         QuestTemplateSelectionService.SelectionBatch batch = selector.select(window);
-        int expectedSlots = "DAILY".equals(window.periodType()) ? 3 : 7;
-        if (!window.periodType().equals(batch.periodType()) || batch.slots().size() != expectedSlots) {
+        int expectedSlots = window.periodType() == QuestPeriodType.DAILY ? 3 : 7;
+        if (window.periodType() != batch.periodType() || batch.slots().size() != expectedSlots) {
             throw new IllegalStateException("퀘스트 슬롯 전체가 준비되지 않았습니다: " + window.periodType());
         }
         // 템플릿 조회 도중 날짜가 바뀌었다면 아직 DB를 변경하지 않았으므로 즉시 중단합니다.
@@ -163,7 +166,7 @@ public class QuestPeriodPersistenceService {
             return new QuestPeriodAssignmentService.Result(
                     QuestPeriodAssignmentService.Outcome.NOT_READY, null, 0);
         }
-        if (period != null && "ACTIVE".equals(period.getStatus())) {
+        if (period != null && period.getStatus() == QuestPeriodStatus.ACTIVE) {
             return new QuestPeriodAssignmentService.Result(
                     QuestPeriodAssignmentService.Outcome.ALREADY_ACTIVE, period.getId(),
                     assignmentRepository.countByQuestPeriodId(period.getId()));
@@ -198,12 +201,13 @@ public class QuestPeriodPersistenceService {
     public Optional<QuestPeriodAssignmentService.Result> readCommittedOutcome(
             QuestPeriodCalendar.PeriodWindow window
     ) {
-        return periodRepository.findByPeriodTypeAndStartAt(window.periodType(), window.startAt())
+        return periodRepository.findByPeriodTypeAndStartAt(
+                        window.periodType(), window.startAt())
                 .flatMap(period -> switch (period.getStatus()) {
-                    case "ACTIVE" -> Optional.of(new QuestPeriodAssignmentService.Result(
+                    case ACTIVE -> Optional.of(new QuestPeriodAssignmentService.Result(
                             QuestPeriodAssignmentService.Outcome.ALREADY_ACTIVE, period.getId(),
                             assignmentRepository.countByQuestPeriodId(period.getId())));
-                    case "FAILED" -> Optional.of(new QuestPeriodAssignmentService.Result(
+                    case FAILED -> Optional.of(new QuestPeriodAssignmentService.Result(
                             QuestPeriodAssignmentService.Outcome.FAILED, period.getId(), 0));
                     default -> Optional.empty();
                 });
@@ -286,7 +290,7 @@ public class QuestPeriodPersistenceService {
      * 상위 조정 서비스에서 NOT_READY로 변환하되 원본 트랜잭션 안에서는 잡지 않습니다.
      */
     static final class WindowExpiredDuringPersistenceException extends RuntimeException {
-        WindowExpiredDuringPersistenceException(String type, Instant startAt) {
+        WindowExpiredDuringPersistenceException(QuestPeriodType type, Instant startAt) {
             super("퀘스트 저장 중 기간이 종료되었습니다. type=" + type + ", startAt=" + startAt);
         }
     }

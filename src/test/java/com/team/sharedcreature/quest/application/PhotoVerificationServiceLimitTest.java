@@ -1,5 +1,9 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.QuestVerificationType;
+
+import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
@@ -123,10 +127,10 @@ class PhotoVerificationServiceLimitTest {
                 .thenReturn(java.util.Optional.of(assignment));
         when(seasonQueryService.findCurrentSeason()).thenReturn(season);
 
-        when(assignment.getVerificationTypeSnapshot()).thenReturn("PHOTO_EXIF");
+        when(assignment.getVerificationTypeSnapshot()).thenReturn(QuestVerificationType.PHOTO_EXIF);
         when(assignment.getQuestPeriod()).thenReturn(period);
         when(period.getSeason()).thenReturn(season);
-        when(period.getStatus()).thenReturn("ACTIVE");
+        when(period.getStatus()).thenReturn(QuestPeriodStatus.ACTIVE);
         when(period.getStartAt()).thenReturn(NOW.minusSeconds(3600));
         when(period.getEndAt()).thenReturn(NOW.plusSeconds(3600));
         when(season.getId()).thenReturn(4L);

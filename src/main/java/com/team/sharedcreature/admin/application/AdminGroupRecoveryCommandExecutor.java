@@ -1,17 +1,20 @@
 package com.team.sharedcreature.admin.application;
 
+import com.team.sharedcreature.admin.domain.AdminAuditActionType;
+import com.team.sharedcreature.admin.domain.AdminAuditTargetType;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.admin.domain.AdminAuditLog;
+import com.team.sharedcreature.admin.domain.AdminAuditResult;
 import com.team.sharedcreature.admin.infrastructure.AdminAuditLogRepository;
 import com.team.sharedcreature.auth.domain.User;
+import com.team.sharedcreature.auth.domain.GlobalRole;
+import com.team.sharedcreature.auth.domain.UserStatus;
 import com.team.sharedcreature.auth.infrastructure.UserProfileRepository;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.api.GroupSummaryResponse;
 import com.team.sharedcreature.group.api.MyGroupResponse;
-import com.team.sharedcreature.group.domain.Group;
-import com.team.sharedcreature.group.domain.GroupAdminChange;
-import com.team.sharedcreature.group.domain.GroupMembership;
+import com.team.sharedcreature.group.domain.*;
 import com.team.sharedcreature.group.infrastructure.GroupAdminChangeRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
@@ -80,16 +83,17 @@ public class AdminGroupRecoveryCommandExecutor {
         User actor = users.get(actorId);
         User previousPrimary = users.get(previousPrimaryId);
         User target = users.get(targetId);
-        if (!"ACTIVE".equals(actor.getStatus()) || !"SUPER_ADMIN".equals(actor.getGlobalRole())) {
+        if (actor.getStatus() != UserStatus.ACTIVE
+                || actor.getGlobalRole() != GlobalRole.SUPER_ADMIN) {
             throw new BusinessException(ErrorCode.ROLE_FORBIDDEN);
         }
 
         Group group = groupRepository.findByIdForUpdate(groupId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        if (!"ACTIVE".equals(group.getStatus())
+        if (group.getStatus() != GroupStatus.ACTIVE
                 || group.getPrimaryAdminUser() == null
                 || !previousPrimaryId.equals(group.getPrimaryAdminUser().getId())
-                || !"ACTIVE".equals(target.getStatus())) {
+                || target.getStatus() != UserStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
         }
 
@@ -104,9 +108,9 @@ public class AdminGroupRecoveryCommandExecutor {
         }
         GroupMembership previousMembership = memberships.get(previousMembershipId);
         GroupMembership targetMembership = memberships.get(targetMembershipId);
-        String targetPreviousRole = targetMembership.getRole();
-        if (!"PRIMARY".equals(previousMembership.getRole())
-                || (!"MEMBER".equals(targetPreviousRole) && !"DEPUTY".equals(targetPreviousRole))) {
+        GroupRole targetPreviousRole = targetMembership.getRole();
+        if (previousMembership.getRole() != GroupRole.PRIMARY
+                || (targetPreviousRole != GroupRole.MEMBER && targetPreviousRole != GroupRole.DEPUTY)) {
             throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
         }
 
@@ -119,22 +123,22 @@ public class AdminGroupRecoveryCommandExecutor {
                 group, actor, target, targetPreviousRole, now
         ));
         auditLogRepository.save(AdminAuditLog.create(
-                actor, "TRANSFER_PRIMARY_AS_SUPER_ADMIN", "GROUP", groupId, group,
-                "SUCCEEDED", reason, "{}", now
+                actor, AdminAuditActionType.TRANSFER_PRIMARY_AS_SUPER_ADMIN, AdminAuditTargetType.GROUP, groupId, group,
+                AdminAuditResult.SUCCEEDED, reason, "{}", now
         ));
 
         String nickname = profileRepository.findByUserId(targetId)
                 .orElseThrow(() -> new IllegalStateException("새 주 관리자 프로필이 없습니다."))
                 .getNickname();
         int remaining = Math.max(0, group.getCapacity() - group.getCurrentMemberCount());
-        GroupMembership actorMembership = membershipRepository.findByUserIdAndStatus(actorId, "ACTIVE")
+        GroupMembership actorMembership = membershipRepository.findByUserIdAndStatus(actorId, GroupMembershipStatus.ACTIVE)
                 .filter(membership -> groupId.equals(membership.getGroup().getId()))
                 .orElse(null);
         boolean actorAlreadyJoined = actorMembership != null;
         boolean joinable = !actorAlreadyJoined && remaining > 0;
-        String blockedReason = actorAlreadyJoined
-                ? "ALREADY_IN_GROUP"
-                : (remaining > 0 ? null : "GROUP_FULL");
+        GroupJoinBlockedReason blockedReason = actorAlreadyJoined
+                ? GroupJoinBlockedReason.ALREADY_IN_GROUP
+                : remaining > 0 ? null : GroupJoinBlockedReason.GROUP_FULL;
         return new MyGroupResponse(
                 new GroupSummaryResponse(
                         group.getId(), group.getName(), group.getDescription(), group.getCurrentMemberCount(),

@@ -1,5 +1,9 @@
 package com.team.sharedcreature.season.integration;
 
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
+
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.domain.Group;
@@ -86,7 +90,7 @@ class SeasonGroupInitializationIntegrationTest {
      */
     @BeforeEach
     void setUp() {
-        User user = userRepository.saveAndFlush(User.register("USER", NOW));
+        User user = userRepository.saveAndFlush(User.register(GlobalRole.USER, NOW));
         userId = user.getId();
     }
 
@@ -176,7 +180,7 @@ class SeasonGroupInitializationIntegrationTest {
         GroupCreature egg = creatureRepository.findById(originalEgg.getId()).orElseThrow();
         assertEquals(original.plus(Duration.ofHours(72)), stored.getSelectionDeadlineAt());
         assertEquals(original, egg.getCreatedAt());
-        assertEquals("EGG", egg.getGrowthStage());
+        assertEquals(CreatureGrowthStage.EGG, egg.getGrowthStage());
         assertEquals(1L, countChild("season_group_scores"));
     }
 

@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature._core.time.SeasonCalendar;
 import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.SeasonRepository;
@@ -74,7 +76,7 @@ class SeasonCreationServiceTest {
         verify(repository).saveAndFlush(captor.capture());
         Season created = captor.getValue();
         assertEquals(2, created.getSeasonNumber());
-        assertEquals("SCHEDULED", created.getStatus());
+        assertEquals(SeasonStatus.SCHEDULED, created.getStatus());
         assertEquals(SECOND_START, created.getStartAt());
         assertEquals(SECOND_END, created.getEndAt());
         assertEquals(clock.instant(), created.getCreatedAt());
@@ -281,7 +283,7 @@ class SeasonCreationServiceTest {
         ReflectionTestUtils.setField(season, "seasonNumber", number);
         ReflectionTestUtils.setField(season, "startAt", start);
         ReflectionTestUtils.setField(season, "endAt", end);
-        ReflectionTestUtils.setField(season, "status", status);
+        ReflectionTestUtils.setField(season, "status", status == null ? null : SeasonStatus.valueOf(status));
         return season;
     }
 

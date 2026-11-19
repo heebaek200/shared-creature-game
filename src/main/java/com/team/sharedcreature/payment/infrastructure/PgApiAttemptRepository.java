@@ -47,7 +47,7 @@ public interface PgApiAttemptRepository extends JpaRepository<PgApiAttempt, Long
             SELECT attempt
             FROM PgApiAttempt attempt
             WHERE attempt.refundRequest.id = :requestId
-            AND attempt.operation = 'CANCELLATION'
+            AND attempt.operation = com.team.sharedcreature.payment.domain.PgApiOperation.CANCELLATION
             ORDER BY attempt.attemptNumber ASC, attempt.id ASC
             """)
     List<PgApiAttempt> findCancellationAttemptsForUpdate(
@@ -67,8 +67,8 @@ public interface PgApiAttemptRepository extends JpaRepository<PgApiAttempt, Long
         FROM PgApiAttempt attempt
         WHERE attempt.refundRequest.id = :requestId
         AND attempt.operation IN (
-              'CANCELLATION',
-              'CANCELLATION_LOOKUP'
+              com.team.sharedcreature.payment.domain.PgApiOperation.CANCELLATION,
+              com.team.sharedcreature.payment.domain.PgApiOperation.CANCELLATION_LOOKUP
           )
         ORDER BY attempt.attemptNumber ASC, attempt.id ASC
         """)

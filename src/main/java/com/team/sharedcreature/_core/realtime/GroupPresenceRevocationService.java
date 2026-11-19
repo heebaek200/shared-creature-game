@@ -39,7 +39,7 @@ public class GroupPresenceRevocationService {
                     if (removal.lastSession()) {
                         eventPublisher.publish(
                                 removal.groupId(),
-                                "PRESENCE_LEFT",
+                                GroupLiveEventType.PRESENCE_LEFT,
                                 occurredAt,
                                 new GroupLivePayloads.PresenceLeft(removal.userId())
                         );

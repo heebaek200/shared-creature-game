@@ -1,5 +1,9 @@
 package com.team.sharedcreature.quest.application;
 
+import com.team.sharedcreature.quest.domain.PhotoVerificationStatus;
+
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.quest.domain.PhotoSubmission;
 import com.team.sharedcreature.quest.infrastructure.PhotoSubmissionRepository;
 import org.springframework.stereotype.Service;
@@ -42,7 +46,7 @@ public class PhotoSubmissionCleanupTransactionService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean expirePending(Long id, Instant now) {
         PhotoSubmission submission = repository.findForCleanupUpdate(id).orElse(null);
-        if (submission == null || !"PENDING".equals(submission.getVerificationStatus())
+        if (submission == null || submission.getVerificationStatus() != PhotoVerificationStatus.PENDING
                 || !submission.getCreatedAt().isBefore(now.minus(Duration.ofHours(1)))) {
             return false;
         }
@@ -60,7 +64,7 @@ public class PhotoSubmissionCleanupTransactionService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void deferPendingCleanup(Long id, Instant nextAttemptAt) {
         PhotoSubmission submission = repository.findForCleanupUpdate(id).orElse(null);
-        if (submission == null || !"PENDING".equals(submission.getVerificationStatus())) {
+        if (submission == null || submission.getVerificationStatus() != PhotoVerificationStatus.PENDING) {
             return;
         }
 
@@ -218,13 +222,13 @@ public class PhotoSubmissionCleanupTransactionService {
             return false;
         }
         if (kind == RetentionKind.INVALID) {
-            return "INVALID".equals(submission.getVerificationStatus());
+        return submission.getVerificationStatus() == PhotoVerificationStatus.INVALID;
         }
 
         // 종료 처리 중인 시즌의 파일은 최종 Snapshot 확정 전까지 삭제하지 않습니다.
         var season = submission.getQuestAssignment().getQuestPeriod().getSeason();
-        return "VALID".equals(submission.getVerificationStatus())
-                && "ENDED".equals(season.getStatus())
+        return submission.getVerificationStatus() == PhotoVerificationStatus.VALID
+                && (season.getStatus() == SeasonStatus.ENDED)
                 && !season.getEndAt().isAfter(now.minus(Duration.ofDays(30)));
     }
 }

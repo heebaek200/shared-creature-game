@@ -1,5 +1,9 @@
 package com.team.sharedcreature.season.integration;
 
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.UserProfile;
@@ -143,8 +147,8 @@ class SeasonParticipantStatusIntegrationTest {
         season = seasonRepository.saveAndFlush(season);
         seasonId = season.getId();
 
-        User admin = userRepository.saveAndFlush(User.register("USER", NOW));
-        User member = userRepository.saveAndFlush(User.register("USER", NOW));
+        User admin = userRepository.saveAndFlush(User.register(GlobalRole.USER, NOW));
+        User member = userRepository.saveAndFlush(User.register(GlobalRole.USER, NOW));
         adminId = admin.getId();
         memberId = member.getId();
         profileRepository.saveAndFlush(UserProfile.create(admin, "admin" + adminId, "admin" + adminId, NOW));
@@ -161,7 +165,7 @@ class SeasonParticipantStatusIntegrationTest {
         scoreRepository.saveAndFlush(SeasonGroupScore.zero(groupSeason, NOW));
 
         membershipService.joinGroup(new LoginUser(memberId, "member" + memberId, Set.of()), groupId);
-        memberMembershipId = membershipRepository.findByUserIdAndStatus(memberId, "ACTIVE")
+        memberMembershipId = membershipRepository.findByUserIdAndStatus(memberId, GroupMembershipStatus.ACTIVE)
                 .orElseThrow().getId();
     }
 
@@ -260,7 +264,7 @@ class SeasonParticipantStatusIntegrationTest {
         // 재가입은 탈퇴 후 24시간 제한을 벗어난 동일 시즌 시각에서 실행합니다.
         clock.set(NOW.plus(Duration.ofDays(2)));
         membershipService.joinGroup(new LoginUser(memberId, "member" + memberId, Set.of()), groupId);
-        Long newMembershipId = membershipRepository.findByUserIdAndStatus(memberId, "ACTIVE")
+        Long newMembershipId = membershipRepository.findByUserIdAndStatus(memberId, GroupMembershipStatus.ACTIVE)
                 .orElseThrow().getId();
 
         assertNotEquals(memberMembershipId, newMembershipId);

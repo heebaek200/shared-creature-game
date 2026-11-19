@@ -1,7 +1,6 @@
 package com.team.sharedcreature.avatar.support;
 
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
-import com.team.sharedcreature._core.exception.AvatarApiExceptionHandler;
 import com.team.sharedcreature._core.exception.RestApiExceptionHandler;
 import com.team.sharedcreature._core.security.SecurityConfiguration;
 import com.team.sharedcreature._core.security.SecurityErrorWriter;
@@ -129,11 +128,6 @@ public class AvatarHttpTestConfiguration implements WebMvcConfigurer {
     @Bean
     ShopController shopController(ShopQueryService service) {
         return new ShopController(service);
-    }
-
-    @Bean
-    AvatarApiExceptionHandler avatarApiExceptionHandler(ErrorResponseFactory factory) {
-        return new AvatarApiExceptionHandler(factory);
     }
 
     @Bean

@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.SeasonRepository;
 import com.team.sharedcreature.season.infrastructure.SeasonSnapshotCompletionRepository;
@@ -59,10 +61,10 @@ public class SeasonCloseFinalizationService {
                 ));
 
         // 반복 정상화에서는 저장 상태와 종료 시각을 변경하지 않습니다.
-        if ("ENDED".equals(season.getStatus())) {
+        if ((season.getStatus() == SeasonStatus.ENDED)) {
             return false;
         }
-        if (!"CLOSING".equals(season.getStatus())) {
+        if ((season.getStatus() != SeasonStatus.CLOSING)) {
             throw new IllegalStateException("CLOSING 시즌만 ENDED로 확정할 수 있습니다.");
         }
 

@@ -1,6 +1,8 @@
 package com.team.sharedcreature.avatar.infrastructure;
 
 import com.team.sharedcreature.avatar.domain.ShopItem;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
+import com.team.sharedcreature.avatar.domain.ShopItemStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -20,7 +22,7 @@ public interface ShopItemRepository extends JpaRepository<ShopItem, Long> {
      * @param status 조회할 상품 상태
      * @return 조건에 맞는 상품, 없으면 빈 Optional
      */
-    Optional<ShopItem> findByIdAndStatus(Long id, String status);
+    Optional<ShopItem> findByIdAndStatus(Long id, ShopItemStatus status);
 
     /**
      * 지정한 상태의 상품 목록을 페이지 단위로 조회합니다.
@@ -30,7 +32,7 @@ public interface ShopItemRepository extends JpaRepository<ShopItem, Long> {
      * @return 조건에 맞는 상품 페이지
      */
     Page<ShopItem> findAllByStatus(
-            String status,
+            ShopItemStatus status,
             Pageable pageable
     );
 
@@ -43,8 +45,8 @@ public interface ShopItemRepository extends JpaRepository<ShopItem, Long> {
      * @return 조건에 맞는 상품 페이지
      */
     Page<ShopItem> findAllByStatusAndSlotCode(
-            String status,
-            String slotCode,
+            ShopItemStatus status,
+            AvatarSlot slotCode,
             Pageable pageable
     );
 }

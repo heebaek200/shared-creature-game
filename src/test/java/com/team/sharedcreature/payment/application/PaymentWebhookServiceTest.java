@@ -1,8 +1,11 @@
 package com.team.sharedcreature.payment.application;
 
+import com.team.sharedcreature.payment.domain.PaymentProvider;
 import com.team.sharedcreature.payment.domain.PaymentWebhookEvent;
+import com.team.sharedcreature.payment.domain.WebhookProcessingStatus;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
 import com.team.sharedcreature.payment.domain.Purchase;
+import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import com.team.sharedcreature.payment.infrastructure.PaymentTransactionRepository;
 import com.team.sharedcreature.payment.infrastructure.PaymentWebhookEventRepository;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
@@ -65,7 +68,7 @@ class PaymentWebhookServiceTest {
                   "storeId":"store-test","paymentId":"payment-21","transactionId":"tx-1","cancellationId":"cancel-1"
                 }}
                 """;
-        when(eventRepository.findByProviderAndProviderEventId("PORTONE", "event-1"))
+        when(eventRepository.findByProviderAndProviderEventId(PaymentProvider.PORTONE, "event-1"))
                 .thenReturn(Optional.empty());
         when(purchaseRepository.findByOrderNumber("payment-21")).thenReturn(Optional.empty());
         when(eventRepository.save(any(PaymentWebhookEvent.class)))
@@ -81,7 +84,7 @@ class PaymentWebhookServiceTest {
         assertThat(event.getEventType()).isEqualTo("Transaction.Cancelled");
         assertThat(event.getPayloadSummary()).contains("cancel-1");
         assertThat(event.getPayloadSummary()).doesNotContain("signature");
-        assertThat(event.getProcessingStatus()).isEqualTo("PENDING");
+        assertThat(event.getProcessingStatus()).isEqualTo(WebhookProcessingStatus.PENDING);
         verifyNoInteractions(reconciliationService);
     }
 
@@ -92,7 +95,7 @@ class PaymentWebhookServiceTest {
                   "storeId":"store-test","paymentId":"payment-21","transactionId":"tx-1"
                 }}
                 """;
-        when(eventRepository.findByProviderAndProviderEventId("PORTONE", "event-1"))
+        when(eventRepository.findByProviderAndProviderEventId(PaymentProvider.PORTONE, "event-1"))
                 .thenReturn(Optional.of(mock(PaymentWebhookEvent.class)));
         executeTransactionsImmediately();
 
@@ -110,7 +113,7 @@ class PaymentWebhookServiceTest {
                 }}
                 """;
         when(transactionTemplate.execute(any())).thenThrow(new DataIntegrityViolationException("duplicate"));
-        when(eventRepository.existsByProviderAndProviderEventId("PORTONE", "event-1")).thenReturn(true);
+        when(eventRepository.existsByProviderAndProviderEventId(PaymentProvider.PORTONE, "event-1")).thenReturn(true);
 
         service.receive(body, "event-1", "signature", "100");
 
@@ -126,7 +129,7 @@ class PaymentWebhookServiceTest {
                 """;
         DataIntegrityViolationException failure = new DataIntegrityViolationException("not duplicate");
         when(transactionTemplate.execute(any())).thenThrow(failure);
-        when(eventRepository.existsByProviderAndProviderEventId("PORTONE", "event-1")).thenReturn(false);
+        when(eventRepository.existsByProviderAndProviderEventId(PaymentProvider.PORTONE, "event-1")).thenReturn(false);
 
         assertThatThrownBy(() -> service.receive(body, "event-1", "signature", "100"))
                 .isSameAs(failure);
@@ -142,7 +145,7 @@ class PaymentWebhookServiceTest {
         Purchase purchase = mock(Purchase.class);
         PaymentTransaction transaction = mock(PaymentTransaction.class);
         AtomicReference<PaymentWebhookEvent> saved = new AtomicReference<>();
-        when(eventRepository.findByProviderAndProviderEventId("PORTONE", "event-1"))
+        when(eventRepository.findByProviderAndProviderEventId(PaymentProvider.PORTONE, "event-1"))
                 .thenReturn(Optional.empty());
         when(purchaseRepository.findByOrderNumber("payment-21")).thenReturn(Optional.of(purchase));
         when(eventRepository.save(any(PaymentWebhookEvent.class))).thenAnswer(invocation -> {
@@ -152,7 +155,7 @@ class PaymentWebhookServiceTest {
             return event;
         });
         when(reconciliationService.reconcileByPaymentId("payment-21"))
-                .thenReturn(new PaymentReconciliationService.ReconciliationResult(10L, 20L, "PAID"));
+                .thenReturn(new PaymentReconciliationService.ReconciliationResult(10L, 20L, PurchaseStatus.PAID));
         when(eventRepository.findByIdForUpdate(1L)).thenAnswer(invocation -> Optional.of(saved.get()));
         when(purchaseRepository.findById(10L)).thenReturn(Optional.of(purchase));
         when(transactionRepository.findById(20L)).thenReturn(Optional.of(transaction));
@@ -160,7 +163,7 @@ class PaymentWebhookServiceTest {
 
         service.receive(body, "event-1", "signature", "100");
 
-        assertThat(saved.get().getProcessingStatus()).isEqualTo("PROCESSED");
+        assertThat(saved.get().getProcessingStatus()).isEqualTo(WebhookProcessingStatus.PROCESSED);
         assertThat(saved.get().getPurchase()).isSameAs(purchase);
         assertThat(saved.get().getPaymentTransaction()).isSameAs(transaction);
     }
@@ -172,7 +175,7 @@ class PaymentWebhookServiceTest {
                   "storeId":"store-test","paymentId":"unknown-payment","transactionId":"tx-1"
                 }}
                 """;
-        when(eventRepository.findByProviderAndProviderEventId("PORTONE", "event-1"))
+        when(eventRepository.findByProviderAndProviderEventId(PaymentProvider.PORTONE, "event-1"))
                 .thenReturn(Optional.empty());
         when(purchaseRepository.findByOrderNumber("unknown-payment")).thenReturn(Optional.empty());
         when(eventRepository.save(any(PaymentWebhookEvent.class)))
@@ -184,7 +187,7 @@ class PaymentWebhookServiceTest {
         ArgumentCaptor<PaymentWebhookEvent> captor = ArgumentCaptor.forClass(PaymentWebhookEvent.class);
         verify(eventRepository).save(captor.capture());
         assertThat(captor.getValue().getProviderPaymentId()).isEqualTo("unknown-payment");
-        assertThat(captor.getValue().getProcessingStatus()).isEqualTo("FAILED");
+        assertThat(captor.getValue().getProcessingStatus()).isEqualTo(WebhookProcessingStatus.FAILED);
         assertThat(captor.getValue().getFailureDetail()).isEqualTo("PURCHASE_NOT_FOUND");
         verifyNoInteractions(reconciliationService);
     }
@@ -207,7 +210,7 @@ class PaymentWebhookServiceTest {
         var outcome = service.recover(1L, Instant.parse("2026-11-09T07:55:00Z"));
 
         assertThat(outcome).isEqualTo(PaymentWebhookService.RecoveryOutcome.SKIPPED);
-        assertThat(event.getProcessingStatus()).isEqualTo("IGNORED");
+        assertThat(event.getProcessingStatus()).isEqualTo(WebhookProcessingStatus.IGNORED);
         verifyNoInteractions(reconciliationService);
     }
 
@@ -228,7 +231,7 @@ class PaymentWebhookServiceTest {
         PaymentTransaction transaction = mock(PaymentTransaction.class);
         when(eventRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
         when(reconciliationService.reconcileByPaymentId("payment-21"))
-                .thenReturn(new PaymentReconciliationService.ReconciliationResult(10L, 20L, "PAID"));
+                .thenReturn(new PaymentReconciliationService.ReconciliationResult(10L, 20L, PurchaseStatus.PAID));
         when(purchaseRepository.findById(10L)).thenReturn(Optional.of(purchase));
         when(transactionRepository.findById(20L)).thenReturn(Optional.of(transaction));
         executeTransactionsImmediately();
@@ -236,7 +239,7 @@ class PaymentWebhookServiceTest {
         var outcome = service.recover(1L, Instant.parse("2026-11-09T07:55:00Z"));
 
         assertThat(outcome).isEqualTo(PaymentWebhookService.RecoveryOutcome.PROCESSED);
-        assertThat(event.getProcessingStatus()).isEqualTo("PROCESSED");
+        assertThat(event.getProcessingStatus()).isEqualTo(WebhookProcessingStatus.PROCESSED);
         assertThat(event.getPurchase()).isSameAs(purchase);
         assertThat(event.getPaymentTransaction()).isSameAs(transaction);
     }
@@ -256,14 +259,14 @@ class PaymentWebhookServiceTest {
         event.fail("PURCHASE_NOT_FOUND", Instant.parse("2026-11-09T07:50:01Z"));
         when(eventRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
         when(reconciliationService.reconcileByPaymentId("payment-21"))
-                .thenReturn(new PaymentReconciliationService.ReconciliationResult(10L, 20L, "PAID"));
+                .thenReturn(new PaymentReconciliationService.ReconciliationResult(10L, 20L, PurchaseStatus.PAID));
         when(purchaseRepository.findById(10L)).thenReturn(Optional.empty());
         executeTransactionsImmediately();
 
         var outcome = service.recover(1L, Instant.parse("2026-11-09T07:55:00Z"));
 
         assertThat(outcome).isEqualTo(PaymentWebhookService.RecoveryOutcome.FAILED);
-        assertThat(event.getProcessingStatus()).isEqualTo("FAILED");
+        assertThat(event.getProcessingStatus()).isEqualTo(WebhookProcessingStatus.FAILED);
         assertThat(event.getFailureDetail()).isEqualTo("PAYMENT_WEBHOOK_INCONSISTENT");
     }
 

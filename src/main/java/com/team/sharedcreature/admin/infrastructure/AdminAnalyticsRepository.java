@@ -1,5 +1,11 @@
 package com.team.sharedcreature.admin.infrastructure;
 
+import com.team.sharedcreature.quest.domain.QuestPeriodStatus;
+
+import com.team.sharedcreature.season.domain.CreatureGrowthStage;
+
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import org.springframework.stereotype.Repository;
@@ -8,6 +14,7 @@ import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -109,7 +116,7 @@ public class AdminAnalyticsRepository {
                 SELECT COUNT(membership.id)
                   FROM GroupMembership membership, QuestAssignment assignment
                   JOIN assignment.questPeriod period
-                 WHERE period.status IN ('ACTIVE', 'CLOSED')
+                 WHERE period.status IN (com.team.sharedcreature.quest.domain.QuestPeriodStatus.ACTIVE, com.team.sharedcreature.quest.domain.QuestPeriodStatus.CLOSED)
                    AND period.startAt < :endAt
                    AND period.endAt > :startAt
                    AND membership.joinedAt < period.endAt
@@ -139,7 +146,7 @@ public class AdminAnalyticsRepository {
                   JOIN assignment.questPeriod period
                  WHERE completion.completedAt >= :startAt
                    AND completion.completedAt < :endAt
-                   AND period.status IN ('ACTIVE', 'CLOSED')
+                   AND period.status IN (com.team.sharedcreature.quest.domain.QuestPeriodStatus.ACTIVE, com.team.sharedcreature.quest.domain.QuestPeriodStatus.CLOSED)
                 """ + groupCondition("membership.group.id", groupId);
         return number(query(jpql, groupId)
                 .setParameter("startAt", start)
@@ -147,24 +154,24 @@ public class AdminAnalyticsRepository {
                 .getSingleResult());
     }
 
-    public Map<String, Long> growthStages(Instant now, Long groupId) {
+    public Map<CreatureGrowthStage, Long> growthStages(Instant now, Long groupId) {
         String jpql = """
                 SELECT creature.growthStage
                      , COUNT(creature.id)
                   FROM GroupCreature creature
                   JOIN creature.groupSeason groupSeason
                   JOIN groupSeason.season season
-                 WHERE season.status = 'ACTIVE'
+                 WHERE season.status = com.team.sharedcreature.season.domain.SeasonStatus.ACTIVE
                    AND season.startAt <= :now
                    AND season.endAt > :now
                 """ + groupCondition("groupSeason.group.id", groupId) + """
                  GROUP BY creature.growthStage
                 """;
         Query query = query(jpql, groupId).setParameter("now", now);
-        Map<String, Long> result = new LinkedHashMap<>();
+        Map<CreatureGrowthStage, Long> result = new EnumMap<>(CreatureGrowthStage.class);
         for (Object rowValue : query.getResultList()) {
             Object[] row = (Object[]) rowValue;
-            result.put(String.valueOf(row[0]), number(row[1]));
+            result.put((CreatureGrowthStage) row[0], number(row[1]));
         }
         return result;
     }
@@ -178,7 +185,7 @@ public class AdminAnalyticsRepository {
                   JOIN score.groupSeason groupSeason
                   JOIN groupSeason.group gameGroup
                   JOIN groupSeason.season season
-                 WHERE season.status = 'ACTIVE'
+                 WHERE season.status = com.team.sharedcreature.season.domain.SeasonStatus.ACTIVE
                    AND season.startAt <= :now
                    AND season.endAt > :now
                 """ + groupCondition("gameGroup.id", groupId) + """
@@ -226,7 +233,7 @@ public class AdminAnalyticsRepository {
                 SELECT COALESCE(SUM(gameGroup.currentMemberCount), 0)
                      , COALESCE(SUM(gameGroup.capacity - gameGroup.currentMemberCount), 0)
                   FROM Group gameGroup
-                 WHERE gameGroup.status = 'ACTIVE'
+                 WHERE gameGroup.status = com.team.sharedcreature.group.domain.GroupStatus.ACTIVE
                 """ + groupCondition("gameGroup.id", groupId);
         Object[] row = (Object[]) query(jpql, groupId).getSingleResult();
         return new long[]{number(row[0]), number(row[1])};
@@ -236,7 +243,7 @@ public class AdminAnalyticsRepository {
         String jpql = """
                 SELECT COUNT(report.id)
                   FROM UserReport report
-                 WHERE report.status = 'RECEIVED'
+                 WHERE report.status = com.team.sharedcreature.group.domain.UserReportStatus.RECEIVED
                 """ + groupCondition("report.group.id", groupId);
         return number(query(jpql, groupId).getSingleResult());
     }

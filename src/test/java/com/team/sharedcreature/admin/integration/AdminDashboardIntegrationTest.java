@@ -1,6 +1,7 @@
 package com.team.sharedcreature.admin.integration;
 
 import com.team.sharedcreature.admin.application.AdminDashboardService;
+import com.team.sharedcreature.admin.domain.OperationalWarningType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,7 +28,7 @@ class AdminDashboardIntegrationTest {
         assertThat(response.summary().activeUsers()).isZero();
         assertThat(response.summary().questCompletionRate()).isEqualByComparingTo("0.00");
         assertThat(response.queues().operationalWarnings())
-                .anyMatch(warning -> "SEASON_STATE_INVALID".equals(warning.type())
+                .anyMatch(warning -> warning.type() == OperationalWarningType.SEASON_STATE_INVALID
                         && warning.resourceId() == null);
     }
 }

@@ -1,5 +1,11 @@
 package com.team.sharedcreature.ranking.api;
 
+import com.team.sharedcreature.group.domain.GroupRole;
+
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
 import com.team.sharedcreature._core.exception.*;
 import com.team.sharedcreature._core.security.*;
@@ -200,7 +206,7 @@ class RankingHttpContractTest {
     void 개인응답에_참여상태와_페이지밖_현재순위와_UTC시각을_포함한다() throws Exception {
         when(service.getMemberRanking(1L, null, 0, 20)).thenReturn(
                 new RankingResponse.PageDto<>(List.of(new RankingResponse.MemberDto(
-                        1, 2L, "탈퇴회원", 100L, Instant.parse("2026-11-12T00:00:00Z"), "LEFT")),
+                        1, 2L, "탈퇴회원", 100L, Instant.parse("2026-11-12T00:00:00Z"), GroupMembershipStatus.LEFT)),
                         new RankingResponse.Meta(0, 20, 25, 2,
                                 new RankingResponse.CurrentSubject(1L, 23, 5L))));
         mvc.perform(get("/api/v1/rankings/members").session(session("MEMBER")))
@@ -247,15 +253,15 @@ class RankingHttpContractTest {
 
     /** 실제 인증 필터가 계정과 최신 멤버십 역할을 확인하도록 세션을 구성합니다. */
     private MockHttpSession session(String role) {
-        User user = User.register("USER", Instant.now());
+        User user = User.register(GlobalRole.USER, Instant.now());
         ReflectionTestUtils.setField(user, "id", 1L);
         when(users.findById(1L)).thenReturn(Optional.of(user));
         if (role == null) {
-            when(memberships.findByUserIdAndStatus(1L, "ACTIVE")).thenReturn(Optional.empty());
+            when(memberships.findByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE)).thenReturn(Optional.empty());
         } else {
             var membership = BeanUtils.instantiateClass(GroupMembership.class);
-            ReflectionTestUtils.setField(membership, "role", role);
-            when(memberships.findByUserIdAndStatus(1L, "ACTIVE"))
+            ReflectionTestUtils.setField(membership, "role", GroupRole.valueOf(role));
+            when(memberships.findByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE))
                     .thenReturn(Optional.of(membership));
         }
         var session = new MockHttpSession();
@@ -275,7 +281,7 @@ class RankingHttpContractTest {
     @Import({SecurityConfiguration.class, WebConfiguration.class, RequestIdFilter.class,
             StrictQueryParameterInterceptor.class, SessionAuthenticationFilter.class,
             SecurityErrorWriter.class, ErrorResponseFactory.class, RestApiExceptionHandler.class,
-            RankingApiExceptionHandler.class, RankingController.class, IsolationController.class})
+            RankingController.class, IsolationController.class})
     static class Configuration {
         @Bean Clock clock() { return Clock.systemUTC(); }
         @Bean JsonMapper objectMapper() { return JsonMapper.builder().build(); }

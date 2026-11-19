@@ -2,6 +2,8 @@ package com.team.sharedcreature.group.domain;
 
 import com.team.sharedcreature.auth.domain.User;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -44,8 +46,11 @@ public class ModerationAction {
     @JoinColumn(name = "actor_user_id", nullable = false)
     private User actorUser;
 
+    /** 조치 유형은 기존 문자열 코드로 저장하여 과거 이력과 호환합니다. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "action_type", length = 30, nullable = false)
-    private String actionType;
+    private ModerationActionType actionType;
 
     @Column(name = "reason", length = 1000, nullable = false)
     private String reason;
@@ -75,7 +80,7 @@ public class ModerationAction {
         action.membership = membership;
         action.targetUser = target;
         action.actorUser = actor;
-        action.actionType = "REMOVE_INACTIVE";
+        action.actionType = ModerationActionType.REMOVE_INACTIVE;
         action.reason = reason;
         action.executedAt = now;
         action.createdAt = now;
@@ -98,7 +103,7 @@ public class ModerationAction {
         action.membership = membership;
         action.targetUser = target;
         action.actorUser = actor;
-        action.actionType = "REMOVE_REPORTED";
+        action.actionType = ModerationActionType.REMOVE_REPORTED;
         action.reason = reason;
         action.executedAt = now;
         action.createdAt = now;

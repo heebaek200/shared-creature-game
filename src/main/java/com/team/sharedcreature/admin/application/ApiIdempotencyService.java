@@ -5,6 +5,7 @@ import tools.jackson.databind.ObjectMapper;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.admin.domain.ApiIdempotencyRecord;
+import com.team.sharedcreature.admin.domain.ApiIdempotencyStatus;
 import com.team.sharedcreature.admin.infrastructure.ApiIdempotencyRecordRepository;
 import org.springframework.stereotype.Service;
 
@@ -58,7 +59,7 @@ public class ApiIdempotencyService {
             if (!record.getRequestHash().equals(requestHash)) {
                 throw new BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED);
             }
-            if (!"COMPLETED".equals(record.getStatus())) {
+            if (record.getStatus() != ApiIdempotencyStatus.COMPLETED) {
                 throw new BusinessException(ErrorCode.IDEMPOTENCY_REQUEST_IN_PROGRESS);
             }
             try {

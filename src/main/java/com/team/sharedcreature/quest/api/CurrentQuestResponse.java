@@ -1,5 +1,8 @@
 package com.team.sharedcreature.quest.api;
 
+import com.team.sharedcreature.quest.domain.QuestDifficulty;
+import com.team.sharedcreature.quest.domain.QuestPeriodType;
+import com.team.sharedcreature.quest.domain.QuestVerificationType;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
@@ -11,15 +14,15 @@ public class CurrentQuestResponse {
 
         private final Long assignmentId;
         private final Long periodId;
-        private final String periodType;
+        private final QuestPeriodType periodType;
         private final Instant periodStartAt;
         private final Instant periodEndAt;
         private final Integer slotNumber;
         private final String templateCode;
         private final String title;
         private final String description;
-        private final String difficulty;
-        private final String verificationType;
+        private final QuestDifficulty difficulty;
+        private final QuestVerificationType verificationType;
         private final Long creatureExperience;
         private final Long contributionScore;
         private final boolean completed;

@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.season.api.SeasonResponse;
@@ -49,7 +51,7 @@ public class SeasonQueryService {
         return seasonRepository
                 .findAllRankableOrderBySeasonNumberDesc()
                 .stream()
-                .filter(season -> "ENDED".equals(season.getStatus()) || season.isActiveAt(now))
+                .filter(season -> season.getStatus() == SeasonStatus.ENDED || season.isActiveAt(now))
                 .map(SeasonResponse::from)
                 .toList();
     }
@@ -60,7 +62,7 @@ public class SeasonQueryService {
     @Transactional(readOnly = true)
     public Season findCurrentSeason() {
         Season season = seasonRepository
-                .findFirstByStatusOrderByStartAtDesc("ACTIVE")
+                .findFirstByStatusOrderByStartAtDesc(SeasonStatus.ACTIVE)
                 .orElseThrow(this::seasonNotReady);
 
         // 후보를 조회하고 실제 시각으로 재판정.
@@ -87,7 +89,7 @@ public class SeasonQueryService {
     @Transactional
     public Optional<Season> findCurrentSeasonForShareIfPresent() {
         Optional<Season> candidate = seasonRepository
-                .findForShareByStatus("ACTIVE", PageRequest.of(0, 1))
+                .findForShareByStatus(SeasonStatus.ACTIVE, PageRequest.of(0, 1))
                 .stream().findFirst();
 
         // DB 공유 잠금 획득 후의 시각 사용

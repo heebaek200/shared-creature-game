@@ -1,16 +1,17 @@
 package com.team.sharedcreature.admin.application;
 
+import com.team.sharedcreature.admin.domain.AdminAuditActionType;
+import com.team.sharedcreature.admin.domain.AdminAuditTargetType;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.admin.domain.AdminAuditLog;
+import com.team.sharedcreature.admin.domain.AdminAuditResult;
 import com.team.sharedcreature.admin.infrastructure.AdminAuditLogRepository;
 import com.team.sharedcreature.auth.domain.User;
+import com.team.sharedcreature.auth.domain.GlobalRole;
+import com.team.sharedcreature.auth.domain.UserStatus;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
-import com.team.sharedcreature.group.domain.Group;
-import com.team.sharedcreature.group.domain.GroupJoinRestriction;
-import com.team.sharedcreature.group.domain.GroupMembership;
-import com.team.sharedcreature.group.domain.ModerationAction;
-import com.team.sharedcreature.group.domain.UserReport;
+import com.team.sharedcreature.group.domain.*;
 import com.team.sharedcreature.group.infrastructure.GroupJoinRestrictionRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
@@ -67,8 +68,8 @@ public class AdminModerationCommandExecutor {
         Instant now = clock.instant();
         report.reject(actor, reason, now);
         auditLogRepository.save(AdminAuditLog.create(
-                actor, "DISMISS_REPORT", "USER_REPORT", reportId, report.getGroup(),
-                "SUCCEEDED", reason, "{}", now
+                actor, AdminAuditActionType.DISMISS_REPORT, AdminAuditTargetType.USER_REPORT, reportId, report.getGroup(),
+                AdminAuditResult.SUCCEEDED, reason, "{}", now
         ));
     }
 
@@ -93,11 +94,11 @@ public class AdminModerationCommandExecutor {
                 .orElseThrow(() -> new BusinessException(ErrorCode.CONCURRENT_MODIFICATION));
         GroupMembership membership = membershipRepository.findByIdForUpdate(membershipId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CONCURRENT_MODIFICATION));
-        if (!"ACTIVE".equals(group.getStatus())
-                || !"ACTIVE".equals(target.getStatus())
-                || !"ACTIVE".equals(membership.getStatus())
+        if (group.getStatus() != GroupStatus.ACTIVE
+                || target.getStatus() != UserStatus.ACTIVE
+                || membership.getStatus() != GroupMembershipStatus.ACTIVE
                 || !groupId.equals(membership.getGroup().getId())
-                || "PRIMARY".equals(membership.getRole())) {
+                || membership.getRole() == GroupRole.PRIMARY) {
             throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
         }
 
@@ -115,15 +116,15 @@ public class AdminModerationCommandExecutor {
         ));
         report.resolve(actor, reason, now);
         auditLogRepository.save(AdminAuditLog.create(
-                actor, "REMOVE_REPORTED_MEMBER", "USER_REPORT", reportId, group,
-                "SUCCEEDED", reason, "{}", now
+                actor, AdminAuditActionType.REMOVE_REPORTED_MEMBER, AdminAuditTargetType.USER_REPORT, reportId, group,
+                AdminAuditResult.SUCCEEDED, reason, "{}", now
         ));
     }
 
     private UserReport requireReceivedReport(Long reportId) {
         UserReport report = reportRepository.findByIdForUpdate(reportId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        if (!"RECEIVED".equals(report.getStatus())) {
+        if (report.getStatus() != UserReportStatus.RECEIVED) {
             throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
         }
         return report;
@@ -137,7 +138,8 @@ public class AdminModerationCommandExecutor {
     }
 
     private void validateSuperAdmin(User actor) {
-        if (!"ACTIVE".equals(actor.getStatus()) || !"SUPER_ADMIN".equals(actor.getGlobalRole())) {
+        if (actor.getStatus() != UserStatus.ACTIVE
+                || actor.getGlobalRole() != GlobalRole.SUPER_ADMIN) {
             throw new BusinessException(ErrorCode.ROLE_FORBIDDEN);
         }
     }

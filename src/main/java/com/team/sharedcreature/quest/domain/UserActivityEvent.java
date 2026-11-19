@@ -31,11 +31,13 @@ public class UserActivityEvent {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    @Convert(converter = UserActivityEventType.JpaConverter.class)
     @Column(name = "event_type", length = 50, nullable = false)
-    private String eventType;
+    private UserActivityEventType eventType;
 
+    @Convert(converter = UserActivitySourceType.JpaConverter.class)
     @Column(name = "source_type", length = 50, nullable = false)
-    private String sourceType;
+    private UserActivitySourceType sourceType;
 
     @Column(name = "source_id", nullable = false)
     private Long sourceId;
@@ -79,8 +81,8 @@ public class UserActivityEvent {
      */
     public static UserActivityEvent create(
             User user,
-            String eventType,
-            String sourceType,
+            UserActivityEventType eventType,
+            UserActivitySourceType sourceType,
             Long sourceId,
             GroupMembership membership,
             GroupSeason groupSeason,

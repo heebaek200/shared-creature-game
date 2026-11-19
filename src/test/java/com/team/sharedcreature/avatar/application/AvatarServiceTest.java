@@ -5,17 +5,22 @@ import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.avatar.domain.AvatarEquipment;
 import com.team.sharedcreature.avatar.domain.OwnedItem;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
+import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.avatar.infrastructure.AvatarEquipmentRepository;
 import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.payment.domain.RefundRequest;
+import com.team.sharedcreature.payment.domain.RefundStatus;
 import com.team.sharedcreature.payment.infrastructure.PurchaseRepository;
 import com.team.sharedcreature.payment.infrastructure.RefundRequestRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -59,7 +64,7 @@ class AvatarServiceTest {
     void 최초_장착은_슬롯을_생성하고_사용_확정과_그룹_이벤트를_연결한다() {
         OwnedItem item = unusedItem(10L, 1L, "HEAD");
         stubLockedItem(item, List.of());
-        when(equipmentRepository.findByUserIdAndSlotCodeForUpdate(1L, "HEAD"))
+        when(equipmentRepository.findByUserIdAndSlotCodeForUpdate(1L, AvatarSlot.HEAD))
                 .thenReturn(Optional.empty());
         var savedSlot = new AtomicReference<AvatarEquipment>();
         when(equipmentRepository.save(any(AvatarEquipment.class))).thenAnswer(invocation -> {
@@ -71,9 +76,9 @@ class AvatarServiceTest {
                 .thenAnswer(invocation -> List.of(savedSlot.get()));
         when(membershipRepository.findActiveGroupIdByUserId(1L)).thenReturn(Optional.of(7L));
 
-        var response = service.equipAvatarItem(1L, "HEAD", 10L, true);
+        var response = service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true);
 
-        assertThat(item.getStatus()).isEqualTo("OWNED_USED");
+        assertThat(item.getStatus()).isEqualTo(OwnedItemStatus.OWNED_USED);
         assertThat(item.getUsedAt()).isEqualTo(NOW);
         assertThat(response.equipments().HEAD().ownedItemId()).isEqualTo(10L);
         assertThat(response.equipments().FACE()).isNull();
@@ -81,7 +86,7 @@ class AvatarServiceTest {
         verify(eventPublisher).publishAfterCommit(event.capture());
         assertThat(event.getValue().groupId()).isEqualTo(7L);
         assertThat(event.getValue().userId()).isEqualTo(1L);
-        assertThat(event.getValue().slot()).isEqualTo("HEAD");
+        assertThat(event.getValue().slot()).isEqualTo(AvatarSlot.HEAD);
         assertThat(event.getValue().equippedItem().ownedItemId()).isEqualTo(10L);
         assertThat(event.getValue().occurredAt()).isEqualTo(NOW);
 
@@ -92,7 +97,7 @@ class AvatarServiceTest {
         order.verify(purchaseRepository).findByIdForUpdate(item.getPurchase().getId());
         order.verify(ownedItemRepository).findByIdAndUserIdForUpdate(10L, 1L);
         order.verify(refundRepository).findAllByPurchaseIdForUpdate(item.getPurchase().getId());
-        order.verify(equipmentRepository).findByUserIdAndSlotCodeForUpdate(1L, "HEAD");
+        order.verify(equipmentRepository).findByUserIdAndSlotCodeForUpdate(1L, AvatarSlot.HEAD);
         order.verify(equipmentRepository).flush();
         order.verify(eventPublisher).publishAfterCommit(any());
     }
@@ -101,10 +106,10 @@ class AvatarServiceTest {
     void 최초_사용_미동의는_저장과_이벤트_예약_전에_거부한다() {
         OwnedItem item = unusedItem(10L, 1L, "HEAD");
         stubLockedItem(item, List.of());
-        when(equipmentRepository.findByUserIdAndSlotCodeForUpdate(1L, "HEAD"))
+        when(equipmentRepository.findByUserIdAndSlotCodeForUpdate(1L, AvatarSlot.HEAD))
                 .thenReturn(Optional.empty());
 
-        assertBusinessError(() -> service.equipAvatarItem(1L, "HEAD", 10L, false),
+        assertBusinessError(() -> service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, false),
                 ErrorCode.FIRST_USE_CONFIRMATION_REQUIRED);
 
         assertThat(item.getUsedAt()).isNull();
@@ -113,17 +118,17 @@ class AvatarServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"REQUESTED", "CANCEL_PENDING", "CANCEL_UNKNOWN"})
-    void 환불_진행_중에는_사용_확정과_장착을_거부한다(String status) {
+    @EnumSource(value = RefundStatus.class, names = {"REQUESTED", "CANCEL_PENDING", "CANCEL_UNKNOWN"})
+    void 환불_진행_중에는_사용_확정과_장착을_거부한다(RefundStatus status) {
         OwnedItem item = unusedItem(10L, 1L, "HEAD");
         RefundRequest refund = mock(RefundRequest.class);
         when(refund.getStatus()).thenReturn(status);
         stubLockedItem(item, List.of(refund));
 
-        assertBusinessError(() -> service.equipAvatarItem(1L, "HEAD", 10L, true),
+        assertBusinessError(() -> service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true),
                 ErrorCode.CONCURRENT_MODIFICATION);
 
-        assertThat(item.getStatus()).isEqualTo("OWNED_UNUSED");
+        assertThat(item.getStatus()).isEqualTo(OwnedItemStatus.OWNED_UNUSED);
         assertThat(item.getUsedAt()).isNull();
         verifyNoInteractions(equipmentRepository, eventPublisher);
     }
@@ -133,7 +138,7 @@ class AvatarServiceTest {
         when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user(1L)));
         when(ownedItemRepository.findPurchaseIdByIdAndUserId(10L, 1L)).thenReturn(Optional.empty());
 
-        assertBusinessError(() -> service.equipAvatarItem(1L, "HEAD", 10L, true),
+        assertBusinessError(() -> service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true),
                 ErrorCode.RESOURCE_NOT_FOUND);
 
         verifyNoInteractions(purchaseRepository, refundRepository, equipmentRepository, eventPublisher);
@@ -142,11 +147,11 @@ class AvatarServiceTest {
     @Test
     void 회수된_아이템은_장착하지_않는다() {
         OwnedItem item = unusedItem(10L, 1L, "HEAD");
-        ReflectionTestUtils.setField(item, "status", "REVOKED");
+        ReflectionTestUtils.setField(item, "status", OwnedItemStatus.REVOKED);
         ReflectionTestUtils.setField(item, "revokedAt", NOW);
         stubLockedItem(item, List.of());
 
-        assertBusinessError(() -> service.equipAvatarItem(1L, "HEAD", 10L, true),
+        assertBusinessError(() -> service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true),
                 ErrorCode.RESOURCE_NOT_FOUND);
 
         verifyNoInteractions(equipmentRepository, eventPublisher);
@@ -157,7 +162,7 @@ class AvatarServiceTest {
         OwnedItem item = unusedItem(10L, 1L, "FACE");
         stubLockedItem(item, List.of());
 
-        assertBusinessError(() -> service.equipAvatarItem(1L, "HEAD", 10L, true),
+        assertBusinessError(() -> service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true),
                 ErrorCode.SLOT_MISMATCH);
 
         assertThat(item.getUsedAt()).isNull();
@@ -172,7 +177,7 @@ class AvatarServiceTest {
         stubLockedItem(item, List.of());
         stubExistingSlot(equipment);
 
-        var response = service.equipAvatarItem(1L, "HEAD", 10L, false);
+        var response = service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, false);
 
         assertThat(response.equipments().HEAD().ownedItemId()).isEqualTo(10L);
         assertThat(item.getUsedAt()).isEqualTo(CREATED_AT);
@@ -183,15 +188,15 @@ class AvatarServiceTest {
     @Test
     void 그룹이_없어도_개인_아바타_장착은_가능하다() {
         OwnedItem item = unusedItem(10L, 1L, "HEAD");
-        AvatarEquipment equipment = AvatarEquipment.createEmpty(item.getUser(), "HEAD", CREATED_AT);
+        AvatarEquipment equipment = AvatarEquipment.createEmpty(item.getUser(), AvatarSlot.HEAD, CREATED_AT);
         stubLockedItem(item, List.of());
         stubExistingSlot(equipment);
         when(membershipRepository.findActiveGroupIdByUserId(1L)).thenReturn(Optional.empty());
 
-        var response = service.equipAvatarItem(1L, "HEAD", 10L, true);
+        var response = service.equipAvatarItem(1L, AvatarSlot.HEAD, 10L, true);
 
         assertThat(response.equipments().HEAD().ownedItemId()).isEqualTo(10L);
-        assertThat(item.getStatus()).isEqualTo("OWNED_USED");
+        assertThat(item.getStatus()).isEqualTo(OwnedItemStatus.OWNED_USED);
         verifyNoInteractions(eventPublisher);
     }
 
@@ -204,15 +209,15 @@ class AvatarServiceTest {
         stubExistingSlot(equipment);
         when(membershipRepository.findActiveGroupIdByUserId(1L)).thenReturn(Optional.of(7L));
 
-        var response = service.unequipAvatarItem(1L, "HEAD");
+        var response = service.unequipAvatarItem(1L, AvatarSlot.HEAD);
 
         assertThat(response.equipments().HEAD()).isNull();
-        assertThat(item.getStatus()).isEqualTo("OWNED_USED");
+        assertThat(item.getStatus()).isEqualTo(OwnedItemStatus.OWNED_USED);
         assertThat(item.getUsedAt()).isEqualTo(CREATED_AT);
         var event = ArgumentCaptor.forClass(AvatarEquipmentChangedEvent.class);
         verify(eventPublisher).publishAfterCommit(event.capture());
         assertThat(event.getValue().equippedItem()).isNull();
-        assertThat(event.getValue().slot()).isEqualTo("HEAD");
+        assertThat(event.getValue().slot()).isEqualTo(AvatarSlot.HEAD);
         assertThat(event.getValue().groupId()).isEqualTo(7L);
         verifyNoInteractions(purchaseRepository, ownedItemRepository, refundRepository);
     }
@@ -220,11 +225,11 @@ class AvatarServiceTest {
     @Test
     void 없는_슬롯의_해제는_빈_아바타를_반환하고_이벤트를_예약하지_않는다() {
         when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user(1L)));
-        when(equipmentRepository.findByUserIdAndSlotCodeForUpdate(1L, "HEAD"))
+        when(equipmentRepository.findByUserIdAndSlotCodeForUpdate(1L, AvatarSlot.HEAD))
                 .thenReturn(Optional.empty());
         when(equipmentRepository.findAllByUserId(1L)).thenReturn(List.of());
 
-        var response = service.unequipAvatarItem(1L, "HEAD");
+        var response = service.unequipAvatarItem(1L, AvatarSlot.HEAD);
 
         assertThat(response.equipments().HEAD()).isNull();
         assertThat(response.equipments().FACE()).isNull();
@@ -249,16 +254,57 @@ class AvatarServiceTest {
 
     /** 기존 슬롯의 잠금 조회와 변경 후 응답 조회를 준비합니다. */
     private void stubExistingSlot(AvatarEquipment equipment) {
-        when(equipmentRepository.findByUserIdAndSlotCodeForUpdate(1L, "HEAD"))
+        when(equipmentRepository.findByUserIdAndSlotCodeForUpdate(1L, AvatarSlot.HEAD))
                 .thenReturn(Optional.of(equipment));
         when(equipmentRepository.findAllByUserId(1L)).thenReturn(List.of(equipment));
     }
 
     /** 사용 확정된 아이템이 장착된 슬롯을 준비합니다. */
     private AvatarEquipment equippedSlot(OwnedItem item) {
-        AvatarEquipment equipment = AvatarEquipment.createEmpty(item.getUser(), "HEAD", CREATED_AT);
+        AvatarEquipment equipment = AvatarEquipment.createEmpty(item.getUser(), AvatarSlot.HEAD, CREATED_AT);
         equipment.equip(item, CREATED_AT);
         return equipment;
+    }
+
+    /** 보유 상태 Enum이 조회 조건과 응답에 반영되는지 확인합니다. */
+    @ParameterizedTest
+    @EnumSource(OwnedItemStatus.class)
+    void 보유목록은_상태필터를_Enum으로_조회하고_응답문자열을_유지한다(OwnedItemStatus status) {
+        OwnedItem item = unusedItem(10L, 1L, "HEAD");
+        // 조회용 데이터도 실제 상태 전환을 거쳐 사용·회수 이력을 일치시킵니다.
+        switch (status) {
+            case OWNED_UNUSED -> { }
+            case OWNED_USED -> item.confirmUse(true, NOW);
+            case REVOKED -> item.revokeAfterRefund(NOW);
+        }
+        when(ownedItemRepository.findAllForUser(eq(1L), eq(AvatarSlot.HEAD), eq(status), any()))
+                .thenReturn(new PageImpl<>(List.of(item)));
+        when(equipmentRepository.findAllByUserId(1L)).thenReturn(List.of());
+
+        var response = service.listOwnedItems(1L, 0, 20, AvatarSlot.HEAD, status);
+
+        assertThat(response.getContent().getFirst().slot()).isEqualTo(AvatarSlot.HEAD);
+        assertThat(response.getContent().getFirst().status()).isEqualTo(status);
+        assertThat(response.getContent().getFirst().equipped()).isFalse();
+    }
+
+    @Test
+    void 보유목록_필터_생략은_전체조회로_유지한다() {
+        when(ownedItemRepository.findAllForUser(eq(1L), isNull(), isNull(), any()))
+                .thenReturn(Page.empty());
+        when(equipmentRepository.findAllByUserId(1L)).thenReturn(List.of());
+
+        assertThat(service.listOwnedItems(1L, 0, 20, null, null)).isEmpty();
+    }
+
+    @Test
+    void rejectsMissingEquipmentSlotBeforeDatabaseAccess() {
+        assertBusinessError(() -> service.equipAvatarItem(1L, null, 10L, true),
+                ErrorCode.INVALID_FIELD_VALUE);
+        assertBusinessError(() -> service.unequipAvatarItem(1L, null),
+                ErrorCode.INVALID_FIELD_VALUE);
+        verifyNoInteractions(userRepository, purchaseRepository, ownedItemRepository,
+                refundRepository, equipmentRepository, eventPublisher);
     }
 
     /** HTTP 계층과 구분해 업무 예외의 안정적인 오류 코드를 검사합니다. */

@@ -1,7 +1,10 @@
 package com.team.sharedcreature.payment.api;
 
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+
+import com.team.sharedcreature.auth.domain.GlobalRole;
+
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
-import com.team.sharedcreature._core.exception.RefundApiExceptionHandler;
 import com.team.sharedcreature._core.exception.RestApiExceptionHandler;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.*;
@@ -11,9 +14,12 @@ import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.payment.application.*;
+import com.team.sharedcreature.payment.domain.RefundStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -72,11 +78,11 @@ class RefundHttpContractTest {
         reset(refunds, queries, reconciliation, users, memberships, activities);
         when(users.findById(anyLong())).thenAnswer(call -> {
             long id = call.getArgument(0);
-            var user = User.register(id == 9 ? "SUPER_ADMIN" : "USER", Instant.now());
+            var user = User.register(id == 9 ? GlobalRole.SUPER_ADMIN : GlobalRole.USER, Instant.now());
             ReflectionTestUtils.setField(user, "id", id);
             return Optional.of(user);
         });
-        when(memberships.findByUserIdAndStatus(anyLong(), eq("ACTIVE"))).thenReturn(Optional.empty());
+        when(memberships.findByUserIdAndStatus(anyLong(), eq(GroupMembershipStatus.ACTIVE))).thenReturn(Optional.empty());
         mvc = webAppContextSetup(context).apply(springSecurity()).build();
     }
 
@@ -84,6 +90,41 @@ class RefundHttpContractTest {
         var session = new MockHttpSession();
         session.setAttribute(SessionAuthenticationFilter.LOGIN_USER, new LoginUser(id, "테스트", Set.of()));
         return session;
+    }
+
+    @ParameterizedTest
+    @EnumSource(RefundStatus.class)
+    @NullSource
+    void passesRefundStatusToBothListQueries(RefundStatus filter) throws Exception {
+        when(queries.listMyRefunds(1L, 0, 20, filter)).thenReturn(Page.empty());
+        when(queries.listAdminRefunds(0, 20, filter)).thenReturn(Page.empty());
+
+        var myRequest = get("/api/v1/refund-requests").session(session(1));
+        var adminRequest = get("/api/v1/admin/refund-requests").session(session(9));
+        if (filter != null) {
+            myRequest.queryParam("status", filter.name());
+            adminRequest.queryParam("status", filter.name());
+        }
+        mvc.perform(myRequest).andExpect(status().isOk());
+        mvc.perform(adminRequest).andExpect(status().isOk());
+
+        verify(queries).listMyRefunds(1L, 0, 20, filter);
+        verify(queries).listAdminRefunds(0, 20, filter);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "requested", " REQUESTED", "FAILED ", "PAID", "OWNED_UNUSED", "WRONG"})
+    void rejectsInvalidRefundStatusForBothListQueries(String filter) throws Exception {
+        mvc.perform(get("/api/v1/refund-requests").session(session(1)).queryParam("status", filter))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_FIELD_VALUE"))
+                .andExpect(jsonPath("$.fieldErrors").isEmpty());
+        mvc.perform(get("/api/v1/admin/refund-requests").session(session(9)).queryParam("status", filter))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_FIELD_VALUE"))
+                .andExpect(jsonPath("$.fieldErrors").isEmpty());
+
+        verifyNoInteractions(queries);
     }
 
     @ParameterizedTest
@@ -114,13 +155,8 @@ class RefundHttpContractTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"?page=1&page=2", "?unknown=x", "?page=", "?size=51", "?status=WRONG"})
+    @ValueSource(strings = {"?page=1&page=2", "?unknown=x", "?page=", "?size=51"})
     void 중복_미등록_잘못된_목록Query는_400이다(String query) throws Exception {
-        // 업무 Service도 상태를 검사하므로 이 사례의 잘못된 상태만 동일하게 재현합니다.
-        if (query.contains("WRONG")) {
-            when(queries.listMyRefunds(anyLong(), anyInt(), anyInt(), eq("WRONG")))
-                    .thenThrow(new com.team.sharedcreature._core.exception.BusinessException(ErrorCode.INVALID_FIELD_VALUE));
-        }
         mvc.perform(get("/api/v1/refund-requests" + query).session(session(1)))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_FIELD_VALUE"));
     }
@@ -178,12 +214,13 @@ class RefundHttpContractTest {
 
     @Test
     void 생성성공은_201과_null키를_포함한_공통응답이다() throws Exception {
-        var response = new RefundResponse(1L, 2L, 1L, "환불", null, "REQUESTED", Instant.EPOCH, null, null);
+        var response = new RefundResponse(1L, 2L, 1L, "환불", null, RefundStatus.REQUESTED, Instant.EPOCH, null, null);
         when(refunds.createRefundRequest(1L, 2L, "환불", key)).thenReturn(response);
         mvc.perform(post("/api/v1/purchases/2/refund-requests").session(session(1)).with(csrf().asHeader())
                         .header("Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reason\":\"  환불  \"}"))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.data.refundRequestId").value(1))
+                .andExpect(jsonPath("$.data.status").value("REQUESTED"))
                 .andExpect(jsonPath("$.data.decisionReason").value(nullValue()))
                 .andExpect(jsonPath("$.data.reviewedAt").value(nullValue()));
         verify(refunds).createRefundRequest(1L, 2L, "환불", key);
@@ -214,7 +251,7 @@ class RefundHttpContractTest {
     @EnableWebSecurity
     @Import({SecurityConfiguration.class, WebConfiguration.class,
             RefundController.class, AdminRefundController.class,
-            RefundApiExceptionHandler.class, RestApiExceptionHandler.class,
+            RestApiExceptionHandler.class,
             StrictQueryParameterInterceptor.class, SessionAuthenticationFilter.class,
             RequestIdFilter.class, SecurityErrorWriter.class, ErrorResponseFactory.class})
     static class ConfigurationForTest implements WebMvcConfigurer {

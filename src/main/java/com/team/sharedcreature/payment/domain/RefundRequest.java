@@ -2,6 +2,8 @@ package com.team.sharedcreature.payment.domain;
 
 import com.team.sharedcreature.auth.domain.User;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -45,8 +47,11 @@ public class RefundRequest {
     @Column(name = "decision_reason", length = 500)
     private String decisionReason;
 
+    /** 환불 요청의 심사 및 PG 취소 처리 상태입니다. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    private RefundStatus status;
 
     @Column(name = "requested_at", nullable = false)
     private Instant requestedAt;
@@ -104,7 +109,7 @@ public class RefundRequest {
         refund.purchase = purchase;
         refund.requestedByUser = requester;
         refund.requestReason = normalizedReason;
-        refund.status = "REQUESTED";
+        refund.status = RefundStatus.REQUESTED;
         refund.requestedAt = now;
         refund.createdAt = now;
         refund.updatedAt = now;
@@ -138,7 +143,7 @@ public class RefundRequest {
         this.decisionReason = normalizedReason;
         this.reviewedAt = now;
         this.cancelClaimedAt = now;
-        this.status = "CANCEL_PENDING";
+        this.status = RefundStatus.CANCEL_PENDING;
         this.updatedAt = now;
 
         // PG 취소 성공 전이므로 completedAt과 아이템은 변경하지 않습니다.
@@ -166,7 +171,7 @@ public class RefundRequest {
         this.reviewedByUser = reviewer;
         this.decisionReason = normalizedReason;
         this.reviewedAt = now;
-        this.status = "REJECTED";
+        this.status = RefundStatus.REJECTED;
         this.updatedAt = now;
 
         // 거절은 PG 취소를 시작하지 않으며 환불 완료 시각도 기록하지 않습니다.
@@ -182,7 +187,7 @@ public class RefundRequest {
     public boolean completeCancellation(Instant completedAt, Instant now) {
         Objects.requireNonNull(completedAt, "completedAt");
 
-        return applyCancellationState("COMPLETED", completedAt, now);
+        return applyCancellationState(RefundStatus.COMPLETED, completedAt, now);
     }
 
     /**
@@ -193,7 +198,7 @@ public class RefundRequest {
      * @return 상태가 변경되었으면 true
      */
     public boolean failCancellation(Instant now) {
-        return applyCancellationState("FAILED", null, now);
+        return applyCancellationState(RefundStatus.FAILED, null, now);
     }
 
     /**
@@ -203,7 +208,7 @@ public class RefundRequest {
      * @return 상태가 변경되었으면 true
      */
     public boolean markCancellationPending(Instant now) {
-        return applyCancellationState("CANCEL_PENDING", null, now);
+        return applyCancellationState(RefundStatus.CANCEL_PENDING, null, now);
     }
 
     /**
@@ -213,7 +218,7 @@ public class RefundRequest {
      * @return 상태가 변경되었으면 true
      */
     public boolean markCancellationUnknown(Instant now) {
-        return applyCancellationState("CANCEL_UNKNOWN", null, now);
+        return applyCancellationState(RefundStatus.CANCEL_UNKNOWN, null, now);
     }
 
     public boolean tryClaimRecovery(Instant now) {
@@ -235,8 +240,8 @@ public class RefundRequest {
     ) {
         Objects.requireNonNull(now, "now");
 
-        if (!"CANCEL_PENDING".equals(status)
-                && !"CANCEL_UNKNOWN".equals(status)) {
+        if (status != RefundStatus.CANCEL_PENDING
+                && status != RefundStatus.CANCEL_UNKNOWN) {
             return false;
         }
 
@@ -246,7 +251,7 @@ public class RefundRequest {
         }
 
         boolean immediateUnknown = allowImmediateUnknown
-                && "CANCEL_UNKNOWN".equals(status);
+                && status == RefundStatus.CANCEL_UNKNOWN;
 
         Instant cutoff = now.minusSeconds(300);
 
@@ -273,19 +278,19 @@ public class RefundRequest {
      * @throws BusinessException 취소가 시작되지 않은 요청에 결과를 반영한 경우
      */
     private boolean applyCancellationState(
-            String nextStatus,
+            RefundStatus nextStatus,
             Instant completedAt,
             Instant now
     ) {
         Objects.requireNonNull(now, "now");
 
         // 늦게 도착한 응답으로 확정된 성공·실패를 덮어쓰지 않습니다.
-        if ("COMPLETED".equals(status) || "FAILED".equals(status)) {
+        if (status == RefundStatus.COMPLETED || status == RefundStatus.FAILED) {
             return false;
         }
 
-        if (!"CANCEL_PENDING".equals(status)
-                && !"CANCEL_UNKNOWN".equals(status)) {
+        if (status != RefundStatus.CANCEL_PENDING
+                && status != RefundStatus.CANCEL_UNKNOWN) {
             throw new BusinessException(
                     ErrorCode.CONCURRENT_MODIFICATION,
                     "취소 처리 중인 환불 요청에만 PG 결과를 반영할 수 있습니다."
@@ -293,7 +298,7 @@ public class RefundRequest {
         }
 
         // 동일 결과의 반복 조회로 상태와 변경 시각을 다시 기록하지 않습니다.
-        if (nextStatus.equals(status)) {
+        if (nextStatus == status) {
             return false;
         }
 
@@ -301,7 +306,7 @@ public class RefundRequest {
         this.updatedAt = now;
 
         // 관리자 승인 시각과 실제 PG 취소 완료 시각은 구분합니다.
-        if ("COMPLETED".equals(nextStatus)) {
+        if (nextStatus == RefundStatus.COMPLETED) {
             this.completedAt = completedAt;
         }
 
@@ -314,7 +319,7 @@ public class RefundRequest {
      * @throws BusinessException 다른 요청이 이미 심사를 진행하거나 확정한 경우
      */
     private void requireRequested() {
-        if (!"REQUESTED".equals(status)) {
+        if (status != RefundStatus.REQUESTED) {
             throw new BusinessException(
                     ErrorCode.CONCURRENT_MODIFICATION,
                     "이미 처리 중이거나 심사가 완료된 환불 요청입니다."

@@ -1,6 +1,7 @@
 package com.team.sharedcreature.quest.api;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.team.sharedcreature.quest.domain.PhotoVerificationStatus;
 
 import java.time.Instant;
 
@@ -21,7 +22,7 @@ public record PhotoSubmissionResponse(
         int attemptNumber,
 
         /** 판정 상태: PENDING, VALID, INVALID */
-        String verificationStatus,
+        PhotoVerificationStatus verificationStatus,
 
         /** 실패 사유. 성공했거나 아직 판정 중이면 null */
         String failureReason,

@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.admin.application.SchedulerClaimTicket;
 import com.team.sharedcreature.admin.application.SchedulerExecutionLifecycleService;
 import com.team.sharedcreature.admin.application.SchedulerJobRunner;
@@ -185,10 +187,10 @@ public class SeasonCloseJobService {
      * 아직 CLOSING인 시즌은 다음 단계의 정상 종료 절차를 그대로 수행합니다.
      */
     private boolean isEnded(Long seasonId) {
-        return "ENDED".equals(seasonRepository.findById(seasonId)
+        return seasonRepository.findById(seasonId)
                 .orElseThrow(() -> new IllegalStateException(
                         "시즌을 찾을 수 없습니다. seasonId=" + seasonId
-                )).getStatus());
+                )).getStatus() == SeasonStatus.ENDED;
     }
 
     /**

@@ -5,11 +5,14 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.admin.application.ApiIdempotencyService;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
+import com.team.sharedcreature.auth.domain.GlobalRole;
+import com.team.sharedcreature.auth.domain.UserStatus;
 import com.team.sharedcreature.payment.application
         .RefundApprovalTransactionService.CommandResponse;
 import com.team.sharedcreature.payment.application
         .RefundRecoveryPreparationService.RecoveryCommand;
 import com.team.sharedcreature.payment.infrastructure.RefundIdempotencyRepository;
+import com.team.sharedcreature.payment.domain.RefundStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -58,10 +61,11 @@ public class RefundReconciliationPreparationService {
             throw new BusinessException(ErrorCode.ROLE_FORBIDDEN);
         }
 
+        // 활성 상태의 전체 관리자만 환불 상태의 수동 복구를 요청할 수 있습니다.
         boolean allowed = userRepository.findById(adminUserId)
                 .filter(user ->
-                        "ACTIVE".equals(user.getStatus())
-                                && "SUPER_ADMIN".equals(user.getGlobalRole())
+                        user.getStatus() == UserStatus.ACTIVE
+                                && user.getGlobalRole() == GlobalRole.SUPER_ADMIN
                 )
                 .isPresent();
 
@@ -109,7 +113,7 @@ public class RefundReconciliationPreparationService {
 
             CommandResponse response;
 
-            if ("CANCEL_UNKNOWN".equals(data.status())) {
+        if (data.status() == RefundStatus.CANCEL_UNKNOWN) {
                 response = new CommandResponse(
                         409,
                         null,

@@ -5,6 +5,10 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature.admin.api.AdminGroupSearchResponse;
 import com.team.sharedcreature.group.api.GroupMemberResponse;
 import com.team.sharedcreature.group.domain.Group;
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+import com.team.sharedcreature.group.domain.GroupRole;
+import com.team.sharedcreature.group.domain.GroupStatus;
+import com.team.sharedcreature.group.domain.GroupVisibility;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.group.infrastructure.GroupRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -68,7 +72,7 @@ class AdminGroupQueryServiceTest {
         // 비공개 그룹을 검색 결과에 포함시켜 DTO 변환을 확인합니다.
         when(group.getId()).thenReturn(10L);
         when(group.getName()).thenReturn("Test_%");
-        when(group.getVisibility()).thenReturn("PRIVATE");
+        when(group.getVisibility()).thenReturn(GroupVisibility.PUBLIC);
         when(group.getCurrentMemberCount()).thenReturn(3);
         when(group.getCapacity()).thenReturn(20);
 
@@ -88,7 +92,7 @@ class AdminGroupQueryServiceTest {
                 .extracting(AdminGroupSearchResponse::groupId)
                 .containsExactly(10L);
         assertThat(result.getContent().get(0).visibility())
-                .isEqualTo("PRIVATE");
+                .isEqualTo("PUBLIC");
 
         verify(groupRepository).findAdminActiveGroups(
                 "test\\_\\%",
@@ -112,8 +116,8 @@ class AdminGroupQueryServiceTest {
                 21L,
                 "테스트회원",
                 100L,
-                "MEMBER",
-                "ACTIVE",
+                GroupRole.MEMBER,
+                GroupMembershipStatus.ACTIVE,
                 joinedAt,
                 joinedAt
         );
@@ -121,7 +125,7 @@ class AdminGroupQueryServiceTest {
         // 존재하는 활성 그룹만 회원 목록 조회를 허용합니다.
         when(groupRepository.findById(10L))
                 .thenReturn(Optional.of(group));
-        when(group.getStatus()).thenReturn("ACTIVE");
+        when(group.getStatus()).thenReturn(GroupStatus.ACTIVE);
 
         when(membershipRepository.findActiveMemberResponsesByGroupId(
                 10L,
@@ -151,7 +155,7 @@ class AdminGroupQueryServiceTest {
 
         when(groupRepository.findById(10L))
                 .thenReturn(Optional.of(group));
-        when(group.getStatus()).thenReturn("INACTIVE");
+        when(group.getStatus()).thenReturn(GroupStatus.INACTIVE);
 
         // 그룹 상태를 먼저 검사하고 멤버십 조회를 중단해야 합니다.
         assertThatThrownBy(() -> service.listMembers(10L, 0, 20))

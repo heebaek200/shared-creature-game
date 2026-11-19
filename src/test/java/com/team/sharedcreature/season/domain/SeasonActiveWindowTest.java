@@ -98,7 +98,7 @@ class SeasonActiveWindowTest {
         Season season = new Season();
 
         // JPA 전용 생성자를 사용하는 테스트 Fixture입니다.
-        ReflectionTestUtils.setField(season, "status", status);
+        ReflectionTestUtils.setField(season, "status", status == null ? null : SeasonStatus.valueOf(status));
         ReflectionTestUtils.setField(season, "startAt", START);
         ReflectionTestUtils.setField(season, "endAt", END);
 

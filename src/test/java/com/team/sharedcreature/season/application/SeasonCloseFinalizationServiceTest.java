@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.SeasonRepository;
 import com.team.sharedcreature.season.infrastructure.SeasonSnapshotCompletionRepository;
@@ -67,7 +69,7 @@ class SeasonCloseFinalizationServiceTest {
         // 잠금 조회 후 검사하며 최종 상태를 Commit할 준비를 마칩니다.
         assertTrue(service.finishIfSnapshotsComplete(SEASON_ID));
 
-        assertEquals("ENDED", season.getStatus());
+        assertEquals(SeasonStatus.ENDED, season.getStatus());
         assertEquals(FINALIZED, season.getUpdatedAt());
         InOrder order = inOrder(seasonRepository, completionRepository);
         order.verify(seasonRepository).findForUpdateById(SEASON_ID);
@@ -89,7 +91,7 @@ class SeasonCloseFinalizationServiceTest {
 
         assertThrows(IllegalStateException.class,
                 () -> service.finishIfSnapshotsComplete(SEASON_ID));
-        assertEquals("CLOSING", season.getStatus());
+        assertEquals(SeasonStatus.CLOSING, season.getStatus());
     }
 
     /**
@@ -107,7 +109,7 @@ class SeasonCloseFinalizationServiceTest {
 
         assertThrows(IllegalStateException.class,
                 () -> service.finishIfSnapshotsComplete(SEASON_ID));
-        assertEquals("CLOSING", season.getStatus());
+        assertEquals(SeasonStatus.CLOSING, season.getStatus());
     }
 
     /**
@@ -125,7 +127,7 @@ class SeasonCloseFinalizationServiceTest {
 
         assertThrows(IllegalStateException.class,
                 () -> service.finishIfSnapshotsComplete(SEASON_ID));
-        assertEquals("CLOSING", season.getStatus());
+        assertEquals(SeasonStatus.CLOSING, season.getStatus());
     }
 
     /**
@@ -143,7 +145,7 @@ class SeasonCloseFinalizationServiceTest {
 
         assertThrows(IllegalStateException.class,
                 () -> service.finishIfSnapshotsComplete(SEASON_ID));
-        assertEquals("CLOSING", season.getStatus());
+        assertEquals(SeasonStatus.CLOSING, season.getStatus());
     }
 
     /**
@@ -161,7 +163,7 @@ class SeasonCloseFinalizationServiceTest {
 
         assertThrows(IllegalStateException.class,
                 () -> service.finishIfSnapshotsComplete(SEASON_ID));
-        assertEquals("CLOSING", season.getStatus());
+        assertEquals(SeasonStatus.CLOSING, season.getStatus());
     }
 
     /**
@@ -176,7 +178,7 @@ class SeasonCloseFinalizationServiceTest {
         when(completionRepository.countMemberSnapshots(SEASON_ID)).thenReturn(0L);
 
         assertTrue(service.finishIfSnapshotsComplete(SEASON_ID));
-        assertEquals("ENDED", season.getStatus());
+        assertEquals(SeasonStatus.ENDED, season.getStatus());
         verify(completionRepository, never()).inspectActiveClosing(SEASON_ID);
     }
 
@@ -193,7 +195,7 @@ class SeasonCloseFinalizationServiceTest {
 
         assertThrows(IllegalStateException.class,
                 () -> service.finishIfSnapshotsComplete(SEASON_ID));
-        assertEquals("CLOSING", season.getStatus());
+        assertEquals(SeasonStatus.CLOSING, season.getStatus());
     }
 
     /**
@@ -221,7 +223,7 @@ class SeasonCloseFinalizationServiceTest {
 
         assertThrows(IllegalStateException.class,
                 () -> service.finishIfSnapshotsComplete(SEASON_ID));
-        assertEquals("ACTIVE", season.getStatus());
+        assertEquals(SeasonStatus.ACTIVE, season.getStatus());
         verifyNoInteractions(completionRepository);
     }
 
@@ -236,7 +238,7 @@ class SeasonCloseFinalizationServiceTest {
 
         assertThrows(IllegalStateException.class,
                 () -> service.finishIfSnapshotsComplete(SEASON_ID));
-        assertEquals("CLOSING", season.getStatus());
+        assertEquals(SeasonStatus.CLOSING, season.getStatus());
         verifyNoInteractions(completionRepository);
     }
 
@@ -291,8 +293,8 @@ class SeasonCloseFinalizationServiceTest {
 
         // 실제 엔티티에 값을 채워 검증 시 도메인 메서드를 실행하게 합니다.
         ReflectionTestUtils.setField(season, "id", SEASON_ID);
-        ReflectionTestUtils.setField(season, "status", status);
-        ReflectionTestUtils.setField(season, "closingFromStatus", closingFromStatus);
+        ReflectionTestUtils.setField(season, "status", status == null ? null : SeasonStatus.valueOf(status));
+        ReflectionTestUtils.setField(season, "closingFromStatus", closingFromStatus == null ? null : SeasonStatus.valueOf(closingFromStatus));
         ReflectionTestUtils.setField(season, "updatedAt", END);
         return season;
     }

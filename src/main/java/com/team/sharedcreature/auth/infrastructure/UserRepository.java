@@ -1,6 +1,8 @@
 package com.team.sharedcreature.auth.infrastructure;
 
 import com.team.sharedcreature.auth.domain.User;
+import com.team.sharedcreature.auth.domain.GlobalRole;
+import com.team.sharedcreature.auth.domain.UserStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -17,7 +19,10 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long> {
 
     /** 지정한 전역 역할과 상태를 가진 계정이 존재하는지 확인합니다. */
-    boolean existsByGlobalRoleAndStatus(String globalRole, String status);
+    boolean existsByGlobalRoleAndStatus(
+            GlobalRole globalRole,
+            UserStatus status
+    );
 
     /** 가입 직렬화를 위해 사용자를 비관적 쓰기 잠금으로 조회합니다. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

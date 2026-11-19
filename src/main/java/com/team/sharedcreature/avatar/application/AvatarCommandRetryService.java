@@ -3,6 +3,7 @@ package com.team.sharedcreature.avatar.application;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.avatar.api.AvatarResponse;
+import com.team.sharedcreature.avatar.domain.AvatarSlot;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
@@ -46,7 +47,7 @@ public class AvatarCommandRetryService {
      */
     public AvatarResponse equipAvatarItem(
             Long userId,
-            String slot,
+            AvatarSlot slot,
             Long ownedItemId,
             boolean confirmFirstUse
     ) {
@@ -68,7 +69,7 @@ public class AvatarCommandRetryService {
      * @return 변경된 아바타 정보
      * @throws BusinessException 재시도 한도까지 DB 동시성 오류가 발생하거나 해제 업무 조건을 위반한 경우
      */
-    public AvatarResponse unequipAvatarItem(Long userId, String slot) {
+    public AvatarResponse unequipAvatarItem(Long userId, AvatarSlot slot) {
         return executeWithRetry(() ->
                 avatarService.unequipAvatarItem(userId, slot)
         );

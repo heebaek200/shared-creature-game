@@ -1,5 +1,7 @@
 package com.team.sharedcreature.group.api;
 
+import com.team.sharedcreature.group.domain.GroupJoinBlockedReason;
+
 /** 공개 그룹 선택 목록의 가입 가능 상태를 제공합니다. */
 public record GroupSummaryResponse(
         Long groupId,
@@ -9,6 +11,6 @@ public record GroupSummaryResponse(
         int capacity,
         int remainingCapacity,
         boolean joinable,
-        String joinBlockedReason
+        GroupJoinBlockedReason joinBlockedReason
 ) {
 }

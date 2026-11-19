@@ -5,8 +5,10 @@ import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.admin.application.ApiIdempotencyService;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.avatar.domain.ShopItem;
+import com.team.sharedcreature.avatar.domain.ShopItemStatus;
 import com.team.sharedcreature.avatar.infrastructure.ShopItemRepository;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
+import com.team.sharedcreature.group.domain.GroupStatus;
 import com.team.sharedcreature.payment.api.CreatePurchaseResponse;
 import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.infrastructure.PortOneProperties;
@@ -64,10 +66,16 @@ public class PurchaseService {
             return claim.response();
         }
 
-        ShopItem shopItem = shopItemRepository.findByIdAndStatus(shopItemId, "ACTIVE")
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        // 판매 중인 상품만 구매할 수 있도록 기존 조회 조건을 유지합니다.
+        ShopItem shopItem = shopItemRepository
+                .findByIdAndStatus(shopItemId, ShopItemStatus.ACTIVE)
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)
+                );
         var membership = membershipRepository.findActiveWithGroupByUserId(userId)
-                .filter(activeMembership -> "ACTIVE".equals(activeMembership.getGroup().getStatus()))
+                .filter(activeMembership ->
+                        activeMembership.getGroup().getStatus() == GroupStatus.ACTIVE
+                )
                 .orElse(null);
         Purchase purchase = purchaseRepository.save(Purchase.ready(
                 UUID.randomUUID().toString(),

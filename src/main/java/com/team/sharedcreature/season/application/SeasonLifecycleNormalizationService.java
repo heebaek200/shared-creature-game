@@ -1,5 +1,7 @@
 package com.team.sharedcreature.season.application;
 
+import com.team.sharedcreature.season.domain.SeasonStatus;
+
 import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.infrastructure.SeasonRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -152,7 +154,7 @@ public class SeasonLifecycleNormalizationService {
                 Season season = seasonRepository.findById(seasonId)
                         .orElseThrow(() -> new IllegalStateException("활성화된 시즌을 찾을 수 없습니다."));
                 // 예상과 다른 상태가 저장되면 만료가 아니라 상태 경합으로 분리합니다.
-                Outcome verified = !"ACTIVE".equals(season.getStatus())
+                Outcome verified = (season.getStatus() != SeasonStatus.ACTIVE)
                         ? Outcome.STATE_CHANGED
                         : season.isActiveAt(Instant.now(clock))
                                 ? Outcome.ACTIVE : Outcome.EXPIRED;
