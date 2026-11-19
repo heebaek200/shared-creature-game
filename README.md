@@ -1,8 +1,10 @@
 # 다 같이 키우는 생명체
 
+[![프로젝트 아이콘](frontend/assets/ui/header-title-icon.png)](frontend/assets/ui/header-title-icon.png)
+
 ## 프로젝트 정보
 
-### 개요
+### 📌 개요
 
 **다 같이 키우는 생명체**는 일상 속 작은 활동을 게임으로 연결하고, 여러 사용자가 하나의 생명체를 함께 성장시키는 **웹 기반 소셜 육성 서비스**입니다.
 
@@ -12,20 +14,20 @@
 
 **이 프로젝트가 제공하고자 하는 가치는 일상의 작은 실천을 눈에 보이는 성취로 바꾸고, 공동의 목표를 통해 느슨한 사회적 연결을 만드는 것입니다.** 다만 실제 생활 습관 개선이나 사회적 교류 증대 효과는 아직 검증되지 않은 기대 효과입니다.
 
-### 팀 구성 및 역할
+### 👥 팀 구성 및 역할
 
 - **개발 인원:** 4명
 
 | 이름 | GitHub | 주요 담당 역할 |
 |---|---|---|
 | **이희백** | [heebaek200](https://github.com/heebaek200) | **프로젝트 관리:** GitHub Projects 운영, 설계 문서 관리 및 보완<br>**백엔드:** 프로젝트 기반 구현, Scheduler, WebSocket, 그룹, 관리자 등<br>**프론트엔드:** 퀘스트, WebSocket 연동, 상점·결제, 관리자 등 |
-| **이수현** | [is-hyun](https://github.com/is-hyun) | **기술 검증:** 그래픽 리소스 확보 및 활용 가능성 검토<br>**프론트엔드:** 크리처 홈, 공통 레이아웃·테마, 아바타 화면 등 |
-| **양현재** | [a67286268-oss](https://github.com/a67286268-oss) | **기술 검증:** JPEG EXIF 기반 사진 인증<br>**백엔드:** 퀘스트, EXIF 인증, 아바타·아이템, 랭킹, 환불, 리팩터링 등 |
+| **이수현** | [is-hyun](https://github.com/is-hyun) | **기술 검증:** 그래픽 리소스 확보 및 활용 가능성 검토<br>**리소스 준비:** 크리처·아바타 그래픽 리소스 확보 및 정리<br>**프론트엔드:** 크리처 홈, 공통 레이아웃·테마, 아바타 화면 등 |
+| **양현재** | [a67286268-oss](https://github.com/a67286268-oss) | **기술 검증:** JPEG EXIF 기반 사진 인증<br>**백엔드:** 퀘스트, EXIF 인증, 아바타·아이템, 랭킹, 환불 등<br>**코드 품질 개선:** 백엔드 리팩터링 및 기존 구현 개선 ||
 | **김희성** | [asd27429697-design](https://github.com/asd27429697-design) | **기술 검증:** 크리처·아바타의 브라우저 표현 방식<br>**백엔드:** Naver OAuth, Gemini AI 교정<br>**프론트엔드:** 회원가입·그룹 관리, Naver OAuth, Gemini AI 교정 등 |
 
 ※ 담당 역할은 주요 구현 및 기여 영역을 중심으로 요약했습니다.
 
-### 설계 문서
+### 📄 설계 문서
 
 이 프로젝트는 **팀원들이 함께 설계를 수립한 뒤, 확정된 설계를 기준으로 기능별 구현을 진행하는 워터폴 방식에 가까운 개발 프로세스**를 채택했습니다.
 
@@ -45,7 +47,7 @@
 
 **[전체 설계 문서 보기](docs/index.md)**
 
-### GitHub Projects
+### 📋 GitHub Projects
 
 이 프로젝트는 **GitHub Projects와 Issues를 중심으로 업무를 관리**했습니다.
 
@@ -57,9 +59,11 @@ GitHub Projects의 칸반 보드를 이용하여 업무의 진행 상태를 시�
 
 **[GitHub Projects 보기](https://github.com/heebaek200/shared-creature-game/projects)**
 
-![GitHub Projects 칸반 보드](docs/images/github-projects-kanban.png)
+| GitHub Projects 칸반 보드 |
+|:---:|
+| [![GitHub Projects 칸반 보드](docs/images/github-projects-kanban.png)](docs/images/github-projects-kanban.png) |
 
-### 일일 리포트
+### 💬 일일 리포트
 
 이 프로젝트는 팀원들이 개발 기간 동안 **매일 자신의 작업을 돌아보고 공유하는 일일 리포트 제도**를 운영했습니다.
 
@@ -75,6 +79,11 @@ GitHub Projects의 칸반 보드를 이용하여 업무의 진행 상태를 시�
 이러한 기록을 통해 팀원 각자가 자신의 업무를 정리하는 습관을 만들고, 서로의 작업 진행 상황을 이해하는 데 도움을 얻고자 했습니다.
 
 **[전체 일일 리포트 보기](https://github.com/heebaek200/shared-creature-game/discussions)**
+
+| GitHub Discussions 일일 리포트 |
+|:---:|
+| [![GitHub Discussions 일일 리포트](docs/images/github-discussions-reports.png)](docs/images/github-discussions-reports.png) |
+
 #### 일일 리포트 기록
 
 - [2026-11-02 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/2)
@@ -91,7 +100,7 @@ GitHub Projects의 칸반 보드를 이용하여 업무의 진행 상태를 시�
 - [2026-11-17 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/105)
 - [2026-11-18 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/111)
 
-## 주요 기술 스택
+## 🛠️ 주요 기술 스택
 
 | 분류 | 기술 | 프로젝트에서의 역할 |
 |---|---|---|
@@ -111,7 +120,94 @@ GitHub Projects의 칸반 보드를 이용하여 업무의 진행 상태를 시�
 
 **[기술 스택 및 아키텍처 설계·구현 해설](docs/tech-stack.md)**
 
-## 로컬 구동 방법
+## 🏗️ 프로젝트 구조
+
+### 📁 주요 폴더 트리
+
+Spring Boot 서버와 Vite 기반 프론트엔드를 하나의 저장소에서 관리합니다. 아래는 전체 파일 목록이 아닌 주요 디렉터리와 역할을 보여주는 요약입니다.
+
+```text
+shared-creature-game/
+├── docs/                              # 기획·요구사항·DB·API·화면 설계 및 검증 기록
+├── frontend/
+│   ├── assets/                        # 이미지·그래픽 에셋
+│   └── src/
+│       ├── app/                       # 애플리케이션 시작·라우팅
+│       ├── api/                       # 공통 HTTP 요청과 오류 처리
+│       ├── components/                # 공통 UI 구성 요소
+│       ├── features/                  # 기능별 API·UI 구성
+│       ├── pages/                     # 화면(Route) 단위 컴포넌트
+│       ├── realtime/                  # WebSocket 연동
+│       └── styles/                    # 전역·테마 스타일
+├── src/
+│   ├── main/
+│   │   ├── java/com/team/sharedcreature/
+│   │   │   ├── _core/                 # 인증·예외·공통 인프라
+│   │   │   ├── auth/                  # 사용자 인증
+│   │   │   ├── group/                 # 그룹 및 멤버십
+│   │   │   ├── quest/                 # 퀘스트와 보상
+│   │   │   ├── payment/               # 결제 연동
+│   │   │   ├── ai/                    # Gemini 교정
+│   │   │   └── ...                    # 크리처·아바타·운영 등 기타 도메인
+│   │   └── resources/
+│   │       ├── db/                    # SQL 초기화·데이터 및 로컬 테스트 자료
+│   │       ├── application.yaml      # 공통 설정
+│   │       └── application-local.yaml
+│   └── test/                          # 백엔드 자동 테스트
+├── .env.example                       # 로컬 환경변수 예시
+├── build.gradle                       # Spring Boot·Java 의존성
+└── README.md
+```
+
+백엔드는 도메인별 패키지 안에서 API·업무 처리·데이터 접근과 외부 연동 책임을 구분하고, 프론트엔드는 Router·Page·공통 API Client를 분리하여 화면 전환과 요청 처리를 관리합니다.
+
+### 🗃️ 요약 ERD
+
+설계서에는 인증·그룹, 시즌·크리처, 퀘스트, 상점·환불 및 운영 기록 등 **43개의 업무 테이블**이 정의되어 있습니다. 아래에는 핵심 흐름과 관계가 드러나는 테이블만 발췌했습니다.
+
+```mermaid
+erDiagram
+    users ||--o{ group_memberships : joins
+    game_groups ||--o{ group_memberships : contains
+    game_groups ||--o{ group_seasons : participates
+    seasons ||--o{ group_seasons : runs
+    group_seasons ||--|| group_creatures : nurtures
+
+    users ||--o{ quest_completions : completes
+    quest_assignments ||--o{ quest_completions : receives
+    quest_completions ||--o{ quest_reward_ledgers : grants
+
+    users ||--o{ purchases : buys
+    shop_items ||--o{ purchases : sold_as
+    purchases ||--o| owned_items : grants
+    purchases ||--o{ refund_requests : requested_for
+```
+
+그룹 멤버십과 시즌별 크리처, 퀘스트 완료와 보상 원장, 구매와 아이템 지급·환불 상태를 분리하여 기록합니다. 자세한 컬럼, 외래 키, UNIQUE 제약과 동시성 정책은 전체 설계서를 참고합니다.
+
+**[데이터베이스 설계서 및 전체 ERD 보기](docs/database-design.md)**
+
+### 🧭 주요 URL 및 API 매핑
+
+프론트엔드는 History API 기반 화면 경로를 사용하고, 백엔드는 `/api/v1`을 공통 접두사로 하는 REST API를 제공합니다. 아래는 화면별 대표 API를 추린 표이며 전체 목록은 아닙니다.
+
+| 기능 | 화면 URL | 대표 Backend API |
+|---|---|---|
+| 로그인·가입 | `/login`, `/signup` | `POST /api/v1/auth/oauth-attempts`, `POST /api/v1/auth/signup` |
+| 공개 그룹·그룹 소개 AI 교정 | `/groups/select` | `GET /api/v1/groups`, `POST /api/v1/groups`, `POST /api/v1/ai/proofreads` |
+| 그룹 현황·관리 | `/group`, `/group-admin` | `GET /api/v1/groups/me`, `GET /api/v1/groups/me/members` |
+| 크리처 육성 | `/creature` | `GET /api/v1/groups/me/creature-home` |
+| 퀘스트·사진 인증 | `/quests` | `GET /api/v1/quests/current`, `POST /api/v1/photo-submissions` |
+| 랭킹 | `/rankings` | `GET /api/v1/rankings/members`, `GET /api/v1/rankings/groups` |
+| 상점·아바타 | `/shop`, `/avatar` | `GET /api/v1/shop-items`, `GET /api/v1/avatar` |
+| 구매·환불 내역 | `/payments` | `GET /api/v1/purchases`, `GET /api/v1/refund-requests` |
+| 관리자 | `/admin`, `/admin/reports`, `/admin/refunds`, `/admin/operations` | `GET /api/v1/admin/dashboard`, `GET /api/v1/admin/refund-requests` |
+
+WebSocket은 REST API와 별개로 `/ws` 연결을 사용하며, Vite 개발 서버가 `/api`, `/oauth2`, `/ws` 요청을 Spring Boot로 프록시합니다.
+
+**[REST API 전체 설계서 보기](docs/api-design.md)** · **[화면 설계서 보기](docs/screen-design.md)**
+
+## 🔌로컬 구동 방법
 
 ### 1. 준비물
 
@@ -119,7 +215,7 @@ GitHub Projects의 칸반 보드를 이용하여 업무의 진행 상태를 시�
 - MySQL 8
 - Node.js 20 이상과 npm
 
-Docker, H2, Flyway와 Liquibase는 사용하지 않습니다. 일반 업무 테이블·컬럼과 일반 제약은 JPA `ddl-auto=update`로 만들고, Spring Session 테이블과 MySQL STORED 생성 컬럼·조건부 UNIQUE는 `db/special-schema.sql`로 관리합니다.
+일반 업무 테이블·컬럼과 일반 제약은 JPA `ddl-auto=update`로 만들고, Spring Session 테이블과 MySQL STORED 생성 컬럼·조건부 UNIQUE는 `db/special-schema.sql`로 관리합니다.
 
 ### 2. 데이터베이스 준비
 
