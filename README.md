@@ -22,7 +22,7 @@
 |---|---|---|
 | **이희백** | [heebaek200](https://github.com/heebaek200) | **프로젝트 관리:** GitHub Projects 운영, 설계 문서 관리 및 보완<br>**백엔드:** 프로젝트 기반 구현, Scheduler, WebSocket, 그룹, 관리자 등<br>**프론트엔드:** 퀘스트, WebSocket 연동, 상점·결제, 관리자 등 |
 | **이수현** | [is-hyun](https://github.com/is-hyun) | **기술 검증:** 그래픽 리소스 확보 및 활용 가능성 검토<br>**리소스 준비:** 크리처·아바타 그래픽 리소스 확보 및 정리<br>**프론트엔드:** 크리처 홈, 공통 레이아웃·테마, 아바타 화면 등 |
-| **양현재** | [a67286268-oss](https://github.com/a67286268-oss) | **기술 검증:** JPEG EXIF 기반 사진 인증<br>**백엔드:** 퀘스트, EXIF 인증, 아바타·아이템, 랭킹, 환불 등<br>**코드 품질 개선:** 백엔드 리팩터링 및 기존 구현 개선 ||
+| **양현재** | [a67286268-oss](https://github.com/a67286268-oss) | **기술 검증:** JPEG EXIF 기반 사진 인증<br>**백엔드:** 퀘스트, EXIF 인증, 아바타·아이템, 랭킹, 환불 등<br>**코드 품질 개선:** 백엔드 리팩터링 및 기존 구현 개선 |
 | **김희성** | [asd27429697-design](https://github.com/asd27429697-design) | **기술 검증:** 크리처·아바타의 브라우저 표현 방식<br>**백엔드:** Naver OAuth, Gemini AI 교정<br>**프론트엔드:** 회원가입·그룹 관리, Naver OAuth, Gemini AI 교정 등 |
 
 ※ 담당 역할은 주요 구현 및 기여 영역을 중심으로 요약했습니다.
@@ -100,6 +100,54 @@ GitHub Projects의 칸반 보드를 이용하여 업무의 진행 상태를 시�
 - [2026-11-17 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/105)
 - [2026-11-18 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/111)
 
+## 🎮 주요 기능과 사용자 시나리오
+
+기능별 시연 GIF는 [#40 전체 시나리오·결함 수정](https://github.com/heebaek200/shared-creature-game/issues/40)의 통합 검증 결과와 함께 이 절에 추가합니다.
+
+### 가입과 그룹 참여
+
+1. Google 또는 Naver 계정으로 로그인합니다.
+2. 신규 사용자는 닉네임을 등록해 회원가입을 완료합니다.
+3. 공개 그룹을 검색해 가입하거나 새로운 그룹을 생성합니다.
+4. 초대 링크를 받은 사용자는 링크의 그룹 정보를 확인한 뒤 참여합니다.
+
+### 퀘스트와 공동 크리처 성장
+
+1. 사용자는 현재 배정된 일일·주간 퀘스트를 확인합니다.
+2. 체크인 또는 JPEG 사진 인증으로 퀘스트를 수행합니다.
+3. 완료 보상으로 개인 기여도와 그룹 크리처 경험치가 증가합니다.
+4. 다른 그룹원의 화면에는 성장 결과와 아바타 상태가 실시간으로 반영되며, 이벤트 누락 시 REST Snapshot으로 복구합니다.
+5. 개인·그룹 랭킹에서 현재 시즌의 참여 결과를 확인합니다.
+
+### 실시간 아바타·채팅과 신고 처리
+
+1. 그룹원이 크리처 홈에 접속하면 WebSocket Presence를 기준으로 각 사용자의 아바타가 필드에 표시됩니다.
+2. 사용자가 메시지를 전송하면 같은 그룹의 화면에 아바타 말풍선 채팅으로 실시간 표시됩니다.
+3. 다른 사용자의 말풍선을 선택하면 해당 메시지를 근거로 신고할 수 있습니다.
+4. 신고 시점의 메시지·작성자·그룹 정보를 별도 증거로 보존하므로 원본 채팅의 보존 기한이 지나도 관리자가 당시 내용을 확인할 수 있습니다.
+5. 전체 관리자는 신고 목록과 증거를 검토하고 기각, 강퇴 또는 처리 완료로 상태를 확정합니다.
+
+### 상점·아바타와 결제·환불
+
+1. 사용자는 상점에서 판매 중인 아바타 아이템을 선택합니다.
+2. PortOne V2 테스트 결제를 완료하면 서버가 실제 결제 정보를 검증하고 아이템을 지급합니다.
+3. 보유 아이템을 아바타 슬롯에 장착하거나 해제합니다.
+4. 환불 조건을 만족하는 구매는 환불을 요청하고, 관리자의 승인·거절 및 PG 취소 결과를 확인합니다.
+
+### 그룹·서비스 운영
+
+1. 그룹 관리자는 멤버 역할 변경, 강퇴, 주 관리자 이전과 초대 링크 재발급을 수행합니다.
+2. 사용자는 그룹 내 문제 사용자를 신고할 수 있습니다.
+3. 전체 관리자는 대시보드에서 그룹·사용자·결제·신고 현황과 Scheduler 경고를 확인하고 필요한 조치를 수행합니다.
+
+### 새로고침 없는 Full CSR 화면 이동
+
+1. 브라우저가 최초 HTML과 JavaScript 모듈을 받은 뒤 Vanilla JavaScript Router가 현재 URL과 로그인·역할 상태에 맞는 Page를 선택합니다.
+2. 화면 데이터는 Spring Boot REST API의 JSON 응답으로 조회하고, 필요한 DOM만 다시 그립니다.
+3. 메뉴 이동은 History API로 처리하여 전체 페이지를 다시 받지 않으며 뒤로가기·앞으로가기도 같은 Router가 복원합니다.
+4. Page를 떠날 때 Event Listener, Timer와 WebSocket 구독을 정리하여 중복 처리와 메모리 누적을 막습니다.
+5. 프론트엔드 Route 검사는 화면 접근을 안내하고, 실제 보안 경계는 Spring Security와 Service 소유권 검사가 강제합니다.
+
 ## 🛠️ 주요 기술 스택
 
 | 분류 | 기술 | 프로젝트에서의 역할 |
@@ -114,9 +162,42 @@ GitHub Projects의 칸반 보드를 이용하여 업무의 진행 상태를 시�
 | 정기 작업 | Spring Scheduler | 시즌·퀘스트·부화, 결제·환불 복구, 사진 보존 기한 정리 |
 | 테스트 | JUnit 5, Spring Boot Test, Spring Security Test | 단위·통합·동시성·보안 경계 검증 |
 
-핵심 특징은 DB Commit을 최종 상태로 삼고 WebSocket은 결과 전달에만 사용하는 점, 비관적·낙관적 락과 UNIQUE 제약·멱등성 키를 함께 사용해 중복 처리를 막는 점, 외부 PG 호출과 DB 트랜잭션을 분리하고 Webhook·Scheduler로 결과 불명 상태를 복구하는 점입니다. 사진 인증은 JPEG Signature와 EXIF를 서버에서 다시 검증하고 제한된 Worker와 Timeout으로 작업량을 제어합니다.
+### 강의 블로그에서 여기까지 확장했습니다
 
-> 일부 영역은 최종 확정 설계를 기준으로 먼저 문서화했습니다. 발표·배포 전에는 실제 통합 코드와 테스트 결과를 다시 대조합니다.
+<table>
+<tr>
+<td>
+<strong>🚀 서버 렌더링에서 Vanilla JS Full CSR로</strong><br><br>
+Controller가 HTML을 반환하던 구조를 Spring Boot REST API와 Vite 프론트엔드로 완전히 분리했습니다. 프레임워크 Router 없이 History API, Page 생명주기, 공통 App Shell, Fetch Client와 DOM 갱신을 직접 구현했습니다.
+</td>
+<td>
+<strong>🔐 단순 세션 검사에서 OAuth·Security 경계로</strong><br><br>
+Google·Naver OAuth 2.0/OIDC, Spring Security, Spring Session JDBC를 연결했습니다. OAuth state Hash·nonce·시작 세션 결속, CSRF, 역할별 401·403과 가입 대기 상태까지 하나의 인증 흐름으로 구성했습니다.
+</td>
+</tr>
+<tr>
+<td>
+<strong>💬 화면 조회에서 실시간 공동 공간으로</strong><br><br>
+WebSocket/STOMP로 크리처 성장, 아바타 장착, Presence와 말풍선 채팅을 그룹원에게 전파합니다. 중복·누락·서버 재시작을 감지하면 REST Snapshot으로 복구하고, 채팅은 신고 증거와 관리자 처리까지 이어집니다.
+</td>
+<td>
+<strong>⚔️ 단순 CRUD에서 동시성 정합성으로</strong><br><br>
+비관적 락, 낙관적 락, UNIQUE 제약, 멱등성 키와 원장을 업무별로 조합했습니다. 동시 가입, 중복 보상, 결제 확인과 Webhook 경합에서도 DB Commit 하나만 최종 결과가 되도록 설계했습니다.
+</td>
+</tr>
+<tr>
+<td>
+<strong>💳 결제 성공 처리에서 장애 복구 상태머신으로</strong><br><br>
+브라우저 완료 응답을 그대로 믿지 않고 PortOne의 거래를 서버에서 재검증합니다. Webhook과 브라우저 확인을 같은 Service로 정합화하고, 결과 불명 결제·환불은 Scheduler가 재조회해 아이템 지급·회수까지 복구합니다.
+</td>
+<td>
+<strong>📷 파일 업로드에서 제한된 EXIF 처리 파이프라인으로</strong><br><br>
+JPEG Signature와 EXIF GPS·촬영 시각을 서버에서 다시 검증합니다. 대기열 없는 고정 Worker, Timeout, 제출 횟수 제한과 보존 기한 정리로 무거운 이미지 요청이 서버 자원을 잠식하지 않게 했습니다.
+</td>
+</tr>
+</table>
+
+핵심 특징은 DB Commit을 최종 상태로 삼고 WebSocket은 결과 전달에만 사용하는 점, 비관적·낙관적 락과 UNIQUE 제약·멱등성 키를 함께 사용해 중복 처리를 막는 점, 외부 PG 호출과 DB 트랜잭션을 분리하고 Webhook·Scheduler로 결과 불명 상태를 복구하는 점입니다. 사진 인증은 JPEG Signature와 EXIF를 서버에서 다시 검증하고 제한된 Worker와 Timeout으로 작업량을 제어합니다.
 
 **[기술 스택 및 아키텍처 설계·구현 해설](docs/tech-stack.md)**
 
@@ -207,7 +288,10 @@ WebSocket은 REST API와 별개로 `/ws` 연결을 사용하며, Vite 개발 서
 
 **[REST API 전체 설계서 보기](docs/api-design.md)** · **[화면 설계서 보기](docs/screen-design.md)**
 
-## 🔌로컬 구동 방법
+## 🔌 로컬 구동 방법
+
+<details>
+<summary><strong>로컬·실기기·외부 서비스 실행 절차 펼치기</strong></summary>
 
 ### 1. 준비물
 
@@ -968,4 +1052,6 @@ API Key가 비어 있거나 잘못 설정된 경우에도 같은 오류가 발�
 - [Gemini API 시작하기](https://ai.google.dev/gemini-api/docs/get-started)
 - [Gemini API Key 관리](https://ai.google.dev/gemini-api/docs/api-key)
 - [Gemini API 요금 및 무료 사용 범위](https://ai.google.dev/gemini-api/docs/pricing)
+
+</details>
 
