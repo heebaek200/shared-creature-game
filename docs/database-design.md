@@ -4,7 +4,7 @@
 
 ### 구현할 기능
 
-공동 육성 게임의 **업무 테이블 41개**를 Spring Boot/JPA와 MySQL 8로 관리합니다. 사용자·그룹·시즌·퀘스트·결제 기록은 업무 상태와 이력을 분리하여 보존합니다.
+공동 육성 게임의 **업무 테이블 43개**를 Spring Boot/JPA와 MySQL 8로 관리합니다. 사용자·그룹·시즌·퀘스트·결제 기록은 업무 상태와 이력을 분리하여 보존합니다.
 
 ### 완료 확인
 
@@ -15,12 +15,12 @@
 | 영역 | 업무 테이블 수 | 기준 |
 |---|---:|---|
 | 계정·인증 | 4 | 회원·소셜 계정·프로필·OAuth 시도 |
-| 그룹·운영 | 7 | 그룹·멤버십·초대·제재·관리 이력 |
+| 그룹·운영 | 9 | 그룹·멤버십·초대·채팅·제재·관리 이력 |
 | 시즌·크리처·랭킹 | 9 | 시즌·종·크리처·기여·종료 Snapshot |
 | 퀘스트·활동 | 10 | 템플릿·배정·완료·일별 활동·보상·사진 |
 | 결제·아바타 | 8 | 상품·주문·거래·보유·장착·환불·Webhook |
 | 운영 공통 | 3 | Scheduler·감사·멱등 요청 |
-| **합계** | **41** | Spring Session 등 인프라 테이블은 제외 |
+| **합계** | **43** | Spring Session 등 인프라 테이블은 제외 |
 
 `notifications`는 추후 구현이며 운영 경고는 원본 상태에서 조회합니다.
 
@@ -35,7 +35,7 @@
 | `user_profiles` | 표시 닉네임·정규화 이름 |
 | `oauth_login_attempts` | 일회성 `state`와 시작 세션·초대 문맥 |
 
-### 3.2. 그룹·운영 — 7개
+### 3.2. 그룹·운영 — 9개
 
 | 테이블 | 구현할 기능 |
 |---|---|
@@ -43,7 +43,9 @@
 | `group_memberships` | 현재·과거 소속과 역할 |
 | `group_invite_links` | 초대 링크 발급·폐기 |
 | `group_join_restrictions` | 탈퇴·강퇴 후 가입 제한 |
+| `chat_messages` | 24시간 채팅 원문·발신자 Snapshot |
 | `user_reports` | 사용자 신고·판단 |
+| `user_report_chat_evidence` | 신고 시점의 불변 채팅 증거 |
 | `moderation_actions` | 강퇴 실행·근거 이력 |
 | `group_admin_changes` | 주·부 관리자 역할 변경 이력 |
 
@@ -112,8 +114,12 @@ erDiagram
     game_groups ||--o{ group_invite_links : issues
     users ||--o| group_join_restrictions : restricted
     group_memberships ||--o{ group_join_restrictions : source
+    users ||--o{ chat_messages : sends
+    game_groups ||--o{ chat_messages : contains
     users ||--o{ user_reports : files
     game_groups ||--o{ user_reports : related
+    user_reports ||--o| user_report_chat_evidence : preserves
+    users ||--o{ user_report_chat_evidence : authored
     user_reports o|--o{ moderation_actions : resolved_by
     group_memberships ||--o{ moderation_actions : target
     game_groups ||--o{ group_admin_changes : tracks
@@ -230,6 +236,8 @@ erDiagram
 | `users` | `social_accounts`, `user_profiles` | 각각 1:1 (`user_id` UNIQUE) |
 | `users` | `group_memberships` | 1:N, 활성 소속 최대 1건 |
 | `game_groups` | `group_memberships`, `group_invite_links` | 각각 1:N, 활성 링크 최대 1건 |
+| `game_groups`, `users` | `chat_messages` | 각각 1:N, 전송 당시 그룹·발신자 |
+| `user_reports` | `user_report_chat_evidence` | 1:0..1, 채팅 신고만 증거 보유 |
 | `game_groups`, `seasons` | `group_seasons` | 각각 1:N |
 | `group_seasons` | `group_creatures`, `season_group_scores` | 각각 1:1 |
 | `quest_periods`, `quest_template_versions` | `quest_assignments` | 각각 1:N |
@@ -261,7 +269,7 @@ erDiagram
 | 회원·그룹·시즌·퀘스트·랭킹·결제·환불 | `ON DELETE RESTRICT` 기본, 이력 상태 보존 |
 | 핵심 부모·자식 업무 관계 | `ON DELETE CASCADE` 사용하지 않음 |
 | 공급자 사용자 ID·거래 ID | 외부 문자열로 UNIQUE, 내부 FK로 취급하지 않음 |
-| OAuth 로그인 시도·기타 명시된 임시 데이터 | Scheduler만 정해진 시점에 물리 삭제 |
+| OAuth 로그인 시도·채팅 메시지·기타 명시된 임시 데이터 | Scheduler만 정해진 시점에 물리 삭제 |
 
 ## 6. 공통 컬럼과 생명주기 정책
 
@@ -270,6 +278,7 @@ erDiagram
 | 구분 | 기준 |
 |---|---|
 | PK | `id BIGINT AUTO_INCREMENT` |
+| 공개 채팅 메시지 ID | `message_id CHAR(36)` 서버 생성 UUID PK |
 | FK | `<대상>_id`·`BIGINT` |
 | 금액·경험치·점수 | `BIGINT` |
 | 위도·경도 | `DECIMAL(10,7)` |
@@ -358,6 +367,7 @@ UPDATE game_groups
 | 퀘스트 완료·보상 | 시즌 공유 잠금 → 사용자 → 그룹 → 활성 멤버십 → 그룹 시즌 → 완료 UNIQUE → 개인 기여 → 그룹 점수 → 크리처 → 원장 |
 | 장착·환불 | 구매 → 보유 아이템 → 환불 요청 |
 | 주 관리자 이전 | 기존·신규 사용자 ID 오름차순 → 그룹 → 관련 멤버십 ID 오름차순 |
+| 채팅 신고 | 만료 전 `chat_messages` → 신고 저장 → `user_report_chat_evidence` |
 
 `PESSIMISTIC_WRITE`·조건부 UPDATE를 필요할 때만 사용합니다. 시즌 완료의 공유 잠금은 트랜잭션 종료까지 유지하고, 활동 기록의 멤버십·그룹 시즌 귀속을 다시 검사합니다.
 
@@ -378,7 +388,7 @@ UPDATE game_groups
 
 ### 주요 규칙
 
-성장·기여·장착·환불 관련 WebSocket 이벤트는 **DB Commit 이후에만** 발행합니다. Rollback된 결과는 발행하지 않으며 재연결 시 REST Snapshot이 최종 상태를 결정합니다.
+성장·기여·장착·환불·채팅 WebSocket 이벤트는 **DB Commit 이후에만** 발행합니다. Rollback된 결과는 발행하지 않으며 재연결 시 REST Snapshot이 상태 이벤트의 최종 상태를 결정합니다. 채팅은 Snapshot 복구와 과거 메시지 재전송을 하지 않습니다.
 
 ## 10. 계정·그룹 상세 컬럼
 
@@ -569,6 +579,24 @@ UPDATE game_groups
 | `created_at` | `DATETIME(6)` | — |
 | `updated_at` | `DATETIME(6)` | — |
 
+#### `chat_messages`
+
+**구현할 기능** — 그룹 말풍선 채팅의 서버 검증 원본을 24시간 보유합니다.
+
+**주요 규칙**
+
+`message_id`는 서버 생성 UUID입니다. `(expires_at)` INDEX를 사용해 매시간 `expires_at <= now`인 행을 삭제하며 일반 사용자용 이력 조회는 제공하지 않습니다.
+
+| 컬럼 | 자료형 | 역할·제약 |
+|---|---|---|
+| `message_id` | `CHAR(36)` | PK, 서버 생성 UUID |
+| `group_id` | `BIGINT` | FK, 전송 당시 그룹 |
+| `sender_user_id` | `BIGINT` | FK, 인증 발신자 |
+| `sender_nickname` | `VARCHAR(20)` | 전송 당시 닉네임 Snapshot |
+| `content` | `VARCHAR(80)` | 앞뒤 공백 제거한 단일 행 1~80자 |
+| `sent_at` | `DATETIME(6)` | UTC 작성 시각 |
+| `expires_at` | `DATETIME(6)` | `sent_at + 24시간`, INDEX |
+
 #### `user_reports`
 
 **구현할 기능** — 신고 내용과 전체 관리자 처리 결과를 보유합니다.
@@ -591,6 +619,24 @@ UPDATE game_groups
 | `resolution` | `VARCHAR(1000)` | — |
 | `created_at` | `DATETIME(6)` | — |
 | `updated_at` | `DATETIME(6)` | — |
+
+#### `user_report_chat_evidence`
+
+**구현할 기능** — 채팅 신고 접수 시 서버가 검증한 메시지 Snapshot을 보존합니다.
+
+**주요 규칙**
+
+`report_id`당 0~1건입니다. 원본 `chat_messages`가 만료돼도 삭제하지 않으며 `user_reports`와 같은 기간 보존합니다. `chat_message_id`는 원본 삭제를 허용하기 위해 FK로 연결하지 않습니다.
+
+| 컬럼 | 자료형 | 역할·제약 |
+|---|---|---|
+| `report_id` | `BIGINT` | PK, FK → `user_reports.id` |
+| `chat_message_id` | `CHAR(36)` | 서버가 검증한 원본 메시지 ID |
+| `sender_user_id` | `BIGINT` | FK → `users.id` |
+| `sender_nickname` | `VARCHAR(20)` | 전송 당시 닉네임 Snapshot |
+| `content` | `VARCHAR(80)` | 검증된 메시지 원문 |
+| `sent_at` | `DATETIME(6)` | 원본 작성 시각 |
+| `created_at` | `DATETIME(6)` | 증거 보존 시각 |
 
 #### `moderation_actions`
 
@@ -1363,3 +1409,5 @@ UPDATE game_groups
 | 종료 `oauth_login_attempts` | 상태 종료 후 24시간 |
 | 실패 사진 파일·좌표 | 판정 후 24시간 이내 삭제·NULL 처리 |
 | 성공 사진 파일·좌표 | 시즌 종료 후 30일에 삭제·NULL 처리 |
+| `chat_messages` | 작성 후 24시간, 매시간 만료 행 삭제 |
+| `user_reports`, `user_report_chat_evidence` | 프로젝트 범위에서 자동 삭제하지 않음 |
