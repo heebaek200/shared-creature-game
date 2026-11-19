@@ -150,7 +150,7 @@ class SchedulerAutoActivationContractTest {
      * 파일이 없거나 올바른 YAML이 아니면 테스트가 실패합니다.
      */
     private PropertySource<?> yaml(String fileName) throws IOException {
-        var sources = loader.load(fileName, new ClassPathResource(fileName));
+        List<PropertySource<?>> sources = loader.load(fileName, new ClassPathResource(fileName));
         assertEquals(1, sources.size(), "하나의 YAML 문서만 지원합니다: " + fileName);
         return sources.get(0);
     }

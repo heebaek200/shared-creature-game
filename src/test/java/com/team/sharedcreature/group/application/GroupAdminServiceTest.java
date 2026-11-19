@@ -13,6 +13,7 @@ import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.UserProfile;
 import com.team.sharedcreature.auth.infrastructure.UserProfileRepository;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
+import com.team.sharedcreature.group.api.GroupMemberResponse;
 import com.team.sharedcreature.group.api.MyGroupResponse;
 import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.domain.GroupAdminChange;
@@ -102,7 +103,7 @@ class GroupAdminServiceTest {
         arrangeTargetProfile(fixture);
 
         // 실제 도메인 상태와 응답 DTO를 함께 확인합니다.
-        var response = service.changeMemberRole(ACTOR_ID, TARGET_ID, GroupRole.DEPUTY);
+        GroupMemberResponse response = service.changeMemberRole(ACTOR_ID, TARGET_ID, GroupRole.DEPUTY);
         assertThat(response.userId()).isEqualTo(TARGET_ID);
         assertThat(response.role()).isEqualTo(GroupRole.DEPUTY);
         assertThat(fixture.targetMembership().getRole()).isEqualTo(GroupRole.DEPUTY);
@@ -130,7 +131,7 @@ class GroupAdminServiceTest {
         arrangeTargetProfile(fixture);
 
         // 기존 DEPUTY 권한이 회수되어야 합니다.
-        var response = service.changeMemberRole(ACTOR_ID, TARGET_ID, GroupRole.MEMBER);
+        GroupMemberResponse response = service.changeMemberRole(ACTOR_ID, TARGET_ID, GroupRole.MEMBER);
         assertThat(response.role()).isEqualTo(GroupRole.MEMBER);
         assertThat(fixture.targetMembership().getRole()).isEqualTo(GroupRole.MEMBER);
 
@@ -155,7 +156,7 @@ class GroupAdminServiceTest {
         Instant originalUpdatedAt = fixture.targetMembership().getUpdatedAt();
 
         // 멱등 요청은 동일 상태를 반환합니다.
-        var response = service.changeMemberRole(ACTOR_ID, TARGET_ID, GroupRole.DEPUTY);
+        GroupMemberResponse response = service.changeMemberRole(ACTOR_ID, TARGET_ID, GroupRole.DEPUTY);
         assertThat(response.role()).isEqualTo(GroupRole.DEPUTY);
         assertThat(fixture.targetMembership().getUpdatedAt()).isEqualTo(originalUpdatedAt);
         verify(adminChangeRepository, never()).save(any());
@@ -174,7 +175,7 @@ class GroupAdminServiceTest {
         when(groupQueryService.getMyGroup(ACTOR_ID)).thenReturn(expectedResponse);
 
         // 서비스에 포함된 두 번의 flush 호출과 도메인 상태를 확인합니다.
-        var actualResponse = service.transferPrimaryAdmin(ACTOR_ID, TARGET_ID);
+        MyGroupResponse actualResponse = service.transferPrimaryAdmin(ACTOR_ID, TARGET_ID);
         assertThat(actualResponse).isSameAs(expectedResponse);
         assertThat(fixture.actorMembership().getRole()).isEqualTo(GroupRole.MEMBER);
         assertThat(fixture.targetMembership().getRole()).isEqualTo(GroupRole.PRIMARY);

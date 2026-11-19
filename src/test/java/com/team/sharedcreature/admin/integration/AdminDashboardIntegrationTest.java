@@ -1,5 +1,6 @@
 package com.team.sharedcreature.admin.integration;
 
+import com.team.sharedcreature.admin.api.AdminDashboardResponse;
 import com.team.sharedcreature.admin.application.AdminDashboardService;
 import com.team.sharedcreature.admin.domain.OperationalWarningType;
 import org.junit.jupiter.api.Test;
@@ -23,7 +24,7 @@ class AdminDashboardIntegrationTest {
     /** 원본 데이터가 없어도 0 집계와 시즌 누락 경고를 안정적으로 반환합니다. */
     @Test
     void 빈_원본에서_대시보드와_시즌_누락_경고를_반환한다() {
-        var response = dashboardService.get("7_DAYS", null);
+        AdminDashboardResponse response = dashboardService.get("7_DAYS", null);
 
         assertThat(response.summary().activeUsers()).isZero();
         assertThat(response.summary().questCompletionRate()).isEqualByComparingTo("0.00");

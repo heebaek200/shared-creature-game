@@ -7,6 +7,7 @@ import com.team.sharedcreature.admin.domain.AdminAuditResult;
 import com.team.sharedcreature.admin.infrastructure.AdminAuditLogRepository;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.auth.domain.GlobalRole;
+import com.team.sharedcreature.auth.domain.User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,7 +39,7 @@ public class AdminAuditService {
             Long actorId, AdminAuditActionType actionType, AdminAuditTargetType targetType,
             Long targetId, String code
     ) {
-        var actor = userRepository.findById(actorId).orElse(null);
+        User actor = userRepository.findById(actorId).orElse(null);
         if (actor == null || actor.getGlobalRole() != GlobalRole.SUPER_ADMIN) {
             return;
         }

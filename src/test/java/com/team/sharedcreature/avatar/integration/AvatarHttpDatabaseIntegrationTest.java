@@ -17,6 +17,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.session.Session;
 import org.springframework.session.SessionRepository;
 import org.springframework.session.jdbc.config.annotation.web.http.EnableJdbcHttpSession;
@@ -24,8 +26,10 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -99,7 +103,7 @@ class AvatarHttpDatabaseIntegrationTest {
             return false;
         }
         Properties properties = new Properties();
-        try (var reader = Files.newBufferedReader(environmentFile, StandardCharsets.UTF_8)) {
+        try (Reader reader = Files.newBufferedReader(environmentFile, StandardCharsets.UTF_8)) {
             properties.load(reader);
         }
         return !properties.getProperty("TEST_DB_USERNAME", "").isBlank();
@@ -239,10 +243,10 @@ class AvatarHttpDatabaseIntegrationTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
 
-        var result = browser.perform(get("/api/v1/shop-items")
+        MockHttpServletResponse result = browser.perform(get("/api/v1/shop-items")
                         .queryParam("slot", "HEAD").queryParam("size", "1"))
                 .andExpect(status().isOk()).andReturn().getResponse();
-        var root = mapper.readTree(result.getContentAsString());
+        JsonNode root = mapper.readTree(result.getContentAsString());
         long expectedCount = Objects.requireNonNull(jdbc.queryForObject(
                 "select count(*) from shop_items where status = 'ACTIVE' and slot_code = 'HEAD'", Long.class));
         assertThat(root.get("meta").get("totalElements").longValue()).isEqualTo(expectedCount);
@@ -264,9 +268,9 @@ class AvatarHttpDatabaseIntegrationTest {
 
     /** 실제 CSRF 조회 API에서 받은 헤더와 JDBC 세션 Cookie를 요청에 붙입니다. */
     private MockHttpServletRequestBuilder withRealCsrf(MockHttpServletRequestBuilder request) throws Exception {
-        var response = browser.perform(get("/api/v1/auth/csrf"))
+        MockHttpServletResponse response = browser.perform(get("/api/v1/auth/csrf"))
                 .andExpect(status().isOk()).andReturn().getResponse();
-        var token = mapper.readTree(response.getContentAsString()).get("data");
+        JsonNode token = mapper.readTree(response.getContentAsString()).get("data");
         return request.header(token.get("headerName").asText(), token.get("token").asText());
     }
 
@@ -328,7 +332,7 @@ class AvatarHttpDatabaseIntegrationTest {
 
     /** JDBC가 생성한 식별자를 반환하며 시각은 UTC Instant에서 변환합니다. */
     private long insert(String sql, Object... arguments) {
-        var holder = new GeneratedKeyHolder();
+        KeyHolder holder = new GeneratedKeyHolder();
         jdbc.update(connection -> {
             PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
             for (int index = 0; index < arguments.length; index++) {

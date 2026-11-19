@@ -42,15 +42,15 @@ class AdminReportStatusHttpTest {
     @BeforeEach
     void setUp() {
         reports = mock(UserReportRepository.class);
-        var queries = new AdminReportQueryService(reports, mock(UserProfileRepository.class));
-        var controller = new AdminReportController(queries, mock(AdminModerationService.class));
+        AdminReportQueryService queries = new AdminReportQueryService(reports, mock(UserProfileRepository.class));
+        AdminReportController controller = new AdminReportController(queries, mock(AdminModerationService.class));
         validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
 
-        var methodValidation = new MethodValidationPostProcessor();
+        MethodValidationPostProcessor methodValidation = new MethodValidationPostProcessor();
         methodValidation.setValidator(validator);
         methodValidation.afterPropertiesSet();
-        var validatedController = methodValidation.postProcessAfterInitialization(controller, "adminReportController");
+        Object validatedController = methodValidation.postProcessAfterInitialization(controller, "adminReportController");
         mvc = MockMvcBuilders.standaloneSetup(validatedController)
                 .setControllerAdvice(new RestApiExceptionHandler(new ErrorResponseFactory(Clock.systemUTC())))
                 .build();

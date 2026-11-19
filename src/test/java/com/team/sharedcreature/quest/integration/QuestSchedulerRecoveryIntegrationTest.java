@@ -145,7 +145,7 @@ class QuestSchedulerRecoveryIntegrationTest {
         seedCatalog("DAILY", 5, 4, 3);
         seedCatalog("WEEKLY", 6, 4, 4);
 
-        var first = normalizer.normalizeForActiveSeason(seasonId);
+        QuestAssignmentNormalizationService.Result first = normalizer.normalizeForActiveSeason(seasonId);
         assertEquals(QuestAssignmentNormalizationService.Outcome.CHECKED, first.outcome());
         assertEquals(2, first.periods().size());
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, first.periods().get(0).execution());
@@ -165,7 +165,7 @@ class QuestSchedulerRecoveryIntegrationTest {
                 + "WHERE job_type = 'QUEST_ASSIGN_DAILY' AND JSON_VALID(result_summary) = 1"));
         List<String> original = snapshots();
 
-        var repeated = normalizer.normalizeForActiveSeason(seasonId);
+        QuestAssignmentNormalizationService.Result repeated = normalizer.normalizeForActiveSeason(seasonId);
         assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, repeated.periods().get(0).execution());
         assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, repeated.periods().get(1).execution());
         assertEquals(original, snapshots());
@@ -183,7 +183,7 @@ class QuestSchedulerRecoveryIntegrationTest {
     void insufficientDailyRecoversWithoutChangingPeriodIdOrWeekly() {
         seedCatalog("DAILY", 2, 4, 3);
         seedCatalog("WEEKLY", 6, 4, 4);
-        var failed = normalizer.normalizeForActiveSeason(seasonId);
+        QuestAssignmentNormalizationService.Result failed = normalizer.normalizeForActiveSeason(seasonId);
         assertEquals(QuestAssignmentNormalizationService.Outcome.CHECKED, failed.outcome());
         assertNotNull(failed.periods().get(0).error());
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, failed.periods().get(1).execution());
@@ -199,7 +199,7 @@ class QuestSchedulerRecoveryIntegrationTest {
         for (int order = 3; order <= 5; order++) {
             seedTemplate("DAILY", "LOW", order);
         }
-        var recovered = normalizer.normalizeForActiveSeason(seasonId);
+        QuestAssignmentNormalizationService.Result recovered = normalizer.normalizeForActiveSeason(seasonId);
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, recovered.periods().get(0).execution());
         assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, recovered.periods().get(1).execution());
         assertEquals(beforeId, periodId("DAILY"));
@@ -232,8 +232,8 @@ class QuestSchedulerRecoveryIntegrationTest {
             Future<QuestAssignmentNormalizationService.Result> b = pool.submit(() -> concurrentCall(ready, go));
             assertTrue(ready.await(10, TimeUnit.SECONDS), "두 스케줄러 작업 스레드가 준비되지 않았습니다.");
             go.countDown();
-            var resultA = a.get(35, TimeUnit.SECONDS);
-            var resultB = b.get(35, TimeUnit.SECONDS);
+            QuestAssignmentNormalizationService.Result resultA = a.get(35, TimeUnit.SECONDS);
+            QuestAssignmentNormalizationService.Result resultB = b.get(35, TimeUnit.SECONDS);
             assertEquals(QuestAssignmentNormalizationService.Outcome.CHECKED, resultA.outcome());
             assertEquals(QuestAssignmentNormalizationService.Outcome.CHECKED, resultB.outcome());
         } finally {
@@ -259,14 +259,14 @@ class QuestSchedulerRecoveryIntegrationTest {
     void nextDayRestartCreatesOnlyCurrentDailyAndKeepsWeekly() {
         seedCatalog("DAILY", 5, 4, 3);
         seedCatalog("WEEKLY", 6, 4, 4);
-        var first = normalizer.normalizeForActiveSeason(seasonId);
+        QuestAssignmentNormalizationService.Result first = normalizer.normalizeForActiveSeason(seasonId);
         assertEquals(2, first.periods().size());
         Long weeklyId = periodId("WEEKLY");
         List<String> original = snapshots();
 
         // KST 2026-11-11 03:00: DAILY 인덱스 9, WEEKLY는 동일한 1주차입니다.
         clock.set(NOW.plus(Duration.ofDays(1)));
-        var restarted = normalizer.normalizeForActiveSeason(seasonId);
+        QuestAssignmentNormalizationService.Result restarted = normalizer.normalizeForActiveSeason(seasonId);
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, restarted.periods().get(0).execution());
         assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, restarted.periods().get(1).execution());
         assertEquals(8L, restarted.periods().get(0).skippedExpiredPeriods());

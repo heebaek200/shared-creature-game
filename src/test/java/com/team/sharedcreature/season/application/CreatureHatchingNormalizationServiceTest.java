@@ -2,6 +2,7 @@ package com.team.sharedcreature.season.application;
 
 import com.team.sharedcreature.season.infrastructure.GroupSeasonRepository;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -47,13 +48,13 @@ class CreatureHatchingNormalizationServiceTest {
         when(selection.hatchIfDue(anyLong())).thenReturn(Optional.of(hatchedResponse()));
 
         // 한 트리거 안에서는 ID 순서를 고정하고 각 행의 부화를 위임합니다.
-        var result = normalizer.normalizeForActiveSeason(SEASON_ID);
+        CreatureHatchingNormalizationService.Result result = normalizer.normalizeForActiveSeason(SEASON_ID);
 
         assertEquals(2, result.inspected());
         assertEquals(2, result.hatched());
         assertEquals(0, result.failed());
         assertFalse(result.moreMayRemain());
-        var order = inOrder(selection);
+        InOrder order = inOrder(selection);
         order.verify(selection).hatchIfDue(11L);
         order.verify(selection).hatchIfDue(12L);
     }
@@ -87,7 +88,7 @@ class CreatureHatchingNormalizationServiceTest {
         when(selection.hatchIfDue(22L)).thenReturn(Optional.of(hatchedResponse()));
 
         // 실패 결과는 로그·집계로 보존하고 다음 그룹은 처리합니다.
-        var result = normalizer.normalizeForActiveSeason(SEASON_ID);
+        CreatureHatchingNormalizationService.Result result = normalizer.normalizeForActiveSeason(SEASON_ID);
 
         assertEquals(2, result.inspected());
         assertEquals(1, result.hatched());
@@ -110,7 +111,7 @@ class CreatureHatchingNormalizationServiceTest {
         when(selection.hatchIfDue(anyLong())).thenReturn(Optional.empty());
 
         // 첫 100개가 변화가 없어도 두 번째 페이지부터 이어서 점검합니다.
-        var result = normalizer.normalizeForActiveSeason(SEASON_ID);
+        CreatureHatchingNormalizationService.Result result = normalizer.normalizeForActiveSeason(SEASON_ID);
 
         assertEquals(101, result.inspected());
         assertEquals(0, result.hatched());
@@ -163,7 +164,7 @@ class CreatureHatchingNormalizationServiceTest {
         try {
             // 첫 호출이 후보 조회에 들어간 뒤 두 번째는 즉시 건너뜁니다.
             assertTrue(entered.await(5, TimeUnit.SECONDS));
-            var skipped = normalizer.normalizeForActiveSeason(SEASON_ID);
+            CreatureHatchingNormalizationService.Result skipped = normalizer.normalizeForActiveSeason(SEASON_ID);
             assertTrue(skipped.alreadyRunning());
             assertEquals(0, skipped.inspected());
         } finally {

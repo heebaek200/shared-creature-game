@@ -3,6 +3,7 @@ package com.team.sharedcreature.payment.application;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -51,7 +52,7 @@ public class RefundRecoveryResultResolver {
             return unknown(command);
         }
 
-        var cancellations = payment.cancellations();
+        List<PaymentSnapshot.CancellationSnapshot> cancellations = payment.cancellations();
 
         boolean knownId = cancellationId != null
                 && !cancellationId.isBlank();
@@ -60,7 +61,7 @@ public class RefundRecoveryResultResolver {
 
         if (knownId) {
             // 이미 취소 ID를 받았다면 정확히 같은 거래만 선택합니다.
-            var matches = cancellations.stream()
+            List<PaymentSnapshot.CancellationSnapshot> matches = cancellations.stream()
                     .filter(Objects::nonNull)
                     .filter(item ->
                             cancellationId.equals(item.cancellationId())

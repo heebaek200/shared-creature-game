@@ -54,7 +54,7 @@ class PhotoRetentionNormalizationServiceTest {
                     return SchedulerJobRunner.ExecutionResult.SUCCEEDED;
                 });
 
-        var result = service.normalize();
+        PhotoRetentionNormalizationService.Result result = service.normalize();
         assertEquals(BUCKET, result.scheduledFor());
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, result.execution());
         assertSame(summary, result.summary());
@@ -74,7 +74,7 @@ class PhotoRetentionNormalizationServiceTest {
                 ArgumentMatchers.<Function<SchedulerClaimTicket, String>>any()))
                 .thenReturn(SchedulerJobRunner.ExecutionResult.SKIPPED);
 
-        var result = service.normalize();
+        PhotoRetentionNormalizationService.Result result = service.normalize();
         assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, result.execution());
         assertNull(result.summary());
         assertNull(result.error());
@@ -92,7 +92,7 @@ class PhotoRetentionNormalizationServiceTest {
         when(work.cleanup(eq(NOW), any(Runnable.class))).thenReturn(summary);
         mockRunnerExecutesJob();
 
-        var result = service.normalize();
+        PhotoRetentionNormalizationService.Result result = service.normalize();
         assertNull(result.execution());
         assertSame(summary, result.summary());
         assertTrue(result.error().contains("사진 정리 항목 실패"));
@@ -112,7 +112,7 @@ class PhotoRetentionNormalizationServiceTest {
         });
         mockRunnerExecutesJob();
 
-        var result = service.normalize();
+        PhotoRetentionNormalizationService.Result result = service.normalize();
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, result.execution());
         verify(lifecycle).renewLease(TICKET, Duration.ofMinutes(3));
     }
@@ -133,7 +133,7 @@ class PhotoRetentionNormalizationServiceTest {
                 .when(lifecycle).renewLease(TICKET, Duration.ofMinutes(3));
         mockRunnerExecutesJob();
 
-        var result = service.normalize();
+        PhotoRetentionNormalizationService.Result result = service.normalize();
         assertNull(result.execution());
         assertTrue(result.error().contains("lease lost"));
     }

@@ -4,6 +4,7 @@ import com.team.sharedcreature._core.api.ErrorResponse;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 
 import java.time.Instant;
 
@@ -46,15 +47,15 @@ class RefundCommandFlowTest {
 
     @Test
     void 신규_승인은_준비후_PG를_한번_호출하고_결과를_저장한다() {
-        var command = cancelCommand();
-        var pgResult = new RefundGateway.CancellationResult(
+        RefundApprovalTransactionService.CancellationCommand command = cancelCommand();
+        RefundGateway.CancellationResult pgResult = new RefundGateway.CancellationResult(
                 RefundGateway.Outcome.PENDING, "payment", "cancel", 1000L, null, 200, "REQUESTED");
         when(approvals.prepare(9L, 1L, "승인", "key"))
                 .thenReturn(new RefundApprovalTransactionService.Preparation(command, null));
         when(cancelGateway.cancelFully("payment", "승인", "pg-key")).thenReturn(pgResult);
         when(results.apply(command, pgResult, "trace")).thenReturn(response);
         assertThat(refunds.approveRefund(9L, 1L, "승인", "key", "trace")).isSameAs(response);
-        var order = inOrder(approvals, cancelGateway, results);
+        InOrder order = inOrder(approvals, cancelGateway, results);
         order.verify(approvals).prepare(9L, 1L, "승인", "key");
         order.verify(cancelGateway).cancelFully("payment", "승인", "pg-key");
         order.verify(results).apply(command, pgResult, "trace");
@@ -80,8 +81,8 @@ class RefundCommandFlowTest {
 
     @Test
     void 수동조회_통신장애는_null결과를_저장하고_409응답을_반환한다() {
-        var command = recoveryCommand();
-        var unknownResponse = new RefundApprovalTransactionService.CommandResponse(409, null,
+        RefundRecoveryPreparationService.RecoveryCommand command = recoveryCommand();
+        RefundApprovalTransactionService.CommandResponse unknownResponse = new RefundApprovalTransactionService.CommandResponse(409, null,
                 new ErrorResponse("PG_CANCEL_RESULT_UNKNOWN", "결과 불명", java.util.List.of(), "trace", Instant.EPOCH));
         when(manual.prepare(9L, 1L, "key", "trace"))
                 .thenReturn(new RefundReconciliationPreparationService.Preparation(command, 4L, null));

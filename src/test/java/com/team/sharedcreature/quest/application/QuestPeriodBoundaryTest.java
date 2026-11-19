@@ -204,7 +204,7 @@ class QuestPeriodBoundaryTest {
      * 예상 슬롯은 DAILY 규칙에 맞춰 총 3개입니다.
      */
     private QuestTemplateSelectionService.SelectionBatch dailyBatch() {
-        var slots = IntStream.rangeClosed(1, 3)
+        List<QuestTemplateSelectionService.SelectedQuest> slots = IntStream.rangeClosed(1, 3)
                 .mapToObj(slot -> new QuestTemplateSelectionService.SelectedQuest(
                         slot, (long) slot, (long) slot + 10,
                         "D-TEST-" + slot,

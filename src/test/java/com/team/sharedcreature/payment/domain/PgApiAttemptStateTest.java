@@ -1,5 +1,6 @@
 package com.team.sharedcreature.payment.domain;
 
+import com.team.sharedcreature.avatar.domain.OwnedItem;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -17,7 +18,7 @@ class PgApiAttemptStateTest {
 
     @BeforeEach
     void 준비() {
-        var item = unusedItem(10L, 1L, "HEAD");
+        OwnedItem item = unusedItem(10L, 1L, "HEAD");
         refund = RefundRequest.create(item.getPurchase(), item.getUser(), "요청", CREATED_AT);
         ReflectionTestUtils.setField(refund, "id", 30L);
         refund.claimCancellation(user(9L), "승인", CREATED_AT);
@@ -63,7 +64,7 @@ class PgApiAttemptStateTest {
 
     @Test
     void 복구조회는_취소작업과_구분하고_최초멱등키를_유지한다() {
-        var lookup = PgApiAttempt.prepareCancellationLookup(refund, attempt, 2, NOW);
+        PgApiAttempt lookup = PgApiAttempt.prepareCancellationLookup(refund, attempt, 2, NOW);
 
         assertThat(lookup.getOperation()).isEqualTo(PgApiOperation.CANCELLATION_LOOKUP);
         assertThat(lookup.getResultType()).isEqualTo(PgApiResultType.STARTED);
@@ -75,7 +76,7 @@ class PgApiAttemptStateTest {
 
     @Test
     void 조회이력을_최초취소이력으로_잘못연결하면_거절한다() {
-        var lookup = PgApiAttempt.prepareCancellationLookup(refund, attempt, 2, NOW);
+        PgApiAttempt lookup = PgApiAttempt.prepareCancellationLookup(refund, attempt, 2, NOW);
         ReflectionTestUtils.setField(lookup, "id", 41L);
 
         assertThatThrownBy(() -> PgApiAttempt.prepareCancellationLookup(refund, lookup, 3, NOW))

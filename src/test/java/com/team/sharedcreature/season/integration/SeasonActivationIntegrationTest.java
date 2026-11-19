@@ -140,7 +140,7 @@ class SeasonActivationIntegrationTest {
     @Test
     void initializedGroupAllowsActivationAndRepeatedRunIsIdempotent() {
         Group group = createGroup();
-        var initialization = initializationService.initializeNextBatch(seasonId);
+        SeasonGroupInitializationService.BatchResult initialization = initializationService.initializeNextBatch(seasonId);
         assertEquals(SeasonGroupInitializationService.Outcome.COMPLETE, initialization.outcome());
 
         GroupSeason stored = groupSeasonRepository
@@ -149,9 +149,9 @@ class SeasonActivationIntegrationTest {
         long versionBefore = version();
 
         // 초기화 Commit 이후에만 시즌 상태를 변경합니다.
-        var activated = activationService.activateIfInitializationComplete(seasonId);
+        SeasonActivationService.ActivationResult activated = activationService.activateIfInitializationComplete(seasonId);
         long versionAfter = version();
-        var repeated = activationService.activateIfInitializationComplete(seasonId);
+        SeasonActivationService.ActivationResult repeated = activationService.activateIfInitializationComplete(seasonId);
 
         assertEquals(SeasonActivationService.Outcome.ACTIVATED, activated.outcome());
         assertEquals(SeasonActivationService.Outcome.ALREADY_ACTIVE, repeated.outcome());
@@ -172,7 +172,7 @@ class SeasonActivationIntegrationTest {
     void missingGroupSeasonIsReportedAndPreventsActivation() {
         createGroup();
 
-        var result = activationService.activateIfInitializationComplete(seasonId);
+        SeasonActivationService.ActivationResult result = activationService.activateIfInitializationComplete(seasonId);
 
         assertEquals(SeasonActivationService.Outcome.INCOMPLETE, result.outcome());
         assertEquals(1, result.inspection().missingGroupSeasons());
@@ -189,7 +189,7 @@ class SeasonActivationIntegrationTest {
         GroupSeason gs = createGroupSeason(createGroup());
         scoreRepository.saveAndFlush(SeasonGroupScore.zero(gs, NOW));
 
-        var result = activationService.activateIfInitializationComplete(seasonId);
+        SeasonActivationService.ActivationResult result = activationService.activateIfInitializationComplete(seasonId);
 
         assertEquals(SeasonActivationService.Outcome.INCOMPLETE, result.outcome());
         assertEquals(1, result.inspection().missingEggs());
@@ -206,7 +206,7 @@ class SeasonActivationIntegrationTest {
         GroupSeason gs = createGroupSeason(createGroup());
         creatureRepository.saveAndFlush(GroupCreature.egg(gs, NOW));
 
-        var result = activationService.activateIfInitializationComplete(seasonId);
+        SeasonActivationService.ActivationResult result = activationService.activateIfInitializationComplete(seasonId);
 
         assertEquals(SeasonActivationService.Outcome.INCOMPLETE, result.outcome());
         assertEquals(1, result.inspection().missingScores());
@@ -226,7 +226,7 @@ class SeasonActivationIntegrationTest {
         score.addScore(10, NOW);
         scoreRepository.saveAndFlush(score);
 
-        var result = activationService.activateIfInitializationComplete(seasonId);
+        SeasonActivationService.ActivationResult result = activationService.activateIfInitializationComplete(seasonId);
 
         assertEquals(SeasonActivationService.Outcome.INCOMPLETE, result.outcome());
         assertEquals(1, result.inspection().invalidScores());
@@ -240,7 +240,7 @@ class SeasonActivationIntegrationTest {
      */
     @Test
     void zeroActiveGroupsCanActivate() {
-        var result = activationService.activateIfInitializationComplete(seasonId);
+        SeasonActivationService.ActivationResult result = activationService.activateIfInitializationComplete(seasonId);
 
         assertEquals(SeasonActivationService.Outcome.ACTIVATED, result.outcome());
         assertEquals(0, result.inspection().activeGroups());
@@ -275,7 +275,7 @@ class SeasonActivationIntegrationTest {
             });
             start.countDown();
 
-            var results = List.of(first.get(15, TimeUnit.SECONDS), second.get(15, TimeUnit.SECONDS));
+            List<SeasonActivationService.ActivationResult> results = List.of(first.get(15, TimeUnit.SECONDS), second.get(15, TimeUnit.SECONDS));
             assertEquals(1, results.stream().filter(result ->
                     result.outcome() == SeasonActivationService.Outcome.ACTIVATED).count());
             assertEquals(1, results.stream().filter(result ->
@@ -307,7 +307,7 @@ class SeasonActivationIntegrationTest {
                  WHERE id = ?
                 """, gs.getId());
 
-        var result = activationService.activateIfInitializationComplete(seasonId);
+        SeasonActivationService.ActivationResult result = activationService.activateIfInitializationComplete(seasonId);
 
         assertEquals(SeasonActivationService.Outcome.INCOMPLETE, result.outcome());
         assertEquals(1, result.inspection().invalidGroupSeasons());
@@ -333,7 +333,7 @@ class SeasonActivationIntegrationTest {
                  WHERE group_season_id = ?
                 """, gs.getId());
 
-        var result = activationService.activateIfInitializationComplete(seasonId);
+        SeasonActivationService.ActivationResult result = activationService.activateIfInitializationComplete(seasonId);
 
         assertEquals(SeasonActivationService.Outcome.INCOMPLETE, result.outcome());
         assertEquals(1, result.inspection().invalidEggs());
@@ -350,7 +350,7 @@ class SeasonActivationIntegrationTest {
         jdbc.update("UPDATE seasons SET end_at = ? WHERE id = ?",
                 java.sql.Timestamp.from(NOW), seasonId);
 
-        var result = activationService.activateIfInitializationComplete(seasonId);
+        SeasonActivationService.ActivationResult result = activationService.activateIfInitializationComplete(seasonId);
 
         assertEquals(SeasonActivationService.Outcome.EXPIRED, result.outcome());
         assertEquals("SCHEDULED", status());
@@ -364,7 +364,7 @@ class SeasonActivationIntegrationTest {
     @Test
     void noAdditionalRowsAreInsertedByActivation() {
         Group group = createGroup();
-        var initialization = initializationService.initializeNextBatch(seasonId);
+        SeasonGroupInitializationService.BatchResult initialization = initializationService.initializeNextBatch(seasonId);
         assertEquals(1, initialization.createdGroupSeasons());
         assertNotNull(group);
 

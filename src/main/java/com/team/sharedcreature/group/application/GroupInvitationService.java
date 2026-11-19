@@ -7,11 +7,14 @@ import com.team.sharedcreature._core.security.LoginUser;
 import com.team.sharedcreature._core.security.SessionAuthenticationFilter;
 import com.team.sharedcreature.auth.application.AuthService;
 import com.team.sharedcreature.auth.application.PendingSignup;
+import com.team.sharedcreature.group.api.MembershipResponse;
 import com.team.sharedcreature.group.api.NavigationResponse;
 import com.team.sharedcreature.group.api.PublicInvitationResponse;
+import com.team.sharedcreature.group.domain.Group;
 import com.team.sharedcreature.group.domain.GroupInviteLink;
 import com.team.sharedcreature.group.domain.GroupInviteLinkStatus;
 import com.team.sharedcreature.group.domain.GroupJoinBlockedReason;
+import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.domain.GroupMembershipStatus;
 import com.team.sharedcreature.group.domain.GroupStatus;
 import com.team.sharedcreature.group.infrastructure.GroupInviteLinkRepository;
@@ -23,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -65,7 +69,7 @@ public class GroupInvitationService {
         }
         Object login = session.getAttribute(SessionAuthenticationFilter.LOGIN_USER);
         if (login instanceof LoginUser loginUser) {
-            var current = membershipRepository.findActiveWithGroupByUserId(loginUser.id());
+            Optional<GroupMembership> current = membershipRepository.findActiveWithGroupByUserId(loginUser.id());
             if (current.isPresent()) {
                 if (current.get().getGroup().getId().equals(invitation.getGroup().getId())) {
                     return new NavigationResponse("/creature", null);
@@ -75,8 +79,8 @@ public class GroupInvitationService {
             if (invitation.getGroup().getCurrentMemberCount() >= invitation.getGroup().getCapacity()) {
                 throw conflict(ErrorCode.GROUP_FULL, "그룹 정원이 가득 찼습니다.");
             }
-            var membership = membershipService.joinInvitation(loginUser, invitation.getId());
-            var roles = new HashSet<>(loginUser.roles());
+            MembershipResponse membership = membershipService.joinInvitation(loginUser, invitation.getId());
+            Set<String> roles = new HashSet<>(loginUser.roles());
             roles.add(membership.role().name());
             session.setAttribute(
                     SessionAuthenticationFilter.LOGIN_USER,
@@ -138,7 +142,7 @@ public class GroupInvitationService {
     }
 
     private PublicInvitationResponse response(GroupInviteLink invitation, HttpSession session) {
-        var group = invitation.getGroup();
+        Group group = invitation.getGroup();
         GroupJoinBlockedReason blockedReason = blockedReason(group, session);
         return new PublicInvitationResponse(
                 group.getId(),
@@ -157,7 +161,7 @@ public class GroupInvitationService {
         }
         Object login = session.getAttribute(SessionAuthenticationFilter.LOGIN_USER);
         if (login instanceof LoginUser loginUser) {
-            var membership = membershipRepository.findActiveWithGroupByUserId(loginUser.id());
+            Optional<GroupMembership> membership = membershipRepository.findActiveWithGroupByUserId(loginUser.id());
             if (membership.isPresent()) {
                 return GroupJoinBlockedReason.ALREADY_IN_GROUP;
             }

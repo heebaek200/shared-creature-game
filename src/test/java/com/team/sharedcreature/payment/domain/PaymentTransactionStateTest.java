@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.time.Instant;
+
 import static com.team.sharedcreature.avatar.support.AvatarTestFixtures.*;
 import static org.assertj.core.api.Assertions.*;
 
@@ -13,9 +15,9 @@ class PaymentTransactionStateTest {
     @ParameterizedTest
     @EnumSource(PaymentTransactionStatus.class)
     void 취소결과_반영과_동일결과_재반영에서도_거래정보를_보존한다(PaymentTransactionStatus status) {
-        var transaction = PaymentTransaction.cancellationRequested(
+        PaymentTransaction transaction = PaymentTransaction.cancellationRequested(
                 unusedItem(10L, 1L, "HEAD").getPurchase(), CREATED_AT);
-        var processedAt = status == PaymentTransactionStatus.SUCCESS
+        Instant processedAt = status == PaymentTransactionStatus.SUCCESS
                 || status == PaymentTransactionStatus.DEFINITIVE_FAILURE ? NOW : null;
 
         assertThat(transaction.applyCancellationResult(status, "cancel-1", processedAt, "PG", NOW)).isTrue();
@@ -31,7 +33,7 @@ class PaymentTransactionStateTest {
     @ParameterizedTest
     @EnumSource(value = PaymentTransactionStatus.class, names = {"SUCCESS", "DEFINITIVE_FAILURE"})
     void 확정된_취소결과는_늦은_미확정응답으로_덮어쓰지_않는다(PaymentTransactionStatus status) {
-        var transaction = PaymentTransaction.cancellationRequested(
+        PaymentTransaction transaction = PaymentTransaction.cancellationRequested(
                 unusedItem(10L, 1L, "HEAD").getPurchase(), CREATED_AT);
         transaction.applyCancellationResult(status, "cancel-1", NOW, "PG", NOW);
 
@@ -45,7 +47,7 @@ class PaymentTransactionStateTest {
 
     @Test
     void 승인거래에는_취소결과를_반영하지_않는다() {
-        var transaction = PaymentTransaction.approved(
+        PaymentTransaction transaction = PaymentTransaction.approved(
                 unusedItem(10L, 1L, "HEAD").getPurchase(), "approval-1", 1000L, NOW, NOW);
 
         assertThatThrownBy(() -> transaction.applyCancellationResult(
@@ -57,7 +59,7 @@ class PaymentTransactionStateTest {
 
     @Test
     void 취소성공의_필수정보가_없으면_이전상태를_보존한다() {
-        var transaction = PaymentTransaction.cancellationRequested(
+        PaymentTransaction transaction = PaymentTransaction.cancellationRequested(
                 unusedItem(10L, 1L, "HEAD").getPurchase(), CREATED_AT);
 
         assertThatThrownBy(() -> transaction.applyCancellationResult(

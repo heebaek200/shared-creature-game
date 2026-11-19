@@ -4,11 +4,15 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.auth.domain.GlobalRole;
+import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.domain.UserStatus;
+import com.team.sharedcreature.avatar.domain.OwnedItem;
 import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.payment.domain.PgApiAttempt;
 import com.team.sharedcreature.payment.infrastructure.PgApiAttemptRepository;
+import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.domain.PurchaseStatus;
+import com.team.sharedcreature.payment.domain.RefundRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -20,6 +24,7 @@ import com.team.sharedcreature.payment.infrastructure.RefundIdempotencyRepositor
 import org.springframework.transaction.annotation.Isolation;
 
 import java.time.Clock;
+import java.time.Instant;
 
 /**
  * PG 호출 전에 관리자 승인과 취소 준비 이력을 확정합니다.
@@ -59,7 +64,7 @@ public class RefundApprovalTransactionService {
         }
 
         // 활성 상태의 전체 관리자만 환불 승인을 준비할 수 있습니다.
-        var reviewer = userRepository.findById(adminUserId)
+        User reviewer = userRepository.findById(adminUserId)
                 .filter(user ->
                         user.getStatus() == UserStatus.ACTIVE
                                 && user.getGlobalRole() == GlobalRole.SUPER_ADMIN
@@ -101,7 +106,7 @@ public class RefundApprovalTransactionService {
             );
         }
 
-        var claim = idempotencyService.claim(
+        ApiIdempotencyService.Claim<RefundApprovalTransactionService.CommandResponse> claim = idempotencyService.claim(
                 adminUserId,
                 "approveRefund",
                 idempotencyKey,
@@ -115,10 +120,10 @@ public class RefundApprovalTransactionService {
         }
 
         // 구매 → 보유 아이템 → 환불 요청 순서로 잠급니다.
-        var locked = refundLockService.lock(requestId);
-        var purchase = locked.purchase();
-        var item = locked.item();
-        var refund = locked.refund();
+        RefundLockService.LockedRefund locked = refundLockService.lock(requestId);
+        Purchase purchase = locked.purchase();
+        OwnedItem item = locked.item();
+        RefundRequest refund = locked.refund();
 
         if (item == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
@@ -156,11 +161,11 @@ public class RefundApprovalTransactionService {
         }
 
         // 잠금 대기와 검증이 끝난 뒤의 시각으로 승인·선점을 기록합니다.
-        var now = clock.instant();
+        Instant now = clock.instant();
         refund.claimCancellation(reviewer, normalizedReason, now);
 
         // 최초 승인에서는 취소 시도 번호 1을 사용합니다.
-        var attempt = pgApiAttemptRepository.save(
+        PgApiAttempt attempt = pgApiAttemptRepository.save(
                 PgApiAttempt.prepareCancellation(refund, 1, now)
         );
 

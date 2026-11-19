@@ -103,10 +103,10 @@ class AuthServiceTest {
     @Test
     void naverLoginKeepsProviderFromAttemptThroughSignup() {
         Instant now = Instant.parse("2026-11-10T00:00:00Z");
-        var session = new MockHttpSession();
-        var attempts = mock(OauthLoginAttemptRepository.class);
-        var accounts = mock(SocialAccountRepository.class);
-        var client = mock(SocialLoginClient.class);
+        MockHttpSession session = new MockHttpSession();
+        OauthLoginAttemptRepository attempts = mock(OauthLoginAttemptRepository.class);
+        SocialAccountRepository accounts = mock(SocialAccountRepository.class);
+        SocialLoginClient client = mock(SocialLoginClient.class);
         when(client.provider()).thenReturn("NAVER");
         when(client.authorizationUrl(any(), any())).thenAnswer(call -> call.getArgument(0));
         when(client.exchange(eq("code"), any(), any())).thenReturn(
@@ -114,7 +114,7 @@ class AuthServiceTest {
         AuthService service = callbackService(attempts, accounts, client, now);
 
         String state = service.createOAuthAttempt("NAVER", "DEFAULT", session).authorizationUrl();
-        var savedAttempt = ArgumentCaptor.forClass(OauthLoginAttempt.class);
+        ArgumentCaptor<OauthLoginAttempt> savedAttempt = ArgumentCaptor.forClass(OauthLoginAttempt.class);
         verify(attempts).save(savedAttempt.capture());
         OauthLoginAttempt attempt = savedAttempt.getValue();
         assertThat(attempt.getProvider()).isEqualTo(SocialProvider.NAVER);

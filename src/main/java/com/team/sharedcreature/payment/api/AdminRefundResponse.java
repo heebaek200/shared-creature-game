@@ -5,6 +5,7 @@ import com.team.sharedcreature.avatar.domain.OwnedItem;
 import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.payment.domain.PaymentTransaction;
 import com.team.sharedcreature.payment.domain.PaymentTransactionStatus;
+import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.domain.PurchaseStatus;
 import com.team.sharedcreature.payment.domain.RefundRequest;
 import com.team.sharedcreature.payment.domain.RefundStatus;
@@ -45,7 +46,7 @@ public record AdminRefundResponse(
             OwnedItem item,
             PaymentTransaction cancellation
     ) {
-        var purchase = refund.getPurchase();
+        Purchase purchase = refund.getPurchase();
 
         return new AdminRefundResponse(
                 refund.getId(),

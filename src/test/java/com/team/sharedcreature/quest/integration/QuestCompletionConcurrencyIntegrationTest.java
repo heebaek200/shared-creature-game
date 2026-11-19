@@ -14,6 +14,7 @@ import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
+import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -566,7 +567,7 @@ class QuestCompletionConcurrencyIntegrationTest {
     private Long insertAndGetId(String sql, Object... values) {
         GeneratedKeyHolder keyHolder = new GeneratedKeyHolder();
         jdbcTemplate.update(connection -> {
-            var statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+            PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
             for (int index = 0; index < values.length; index++) {
                 statement.setObject(index + 1, values[index]);
             }

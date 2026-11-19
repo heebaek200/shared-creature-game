@@ -4,6 +4,7 @@ import com.team.sharedcreature.group.domain.GroupMembershipStatus;
 
 import com.team.sharedcreature.auth.domain.GlobalRole;
 
+import com.team.sharedcreature._core.api.ErrorResponse;
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
 import com.team.sharedcreature._core.exception.RestApiExceptionHandler;
 import com.team.sharedcreature._core.exception.ErrorCode;
@@ -35,6 +36,7 @@ import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.test.context.web.WebAppConfiguration;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.validation.beanvalidation.MethodValidationPostProcessor;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
@@ -78,7 +80,7 @@ class RefundHttpContractTest {
         reset(refunds, queries, reconciliation, users, memberships, activities);
         when(users.findById(anyLong())).thenAnswer(call -> {
             long id = call.getArgument(0);
-            var user = User.register(id == 9 ? GlobalRole.SUPER_ADMIN : GlobalRole.USER, Instant.now());
+            User user = User.register(id == 9 ? GlobalRole.SUPER_ADMIN : GlobalRole.USER, Instant.now());
             ReflectionTestUtils.setField(user, "id", id);
             return Optional.of(user);
         });
@@ -87,7 +89,7 @@ class RefundHttpContractTest {
     }
 
     private MockHttpSession session(long id) {
-        var session = new MockHttpSession();
+        MockHttpSession session = new MockHttpSession();
         session.setAttribute(SessionAuthenticationFilter.LOGIN_USER, new LoginUser(id, "테스트", Set.of()));
         return session;
     }
@@ -99,8 +101,8 @@ class RefundHttpContractTest {
         when(queries.listMyRefunds(1L, 0, 20, filter)).thenReturn(Page.empty());
         when(queries.listAdminRefunds(0, 20, filter)).thenReturn(Page.empty());
 
-        var myRequest = get("/api/v1/refund-requests").session(session(1));
-        var adminRequest = get("/api/v1/admin/refund-requests").session(session(9));
+        MockHttpServletRequestBuilder myRequest = get("/api/v1/refund-requests").session(session(1));
+        MockHttpServletRequestBuilder adminRequest = get("/api/v1/admin/refund-requests").session(session(9));
         if (filter != null) {
             myRequest.queryParam("status", filter.name());
             adminRequest.queryParam("status", filter.name());
@@ -214,7 +216,7 @@ class RefundHttpContractTest {
 
     @Test
     void 생성성공은_201과_null키를_포함한_공통응답이다() throws Exception {
-        var response = new RefundResponse(1L, 2L, 1L, "환불", null, RefundStatus.REQUESTED, Instant.EPOCH, null, null);
+        RefundResponse response = new RefundResponse(1L, 2L, 1L, "환불", null, RefundStatus.REQUESTED, Instant.EPOCH, null, null);
         when(refunds.createRefundRequest(1L, 2L, "환불", key)).thenReturn(response);
         mvc.perform(post("/api/v1/purchases/2/refund-requests").session(session(1)).with(csrf().asHeader())
                         .header("Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON)
@@ -236,7 +238,7 @@ class RefundHttpContractTest {
 
     @Test
     void 수동복구_결과불명은_409오류Envelope으로_반환한다() throws Exception {
-        var error = new ErrorResponseFactory(Clock.systemUTC()).create(ErrorCode.PG_CANCEL_RESULT_UNKNOWN, null, List.of(), "first");
+        ErrorResponse error = new ErrorResponseFactory(Clock.systemUTC()).create(ErrorCode.PG_CANCEL_RESULT_UNKNOWN, null, List.of(), "first");
         when(reconciliation.reconcileRefund(eq(9L), eq(1L), eq(key), anyString()))
                 .thenReturn(new RefundApprovalTransactionService.CommandResponse(409, null, error));
         mvc.perform(post("/api/v1/admin/refund-requests/1/reconciliations").session(session(9))
@@ -256,7 +258,7 @@ class RefundHttpContractTest {
             RequestIdFilter.class, SecurityErrorWriter.class, ErrorResponseFactory.class})
     static class ConfigurationForTest implements WebMvcConfigurer {
         @Bean static MethodValidationPostProcessor methodValidationPostProcessor() {
-            var processor = new MethodValidationPostProcessor();
+            MethodValidationPostProcessor processor = new MethodValidationPostProcessor();
             processor.setProxyTargetClass(true);
             return processor;
         }

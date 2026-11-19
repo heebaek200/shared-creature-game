@@ -24,6 +24,7 @@ import com.team.sharedcreature.season.infrastructure.GroupSeasonRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
@@ -87,7 +88,7 @@ class CheckInServiceTest {
 
         CheckInResponse response = service.createCheckIn(1L);
 
-        var lockOrder = inOrder(
+        InOrder lockOrder = inOrder(
                 seasonQueryService,
                 userRepository,
                 membershipRepository,
@@ -103,7 +104,7 @@ class CheckInServiceTest {
         assertThat(response.isMorning()).isTrue();
         assertThat(response.getCompletedQuestIds()).isEmpty();
 
-        var eventCaptor = ArgumentCaptor.forClass(UserActivityEvent.class);
+        ArgumentCaptor<UserActivityEvent> eventCaptor = ArgumentCaptor.forClass(UserActivityEvent.class);
         verify(activityEventRepository).save(eventCaptor.capture());
         UserActivityEvent event = eventCaptor.getValue();
         assertThat(event.getEventType()).isEqualTo(UserActivityEventType.CHECK_IN);

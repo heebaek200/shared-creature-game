@@ -32,10 +32,12 @@ import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.test.context.web.WebAppConfiguration;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -119,13 +121,13 @@ class RankingHttpContractTest {
     @Test
     void 그룹미가입자도_그룹랭킹을_조회하며_null키는_생략하지_않는다() throws Exception {
         when(service.getGroupRanking(1L, null, 0, 20)).thenReturn(emptyPage());
-        var result = mvc.perform(get("/api/v1/rankings/groups").session(session(null)))
+        MvcResult result = mvc.perform(get("/api/v1/rankings/groups").session(session(null)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isArray())
                 .andExpect(jsonPath("$.meta.totalElements").value(0))
                 .andExpect(jsonPath("$.meta.totalPages").value(0))
                 .andReturn();
-        var meta = mapper.readTree(result.getResponse().getContentAsString()).get("meta");
+        JsonNode meta = mapper.readTree(result.getResponse().getContentAsString()).get("meta");
         assertThat(meta.has("currentSubject")).isTrue();
         assertThat(meta.get("currentSubject").isNull()).isTrue();
     }
@@ -226,7 +228,7 @@ class RankingHttpContractTest {
                         6, 7L, "그룹이름", 30L, Instant.parse("2026-11-12T00:00:00Z"))),
                         new RankingResponse.Meta(1, 5, 6, 2,
                                 new RankingResponse.CurrentSubject(9L, null, 0L))));
-        var result = mvc.perform(get("/api/v1/rankings/groups").session(session(null))
+        MvcResult result = mvc.perform(get("/api/v1/rankings/groups").session(session(null))
                         .queryParam("seasonId", "10").queryParam("page", "1").queryParam("size", "5"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].rank").value(6))
@@ -234,7 +236,7 @@ class RankingHttpContractTest {
                 .andExpect(jsonPath("$.data[0].groupName").value("그룹이름"))
                 .andExpect(jsonPath("$.data[0].score").value(30))
                 .andReturn();
-        var subject = mapper.readTree(result.getResponse().getContentAsString())
+        JsonNode subject = mapper.readTree(result.getResponse().getContentAsString())
                 .get("meta").get("currentSubject");
         assertThat(subject.has("rank")).isTrue();
         assertThat(subject.get("rank").isNull()).isTrue();
@@ -259,12 +261,12 @@ class RankingHttpContractTest {
         if (role == null) {
             when(memberships.findByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE)).thenReturn(Optional.empty());
         } else {
-            var membership = BeanUtils.instantiateClass(GroupMembership.class);
+            GroupMembership membership = BeanUtils.instantiateClass(GroupMembership.class);
             ReflectionTestUtils.setField(membership, "role", GroupRole.valueOf(role));
             when(memberships.findByUserIdAndStatus(1L, GroupMembershipStatus.ACTIVE))
                     .thenReturn(Optional.of(membership));
         }
-        var session = new MockHttpSession();
+        MockHttpSession session = new MockHttpSession();
         session.setAttribute(SessionAuthenticationFilter.LOGIN_USER,
                 new LoginUser(1L, "조회회원", Set.of()));
         return session;

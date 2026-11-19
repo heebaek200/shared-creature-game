@@ -1,6 +1,7 @@
 
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.group.api.RotateInvitationResponse;
 import com.team.sharedcreature.group.domain.GroupInviteLinkStatus;
 
 import com.team.sharedcreature.auth.domain.GlobalRole;
@@ -95,7 +96,7 @@ class GroupInvitationManagementServiceTest {
         arrangeRotation(f);
 
         // 새 초대 링크를 발급합니다.
-        var response = service.rotateInvitation(1L);
+        RotateInvitationResponse response = service.rotateInvitation(1L);
 
         // 기존 링크와 반환 URL이 올바른지 확인합니다.
         assertThat(f.previous().getStatus()).isEqualTo(GroupInviteLinkStatus.INVALIDATED);

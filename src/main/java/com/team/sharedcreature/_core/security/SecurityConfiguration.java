@@ -43,7 +43,7 @@ public class SecurityConfiguration {
             RequestIdFilter requestIdFilter,
             SecurityErrorWriter errorWriter
     ) throws Exception {
-        var csrfRepository = new HttpSessionCsrfTokenRepository();
+        HttpSessionCsrfTokenRepository csrfRepository = new HttpSessionCsrfTokenRepository();
         csrfRepository.setHeaderName("X-CSRF-TOKEN");
 
         http

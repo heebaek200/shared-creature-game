@@ -19,7 +19,7 @@ class CreatureApiContractTest {
 
     @Test
     void 현재_시즌_응답은_현행_필드명으로_직렬화한다() throws Exception {
-        var response = new SeasonResponse(
+        SeasonResponse response = new SeasonResponse(
                 1L,
                 3,
                 SeasonStatus.ACTIVE,
@@ -43,22 +43,22 @@ class CreatureApiContractTest {
     void 크리처_홈_응답은_온라인_구성원과_Snapshot_커서를_계약대로_직렬화한다() throws Exception {
         Instant snapshotAt = Instant.parse("2026-11-10T00:00:00Z");
         UUID streamInstanceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        var equippedItem = new CreatureHomeResponse.EquippedItemResponse(101L, 201L, "새싹 모자", "hat-seed");
-        var equipments = new CreatureHomeResponse.EquipmentSlotsResponse(equippedItem, null, null, null);
-        var onlineMember = new CreatureHomeResponse.OnlineMemberResponse(
+        CreatureHomeResponse.EquippedItemResponse equippedItem = new CreatureHomeResponse.EquippedItemResponse(101L, 201L, "새싹 모자", "hat-seed");
+        CreatureHomeResponse.EquipmentSlotsResponse equipments = new CreatureHomeResponse.EquipmentSlotsResponse(equippedItem, null, null, null);
+        CreatureHomeResponse.OnlineMemberResponse onlineMember = new CreatureHomeResponse.OnlineMemberResponse(
                 7L,
                 "새싹지기",
                 null,
                 30L,
                 new CreatureHomeResponse.AvatarResponse(equipments)
         );
-        var contribution = new CreatureHomeResponse.ContributionActivityResponse(
+        CreatureHomeResponse.ContributionActivityResponse contribution = new CreatureHomeResponse.ContributionActivityResponse(
                 7L,
                 "새싹지기",
                 100L,
                 snapshotAt.minusSeconds(60)
         );
-        var response = new CreatureHomeResponse(
+        CreatureHomeResponse response = new CreatureHomeResponse(
                 10L,
                 "테스트 그룹",
                 new SeasonResponse(1L, 3, SeasonStatus.ACTIVE, snapshotAt.minusSeconds(60), snapshotAt.plusSeconds(60)),
@@ -124,8 +124,8 @@ class CreatureApiContractTest {
 
     @Test
     void 활성_종과_관리자_선택_응답은_현행_ID_필드를_사용한다() throws Exception {
-        var species = new CreatureSpeciesResponse(5L, "MOSS_GOLEM", "이끼 골렘", "moss-golem", 1);
-        var selection = new CreatureSelectionResponse(
+        CreatureSpeciesResponse species = new CreatureSpeciesResponse(5L, "MOSS_GOLEM", "이끼 골렘", "moss-golem", 1);
+        CreatureSelectionResponse selection = new CreatureSelectionResponse(
                 10L,
                 1L,
                 5L,
@@ -150,7 +150,7 @@ class CreatureApiContractTest {
 
     @Test
     void creatureUpdatedPayloadSerializesGrowthStageAsString() {
-        var payload = new GroupLivePayloads.CreatureUpdated(
+        GroupLivePayloads.CreatureUpdated payload = new GroupLivePayloads.CreatureUpdated(
                 1L, 20L, 150_000L, CreatureGrowthStage.COMPLETE, 30L, Instant.EPOCH);
 
         assertThat(objectMapper.writeValueAsString(payload)).contains("\"growthStage\":\"COMPLETE\"");

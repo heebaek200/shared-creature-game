@@ -7,8 +7,12 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import com.team.sharedcreature.payment.application.RefundApprovalTransactionService.CommandResponse;
 
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -38,13 +42,13 @@ public class RefundReconciliationService implements RefundRecoveryWork {
         // 최초 실행권 갱신에 실패하면 업무를 시작하지 않습니다.
         heartbeat.run();
 
-        var heartbeatFailure = new AtomicReference<RuntimeException>();
+        AtomicReference<RuntimeException> heartbeatFailure = new AtomicReference<>();
 
         // 장시간 PG 조회·DB 대기 중에도 시간 기준으로 Heartbeat를 호출합니다.
-        var heartbeatExecutor =
+        ScheduledExecutorService heartbeatExecutor =
                 Executors.newSingleThreadScheduledExecutor();
 
-        var heartbeatTask = heartbeatExecutor.scheduleWithFixedDelay(
+        ScheduledFuture<?> heartbeatTask = heartbeatExecutor.scheduleWithFixedDelay(
                 () -> {
                     if (heartbeatFailure.get() != null) {
                         return;
@@ -62,7 +66,7 @@ public class RefundReconciliationService implements RefundRecoveryWork {
         );
 
         try {
-            var candidates = preparationService.findScheduledCandidates();
+            List<Long> candidates = preparationService.findScheduledCandidates();
 
             checkHeartbeat(heartbeatFailure);
 
@@ -78,7 +82,7 @@ public class RefundReconciliationService implements RefundRecoveryWork {
 
                 try {
                     // 별도 트랜잭션에서 조건 재검사와 선점을 Commit합니다.
-                    var prepared =
+                    Optional<RefundRecoveryPreparationService.RecoveryCommand> prepared =
                             preparationService.prepareScheduled(requestId);
 
                     checkHeartbeat(heartbeatFailure);
@@ -86,7 +90,7 @@ public class RefundReconciliationService implements RefundRecoveryWork {
                     if (prepared.isEmpty()) {
                         skipped++;
                     } else {
-                        var command = prepared.get();
+                        RefundRecoveryPreparationService.RecoveryCommand command = prepared.get();
 
                         PaymentSnapshot payment = null;
                         boolean lookupFailed = false;
@@ -110,7 +114,7 @@ public class RefundReconciliationService implements RefundRecoveryWork {
                         checkHeartbeat(heartbeatFailure);
 
                         // 조회 실패도 UNKNOWN으로 저장하되 기술 오류로 집계합니다.
-                        var outcome = resultTransactionService.applyRecovery(
+                        Optional<RefundGateway.Outcome> outcome = resultTransactionService.applyRecovery(
                                 command,
                                 payment
                         );
@@ -181,7 +185,7 @@ public class RefundReconciliationService implements RefundRecoveryWork {
             String traceId
     ) {
         // 별도 트랜잭션에서 멱등 기록과 조회 준비를 Commit합니다.
-        var prepared = reconciliationPreparationService.prepare(
+        RefundReconciliationPreparationService.Preparation prepared = reconciliationPreparationService.prepare(
                 adminUserId,
                 requestId,
                 idempotencyKey,
@@ -193,7 +197,7 @@ public class RefundReconciliationService implements RefundRecoveryWork {
             return prepared.response();
         }
 
-        var command = prepared.command();
+        RefundRecoveryPreparationService.RecoveryCommand command = prepared.command();
 
         PaymentSnapshot payment = null;
 

@@ -2,6 +2,7 @@ package com.team.sharedcreature.quest.application;
 
 import com.team.sharedcreature.quest.domain.PhotoVerificationStatus;
 
+import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.domain.SeasonStatus;
 
 import com.team.sharedcreature.quest.domain.PhotoSubmission;
@@ -226,7 +227,7 @@ public class PhotoSubmissionCleanupTransactionService {
         }
 
         // 종료 처리 중인 시즌의 파일은 최종 Snapshot 확정 전까지 삭제하지 않습니다.
-        var season = submission.getQuestAssignment().getQuestPeriod().getSeason();
+        Season season = submission.getQuestAssignment().getQuestPeriod().getSeason();
         return submission.getVerificationStatus() == PhotoVerificationStatus.VALID
                 && (season.getStatus() == SeasonStatus.ENDED)
                 && !season.getEndAt().isAfter(now.minus(Duration.ofDays(30)));

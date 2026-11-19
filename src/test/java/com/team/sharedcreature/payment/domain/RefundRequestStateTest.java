@@ -23,14 +23,14 @@ class RefundRequestStateTest {
     }
 
     private RefundRequest pending() {
-        var refund = requested();
+        RefundRequest refund = requested();
         refund.claimCancellation(reviewer, "  승인 사유  ", START);
         return refund;
     }
 
     @Test
     void 승인하면_사유와_심사정보를_기록하고_완료로_처리하지_않는다() {
-        var refund = pending();
+        RefundRequest refund = pending();
         assertThat(refund.getRequestReason()).isEqualTo("요청 사유");
         assertThat(refund.getDecisionReason()).isEqualTo("승인 사유");
         assertThat(refund.getReviewedByUser()).isSameAs(reviewer);
@@ -41,14 +41,14 @@ class RefundRequestStateTest {
 
     @Test
     void 승인_후_거절이나_중복_승인은_충돌이다() {
-        var refund = pending();
+        RefundRequest refund = pending();
         assertConflict(() -> refund.reject(reviewer, "거절", START));
         assertConflict(() -> refund.claimCancellation(reviewer, "승인", START));
     }
 
     @Test
     void 거절하면_재승인할_수_없고_취소_선점시각은_없다() {
-        var refund = requested();
+        RefundRequest refund = requested();
         refund.reject(reviewer, "  거절 사유  ", START);
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.REJECTED);
         assertThat(refund.getDecisionReason()).isEqualTo("거절 사유");
@@ -59,7 +59,7 @@ class RefundRequestStateTest {
     @ParameterizedTest
     @ValueSource(strings = {"", "   "})
     void 빈_사유는_상태를_변경하지_않는다(String reason) {
-        var refund = requested();
+        RefundRequest refund = requested();
         assertThatThrownBy(() -> refund.claimCancellation(reviewer, reason, START))
                 .isInstanceOfSatisfying(BusinessException.class,
                         error -> assertThat(error.errorCode()).isEqualTo(ErrorCode.INVALID_FIELD_VALUE));
@@ -70,7 +70,7 @@ class RefundRequestStateTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void 대기상태는_정확히_5분부터_복구한다(boolean manual) {
-        var refund = pending();
+        RefundRequest refund = pending();
         assertThat(refund.tryClaimRecovery(START.plusSeconds(300).minusNanos(1), manual)).isFalse();
         assertThat(refund.getCancelClaimedAt()).isEqualTo(START);
         assertThat(refund.tryClaimRecovery(START.plusSeconds(300), manual)).isTrue();
@@ -80,7 +80,7 @@ class RefundRequestStateTest {
 
     @Test
     void 결과불명은_관리자만_5분전에도_복구를_선점한다() {
-        var refund = pending();
+        RefundRequest refund = pending();
         refund.markCancellationUnknown(START.plusSeconds(1));
         assertThat(refund.tryClaimRecovery(START.plusSeconds(2))).isFalse();
         assertThat(refund.tryClaimRecovery(START.plusSeconds(2), true)).isTrue();
@@ -91,7 +91,7 @@ class RefundRequestStateTest {
 
     @Test
     void 성공확정_후_늦은_실패와_중복성공은_기존_완료시각을_보존한다() {
-        var refund = pending();
+        RefundRequest refund = pending();
         Instant pgTime = START.plusSeconds(10);
         assertThat(refund.completeCancellation(pgTime, START.plusSeconds(11))).isTrue();
         assertThat(refund.failCancellation(START.plusSeconds(12))).isFalse();
@@ -104,7 +104,7 @@ class RefundRequestStateTest {
 
     @Test
     void 확정실패_후_늦은_성공을_덮어쓰지_않는다() {
-        var refund = pending();
+        RefundRequest refund = pending();
         assertThat(refund.failCancellation(START.plusSeconds(10))).isTrue();
         assertThat(refund.completeCancellation(START.plusSeconds(11), START.plusSeconds(12))).isFalse();
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.FAILED);

@@ -4,6 +4,7 @@ import com.team.sharedcreature._core.api.ApiResponse;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature._core.security.LoginUser;
+import com.team.sharedcreature.payment.application.RefundApprovalTransactionService;
 import com.team.sharedcreature.payment.application.RefundQueryService;
 import com.team.sharedcreature.payment.application.RefundService;
 import com.team.sharedcreature.payment.application.RefundReconciliationService;
@@ -86,7 +87,7 @@ public class AdminRefundController {
             @Valid @RequestBody RefundDecisionRequest body,
             HttpServletRequest request
     ) {
-        var result = refundService.approveRefund(
+        RefundApprovalTransactionService.CommandResponse result = refundService.approveRefund(
                 loginUser.id(),
                 requestId,
                 body.decisionReason(),
@@ -136,7 +137,7 @@ public class AdminRefundController {
             @Pattern(regexp = UUID_PATTERN) String idempotencyKey,
             HttpServletRequest request
     ) {
-        var result = reconciliationService.reconcileRefund(
+        RefundApprovalTransactionService.CommandResponse result = reconciliationService.reconcileRefund(
                 loginUser.id(),
                 requestId,
                 idempotencyKey,

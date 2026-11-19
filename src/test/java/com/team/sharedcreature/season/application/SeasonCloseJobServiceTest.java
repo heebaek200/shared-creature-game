@@ -11,6 +11,7 @@ import com.team.sharedcreature.season.infrastructure.SeasonRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -124,7 +125,7 @@ class SeasonCloseJobServiceTest {
                 service.runSeasonClose(SEASON_ID, OWNER));
 
         // 세 독립 업무 서비스가 모두 끝나야 Scheduler 성공 상태를 갱신합니다.
-        var order = inOrder(transitionService, groupSnapshotService,
+        InOrder order = inOrder(transitionService, groupSnapshotService,
                 memberSnapshotService, finalizationService, lifecycleService);
         order.verify(transitionService).beginClosingIfExpired(SEASON_ID);
         order.verify(groupSnapshotService, times(2)).writeNextBatch(SEASON_ID);

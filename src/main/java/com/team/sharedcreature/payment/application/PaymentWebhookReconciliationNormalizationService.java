@@ -94,7 +94,7 @@ public class PaymentWebhookReconciliationNormalizationService {
                     (Function<SchedulerClaimTicket, String>) ticket -> {
                         // PG 조회가 블로킹되더라도 별도 스레드가 DB Lease를 갱신합니다.
                         try (PaymentWebhookLeaseHeartbeat.Scope scope = heartbeat.start(ticket, LEASE)) {
-                            var outcome = Objects.requireNonNull(
+                            PaymentWebhookRecoveryService.PaymentWebhookRecoveryResult outcome = Objects.requireNonNull(
                                     recoveryService.recoverStaleWebhooks(), "결제 Webhook 복구 결과가 없습니다.");
                             summary.set(outcome);
                             validateSummary(outcome);

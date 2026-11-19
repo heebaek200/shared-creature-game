@@ -52,7 +52,7 @@ class PaymentWebhookRecoveryServiceTest {
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
 
-        var result = service.recoverStaleWebhooks();
+        PaymentWebhookRecoveryService.PaymentWebhookRecoveryResult result = service.recoverStaleWebhooks();
 
         assertThat(result.selectedCount()).isEqualTo(3);
         assertThat(result.processedCount()).isEqualTo(1);

@@ -14,7 +14,7 @@ class PaymentWebhookEventStateTest {
 
     @Test
     void 대기상태는_처리시작후_정확히_5분부터_복구할수있다() {
-        var event = received();
+        PaymentWebhookEvent event = received();
 
         assertThat(event.getProcessingStatus()).isEqualTo(WebhookProcessingStatus.PENDING);
         assertThat(event.isRecoverable(START.minusNanos(1))).isFalse();
@@ -24,7 +24,7 @@ class PaymentWebhookEventStateTest {
 
     @Test
     void 실패상태는_최초접수가_아닌_마지막실패시각으로_복구를_판정한다() {
-        var event = received();
+        PaymentWebhookEvent event = received();
         Instant failedAt = START.plusSeconds(600);
         event.fail("PAYMENT_PENDING", failedAt);
 
@@ -36,7 +36,7 @@ class PaymentWebhookEventStateTest {
     @ParameterizedTest
     @EnumSource(value = WebhookProcessingStatus.class, names = {"PROCESSED", "IGNORED"})
     void 종료된_이벤트는_오래되어도_복구대상이_아니다(WebhookProcessingStatus status) {
-        var event = received();
+        PaymentWebhookEvent event = received();
         if (status == WebhookProcessingStatus.PROCESSED) {
             event.complete(null, null, START);
         } else {
@@ -49,7 +49,7 @@ class PaymentWebhookEventStateTest {
 
     @Test
     void 재시도는_시작시각과_횟수를_갱신하고_원본이벤트를_보존한다() {
-        var event = received();
+        PaymentWebhookEvent event = received();
         event.fail("PG_UNAVAILABLE", START.plusSeconds(1));
         Instant retriedAt = START.plusSeconds(600);
         event.retry(retriedAt);

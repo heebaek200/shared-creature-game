@@ -20,7 +20,7 @@ class KstPeriodCalculatorTest {
      */
     @Test
     void dailyPeriodUsesKstMidnight() {
-        var window = calculator.dailyAt(
+        KstPeriodCalculator.PeriodWindow window = calculator.dailyAt(
                 Instant.parse("2026-11-06T03:00:00Z")
         );
 
@@ -40,10 +40,10 @@ class KstPeriodCalculatorTest {
      */
     @Test
     void dailyPeriodChangesExactlyAtMidnight() {
-        var before = calculator.dailyAt(
+        KstPeriodCalculator.PeriodWindow before = calculator.dailyAt(
                 Instant.parse("2026-11-05T14:59:59Z")
         );
-        var after = calculator.dailyAt(
+        KstPeriodCalculator.PeriodWindow after = calculator.dailyAt(
                 Instant.parse("2026-11-05T15:00:00Z")
         );
 
@@ -61,7 +61,7 @@ class KstPeriodCalculatorTest {
      */
     @Test
     void weeklyPeriodStartsOnMonday() {
-        var window = calculator.weeklyAt(
+        KstPeriodCalculator.PeriodWindow window = calculator.weeklyAt(
                 Instant.parse("2026-11-06T03:00:00Z")
         );
 
@@ -81,10 +81,10 @@ class KstPeriodCalculatorTest {
      */
     @Test
     void weeklyPeriodChangesOnMondayMidnight() {
-        var before = calculator.weeklyAt(
+        KstPeriodCalculator.PeriodWindow before = calculator.weeklyAt(
                 Instant.parse("2026-11-01T14:59:59Z")
         );
-        var after = calculator.weeklyAt(
+        KstPeriodCalculator.PeriodWindow after = calculator.weeklyAt(
                 Instant.parse("2026-11-01T15:00:00Z")
         );
 

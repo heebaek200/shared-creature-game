@@ -2,6 +2,9 @@ package com.team.sharedcreature.ranking.application;
 
 import com.team.sharedcreature.group.domain.GroupMembershipStatus;
 
+import com.team.sharedcreature.ranking.api.RankingResponse;
+import com.team.sharedcreature.season.domain.SeasonGroupRankSnapshot;
+import com.team.sharedcreature.season.domain.SeasonMemberRankSnapshot;
 import com.team.sharedcreature.season.domain.SeasonStatus;
 
 import com.team.sharedcreature.group.domain.GroupStatus;
@@ -71,8 +74,8 @@ class RankingServiceTest {
                 contribution(2, 30, NOW, "LEFT"),
                 contribution(1, 30, NOW.minusSeconds(1), "ACTIVE")));
 
-        var first = service.getMemberRanking(4L, null, 0, 2);
-        var second = service.getMemberRanking(4L, null, 1, 2);
+        RankingResponse.PageDto<RankingResponse.MemberDto> first = service.getMemberRanking(4L, null, 0, 2);
+        RankingResponse.PageDto<RankingResponse.MemberDto> second = service.getMemberRanking(4L, null, 1, 2);
 
         assertThat(first.data()).extracting(row -> row.userId()).containsExactly(1L, 2L);
         assertThat(second.data()).extracting(row -> row.userId()).containsExactly(3L, 4L);
@@ -92,7 +95,7 @@ class RankingServiceTest {
     @Test
     void 마지막페이지를_넘어도_현재순위와_전체개수는_유지한다() {
         stubCurrentMember(List.of(contribution(4, 10, NOW, "ACTIVE")));
-        var response = service.getMemberRanking(4L, null, Integer.MAX_VALUE, 50);
+        RankingResponse.PageDto<RankingResponse.MemberDto> response = service.getMemberRanking(4L, null, Integer.MAX_VALUE, 50);
         assertThat(response.data()).isEmpty();
         assertThat(response.meta().page()).isEqualTo(Integer.MAX_VALUE);
         assertThat(response.meta().totalElements()).isEqualTo(1);
@@ -103,7 +106,7 @@ class RankingServiceTest {
     @Test
     void 개인기록이_없으면_빈목록과_null현재대상을_반환한다() {
         stubCurrentMember(List.of());
-        var response = service.getMemberRanking(4L, null, 0, 20);
+        RankingResponse.PageDto<RankingResponse.MemberDto> response = service.getMemberRanking(4L, null, 0, 20);
         assertThat(response.data()).isEmpty();
         assertThat(response.meta().totalPages()).isZero();
         assertThat(response.meta().currentSubject()).isNull();
@@ -114,7 +117,7 @@ class RankingServiceTest {
     void 현재그룹이_조회시즌에_없으면_개인기록을_조회하지_않는다() {
         stubMembership();
         when(seasonQueryService.findCurrentSeason()).thenReturn(season("ACTIVE"));
-        var response = service.getMemberRanking(4L, null, 0, 20);
+        RankingResponse.PageDto<RankingResponse.MemberDto> response = service.getMemberRanking(4L, null, 0, 20);
         assertThat(response.data()).isEmpty();
         assertThat(response.meta().currentSubject()).isNull();
         verifyNoInteractions(contributionRepository, memberSnapshotRepository, profileRepository);
@@ -150,15 +153,15 @@ class RankingServiceTest {
         when(seasonRepository.findById(10L)).thenReturn(Optional.of(season("ENDED")));
         when(groupSeasonRepository.findSnapshotByGroupIdAndSeasonId(7L, 10L))
                 .thenReturn(Optional.of(entity(GroupSeason.class, "id", 70L)));
-        var snapshot = entity(SeasonMemberRankSnapshot.class,
+        SeasonMemberRankSnapshot snapshot = entity(SeasonMemberRankSnapshot.class,
                 "user", user(4), "rankNumber", 8, "nicknameSnapshot", "종료닉네임",
                 "contributionScore", 90L, "scoreReachedAt", NOW.minusSeconds(20),
                 "participantStatus", GroupMembershipStatus.LEFT);
         when(memberSnapshotRepository.findAllByGroupSeasonIdOrderByRankNumberAsc(70L))
                 .thenReturn(List.of(snapshot));
 
-        var first = service.getMemberRanking(4L, 10L, 0, 20);
-        var second = service.getMemberRanking(4L, 10L, 0, 20);
+        RankingResponse.PageDto<RankingResponse.MemberDto> first = service.getMemberRanking(4L, 10L, 0, 20);
+        RankingResponse.PageDto<RankingResponse.MemberDto> second = service.getMemberRanking(4L, 10L, 0, 20);
 
         assertThat(first).isEqualTo(second);
         assertThat(first.data().getFirst().nickname()).isEqualTo("종료닉네임");
@@ -180,8 +183,8 @@ class RankingServiceTest {
                 score(4, 50, NOW.minusSeconds(1), NOW.minusSeconds(10)),
                 score(8, 0, null, NOW.minusSeconds(3))));
 
-        var first = service.getGroupRanking(4L, null, 0, 2);
-        var second = service.getGroupRanking(4L, null, 1, 2);
+        RankingResponse.PageDto<RankingResponse.GroupDto> first = service.getGroupRanking(4L, null, 0, 2);
+        RankingResponse.PageDto<RankingResponse.GroupDto> second = service.getGroupRanking(4L, null, 1, 2);
 
         assertThat(first.data()).extracting(row -> row.groupId()).containsExactly(4L, 5L);
         assertThat(second.data()).extracting(row -> row.groupId()).containsExactly(6L, 7L);
@@ -198,7 +201,7 @@ class RankingServiceTest {
         when(seasonQueryService.findCurrentSeason()).thenReturn(season("ACTIVE"));
         when(scoreRepository.findAllForGroupRanking(10L))
                 .thenReturn(List.of(score(7, 80, NOW, NOW)));
-        var response = service.getGroupRanking(4L, null, 0, 20);
+        RankingResponse.PageDto<RankingResponse.GroupDto> response = service.getGroupRanking(4L, null, 0, 20);
         assertThat(response.data()).hasSize(1);
         assertThat(response.meta().currentSubject()).isNull();
     }
@@ -208,15 +211,15 @@ class RankingServiceTest {
         stubMembership();
         when(seasonRepository.findById(10L)).thenReturn(Optional.of(season("ENDED")));
         Group currentGroup = group(7);
-        var snapshot = entity(SeasonGroupRankSnapshot.class,
+        SeasonGroupRankSnapshot snapshot = entity(SeasonGroupRankSnapshot.class,
                 "group", currentGroup, "rankNumber", 6, "score", 120L,
                 "scoreReachedAt", NOW.minusSeconds(30), "groupNameSnapshot", "종료그룹명");
         when(groupSnapshotRepository.findAllBySeasonIdOrderByRankNumberAsc(10L))
                 .thenReturn(List.of(snapshot));
-        var first = service.getGroupRanking(4L, 10L, 0, 20);
+        RankingResponse.PageDto<RankingResponse.GroupDto> first = service.getGroupRanking(4L, 10L, 0, 20);
         // 현재 그룹명을 바꿔도 과거 시즌의 표시명은 Snapshot에서 읽습니다.
         ReflectionTestUtils.setField(currentGroup, "name", "변경된현재이름");
-        var second = service.getGroupRanking(4L, 10L, 0, 20);
+        RankingResponse.PageDto<RankingResponse.GroupDto> second = service.getGroupRanking(4L, 10L, 0, 20);
         assertThat(second).isEqualTo(first);
         assertThat(second.data().getFirst().groupName()).isEqualTo("종료그룹명");
         assertThat(second.meta().currentSubject().rank()).isEqualTo(6);

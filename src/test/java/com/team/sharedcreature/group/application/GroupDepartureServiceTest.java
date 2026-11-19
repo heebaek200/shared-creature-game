@@ -1,5 +1,6 @@
 package com.team.sharedcreature.group.application;
 
+import com.team.sharedcreature.group.api.LeaveMyGroupResponse;
 import com.team.sharedcreature.group.domain.GroupMembershipExitReason;
 import com.team.sharedcreature.season.domain.CreatureGrowthStage;
 
@@ -111,7 +112,7 @@ class GroupDepartureServiceTest {
         Fixture fixture = arrange("MEMBER", 3);
 
         // 실제 도메인 객체의 변경 결과를 검증합니다.
-        var response = service.leaveMyGroup(USER_ID);
+        LeaveMyGroupResponse response = service.leaveMyGroup(USER_ID);
         assertThat(response.groupId()).isEqualTo(GROUP_ID);
         assertThat(response.userId()).isEqualTo(USER_ID);
         assertThat(response.endedAt()).isEqualTo(NOW);
@@ -148,7 +149,7 @@ class GroupDepartureServiceTest {
         Fixture fixture = arrange("DEPUTY", 2);
 
         // MEMBER와 동일한 종료 규칙이 적용되는지 확인합니다.
-        var response = service.leaveMyGroup(USER_ID);
+        LeaveMyGroupResponse response = service.leaveMyGroup(USER_ID);
         assertThat(response.groupDeactivated()).isFalse();
         assertThat(fixture.membership().getRole()).isEqualTo(GroupRole.DEPUTY);
         assertThat(fixture.membership().getStatus()).isEqualTo(GroupMembershipStatus.LEFT);
@@ -227,7 +228,7 @@ class GroupDepartureServiceTest {
         CreatureGrowthStage oldGrowthStage = creature.getGrowthStage();
 
         // 그룹 종료 결과와 관련 엔티티의 상태 전이를 함께 확인합니다.
-        var response = service.leaveMyGroup(USER_ID);
+        LeaveMyGroupResponse response = service.leaveMyGroup(USER_ID);
         assertThat(response.groupDeactivated()).isTrue();
         assertThat(fixture.group().getStatus()).isEqualTo(GroupStatus.INACTIVE);
         assertThat(fixture.group().getCurrentMemberCount()).isZero();
@@ -253,7 +254,7 @@ class GroupDepartureServiceTest {
                 .thenReturn(Optional.empty());
 
         // 선택적 부가 데이터가 없어도 탈퇴는 성공해야 합니다.
-        var response = service.leaveMyGroup(USER_ID);
+        LeaveMyGroupResponse response = service.leaveMyGroup(USER_ID);
         assertThat(response.groupDeactivated()).isTrue();
         assertThat(fixture.group().getStatus()).isEqualTo(GroupStatus.INACTIVE);
         verifyNoInteractions(groupCreatureRepository);

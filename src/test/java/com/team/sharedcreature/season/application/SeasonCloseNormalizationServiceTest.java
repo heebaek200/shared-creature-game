@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -63,14 +64,14 @@ class SeasonCloseNormalizationServiceTest {
                 .thenReturn(SchedulerJobRunner.ExecutionResult.SUCCEEDED);
 
         // 목록의 현재 실행 순서를 변경하거나 임의의 기간을 소급 생성하지 않습니다.
-        var result = service.normalize();
+        SeasonCloseNormalizationService.NormalizationResult result = service.normalize();
         assertEquals(3, result.examined());
         assertEquals(2, result.succeeded());
         assertEquals(1, result.skipped());
         assertEquals(0, result.failed());
         assertFalse(result.alreadyRunning());
 
-        var ordered = inOrder(closeJobService);
+        InOrder ordered = inOrder(closeJobService);
         ordered.verify(closeJobService).runSeasonClose(eq(11L), anyString());
         ordered.verify(closeJobService).runSeasonClose(eq(12L), anyString());
         ordered.verify(closeJobService).runSeasonClose(eq(13L), anyString());
@@ -85,7 +86,7 @@ class SeasonCloseNormalizationServiceTest {
     void noCandidatesDoesNotStartJobs() {
         when(seasonRepository.findIdsNeedingCloseNormalization(NOW)).thenReturn(List.of());
 
-        var result = service.normalize();
+        SeasonCloseNormalizationService.NormalizationResult result = service.normalize();
         assertEquals(0, result.examined());
         assertEquals(0, result.failed());
         verifyNoInteractions(closeJobService);
@@ -104,7 +105,7 @@ class SeasonCloseNormalizationServiceTest {
         when(closeJobService.runSeasonClose(eq(2L), anyString()))
                 .thenReturn(SchedulerJobRunner.ExecutionResult.SUCCEEDED);
 
-        var result = service.normalize();
+        SeasonCloseNormalizationService.NormalizationResult result = service.normalize();
         assertEquals(1, result.failed());
         assertEquals(1, result.succeeded());
         verify(closeJobService).runSeasonClose(eq(2L), anyString());
@@ -124,7 +125,7 @@ class SeasonCloseNormalizationServiceTest {
             return SchedulerJobRunner.ExecutionResult.SUCCEEDED;
         });
 
-        var result = service.normalize();
+        SeasonCloseNormalizationService.NormalizationResult result = service.normalize();
         assertEquals(1, result.succeeded());
         assertTrue(nested.get().alreadyRunning());
         assertEquals(0, nested.get().examined());

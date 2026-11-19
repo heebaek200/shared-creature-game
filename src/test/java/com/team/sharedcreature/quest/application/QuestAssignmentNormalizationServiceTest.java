@@ -72,7 +72,7 @@ class QuestAssignmentNormalizationServiceTest {
         mockSuccessfulExecution();
         mockCreatedAssignments();
 
-        var result = normalizer.normalizeForActiveSeason(7L);
+        QuestAssignmentNormalizationService.Result result = normalizer.normalizeForActiveSeason(7L);
         assertEquals(QuestAssignmentNormalizationService.Outcome.CHECKED, result.outcome());
         assertEquals(2, result.periods().size());
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, result.periods().get(0).execution());
@@ -104,7 +104,7 @@ class QuestAssignmentNormalizationServiceTest {
         when(periods.findHistoricalStartAts(eq(QuestPeriodType.DAILY), eq(FIRST), eq(monday)))
                 .thenReturn(List.of(FIRST, FIRST.plus(Duration.ofDays(2)), FIRST.plus(Duration.ofDays(4))));
 
-        var result = normalizer.normalizeForActiveSeason(7L);
+        QuestAssignmentNormalizationService.Result result = normalizer.normalizeForActiveSeason(7L);
         assertEquals(4L, result.periods().get(0).skippedExpiredPeriods());
         assertEquals(1L, result.periods().get(1).skippedExpiredPeriods());
         assertTrue(summaries.get(0).contains("\"skippedExpiredCount\":4"));
@@ -133,7 +133,7 @@ class QuestAssignmentNormalizationServiceTest {
                     QuestPeriodAssignmentService.Outcome.CREATED, 11L, 7);
         });
 
-        var result = normalizer.normalizeForActiveSeason(7L);
+        QuestAssignmentNormalizationService.Result result = normalizer.normalizeForActiveSeason(7L);
         assertNotNull(result.periods().get(0).error());
         assertNull(result.periods().get(0).execution());
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, result.periods().get(1).execution());
@@ -155,7 +155,7 @@ class QuestAssignmentNormalizationServiceTest {
                 .thenReturn(new QuestAssignmentIntegrityService.ExecutionAudit(
                         QuestAssignmentIntegrityService.AuditOutcome.NOT_SUCCEEDED, null));
 
-        var result = normalizer.normalizeForActiveSeason(7L);
+        QuestAssignmentNormalizationService.Result result = normalizer.normalizeForActiveSeason(7L);
         assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, result.periods().get(0).execution());
         assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, result.periods().get(1).execution());
         assertNull(result.periods().get(0).error());
@@ -183,7 +183,7 @@ class QuestAssignmentNormalizationServiceTest {
                             : new QuestAssignmentIntegrityService.ExecutionAudit(
                                     QuestAssignmentIntegrityService.AuditOutcome.CONSISTENT, null);
                 });
-        var result = normalizer.normalizeForActiveSeason(7L);
+        QuestAssignmentNormalizationService.Result result = normalizer.normalizeForActiveSeason(7L);
         assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, result.periods().get(0).execution());
         assertTrue(result.periods().get(0).error().contains("PERIOD_MISSING"));
         assertNull(result.periods().get(1).error());
@@ -214,7 +214,7 @@ class QuestAssignmentNormalizationServiceTest {
                     return SchedulerJobRunner.ExecutionResult.SUCCEEDED;
                 });
 
-        var result = normalizer.normalizeForActiveSeason(7L);
+        QuestAssignmentNormalizationService.Result result = normalizer.normalizeForActiveSeason(7L);
         assertTrue(result.periods().get(0).error().contains("ASSIGNMENT_COUNT_MISMATCH"));
         assertNull(result.periods().get(0).execution());
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, result.periods().get(1).execution());
@@ -230,7 +230,7 @@ class QuestAssignmentNormalizationServiceTest {
     void doesNothingWhenSeasonIsNotReady() {
         when(seasons.findById(7L)).thenReturn(Optional.of(active));
         when(active.isActiveAt(NOW)).thenReturn(false);
-        var result = normalizer.normalizeForActiveSeason(7L);
+        QuestAssignmentNormalizationService.Result result = normalizer.normalizeForActiveSeason(7L);
         assertEquals(QuestAssignmentNormalizationService.Outcome.NOT_READY, result.outcome());
         verifyNoInteractions(jobRunner, periods, assignments, integrity);
     }

@@ -144,12 +144,12 @@ class QuestAssignmentIntegrityIntegrationTest {
     @Test
     @Timeout(45)
     void succeededAndCompleteSnapshotRemainUnchanged() {
-        var first = normalizer.normalizeForActiveSeason(seasonId);
+        QuestAssignmentNormalizationService.Result first = normalizer.normalizeForActiveSeason(seasonId);
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, first.periods().get(0).execution());
         assertEquals(SchedulerJobRunner.ExecutionResult.SUCCEEDED, first.periods().get(1).execution());
         assertEquals(10L, count("SELECT COUNT(*) FROM quest_assignments"));
 
-        var repeated = normalizer.normalizeForActiveSeason(seasonId);
+        QuestAssignmentNormalizationService.Result repeated = normalizer.normalizeForActiveSeason(seasonId);
         assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, repeated.periods().get(0).execution());
         assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, repeated.periods().get(1).execution());
         assertNull(repeated.periods().get(0).error());
@@ -171,7 +171,7 @@ class QuestAssignmentIntegrityIntegrationTest {
         jdbc.update("DELETE FROM quest_assignments WHERE quest_period_id = ?", dailyId);
         jdbc.update("DELETE FROM quest_periods WHERE id = ?", dailyId);
 
-        var checked = normalizer.normalizeForActiveSeason(seasonId);
+        QuestAssignmentNormalizationService.Result checked = normalizer.normalizeForActiveSeason(seasonId);
         assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, checked.periods().get(0).execution());
         assertTrue(checked.periods().get(0).error().contains("PERIOD_MISSING"));
         assertNull(checked.periods().get(1).error());
@@ -192,7 +192,7 @@ class QuestAssignmentIntegrityIntegrationTest {
         Long dailyId = dailyPeriodId();
         jdbc.update("DELETE FROM quest_assignments WHERE quest_period_id = ? AND slot_number = 1", dailyId);
 
-        var checked = normalizer.normalizeForActiveSeason(seasonId);
+        QuestAssignmentNormalizationService.Result checked = normalizer.normalizeForActiveSeason(seasonId);
         assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, checked.periods().get(0).execution());
         assertTrue(checked.periods().get(0).error().contains("ASSIGNMENT_COUNT_MISMATCH"));
         assertNull(checked.periods().get(1).error());
@@ -210,7 +210,7 @@ class QuestAssignmentIntegrityIntegrationTest {
         normalizer.normalizeForActiveSeason(seasonId);
         jdbc.update("UPDATE quest_periods SET status = 'FAILED' WHERE id = ?", dailyPeriodId());
 
-        var checked = normalizer.normalizeForActiveSeason(seasonId);
+        QuestAssignmentNormalizationService.Result checked = normalizer.normalizeForActiveSeason(seasonId);
         assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, checked.periods().get(0).execution());
         assertTrue(checked.periods().get(0).error().contains("PERIOD_NOT_ACTIVE"));
         assertNull(checked.periods().get(1).error());
@@ -236,7 +236,7 @@ class QuestAssignmentIntegrityIntegrationTest {
                 """, dailyId);
 
         // 슬롯 수는 정상이어도 난이도 분포가 잘못됐음을 탐지합니다.
-        var checked = normalizer.normalizeForActiveSeason(seasonId);
+        QuestAssignmentNormalizationService.Result checked = normalizer.normalizeForActiveSeason(seasonId);
         assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, checked.periods().get(0).execution());
         assertTrue(checked.periods().get(0).error().contains("DIFFICULTY_SLOT_MISMATCH"));
         assertNull(checked.periods().get(1).error());
@@ -267,7 +267,7 @@ class QuestAssignmentIntegrityIntegrationTest {
                 """, otherVersion, dailyId);
 
         // 서로 다른 실제 템플릿에 속하는 버전의 연결 관계를 검증합니다.
-        var checked = normalizer.normalizeForActiveSeason(seasonId);
+        QuestAssignmentNormalizationService.Result checked = normalizer.normalizeForActiveSeason(seasonId);
         assertEquals(SchedulerJobRunner.ExecutionResult.SKIPPED, checked.periods().get(0).execution());
         assertTrue(checked.periods().get(0).error().contains("TEMPLATE_VERSION_MISMATCH"));
         assertNull(checked.periods().get(1).error());

@@ -158,8 +158,8 @@ class GroupInvitationRotationConcurrencyIntegrationTest {
             start.countDown();
 
             // Service는 두 요청을 차례로 Commit한 뒤 서로 다른 URL을 반환합니다.
-            var firstResult = first.get(15, TimeUnit.SECONDS);
-            var secondResult = second.get(15, TimeUnit.SECONDS);
+            RotateInvitationResponse firstResult = first.get(15, TimeUnit.SECONDS);
+            RotateInvitationResponse secondResult = second.get(15, TimeUnit.SECONDS);
             assertThat(firstResult.invitationUrl()).isNotEqualTo(secondResult.invitationUrl());
 
             // 총 3건(기존 1 + 신규 2) 중 마지막 1건만 ACTIVE입니다.

@@ -337,7 +337,7 @@ public class QuestCompletionService {
                 if (completed) {
                     currentProgress = progressTarget;
                 } else {
-                    var checkInDate = assignment.getQuestPeriod().getPeriodDate();
+                    LocalDate checkInDate = assignment.getQuestPeriod().getPeriodDate();
                     currentProgress = (int) findDailyCompletionAggregateProgress(
                             userId,
                             membership.getId(),
@@ -372,8 +372,8 @@ public class QuestCompletionService {
                 if (completed) {
                     currentProgress = progressTarget;
                 } else {
-                    var weekStart = assignment.getQuestPeriod().getPeriodDate();
-                    var weekEndExclusive = weekStart.plusWeeks(1);
+                    LocalDate weekStart = assignment.getQuestPeriod().getPeriodDate();
+                    LocalDate weekEndExclusive = weekStart.plusWeeks(1);
 
                     currentProgress = (int) Math.min(
                             countWeeklyCheckIns(
@@ -395,8 +395,8 @@ public class QuestCompletionService {
                 if (completed) {
                     currentProgress = progressTarget;
                 } else {
-                    var weekStart = assignment.getQuestPeriod().getPeriodDate();
-                    var weekEndExclusive = weekStart.plusWeeks(1);
+                    LocalDate weekStart = assignment.getQuestPeriod().getPeriodDate();
+                    LocalDate weekEndExclusive = weekStart.plusWeeks(1);
 
                     currentProgress = (int) Math.min(
                             countWeeklyCheckIns(
@@ -651,12 +651,12 @@ public class QuestCompletionService {
         seasonQueryService.findCurrentSeasonForShareIfPresent();
 
         // 401	AUTH_REQUIRED	세션 인증 없음
-        var user = userRepository.findByIdForUpdate(userId)
+        User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.AUTH_REQUIRED, "로그인이 필요합니다."));
 
         // 403	ROLE_FORBIDDEN	요청자 권한 부족
-        var membership = membershipRepository.findActiveWithGroupByUserId(userId)
+        GroupMembership membership = membershipRepository.findActiveWithGroupByUserId(userId)
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.ROLE_FORBIDDEN, "요청 권한이 없습니다."));
 
@@ -689,7 +689,7 @@ public class QuestCompletionService {
         QuestAssignment assignment = findCompletableAssignment(userId, assignmentId, QuestVerificationType.SELF_CHECK);
 
         // 404	RESOURCE_NOT_FOUND	없거나 요청자에게 노출하지 않는 리소스
-        var groupSeason = groupSeasonRepository.findForUpdateByGroupIdAndSeasonId(
+        GroupSeason groupSeason = groupSeasonRepository.findForUpdateByGroupIdAndSeasonId(
                         membership.getGroup().getId(),
                         assignment.getQuestPeriod().getSeason().getId())
                 .orElseThrow(() -> new BusinessException(
@@ -1083,16 +1083,16 @@ public class QuestCompletionService {
 
         // 문서화된 잠금 순서에 따라 개인 기여도와 그룹 점수를 먼저 조회합니다.
         Instant now = Instant.now(clock);
-        var contribution = getOrCreateMemberContribution(
+        SeasonMemberContribution contribution = getOrCreateMemberContribution(
                 groupSeason,
                 user,
                 membership,
                 now
         );
-        var groupScore = findGroupScoreForUpdate(groupSeason.getId());
+        SeasonGroupScore groupScore = findGroupScoreForUpdate(groupSeason.getId());
 
         // 크리처 행 잠금은 기여도와 그룹 점수 뒤에 획득해 공통 잠금 순서를 유지합니다.
-        var creature = groupCreatureRepository
+        GroupCreature creature = groupCreatureRepository
                 .findForUpdateByGroupSeasonId(groupSeason.getId())
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.RESOURCE_NOT_FOUND,
@@ -1208,7 +1208,7 @@ public class QuestCompletionService {
                 continue;
             }
 
-            var checkInDate = dailyAssignment.getQuestPeriod().getPeriodDate();
+            LocalDate checkInDate = dailyAssignment.getQuestPeriod().getPeriodDate();
 
             int target = readTargetFromSnapshot(dailyAssignment);
             long current = findDailyCompletionAggregateProgress(
@@ -1234,8 +1234,8 @@ public class QuestCompletionService {
 
             // 공통 기간 산정
             String templateCode = weeklyAssignment.getQuestTemplate().getCode();
-            var weekStart = weeklyAssignment.getQuestPeriod().getPeriodDate();
-            var weekEndExclusive = weekStart.plusWeeks(1);
+            LocalDate weekStart = weeklyAssignment.getQuestPeriod().getPeriodDate();
+            LocalDate weekEndExclusive = weekStart.plusWeeks(1);
 
             Long current = findWeeklyAggregateProgress(
                     user.getId(),
@@ -1418,7 +1418,7 @@ public class QuestCompletionService {
             }
         }
 
-        var experienceLedger = creatureExperienceLedgerRepository
+        CreatureExperienceLedger experienceLedger = creatureExperienceLedgerRepository
                 .findByQuestCompletionId(completion.getId())
                 .orElseThrow(() -> new IllegalStateException(
                         "Creature experience ledger is missing. completionId=" + completion.getId()));
@@ -1429,7 +1429,7 @@ public class QuestCompletionService {
         CreatureGrowthStage creatureGrowthStage = completion.getCreatureGrowthStageAfter();
 
         if (creatureGrowthStage == null) {
-            var creature = groupCreatureRepository
+            GroupCreature creature = groupCreatureRepository
                     .findSnapshotByGroupSeasonId(completion.getGroupSeason().getId())
                     .orElseThrow(() -> new IllegalStateException(
                             "Group creature is missing. groupSeasonId=" + completion.getGroupSeason().getId()));

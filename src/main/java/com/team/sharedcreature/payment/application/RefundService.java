@@ -4,8 +4,10 @@ import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.admin.application.ApiIdempotencyService;
 import com.team.sharedcreature.avatar.infrastructure.OwnedItemRepository;
+import com.team.sharedcreature.avatar.domain.OwnedItem;
 import com.team.sharedcreature.avatar.domain.OwnedItemStatus;
 import com.team.sharedcreature.payment.api.RefundResponse;
+import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.domain.RefundRequest;
 import com.team.sharedcreature.payment.domain.RefundStatus;
 import com.team.sharedcreature.payment.domain.PurchaseStatus;
@@ -23,6 +25,7 @@ import com.team.sharedcreature.payment.application.RefundApprovalTransactionServ
 import org.springframework.transaction.annotation.Propagation;
 
 import java.time.Clock;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -81,7 +84,7 @@ public class RefundService {
         String normalizedReason = normalizeRequestReason(reason);
 
         // 대상 구매와 정규화한 사유를 모두 멱등 요청 비교에 포함합니다.
-        var claim = idempotencyService.claim(
+        ApiIdempotencyService.Claim<RefundResponse> claim = idempotencyService.claim(
                 userId,
                 CREATE_OPERATION,
                 idempotencyKey,
@@ -94,7 +97,7 @@ public class RefundService {
         }
 
         // 잠금 1: 구매. 다른 사용자의 구매는 노출하지 않습니다.
-        var purchase = purchaseRepository.findByIdForUpdate(purchaseId)
+        Purchase purchase = purchaseRepository.findByIdForUpdate(purchaseId)
                 .orElseThrow(() ->
                         new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)
                 );
@@ -104,13 +107,13 @@ public class RefundService {
         }
 
         // 잠금 2: 구매에 연결된 보유 아이템.
-        var item = ownedItemRepository.findByPurchaseIdForUpdate(purchaseId)
+        OwnedItem item = ownedItemRepository.findByPurchaseIdForUpdate(purchaseId)
                 .orElseThrow(() ->
                         new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)
                 );
 
         // 잠금 3: 같은 구매의 환불 이력.
-        var refunds = refundRequestRepository
+        List<RefundRequest> refunds = refundRequestRepository
                 .findAllByPurchaseIdForUpdate(purchaseId);
 
         if (purchase.getStatus() != PurchaseStatus.PAID) {
@@ -142,7 +145,7 @@ public class RefundService {
         }
 
         // 잠금 대기 이후의 서버 시각으로 요청을 생성합니다.
-        var refund = refundRequestRepository.save(
+        RefundRequest refund = refundRequestRepository.save(
                 RefundRequest.create(
                         purchase,
                         purchase.getUser(),
@@ -183,7 +186,7 @@ public class RefundService {
         User reviewer = requireSuperAdmin(adminUserId);
 
         // 구매 → 보유 아이템 → 환불 요청 순서로 잠급니다.
-        var locked = refundLockService.lock(requestId);
+        RefundLockService.LockedRefund locked = refundLockService.lock(requestId);
 
         // 잠금 획득 후 REQUESTED 상태와 사유를 검사하고 변경합니다.
         locked.refund().reject(
@@ -216,7 +219,7 @@ public class RefundService {
             String traceId
     ) {
         // 별도 트랜잭션에서 처리권을 선점하고 Commit까지 완료합니다.
-        var preparation = approvalTransactionService.prepare(
+        RefundApprovalTransactionService.Preparation preparation = approvalTransactionService.prepare(
                 adminUserId,
                 requestId,
                 decisionReason,
@@ -228,10 +231,10 @@ public class RefundService {
             return preparation.replayResponse();
         }
 
-        var command = preparation.command();
+        RefundApprovalTransactionService.CancellationCommand command = preparation.command();
 
         // 승인 준비 트랜잭션이 끝난 뒤 PG 전체 취소를 호출합니다.
-        var result = refundGateway.cancelFully(
+        RefundGateway.CancellationResult result = refundGateway.cancelFully(
                 command.paymentId(),
                 command.reason(),
                 command.pgIdempotencyKey()
