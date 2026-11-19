@@ -144,10 +144,12 @@ export function createRouter(root, routes) {
         return;
       }
 
+      // 그룹 관리 화면은 DB에서 조회된 현재 멤버십 역할로 검사합니다.
       if (route.access === 'GROUP_ADMIN') {
-        const roles = Array.isArray(me.roles) ? me.roles : [];
+        const groupRole = me.membership?.role;
+
         const canManageGroup =
-            roles.includes('PRIMARY') || roles.includes('DEPUTY');
+            groupRole === 'PRIMARY' || groupRole === 'DEPUTY';
 
         if (!canManageGroup) {
           replace('/403');

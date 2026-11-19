@@ -815,7 +815,8 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 ### removeGroupMember — `POST /api/v1/groups/me/members/{userId}/removals`
 
 - **Operation ID:** `removeGroupMember` · **요구사항:** `REQ-GRP-005` · **인증·권한:** `GROUP_ADMIN` · **성공 HTTP:** `200`
-- **엔드포인트 조건:** DEPUTY는 비활동 MEMBER만, PRIMARY는 DEPUTY 및 비활동 MEMBER를 강퇴 가능.
+- **엔드포인트 조건:** DEPUTY는 비활동 MEMBER만 강퇴 가능하며, PRIMARY는 비활동 MEMBER·DEPUTY를 강퇴할 수 있다. PRIMARY는 강퇴할 수 없다.
+- **비활동 판정:** 대상의 `lastActiveAt`이 존재하고 해당 시각부터 72시간 10분이 경과해야 한다. 최종 판정은 요청 처리 시 서버에서 수행한다.
 
 **요청 필드**
 
@@ -2345,7 +2346,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | Header | Content-Type | string | Y | N | application/json |
 | Body | reportedUserId | integer(int64) | Y | N | 1 이상; 자신 신고 불가 |
 | Body | category | string(enum) | Y | N | HARASSMENT \| SPAM \| INAPPROPRIATE_CONTENT \| OTHER |
-| Body | content | string | Y | N | trim 후 1~1000자 |
+| Body | content | string | Y | N | 공백만 입력 불가; 입력 원문 최대 1000자, 저장 시 앞뒤 공백 제거 |
 
 **성공 응답 필드**
 

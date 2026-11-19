@@ -5,6 +5,7 @@ import {
     listPublicGroups,
     joinGroup,
 } from '../features/group/api.js';
+import { getCurrentUser } from '../features/auth/api.js';
 import { createAppShell } from '../components/app-shell.js';
 import { proofreadGroupDescription } from '../ai/api.js';
 
@@ -31,6 +32,35 @@ export function groupSelectPage({navigate, currentUser}) {
                     <h2 class="h5 fw-bold mb-0">공개 그룹 선택</h2>
                     <span class="badge text-bg-light border text-secondary">공개 그룹</span>
                 </div>
+
+                <!-- 서버 인증 정보에 기반한 그룹 가입 제한 안내 -->
+                <section class="alert alert-warning mb-4 d-none"
+                         aria-label="그룹 가입 제한 안내"
+                         data-restriction-panel>
+                    <h3 class="h6 fw-bold mb-2">그룹 가입 제한 중</h3>
+
+                    <p class="small mb-3" data-restriction-message>
+                        가입 가능 상태를 확인하고 있습니다.
+                    </p>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-sm-6">
+                            <div class="small mb-1">제한 해제 시각</div>
+                            <strong data-restriction-until>-</strong>
+                        </div>
+
+                        <div class="col-sm-6">
+                            <div class="small mb-1">남은 시간</div>
+                            <strong data-restriction-remaining aria-live="off">-</strong>
+                        </div>
+                    </div>
+
+                    <button type="button"
+                            class="btn btn-outline-secondary btn-sm"
+                            data-restriction-retry>
+                        가입 가능 상태 다시 확인
+                    </button>
+                </section>
 
                 <div class="row align-items-end g-3 mb-4">
                     <div class="col-md-8">
@@ -182,6 +212,48 @@ export function groupSelectPage({navigate, currentUser}) {
         groupDescriptionError.textContent = '';
     };
 
+    const listAlert = element.querySelector('.list-alert');
+
+    // 가입 제한 표시 영역
+    const restrictionPanel = content.querySelector('[data-restriction-panel]');
+    const restrictionMessage = content.querySelector('[data-restriction-message]');
+    const restrictionUntilElement = content.querySelector('[data-restriction-until]');
+    const restrictionRemaining = content.querySelector('[data-restriction-remaining]');
+    const restrictionRetry = content.querySelector('[data-restriction-retry]');
+
+    // Router가 이미 조회한 /api/v1/me 응답을 사용합니다.
+    const rawRestrictionUntil = currentUser?.restrictionUntil ?? null;
+    const parsedRestrictionUntil = rawRestrictionUntil
+        ? Date.parse(rawRestrictionUntil)
+        : null;
+
+    let restrictionUntilMs = parsedRestrictionUntil;
+    let restrictionStatus = rawRestrictionUntil ? 'ACTIVE' : 'NONE';
+
+    // 정상적인 ISO 8601 시간이 아니라면 임의로 가입을 허용하지 않습니다.
+    if (rawRestrictionUntil && !Number.isFinite(restrictionUntilMs)) {
+        restrictionStatus = 'ERROR';
+        restrictionUntilMs = null;
+    }
+
+    // 페이지와 비동기 작업의 상태
+    let pageMounted = true;
+    let creating = false;
+    let creationCompleted = false;
+    let restrictionTimerId = null;
+    let nextRestrictionCheckAt = 0;
+
+    /**
+     * 가입 제한 또는 재확인 중인지 판정합니다.
+     * 서버 확인이 실패했다면 가입 버튼을 잠금 상태로 유지합니다.
+     * 프론트엔드 시각만으로 가입 가능을 확정하지 않습니다.
+     *
+     * @returns {boolean} 가입·생성 UI를 잠가야 하는지 여부
+     */
+    function isRestrictionLocked() {
+        return restrictionStatus !== 'NONE';
+    }
+
     const onGroupDescriptionInput = () => {
         clearGroupDescriptionError();
 
@@ -189,8 +261,6 @@ export function groupSelectPage({navigate, currentUser}) {
         aiProofreadResult.classList.add('d-none');
         hideAlert(aiProofreadAlert);
     };
-
-    const listAlert = element.querySelector('.list-alert');
 
     // 회원가입 후 초대 그룹 가입 실패 사유 안내
     const params = new URLSearchParams(window.location.search);
@@ -228,8 +298,24 @@ export function groupSelectPage({navigate, currentUser}) {
         target.textContent = message;
     };
 
-    if (reason) {
+    // 최초 진입 안내를 계속 유지할지 여부입니다.
+    let preserveInitialAlert = Boolean(reason && reason !== 'JOIN_COOLDOWN_ACTIVE');
+
+    // 가입 제한은 별도의 제한 안내 패널에서 표시합니다.
+    if (preserveInitialAlert) {
         showAlert(listAlert, reasonMessages[reason], 'warning');
+    }
+
+    // 표시 여부와 관계없이 유효한 reason은 URL에서 소비합니다.
+    if (reason) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('reason');
+
+        window.history.replaceState(
+            window.history.state,
+            '',
+            `${url.pathname}${url.search}${url.hash}`
+        );
     }
 
     const hideAlert = (target) => {
@@ -330,12 +416,196 @@ export function groupSelectPage({navigate, currentUser}) {
         });
     };
 
+    /**
+     * 제한 해제 시각을 한국 표준시로 표시합니다.
+     * 서버의 ISO 8601 시각을 변경하지 않고 브라우저에서 변환합니다.
+     * 잘못된 시각은 별도 안내로 처리합니다.
+     *
+     * @param {number|null} timestamp Unix millisecond
+     * @returns {string} 한국 시간 표시 문자열
+     */
+    function formatRestrictionUntil(timestamp) {
+        if (!Number.isFinite(timestamp)) {
+            return '확인할 수 없음';
+        }
+
+        return new Intl.DateTimeFormat('ko-KR', {
+            timeZone: 'Asia/Seoul',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            weekday: 'short',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+        }).format(new Date(timestamp));
+    }
+
+    /**
+     * 남은 초를 일·시간·분·초 형식으로 변환합니다.
+     * 화면 표시용 계산만 수행합니다.
+     * 가입 가능 여부 자체는 서버 상태로 판단합니다.
+     *
+     * @param {number} totalSeconds 남은 초
+     * @returns {string} 남은 시간 표시 문자열
+     */
+    function formatRestrictionRemaining(totalSeconds) {
+        let seconds = Math.max(0, totalSeconds);
+
+        const days = Math.floor(seconds / 86400);
+        seconds %= 86400;
+
+        const hours = Math.floor(seconds / 3600);
+        seconds %= 3600;
+
+        const minutes = Math.floor(seconds / 60);
+        seconds %= 60;
+
+        const parts = [];
+
+        if (days > 0) parts.push(`${days}일`);
+        if (hours > 0 || days > 0) parts.push(`${hours}시간`);
+
+        parts.push(`${minutes}분`);
+        parts.push(`${seconds}초`);
+
+        return parts.join(' ');
+    }
+
+    /**
+     * 현재 가입 제한 상태를 화면과 작업 버튼에 반영합니다.
+     * 가입 제한이 있으면 그룹 생성과 가입을 잠급니다.
+     * 재확인 실패 시 기존 데이터를 임의로 가입 가능 처리하지 않습니다.
+     */
+    function renderRestrictionStatus() {
+        const locked = isRestrictionLocked();
+
+        restrictionPanel.classList.toggle('d-none', !locked);
+        createToggle.disabled = locked;
+        createSubmit.disabled = locked || creating || creationCompleted;
+
+        if (!locked) return;
+
+        restrictionUntilElement.textContent =
+            formatRestrictionUntil(restrictionUntilMs);
+
+        if (restrictionStatus === 'VERIFYING') {
+            restrictionMessage.textContent =
+                '가입 제한이 끝났는지 서버에 확인하고 있습니다.';
+            restrictionRemaining.textContent = '확인 중';
+        } else if (restrictionStatus === 'ERROR') {
+            restrictionMessage.textContent =
+                '가입 가능 상태를 확인하지 못했습니다. 다시 확인해 주세요.';
+            restrictionRemaining.textContent = '서버 확인 필요';
+        } else {
+            restrictionMessage.textContent =
+                '그룹 탈퇴 또는 강퇴 후 24시간 동안 ' +
+                '새 그룹에 가입하거나 생성할 수 없습니다.';
+
+            const remainingSeconds = Math.max(
+                0,
+                Math.ceil((restrictionUntilMs - Date.now()) / 1000)
+            );
+
+            restrictionRemaining.textContent =
+                remainingSeconds > 0
+                    ? formatRestrictionRemaining(remainingSeconds)
+                    : '제한 종료 확인 중';
+        }
+
+        // 제한 중이거나 확인 중이면 현재 표시된 가입 버튼도 잠급니다.
+        content.querySelectorAll('.join-button').forEach((button) => {
+            if (button instanceof HTMLButtonElement) {
+                button.disabled = locked || joining;
+            }
+        });
+
+        restrictionRetry.disabled = restrictionStatus === 'VERIFYING';
+    }
+
+    /**
+     * 현재 사용자 정보를 다시 조회해 가입 제한 해제 여부를 확인합니다.
+     * 제한이 해제되면 공개 그룹 목록도 재조회합니다.
+     * 조회 실패 시 사용자가 직접 재시도하도록 안내합니다.
+     */
+    async function refreshRestrictionStatus() {
+        if (!pageMounted || restrictionStatus === 'VERIFYING') return;
+
+        restrictionStatus = 'VERIFYING';
+
+        // 브라우저 시계가 앞서 있는 경우 무한 재조회하지 않도록 합니다.
+        nextRestrictionCheckAt = Date.now() + 60_000;
+        renderRestrictionStatus();
+
+        try {
+            const user = await getCurrentUser();
+
+            if (!pageMounted) return;
+
+            // 다른 탭에서 로그아웃하거나 그룹에 가입했을 수도 있습니다.
+            if (user.authenticationState !== 'AUTHENTICATED') {
+                navigate('/login');
+                return;
+            }
+
+            if (user.membership) {
+                navigate('/creature');
+                return;
+            }
+
+            const rawUntil = user.restrictionUntil;
+            const parsedUntil = rawUntil ? Date.parse(rawUntil) : null;
+
+            if (rawUntil && !Number.isFinite(parsedUntil)) {
+                throw new Error('가입 제한 종료 시각을 확인할 수 없습니다.');
+            }
+
+            // 서버에서 반환한 최신 제한 시각을 반영합니다.
+            restrictionUntilMs = parsedUntil;
+            restrictionStatus = rawUntil ? 'ACTIVE' : 'NONE';
+
+            renderRestrictionStatus();
+
+            // 제한 해제 후 서버의 최신 가입 가능 여부를 재조회합니다.
+            void loadGroup();
+
+        } catch (error) {
+            if (!pageMounted) return;
+
+            restrictionStatus = 'ERROR';
+            renderRestrictionStatus();
+
+            console.error('가입 제한 상태 확인 실패:', error);
+        }
+    }
+
+    /**
+     * 남은 시간을 주기적으로 갱신합니다.
+     * 브라우저 기준 종료 시각에 도달하면 서버 확인을 시작합니다.
+     * 이미 확인 중이거나 실패했다면 자동 요청을 반복하지 않습니다.
+     */
+    function tickRestrictionCountdown() {
+        if (!pageMounted) return;
+
+        renderRestrictionStatus();
+
+        if (
+            restrictionStatus === 'ACTIVE' &&
+            restrictionUntilMs !== null &&
+            Date.now() >= restrictionUntilMs &&
+            Date.now() >= nextRestrictionCheckAt
+        ) {
+            void refreshRestrictionStatus();
+        }
+    }
+
     const getBlockedMessage = (reason) => {
         const messages = {
             GROUP_FULL: '그룹 정원이 가득 찼습니다.',
             JOIN_COOLDOWN_ACTIVE: '24시간 가입 제한이 적용 중입니다.',
             ALREADY_IN_GROUP: '이미 다른 그룹에 가입되어 있습니다.',
             GROUP_NOT_FOUND: '존재하지 않는 그룹입니다',
+            JOIN_STATE_CHECKING: '가입 가능 상태를 확인 중입니다.',
         };
 
         return messages[reason] ?? '그룹에 가입할 수 없습니다';
@@ -366,7 +636,16 @@ export function groupSelectPage({navigate, currentUser}) {
                 Math.max(0, groupCapacity - currentCount)
             );
 
-            const canJoin = group.joinable === true;
+            // 서버의 그룹별 가입 가능 여부와 현재 사용자 제한을 함께 확인합니다.
+            const canJoin =
+                group.joinable === true && !isRestrictionLocked();
+
+            // 서버 확인 중에는 임의로 가입 가능 버튼을 표시하지 않습니다.
+            const blockedReason = isRestrictionLocked()
+                ? restrictionStatus === 'ACTIVE'
+                    ? 'JOIN_COOLDOWN_ACTIVE'
+                    : 'JOIN_STATE_CHECKING'
+                : group.joinBlockedReason;
 
             row.innerHTML = `
                 <td>
@@ -396,7 +675,7 @@ export function groupSelectPage({navigate, currentUser}) {
                                 ${remaining <= 0 ? '정원 마감' : '가입 불가'}
                             </button>
                             <div class="small text-danger mt-1">
-                                ${escapeHtml(getBlockedMessage(group.joinBlockedReason))}
+                                ${escapeHtml(getBlockedMessage(blockedReason))}
                             </div>
                         `
                     }
@@ -448,6 +727,8 @@ export function groupSelectPage({navigate, currentUser}) {
     };
 
     const loadGroup = async () => {
+        if (!pageMounted) return;
+
         if (loading) {
             pendingLoad = true;
             return;
@@ -456,9 +737,11 @@ export function groupSelectPage({navigate, currentUser}) {
         loading = true;
         searchButton.disabled = true;
 
-        if (!reason) {
+        // 최초 안내는 첫 조회까지 유지하고, 이후 재조회에서는 지웁니다.
+        if (!preserveInitialAlert) {
             hideAlert(listAlert);
         }
+        preserveInitialAlert = false;
 
         groupList.innerHTML = `
             <tr>
@@ -474,6 +757,8 @@ export function groupSelectPage({navigate, currentUser}) {
                 page: currentPage,
                 size: PAGE_SIZE,
             });
+
+            if (!pageMounted) return;
 
             const groups = Array.isArray(result?.data)
                 ? result.data
@@ -491,6 +776,9 @@ export function groupSelectPage({navigate, currentUser}) {
             renderGroups(groups);
             renderPagination();
         } catch (error) {
+            // 페이지가 종료된 후에는 오류 UI를 변경하지 않습니다.
+            if (!pageMounted) return;
+
             groupList.innerHTML = `
                 <tr>
                     <td colspan="4" class="text-center py-4 text-danger">
@@ -504,7 +792,6 @@ export function groupSelectPage({navigate, currentUser}) {
                     </td>
                 </tr>
             `;
-
             showAlert(
                 listAlert,
                 error.message || '그룹 목록 조회 중 오류가 발생했습니다.'
@@ -514,11 +801,18 @@ export function groupSelectPage({navigate, currentUser}) {
             renderPagination();
         } finally {
             loading = false;
-            searchButton.disabled = false;
 
-            if (pendingLoad) {
+            if (pageMounted) {
+                searchButton.disabled = false;
+
+                // 현재 페이지가 살아 있을 때만 예약된 재조회를 수행합니다.
+                if (pendingLoad) {
+                    pendingLoad = false;
+                    void loadGroup();
+                }
+            } else {
+                // 화면 종료 후에는 추가 API 요청을 만들지 않습니다.
                 pendingLoad = false;
-                loadGroup();
             }
         }
     };
@@ -533,6 +827,8 @@ export function groupSelectPage({navigate, currentUser}) {
     };
 
     const onCreateToggle = () => {
+        if (isRestrictionLocked()) return;
+
         const isHidden = createPanel.classList.toggle('d-none');
 
         createToggle.setAttribute(
@@ -548,10 +844,22 @@ export function groupSelectPage({navigate, currentUser}) {
     const onCreate = async (event) => {
         event.preventDefault();
 
-        if (createSubmit.disabled) return;
+        // 제한 중이거나 제한 상태 확인에 실패했다면 제출하지 않습니다.
+        if (isRestrictionLocked()) {
+            showAlert(
+                createAlert,
+                '가입 제한이 해제된 후 그룹을 생성할 수 있습니다.',
+                'warning'
+            );
+            return;
+        }
+
+        if (createSubmit.disabled || creating) return;
         if (!createForm.reportValidity()) return;
 
+        creating = true;
         createSubmit.disabled = true;
+
         hideAlert(createAlert);
 
         let creationSucceeded = false;
@@ -681,14 +989,29 @@ export function groupSelectPage({navigate, currentUser}) {
                 );
             }
         } finally {
-            createSubmit.disabled = creationSucceeded;
+            // 가입 제한 상태를 다시 렌더링해도 중복 생성은 허용하지 않습니다.
+            creating = false;
+            creationCompleted = creationCompleted || creationSucceeded;
+
+            createSubmit.disabled = isRestrictionLocked() || creating || creationCompleted;
         }
     };
 
     const onJoin = async (event) => {
         const button = event.target.closest('.join-button');
 
+        // 그룹 가입 요청은 화면 전체에서 한 번에 하나만 수행합니다.
         if (!button || joining) return;
+
+        // 제한 상태도 제출 시점에 다시 확인합니다.
+        if (isRestrictionLocked()) {
+            showAlert(
+                listAlert,
+                '가입 제한이 해제된 후 그룹에 가입할 수 있습니다.',
+                'warning'
+            );
+            return;
+        }
 
         const groupId = Number(button.dataset.groupId);
 
@@ -765,11 +1088,62 @@ export function groupSelectPage({navigate, currentUser}) {
     groupList.addEventListener('click', onGroupListClick);
     pagination.addEventListener('click', onPagination);
 
-    loadGroup();
+    // 서버에서 전달된 현재 제한 상태를 즉시 화면에 반영합니다.
+    renderRestrictionStatus();
+
+    // 1초마다 남은 시간을 갱신하고, 종료 시에는 서버에 확인합니다.
+    restrictionTimerId = window.setInterval(
+        tickRestrictionCountdown,
+        1000
+    );
+
+    /**
+     * 브라우저 탭으로 돌아왔을 때 제한 종료 시각을 즉시 확인합니다.
+     * 백그라운드 탭에서 지연된 타이머를 보정합니다.
+     * 서버 조회는 필요한 경우에만 시작합니다.
+     */
+    function onRestrictionVisibilityChange() {
+        if (!document.hidden) {
+            tickRestrictionCountdown();
+        }
+    }
+
+    document.addEventListener(
+        'visibilitychange',
+        onRestrictionVisibilityChange
+    );
+
+    // 사용자가 직접 가입 가능 상태를 다시 확인할 수 있도록 합니다.
+    const onRestrictionRetry = () => {
+        void refreshRestrictionStatus();
+    };
+
+    restrictionRetry.addEventListener('click', onRestrictionRetry);
+
+    // 최초부터 제한 시각이 이미 경과했다면 바로 서버에 확인합니다.
+    tickRestrictionCountdown();
+
+    // 기존 공개 그룹 목록 조회를 시작합니다.
+    void loadGroup();
 
     return {
         element,
         cleanup: () => {
+            // 이전 화면의 타이머 및 비동기 결과가 화면을 변경하지 못하게 합니다.
+            pageMounted = false;
+
+            if (restrictionTimerId !== null) {
+                window.clearInterval(restrictionTimerId);
+                restrictionTimerId = null;
+            }
+
+            document.removeEventListener(
+                'visibilitychange',
+                onRestrictionVisibilityChange
+            );
+
+            restrictionRetry.removeEventListener('click', onRestrictionRetry);
+
             searchForm.removeEventListener('submit', onSearch);
             createToggle.removeEventListener('click', onCreateToggle);
             createForm.removeEventListener('submit', onCreate);
