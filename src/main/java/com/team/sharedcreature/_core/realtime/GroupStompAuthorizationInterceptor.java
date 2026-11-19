@@ -23,7 +23,7 @@ import java.util.regex.Pattern;
 public class GroupStompAuthorizationInterceptor implements ChannelInterceptor {
 
     private static final Pattern GROUP_DESTINATION =
-            Pattern.compile("^/topic/groups/([1-9][0-9]*)/live$");
+            Pattern.compile("^/topic/groups/([1-9][0-9]*)/(live|chat)$");
 
     private final GroupMembershipRepository membershipRepository;
     private final GroupPresenceService presenceService;
@@ -75,7 +75,12 @@ public class GroupStompAuthorizationInterceptor implements ChannelInterceptor {
         if (sessionId == null) {
             return;
         }
-        presenceService.removeSession(sessionId)
+        String subscriptionId = accessor.getSubscriptionId();
+        if (subscriptionId == null) {
+            return;
+        }
+        try {
+            presenceService.removeSubscription(sessionId, subscriptionId)
                 .filter(GroupPresenceService.Removal::lastSession)
                 .ifPresent(removal -> eventPublisher.publish(
                         removal.groupId(),
@@ -83,6 +88,9 @@ public class GroupStompAuthorizationInterceptor implements ChannelInterceptor {
                         Instant.now(),
                         new GroupLivePayloads.PresenceLeft(removal.userId())
                 ));
+        } catch (IllegalStateException ignored) {
+            // 실패한 SUBSCRIBE가 등록 전에 거절된 경우 정리할 상태가 없습니다.
+        }
     }
 
     private Message<?> validateConnect(Message<?> message, StompHeaderAccessor accessor) {
@@ -103,7 +111,8 @@ public class GroupStompAuthorizationInterceptor implements ChannelInterceptor {
 
     private Message<?> registerSubscription(Message<?> message, StompHeaderAccessor accessor) {
         LoginUser loginUser = requireLoginUser(accessor);
-        Long groupId = groupId(accessor.getDestination());
+        GroupDestination destination = groupDestination(accessor.getDestination());
+        Long groupId = destination.groupId();
         GroupMembership membership = membershipRepository.findActiveWithGroupByUserId(loginUser.id())
                 .orElseThrow(() -> new StompAccessException("ROLE_FORBIDDEN"));
         if (!groupId.equals(membership.getGroup().getId())
@@ -116,25 +125,28 @@ public class GroupStompAuthorizationInterceptor implements ChannelInterceptor {
                 WebSocketSessionHandshakeInterceptor.HTTP_SESSION_ID_ATTRIBUTE) instanceof String value
                 ? value
                 : "";
+        String subscriptionId = requireSubscriptionId(accessor);
         GroupPresenceService.Registration registration;
         try {
             registration = presenceService.register(
                     webSocketSessionId,
                     httpSessionId,
-                    requireSubscriptionId(accessor),
+                    subscriptionId,
                     loginUser.id(),
-                    groupId
+                    groupId,
+                    destination.type()
             );
         } catch (IllegalStateException exception) {
             throw new StompAccessException("INVALID_REQUEST");
         }
-        if (registration.firstSession()) {
+        if (destination.type() == GroupPresenceService.SubscriptionType.LIVE
+                && registration.firstSession()) {
             try {
                 GroupLivePayloads.PresenceJoined payload =
                         payloadProvider.getPresenceJoined(groupId, loginUser.id());
                 eventPublisher.publish(groupId, GroupLiveEventType.PRESENCE_JOINED, Instant.now(), payload);
             } catch (RuntimeException exception) {
-                presenceService.removeSession(webSocketSessionId);
+                presenceService.removeSubscription(webSocketSessionId, subscriptionId);
                 throw exception;
             }
         }
@@ -186,16 +198,22 @@ public class GroupStompAuthorizationInterceptor implements ChannelInterceptor {
         return attributes;
     }
 
-    private Long groupId(String destination) {
+    private GroupDestination groupDestination(String destination) {
         Matcher matcher = GROUP_DESTINATION.matcher(destination == null ? "" : destination);
         if (!matcher.matches()) {
             throw new StompAccessException("INVALID_REQUEST");
         }
         try {
-            return Long.valueOf(matcher.group(1));
+            GroupPresenceService.SubscriptionType type = "live".equals(matcher.group(2))
+                    ? GroupPresenceService.SubscriptionType.LIVE
+                    : GroupPresenceService.SubscriptionType.CHAT;
+            return new GroupDestination(Long.valueOf(matcher.group(1)), type);
         } catch (NumberFormatException exception) {
             throw new StompAccessException("INVALID_REQUEST");
         }
+    }
+
+    private record GroupDestination(Long groupId, GroupPresenceService.SubscriptionType type) {
     }
 
     private String requireSessionId(StompHeaderAccessor accessor) {

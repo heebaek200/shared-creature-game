@@ -17,6 +17,18 @@ export async function getCreatureHome() {
 }
 
 /**
+ * 현재 그룹에 말풍선 메시지를 전송합니다.
+ * @param {string} content Unicode 기준 1~80자인 메시지
+ * @returns {Promise<Record<string, any>>} 저장된 채팅 메시지
+ */
+export function createGroupChatMessage(content) {
+    return apiRequest('/api/v1/groups/me/chat', {
+        method: 'POST',
+        body: {content},
+    });
+}
+
+/**
  * 현재 선택 가능한 크리처 종 목록을 조회합니다.
  * GET /api/v1/creature-species
  */

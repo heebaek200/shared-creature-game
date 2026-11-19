@@ -36,7 +36,8 @@ public class ReportController {
                         loginUser.id(),
                         request.reportedUserId(),
                         UserReportCategory.valueOf(request.category()),
-                        request.content()
+                        request.content(),
+                        request.chatMessageId()
                 )));
     }
 }

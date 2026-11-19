@@ -54,4 +54,31 @@ class GroupPresenceServiceTest {
                 .isInstanceOf(IllegalStateException.class);
         assertThat(service.activeUserIds(20L)).containsExactly(10L);
     }
+
+    @Test
+    void 같은_연결의_chat_구독은_Presence에_포함하지_않고_live와_독립_해제한다() {
+        service.register("ws-1", "http-1", "live-1", 10L, 20L,
+                GroupPresenceService.SubscriptionType.LIVE);
+        GroupPresenceService.Registration chat = service.register(
+                "ws-1", "http-1", "chat-1", 10L, 20L,
+                GroupPresenceService.SubscriptionType.CHAT);
+
+        assertThat(chat.firstSession()).isFalse();
+        assertThat(service.removeSubscription("ws-1", "chat-1").orElseThrow().lastSession())
+                .isFalse();
+        assertThat(service.activeUserIds(20L)).containsExactly(10L);
+        assertThat(service.removeSubscription("ws-1", "live-1").orElseThrow().lastSession())
+                .isTrue();
+    }
+
+    @Test
+    void chat만_구독한_연결도_사용자_권한_회수_대상이다() {
+        service.register("ws-chat", "http-1", "chat-1", 10L, 20L,
+                GroupPresenceService.SubscriptionType.CHAT);
+
+        assertThat(service.activeUserIds(20L)).isEmpty();
+        assertThat(service.removeUser(10L))
+                .extracting(GroupPresenceService.Removal::webSocketSessionId)
+                .containsExactly("ws-chat");
+    }
 }

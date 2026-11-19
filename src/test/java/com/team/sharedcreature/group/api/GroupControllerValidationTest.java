@@ -183,7 +183,7 @@ class GroupControllerValidationTest {
     @ParameterizedTest
     @EnumSource(UserReportCategory.class)
     void passesReportCategoryToService(UserReportCategory category) throws Exception {
-        when(reportService.create(1L, 2L, category, "report content")).thenReturn(
+        when(reportService.create(1L, 2L, category, "report content", null)).thenReturn(
                 new UserReportResponse(3L, 4L, 1L, 2L, category, "report content",
                         UserReportStatus.RECEIVED, Instant.EPOCH, null));
         mockMvc.perform(post("/api/v1/reports")
@@ -194,7 +194,7 @@ class GroupControllerValidationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.category").value(category.name()));
 
-        verify(reportService).create(1L, 2L, category, "report content");
+        verify(reportService).create(1L, 2L, category, "report content", null);
     }
 
     @ParameterizedTest

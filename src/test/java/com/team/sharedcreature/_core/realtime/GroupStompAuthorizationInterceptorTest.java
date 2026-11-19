@@ -138,6 +138,24 @@ class GroupStompAuthorizationInterceptorTest {
     }
 
     @Test
+    void 같은_연결은_live와_chat을_각각_하나씩_구독한다() {
+        GroupMembership membership = activeMembership(20L);
+        when(membershipRepository.findActiveWithGroupByUserId(10L))
+                .thenReturn(Optional.of(membership));
+        when(payloadProvider.getPresenceJoined(20L, 10L)).thenReturn(
+                new GroupLivePayloads.PresenceJoined(10L, "새싹", 1, 30L,
+                        new CreatureHomeResponse.EquipmentSlotsResponse(null, null, null, null)));
+
+        interceptor.preSend(message(StompCommand.SUBSCRIBE,
+                "/topic/groups/20/live", "live-1", null), channel);
+        Message<byte[]> chat = message(StompCommand.SUBSCRIBE,
+                "/topic/groups/20/chat", "chat-1", null);
+
+        assertThat(interceptor.preSend(chat, channel)).isSameAs(chat);
+        assertThat(presenceService.activeUserIds(20L)).containsExactly(10L);
+    }
+
+    @Test
     void 클라이언트_SEND는_INVALID_REQUEST이다() {
         Message<byte[]> send = message(StompCommand.SEND, "/topic/groups/20/live", null, null);
 

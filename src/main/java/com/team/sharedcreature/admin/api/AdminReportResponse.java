@@ -18,7 +18,9 @@ public record AdminReportResponse(
         Instant handledAt,
         String reportedUserNickname,
         String reporterNickname,
+        boolean reportedUserActive,
         Long handledByUserId,
-        String resolution
+        String resolution,
+        AdminReportChatEvidenceResponse chatEvidence
 ) {
 }

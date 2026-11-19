@@ -4,6 +4,7 @@ import com.team.sharedcreature.admin.domain.AdminAuditActionType;
 import com.team.sharedcreature.admin.domain.AdminAuditTargetType;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
+import com.team.sharedcreature._core.realtime.GroupPresenceRevocationService;
 import com.team.sharedcreature.admin.domain.AdminAuditLog;
 import com.team.sharedcreature.admin.domain.AdminAuditResult;
 import com.team.sharedcreature.admin.infrastructure.AdminAuditLogRepository;
@@ -37,9 +38,10 @@ public class AdminModerationCommandExecutor {
     private final GroupJoinRestrictionRepository restrictionRepository;
     private final ModerationActionRepository moderationActionRepository;
     private final AdminAuditLogRepository auditLogRepository;
+    private final GroupPresenceRevocationService presenceRevocationService;
     private final Clock clock;
 
-    /** 신고 처리에 필요한 모든 상태 저장소를 주입받습니다. */
+    /** 신고 처리 상태 저장소와 Commit 후 권한 회수 Service를 주입받습니다. */
     public AdminModerationCommandExecutor(
             UserReportRepository reportRepository,
             UserRepository userRepository,
@@ -48,6 +50,7 @@ public class AdminModerationCommandExecutor {
             GroupJoinRestrictionRepository restrictionRepository,
             ModerationActionRepository moderationActionRepository,
             AdminAuditLogRepository auditLogRepository,
+            GroupPresenceRevocationService presenceRevocationService,
             Clock clock
     ) {
         this.reportRepository = reportRepository;
@@ -57,6 +60,7 @@ public class AdminModerationCommandExecutor {
         this.restrictionRepository = restrictionRepository;
         this.moderationActionRepository = moderationActionRepository;
         this.auditLogRepository = auditLogRepository;
+        this.presenceRevocationService = presenceRevocationService;
         this.clock = clock;
     }
 
@@ -104,6 +108,7 @@ public class AdminModerationCommandExecutor {
 
         Instant now = clock.instant();
         membership.removeForReport(actor, now);
+        presenceRevocationService.revokeAfterCommit(targetId, now);
         group.decrementMemberCount(now);
         GroupJoinRestriction restriction = restrictionRepository.findByUserIdForUpdate(targetId).orElse(null);
         if (restriction == null) {
@@ -119,6 +124,23 @@ public class AdminModerationCommandExecutor {
                 actor, AdminAuditActionType.REMOVE_REPORTED_MEMBER, AdminAuditTargetType.USER_REPORT, reportId, group,
                 AdminAuditResult.SUCCEEDED, reason, "{}", now
         ));
+    }
+
+    /** 대상이 현재 활성 회원이 아닐 때 신고만 처리 완료하고 감사를 남깁니다. */
+    @Transactional
+    public void resolveInactive(Long actorId, Long reportId, String reason) {
+        UserReport report = requireReceivedReport(reportId);
+        User actor = requireSuperAdmin(actorId);
+        Long groupId = report.getGroup().getId();
+        Long targetId = report.getReportedUser().getId();
+        if (membershipRepository.findActiveMembershipId(groupId, targetId).isPresent()) {
+            throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION);
+        }
+        Instant now = clock.instant();
+        report.resolve(actor, reason, now);
+        auditLogRepository.save(AdminAuditLog.create(
+                actor, AdminAuditActionType.RESOLVE_REPORT, AdminAuditTargetType.USER_REPORT,
+                reportId, report.getGroup(), AdminAuditResult.SUCCEEDED, reason, "{}", now));
     }
 
     private UserReport requireReceivedReport(Long reportId) {

@@ -60,7 +60,7 @@ export function leaveMyGroup() {
  * 신고 내용은 서버에서 검증하고 앞뒤 공백을 제거해 저장합니다.
  * 신고 접수는 강퇴와 별개의 관리 업무입니다.
  *
- * @param {{reportedUserId: number, category: string, content: string}} input 신고 정보
+ * @param {{reportedUserId: number, category: string, content: string, chatMessageId?: string}} input 신고 정보
  * @returns {Promise<object>} 신고 접수 결과
  */
 export function createUserReport(input) {
@@ -69,7 +69,8 @@ export function createUserReport(input) {
         body: {
             reportedUserId: input.reportedUserId,
             category: input.category,
-            content: input.content
+            content: input.content,
+            ...(input.chatMessageId ? {chatMessageId: input.chatMessageId} : {})
         }
     });
 }

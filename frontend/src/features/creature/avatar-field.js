@@ -7,6 +7,10 @@ import {
     calculateIdleWaitScale,
     calculateRenderedPosition,
 } from './avatar-movement-policy.js';
+import {
+    calculateBubbleHorizontalShift,
+    shouldRunBubbleTimer,
+} from './avatar-bubble-policy.js';
 
 const movementAreas = [
     { minX: 8, maxX: 28, minY: 5, maxY: 20 },
@@ -38,6 +42,7 @@ const MAX_CONCURRENT_MOVERS = 3;
 const MAX_MOVE_DISTANCE = 32;
 const IDLE_WAIT_MIN_MS = 12_000;
 const IDLE_WAIT_MAX_MS = 26_000;
+const CHAT_BUBBLE_DURATION_MS = 5000;
 
 /**
  * 최대 20명의 그룹원 아바타를 10개 Zone에 배치하고 브라우저 안에서 이동시킵니다.
@@ -45,7 +50,8 @@ const IDLE_WAIT_MAX_MS = 26_000;
  *
  * @param {{
  *   container: HTMLElement,
- *   onSelect: (member: Record<string, any>) => void
+ *   onSelect: (member: Record<string, any>, chatMessage: Record<string, any>|null) => void,
+ *   onMessageExpired?: (message: Record<string, any>) => void
  * }} options
  */
 export function createAvatarField(options) {
@@ -132,6 +138,88 @@ export function createAvatarField(options) {
             window.clearTimeout(actor.frameTimer);
             actor.frameTimer = null;
         }
+    }
+
+    function clearBubbleTimer(actor) {
+        if (actor.bubbleTimer !== null) {
+            window.clearTimeout(actor.bubbleTimer);
+            actor.bubbleTimer = null;
+        }
+    }
+
+    function clearBubblePositionFrame(actor) {
+        if (actor.bubblePositionFrame !== null) {
+            window.cancelAnimationFrame(actor.bubblePositionFrame);
+            actor.bubblePositionFrame = null;
+        }
+    }
+
+    function correctBubblePosition(actor) {
+        if (disposed || !actor.chatMessage) {
+            clearBubblePositionFrame(actor);
+            return;
+        }
+        const fieldBounds = fieldLayer.getBoundingClientRect();
+        actor.bubble.style.maxWidth = `${Math.max(1, Math.min(
+            220,
+            window.innerWidth * 0.65,
+            fieldBounds.width - 16,
+        ))}px`;
+        const bubbleBounds = actor.bubble.getBoundingClientRect();
+        actor.bubbleShiftX = calculateBubbleHorizontalShift({
+            fieldLeft: fieldBounds.left + 8,
+            fieldRight: fieldBounds.right - 8,
+            bubbleLeft: bubbleBounds.left,
+            bubbleRight: bubbleBounds.right,
+            currentShift: actor.bubbleShiftX,
+        });
+        actor.bubble.style.setProperty(
+            '--avatar-bubble-shift-x', `${actor.bubbleShiftX}px`,
+        );
+        actor.bubblePositionFrame = window.requestAnimationFrame(
+            () => correctBubblePosition(actor),
+        );
+    }
+
+    function hideBubble(actor) {
+        const expiredMessage = actor.chatMessage;
+        clearBubbleTimer(actor);
+        clearBubblePositionFrame(actor);
+        actor.chatMessage = null;
+        actor.bubble.classList.add('d-none');
+        actor.bubble.textContent = '';
+        if (expiredMessage) options.onMessageExpired?.(expiredMessage);
+    }
+
+    function startBubbleTimer(actor) {
+        clearBubbleTimer(actor);
+        actor.bubbleStartedAt = Date.now();
+        actor.bubbleTimer = window.setTimeout(
+            () => hideBubble(actor),
+            actor.bubbleRemainingMs,
+        );
+    }
+
+    function pauseBubble(actor) {
+        if (actor.bubbleTimer === null) return;
+        actor.bubbleRemainingMs = Math.max(
+            0,
+            actor.bubbleRemainingMs - (Date.now() - actor.bubbleStartedAt),
+        );
+        clearBubbleTimer(actor);
+    }
+
+    function resumeBubble(actor) {
+        if (
+            !actor.chatMessage
+            || actor.bubbleTimer !== null
+            || !shouldRunBubbleTimer({
+                hovered: actor.bubbleHovered,
+                focused: actor.bubbleFocused,
+            })
+        ) return;
+        if (actor.bubbleRemainingMs <= 0) hideBubble(actor);
+        else startBubbleTimer(actor);
     }
 
     function scheduleNextFrame(actor) {
@@ -273,7 +361,10 @@ export function createAvatarField(options) {
         });
         const name = document.createElement('span');
         name.className = 'avatar-spot__name';
-        button.append(visual, name);
+        const bubble = document.createElement('span');
+        bubble.className = 'avatar-chat-bubble d-none';
+        bubble.setAttribute('aria-live', 'polite');
+        button.append(bubble, visual, name);
 
         const areaIndex = index % movementAreas.length;
         const initialPosition = randomPosition(areaIndex);
@@ -281,6 +372,7 @@ export function createAvatarField(options) {
             button,
             visual,
             name,
+            bubble,
             member,
             x: initialPosition.x,
             y: initialPosition.y,
@@ -290,16 +382,38 @@ export function createAvatarField(options) {
             frame: Math.random() < 0.5 ? 1 : 2,
             timer: null,
             frameTimer: null,
+            chatMessage: null,
+            bubbleTimer: null,
+            bubbleStartedAt: 0,
+            bubbleRemainingMs: CHAT_BUBBLE_DURATION_MS,
+            bubbleHovered: false,
+            bubbleFocused: false,
+            bubbleShiftX: 0,
+            bubblePositionFrame: null,
         };
         updateActorMember(actor, member, currentUserId);
         button.style.left = `${actor.x}%`;
         button.style.top = `${actor.y}%`;
-        button.addEventListener('click', () => options.onSelect(actor.member));
-        button.addEventListener('focus', () => stopActor(actor));
+        button.addEventListener('click', () => options.onSelect(actor.member, actor.chatMessage));
+        button.addEventListener('focus', () => {
+            actor.bubbleFocused = true;
+            stopActor(actor);
+            pauseBubble(actor);
+        });
         button.addEventListener('blur', () => {
+            actor.bubbleFocused = false;
+            resumeBubble(actor);
             if (movementEnabled && !reducedMotion.matches) {
                 scheduleMove(actor, 400);
             }
+        });
+        button.addEventListener('mouseenter', () => {
+            actor.bubbleHovered = true;
+            pauseBubble(actor);
+        });
+        button.addEventListener('mouseleave', () => {
+            actor.bubbleHovered = false;
+            resumeBubble(actor);
         });
         fieldLayer.appendChild(button);
         actors.set(String(member.userId), actor);
@@ -325,6 +439,8 @@ export function createAvatarField(options) {
             for (const [userId, actor] of actors) {
                 if (nextUserIds.has(userId)) continue;
                 clearActorTimer(actor);
+                clearBubbleTimer(actor);
+                clearBubblePositionFrame(actor);
                 actor.button.remove();
                 actors.delete(userId);
             }
@@ -354,11 +470,34 @@ export function createAvatarField(options) {
             else stopAllActors();
         },
 
+        /** 같은 사용자의 기존 말풍선을 교체하고 5초 표시 Timer를 시작합니다. */
+        showMessage(message) {
+            const actor = actors.get(String(message.senderUserId));
+            if (!actor) return false;
+            clearBubbleTimer(actor);
+            actor.chatMessage = message;
+            actor.bubbleRemainingMs = CHAT_BUBBLE_DURATION_MS;
+            actor.bubbleShiftX = 0;
+            actor.bubble.style.setProperty('--avatar-bubble-shift-x', '0px');
+            actor.bubble.textContent = message.content;
+            actor.bubble.classList.remove('d-none');
+            clearBubblePositionFrame(actor);
+            actor.bubblePositionFrame = window.requestAnimationFrame(
+                () => correctBubblePosition(actor),
+            );
+            resumeBubble(actor);
+            return true;
+        },
+
         /** 아바타 이동·프레임 Timer와 미디어 쿼리 Listener를 정리합니다. */
         dispose() {
             if (disposed) return;
             disposed = true;
             stopAllActors();
+            for (const actor of actors.values()) {
+                clearBubbleTimer(actor);
+                clearBubblePositionFrame(actor);
+            }
             actors.clear();
             fieldLayer.remove();
             reducedMotion.removeEventListener('change', handleReducedMotionChange);

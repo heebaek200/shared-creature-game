@@ -2,7 +2,7 @@
 
 ## 1. 문서 목적과 읽는 법
 
-이 문서는 구현할 Java 클래스의 책임과 의존 방향을 보여줍니다. 41개 업무 테이블의 모든 컬럼을 한 그림에 넣지 않고, 팀원이 기능별 흐름을 찾기 쉽도록 네 영역으로 나눕니다.
+이 문서는 구현할 Java 클래스의 책임과 의존 방향을 보여줍니다. 43개 업무 테이블의 모든 컬럼을 한 그림에 넣지 않고, 팀원이 기능별 흐름을 찾기 쉽도록 네 영역으로 나눕니다.
 
 - `Controller`는 HTTP 요청과 응답만 담당합니다.
 - `Service`는 권한, 상태 전이, 동시성 및 트랜잭션 같은 업무 규칙을 담당합니다.
@@ -76,6 +76,27 @@ classDiagram
         +rotateInvitation()
         +acceptInvitation()
     }
+    class ChatController {
+        <<Controller>>
+        +createGroupChatMessage()
+    }
+    class GroupChatService {
+        <<Service>>
+        +createMessage()
+        +deleteExpiredMessages()
+    }
+    class ChatMessageRetentionScheduler {
+        <<Scheduler>>
+        +deleteExpiredHourly()
+    }
+    class ReportController {
+        <<Controller>>
+        +createUserReport()
+    }
+    class UserReportService {
+        <<Service>>
+        +create()
+    }
     class AdminGroupRecoveryController {
         <<Controller>>
         +transferPrimaryForGroup()
@@ -133,6 +154,19 @@ classDiagram
         <<Entity>>
         +status: ReportStatus
     }
+    class ChatMessage {
+        <<Entity>>
+        +messageId: UUID
+        +content: String
+        +sentAt: Instant
+        +expiresAt: Instant
+    }
+    class UserReportChatEvidence {
+        <<Entity>>
+        +chatMessageId: UUID
+        +content: String
+        +sentAt: Instant
+    }
     class ModerationAction {
         <<Entity>>
         +actionType: ModerationActionType
@@ -155,6 +189,15 @@ classDiagram
         <<Repository>>
         +findByUserIdForUpdate()
     }
+    class ChatMessageRepository {
+        <<Repository>>
+        +findUnexpiredByMessageIdForUpdate()
+        +deleteExpired()
+    }
+    class UserReportChatEvidenceRepository {
+        <<Repository>>
+        +save()
+    }
 
     AuthController --> AuthService
     AuthService --> SocialLoginClient
@@ -164,6 +207,12 @@ classDiagram
     GroupController --> GroupMembershipService
     GroupController --> GroupAdminService
     GroupController --> GroupInvitationService
+    ChatController --> GroupChatService
+    ChatMessageRetentionScheduler --> GroupChatService
+    ReportController --> UserReportService
+    GroupChatService --> ChatMessageRepository
+    UserReportService --> ChatMessageRepository
+    UserReportService --> UserReportChatEvidenceRepository
     AdminGroupRecoveryController --> GroupAdminService
     GroupMembershipService --> GroupRepository
     GroupMembershipService --> GroupMembershipRepository
@@ -178,6 +227,9 @@ classDiagram
     GroupInviteLink "0..1" --> "0..*" OAuthLoginAttempt : carries context
     User "1" --> "0..1" GroupJoinRestriction
     User "1" --> "0..*" UserReport : target
+    User "1" --> "0..*" ChatMessage : sends
+    Group "1" --> "0..*" ChatMessage : contains
+    UserReport "1" --> "0..1" UserReportChatEvidence
     UserReport "1" --> "0..1" ModerationAction
 ```
 
@@ -188,6 +240,7 @@ classDiagram
 - 주 관리자가 유일한 구성원이면 자기 탈퇴 흐름이 그룹 `INACTIVE`, 초대 링크 무효화, 그룹 시즌 `ENDED`와 크리처 `ARCHIVED`까지 같은 트랜잭션에서 처리하고 기존 기록은 보존합니다.
 - 일반·부 관리자 회원의 강퇴 권한과 저장된 `lastActiveAt` 기준 72시간 10분 미활동 조건은 Controller가 아닌 Service가 판정합니다. 부 관리자 강퇴도 미접속 강퇴 흐름을 재사용합니다.
 - 전체 관리자의 신고 기반 강퇴도 최종적으로 같은 멤버십 종료·24시간 제한 생성 흐름을 재사용합니다.
+- 채팅 신고는 만료 전 `ChatMessage`를 잠금 조회하고 `UserReport`와 `UserReportChatEvidence`를 같은 트랜잭션으로 저장합니다. 원본 메시지 만료 정리는 증거 Entity를 삭제하지 않습니다.
 
 ## 3. 시즌·크리처·퀘스트·랭킹
 
@@ -620,11 +673,20 @@ classDiagram
         <<Adapter>>
         +publishAfterCommit()
     }
-    class GroupPresenceRegistry {
-        <<Core>>
-        +connected()
-        +disconnected()
-        +snapshot()
+    class GroupChatEventPublisher {
+        <<Port>>
+        +publishAfterCommit()
+    }
+    class StompGroupChatEventPublisher {
+        <<Adapter>>
+        +publishAfterCommit()
+    }
+    class GroupPresenceService {
+        <<Service>>
+        +registerSubscription(channel)
+        +removeSubscription()
+        +removeSession()
+        +activeUserIds()
     }
     class RequestRateLimiter {
         <<Core>>
@@ -632,7 +694,13 @@ classDiagram
         +tryGemini(userId)
         +tryPhoto(userId)
     }
-    class StompInboundAuthorization {
+    class GroupChatRateLimiter {
+        <<Core>>
+        +tryAcquire(userId)
+        +finish(userId, committed)
+        +retryAfter()
+    }
+    class GroupStompAuthorizationInterceptor {
         <<Core>>
         +authorizeConnect()
         +authorizeSubscribe()
@@ -649,6 +717,13 @@ classDiagram
         +streamInstanceId: UUID
         +sequence: long
         +eventType: String
+    }
+    class GroupChatEvent {
+        <<Event>>
+        +messageId: UUID
+        +groupId: Long
+        +senderUserId: Long
+        +sentAt: Instant
     }
     class SchedulerExecution {
         <<Entity>>
@@ -677,30 +752,35 @@ classDiagram
 
     GroupLiveEventPublisher <|.. StompGroupLiveEventPublisher
     StompGroupLiveEventPublisher --> GroupLiveEvent
-    GroupPresenceRegistry --> GroupLiveEvent
+    GroupChatEventPublisher <|.. StompGroupChatEventPublisher
+    StompGroupChatEventPublisher --> GroupChatEvent
+    GroupPresenceService --> GroupLiveEvent
     SchedulerExecutionService --> SchedulerExecution
     AdminAuditService --> AdminAuditLog
     ApiIdempotencyService --> ApiIdempotencyRecord
     TextProofreadingService --> TextProofreader
     TextProofreadingService --> RequestRateLimiter
     TextProofreader <|.. GeminiTextProofreader
-    StompInboundAuthorization --> CurrentUser
+    GroupStompAuthorizationInterceptor --> CurrentUser
     PhotoProcessingLimiter --> RequestRateLimiter
     SchedulerExecutionService --> BusinessClock
     AdminAuditService --> CurrentUser
     TransactionBoundary ..> PessimisticLockRule : coordinates
     TransactionBoundary ..> GroupLiveEventPublisher : publish after commit
+    TransactionBoundary ..> GroupChatEventPublisher : publish after commit
 ```
 
 ### 구현 시 핵심 확인점
 
 - `BusinessClock`을 주입하여 시즌, KST 자정, 24시간 제한과 72시간 미접속 규칙을 고정 시각으로 테스트합니다.
 - 같은 Scheduler 작업은 `(jobType, scheduledFor)` 논리 키로 한 실행만 처리권을 얻습니다.
+- `ChatMessageRetentionScheduler`는 매시간 `SchedulerJobRunner`를 통해 만료 채팅을 삭제하며 서버 중단 중 실행 틱은 재생하지 않고 다음 실행에서 현재 만료 행을 정리합니다.
 - `scheduledFor`는 업무 논리 경계이며 실제 실행 시각이 아닙니다. 실행 이력이 없어도 업무 테이블의 상태·기한으로 누락을 찾고 `FAILED`와 Lease 만료 `RUNNING`만 재선점합니다.
 - 시즌 그룹 초기화·일반 `ACTIVE` 부화·사진·결제처럼 대상이 많은 상태 기반 작업은 100건씩 처리하며, 다음 5분 점검이 남은 대상을 이어서 처리합니다. 초기화 대상이 남은 시즌 활성화 실행은 성공 처리하지 않고, 지나간 5분 틱 자체는 재생하지 않습니다.
-- WebSocket 이벤트는 DB Commit 이후에만 발행하고 명령 처리는 REST API가 담당합니다.
-- `StompInboundAuthorization`은 세션·Origin·CSRF와 활성 그룹 구독만 허용하고 클라이언트 애플리케이션 메시지는 기본 거부합니다.
-- Presence는 MVP에서 단일 애플리케이션 인스턴스 메모리만 사용하며 영속 Entity로 만들지 않습니다.
+- WebSocket 상태·채팅 이벤트는 DB Commit 이후에만 발행하고 명령 처리는 REST API가 담당합니다. 채팅 Publisher는 `/live` Stream Cursor를 사용하지 않으며 실패를 기록하고 저장 결과는 유지합니다.
+- `GroupStompAuthorizationInterceptor`는 세션·Origin·CSRF와 같은 활성 그룹의 `/live`·`/chat` 구독을 각각 하나만 허용하고 클라이언트 애플리케이션 메시지는 기본 거부합니다.
+- 기존 `GroupPresenceService`가 연결별 `/live`·`/chat` 구독을 구분해 관리합니다. Presence는 `/live`만 계산하고 `/chat`만 남은 연결도 로그아웃·탈퇴·강퇴·세션 만료 시 종료합니다. 별도 영속 Entity나 분산 Registry는 만들지 않습니다.
+- `GroupChatRateLimiter`는 단일 인스턴스 메모리에서 사용자별 여러 탭 요청을 원자적으로 판정합니다. DB Commit만 성공 시각으로 기록하고 Rollback 시 선점을 해제합니다.
 - 중요 권한 변경, 강퇴, 환불 판단과 운영 복구는 `AdminAuditService`로 감사 이력을 남깁니다.
 - 외부 효과 명령은 `ApiIdempotencyService`가 사용자·Operation·Key를 선점한 뒤 같은 요청에는 최초 결과를 반환합니다.
 - Gemini 교정은 `TextProofreader` Port 뒤에 격리하고 DB 트랜잭션 밖에서 한 번 호출합니다. 테스트는 외부 API 대신 단순 Fake를 사용합니다.
@@ -711,7 +791,7 @@ classDiagram
 | 영역 | 기본 패키지 | 주요 클래스 예시 |
 |---|---|---|
 | 인증·사용자 | `auth`, `user` | `AuthService`, `SocialLoginClient`, `User`, `UserProfile` |
-| 그룹·권한 | `group` | `GroupMembershipService`, `GroupAdminService`, `GroupInvitationService` |
+| 그룹·권한·채팅 | `group` | `GroupMembershipService`, `GroupAdminService`, `GroupInvitationService`, `GroupChatService`, `UserReportService` |
 | 시즌·크리처 | `season` | `SeasonScheduler`, `CreatureSelectionService`, `GroupCreature` |
 | 퀘스트 | `quest` | `QuestAssignmentScheduler`, `QuestCompletionService` |
 | 랭킹 | `ranking` | `RankingService`, 종료 시즌 Snapshot Entity |

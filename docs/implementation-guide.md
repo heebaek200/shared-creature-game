@@ -299,7 +299,7 @@ Mock ON/OFF를 바꿔 정상·빈 목록·오류를 확인하고 Network에서 G
 | `/invite/:token` | `getPublicInvitation` | `acceptInvitation`, `rejectInvitation` | `nextRoute` 이동 |
 | `/signup` | `getSignupContext` | `completeSignup` | 상태별 Route Guard |
 | `/groups/select` | `listPublicGroups` | `proofreadGroupDescription`, `createGroup`, `joinGroup` | `/creature` 또는 업무 오류 |
-| `/creature` | `getCurrentSeason`, `getCreatureHome` | WebSocket Event | Snapshot 재조회 |
+| `/creature` | `getCurrentSeason`, `getCreatureHome` | `createGroupChatMessage`, WebSocket 상태·채팅 Event, `createUserReport` | 상태 Snapshot 재조회 / 채팅은 복원하지 않음 |
 | `/quests` | `listCurrentQuests` | `completeQuestAssignment`, `createCheckIn`, `submitQuestPhoto` | 퀘스트 재조회 |
 | `/rankings` | `listRankableSeasons`, `getMemberRanking`, `getGroupRanking` | Page·시즌 변경 | 선택 랭킹 재조회 |
 | `/group` | `getMyGroup`, `listMyGroupMembers` | `leaveMyGroup`, `createUserReport` | 탈퇴 시 `/groups/select` / 신고 안내 |
@@ -308,7 +308,7 @@ Mock ON/OFF를 바꿔 정상·빈 목록·오류를 확인하고 Network에서 G
 | `/payments` | `listPurchases`, `listMyRefundRequests` | `getPurchase`, `createRefundRequest` | 구매·환불 재조회 |
 | `/group-admin` | `getMyGroup`, `listMyGroupMembers`, `getInvitationManagement`, `listActiveCreatureSpecies` | `changeMemberRole`, `removeGroupMember`, `transferPrimaryAdmin`, `rotateInvitation`, `selectCreatureSpecies` | 관련 Snapshot 재조회 |
 | `/admin` | `getAdminDashboard` | 필터 변경 | 카드·차트 갱신 |
-| `/admin/reports` | `listAdminReports` | `getAdminReport`, `dismissReport`, `removeReportedMember` | 목록·상세 재조회 |
+| `/admin/reports` | `listAdminReports` | `getAdminReport`, `dismissReport`, `removeReportedMember`, `resolveInactiveReport` | 목록·상세 재조회 |
 | `/admin/refunds` | `listAdminRefundRequests` | `getAdminRefundRequest`, `approveRefund`, `rejectRefund`, `reconcileRefund` | 목록·상세 재조회 |
 | `/admin/operations` | `listOperationalWarnings` | `transferPrimaryAdminAsSuperAdmin` | 경고·그룹 재조회 |
 
@@ -325,7 +325,9 @@ Mock ON/OFF를 바꿔 정상·빈 목록·오류를 확인하고 Network에서 G
 | 랭킹 | `getMemberRanking`, `getGroupRanking` | Ranking Query Service | `season_member_contributions`, `season_group_scores`, Ranking Snapshot |
 | 아바타·상점 | `listShopItems` ~ `unequipAvatarItem` | Avatar Service | `shop_items`, `owned_items`, `avatar_equipments` |
 | 결제·환불 | `createPurchase` ~ `reconcileRefund` | Payment·Refund Service·`PaymentGateway` | `purchases`, `payment_transactions`, `refund_requests`, `api_idempotency_records` |
-| 신고·전체 관리자 | `createUserReport` ~ `listOperationalWarnings` | Admin Service | `user_reports`, `admin_audit_logs`, `scheduler_executions` |
+| 채팅·신고·전체 관리자 | `createGroupChatMessage` ~ `listOperationalWarnings` | `GroupChatService`, `UserReportService`, Admin Service | `chat_messages`, `user_reports`, `user_report_chat_evidence`, `admin_audit_logs`, `scheduler_executions` |
+
+채팅은 기존 `GroupPresenceService`와 `GroupStompAuthorizationInterceptor`를 최소 확장하고 `/live` Stream Cursor와 분리된 Publisher를 사용합니다. 관리자 신고 목록은 채팅 증거를 매핑하지 않고 상세·처리 응답에만 매핑하여 기존 목록 JSON 계약을 유지합니다.
 
 ## 6. 목 데이터로 프론트엔드를 먼저 만드는 방법
 

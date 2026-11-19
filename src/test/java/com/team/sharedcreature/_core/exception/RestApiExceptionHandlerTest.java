@@ -2,6 +2,7 @@ package com.team.sharedcreature._core.exception;
 
 import com.team.sharedcreature._core.api.ErrorResponse;
 import com.team.sharedcreature._core.api.ErrorResponseFactory;
+import com.team.sharedcreature.group.application.ChatRateLimitException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -47,6 +48,17 @@ class RestApiExceptionHandlerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().code()).isEqualTo("RATE_LIMIT_EXCEEDED");
         assertThat(response.getBody().fieldErrors()).isEmpty();
+    }
+
+    @Test
+    void 채팅_전송_제한은_Retry_After_Header를_반환한다() {
+        var response = handler.handleChatRateLimit(
+                new ChatRateLimitException(2), request("request-chat"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(response.getHeaders().getFirst("Retry-After")).isEqualTo("2");
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("RATE_LIMIT_EXCEEDED");
     }
 
     @Test

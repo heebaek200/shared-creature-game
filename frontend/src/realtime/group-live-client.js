@@ -14,11 +14,12 @@ const ACCESS_ERROR_CODES = [
 ];
 
 /**
- * 현재 그룹의 Native WebSocket STOMP 연결과 단일 구독을 관리합니다.
+ * 현재 그룹의 Native WebSocket STOMP 연결과 live·chat 구독을 관리합니다.
  *
  * @param {{
  *   groupId: number|string,
  *   onEvent: (event: Record<string, any>) => void,
+ *   onChatMessage?: (message: Record<string, any>) => void,
  *   onSubscribed: () => void|Promise<void>,
  *   onDisconnected: () => void,
  *   onError: (code: string, error?: unknown) => void
@@ -35,7 +36,8 @@ const ACCESS_ERROR_CODES = [
  */
 export function createGroupLiveClient(options, dependencies = {}) {
     let disposed = false;
-    let subscription = null;
+    let liveSubscription = null;
+    let chatSubscription = null;
     let terminalError = false;
     let csrfRetryUsed = false;
     let reconnectPromise = null;
@@ -50,7 +52,8 @@ export function createGroupLiveClient(options, dependencies = {}) {
     const mockEnabled = dependencies.useMock ?? useMock;
     const protocol = runtimeLocation.protocol === 'https:' ? 'wss:' : 'ws:';
     const brokerURL = `${protocol}//${runtimeLocation.host}/ws`;
-    const destination = `/topic/groups/${options.groupId}/live`;
+    const liveDestination = `/topic/groups/${options.groupId}/live`;
+    const chatDestination = `/topic/groups/${options.groupId}/chat`;
 
     const createClient = dependencies.createClient
         ?? ((configuration) => new Client(configuration));
@@ -112,14 +115,27 @@ export function createGroupLiveClient(options, dependencies = {}) {
         clearCsrfRetryTimer();
         terminalError = false;
         csrfRetryUsed = false;
-        subscription?.unsubscribe();
-        subscription = client.subscribe(destination, (message) => {
+        liveSubscription?.unsubscribe();
+        chatSubscription?.unsubscribe();
+        liveSubscription = client.subscribe(liveDestination, (message) => {
             if (disposed) return;
 
             try {
                 const event = JSON.parse(message.body);
                 if (String(event.groupId) === String(options.groupId)) {
                     options.onEvent(event);
+                }
+            } catch (error) {
+                options.onError('INVALID_MESSAGE', error);
+            }
+        });
+        chatSubscription = client.subscribe(chatDestination, (message) => {
+            if (disposed) return;
+
+            try {
+                const chatMessage = JSON.parse(message.body);
+                if (String(chatMessage.groupId) === String(options.groupId)) {
+                    options.onChatMessage?.(chatMessage);
                 }
             } catch (error) {
                 options.onError('INVALID_MESSAGE', error);
@@ -156,7 +172,8 @@ export function createGroupLiveClient(options, dependencies = {}) {
 
     client.onWebSocketClose = () => {
         if (disposed) return;
-        subscription = null;
+        liveSubscription = null;
+        chatSubscription = null;
         if (!terminalError) options.onDisconnected();
     };
 
@@ -172,8 +189,10 @@ export function createGroupLiveClient(options, dependencies = {}) {
 
         terminalError = true;
         reconnectPromise = (async () => {
-            subscription?.unsubscribe();
-            subscription = null;
+            liveSubscription?.unsubscribe();
+            chatSubscription?.unsubscribe();
+            liveSubscription = null;
+            chatSubscription = null;
             await client.deactivate();
             if (disposed) return;
 
@@ -212,8 +231,10 @@ export function createGroupLiveClient(options, dependencies = {}) {
             if (disposed) return;
             disposed = true;
             clearCsrfRetryTimer();
-            subscription?.unsubscribe();
-            subscription = null;
+            liveSubscription?.unsubscribe();
+            chatSubscription?.unsubscribe();
+            liveSubscription = null;
+            chatSubscription = null;
             await client.deactivate();
         },
     };

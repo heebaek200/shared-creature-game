@@ -92,6 +92,22 @@ test('화면 밖에서 받은 이벤트도 저장하고 재진입 구독에 최�
     assert.equal(latest.onlineMembers[0].userId, 2);
 });
 
+test('채팅 이벤트는 상태 Snapshot과 분리해 현재 그룹 구독자에게 전달한다', async (t) => {
+    const { manager, clients } = setup(t);
+    const received = [];
+    manager.subscribeChatMessages((message) => received.push(message));
+    await manager.start({ userId: 1, groupId: 10 });
+
+    clients[0].options.onChatMessage({
+        messageId: 'message-1', groupId: 10, senderUserId: 2, content: '안녕',
+    });
+    clients[0].options.onChatMessage({
+        messageId: 'message-2', groupId: 20, senderUserId: 3, content: '다른 그룹',
+    });
+
+    assert.deepEqual(received.map(({messageId}) => messageId), ['message-1']);
+});
+
 test('로그아웃 뒤 늦게 도착한 조회와 연결 이벤트는 무시한다', async (t) => {
     let finish;
     const { manager, clients } = setup(t, () => new Promise((resolve) => { finish = resolve; }));

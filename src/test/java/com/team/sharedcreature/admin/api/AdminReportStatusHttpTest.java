@@ -7,6 +7,8 @@ import com.team.sharedcreature.admin.application.AdminReportQueryService;
 import com.team.sharedcreature.auth.infrastructure.UserProfileRepository;
 import com.team.sharedcreature.group.domain.UserReportStatus;
 import com.team.sharedcreature.group.infrastructure.UserReportRepository;
+import com.team.sharedcreature.group.infrastructure.UserReportChatEvidenceRepository;
+import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,7 +44,12 @@ class AdminReportStatusHttpTest {
     @BeforeEach
     void setUp() {
         reports = mock(UserReportRepository.class);
-        AdminReportQueryService queries = new AdminReportQueryService(reports, mock(UserProfileRepository.class));
+        AdminReportQueryService queries = new AdminReportQueryService(
+            reports,
+            mock(UserProfileRepository.class),
+            mock(UserReportChatEvidenceRepository.class),
+            mock(GroupMembershipRepository.class)
+        );
         AdminReportController controller = new AdminReportController(queries, mock(AdminModerationService.class));
         validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();

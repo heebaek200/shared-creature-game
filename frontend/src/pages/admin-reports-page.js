@@ -1,12 +1,19 @@
 // @ts-check
-import {listAdminReports, getAdminReport, dismissReport, removeReportedMember} from "../features/admin/api.js";
+import {
+    listAdminReports,
+    getAdminReport,
+    dismissReport,
+    removeReportedMember,
+    resolveInactiveReportedMember,
+} from "../features/admin/api.js";
 import {ApiError} from "../api/client.js";
+import {reportActionAvailability} from "../features/admin/report-action-policy.js";
 
 const PAGE_SIZE = 10;
 const STATUS_LABELS = {
     RECEIVED: '미처리',
     REJECTED: '기각',
-    RESOLVED: '강퇴 처리'
+    RESOLVED: '처리 완료'
 };
 const CATEGORY_LABELS = {
     HARASSMENT: '괴롭힘',
@@ -80,7 +87,7 @@ export function adminReportsPage() {
             <select id="report-status" class="form-select" data-status-filter>
               <option value="">전체</option>
               <option value="RECEIVED">미처리</option>
-              <option value="RESOLVED">강퇴 처리</option>
+              <option value="RESOLVED">처리 완료</option>
               <option value="REJECTED">기각</option>
             </select>
           </div>
@@ -147,6 +154,8 @@ export function adminReportsPage() {
                       data-dismiss>기각</button>
               <button type="button" class="btn btn-danger"
                       data-remove>강퇴 처리</button>
+              <button type="button" class="btn btn-outline-danger"
+                      data-resolve>비활성 대상 처리 완료</button>
             </div>
           </div>
         </div>
@@ -194,6 +203,7 @@ export function adminReportsPage() {
     const actions = /** @type {HTMLElement} */ (element.querySelector('[data-action-buttons]'));
     const dismissButton = /** @type {HTMLButtonElement} */ (element.querySelector('[data-dismiss]'));
     const removeButton = /** @type {HTMLButtonElement} */ (element.querySelector('[data-remove]'));
+    const resolveButton = /** @type {HTMLButtonElement} */ (element.querySelector('[data-resolve]'));
     const dialog = /** @type {HTMLDialogElement} */ (element.querySelector('[data-confirm-dialog]'));
     const confirmForm = /** @type {HTMLFormElement} */ (element.querySelector('[data-confirm-form]'));
     const dialogTitle = /** @type {HTMLElement} */ (element.querySelector('[data-dialog-title]'));
@@ -208,7 +218,7 @@ export function adminReportsPage() {
     let totalPages = 0;
     /** @type {any|null} */
     let selectedReport = null;
-    /** @type {'dismiss'|'remove'|null} */
+    /** @type {'dismiss'|'remove'|'resolve'|null} */
     let actionKind = null;
     let processing = false;
     let loading = false; // 신고 목록을 조회하는 동안 중복 페이징을 막습니다.
@@ -240,6 +250,7 @@ export function adminReportsPage() {
      * @returns {void}
      */
     function updateControls() {
+        const available = reportActionAvailability(selectedReport);
         // 목록 조회 중에는 현재 페이지를 확정할 때까지 이동을 제한합니다.
         prevButton.disabled = processing || loading || page <= 0;
         nextButton.disabled =
@@ -248,10 +259,9 @@ export function adminReportsPage() {
 
         // 상태 변경 또는 목록 조회 중에는 필터 변경을 차단합니다.
         statusInput.disabled = processing || loading;
-        dismissButton.disabled =
-            processing || selectedReport?.status !== 'RECEIVED';
-        removeButton.disabled =
-            processing || selectedReport?.status !== 'RECEIVED';
+        dismissButton.disabled = processing || !available.dismiss;
+        removeButton.disabled = processing || !available.remove;
+        resolveButton.disabled = processing || !available.resolve;
         confirmButton.disabled = processing;
         cancelButton.disabled = processing;
     }
@@ -293,6 +303,14 @@ export function adminReportsPage() {
             ['처리자 ID', report.handledByUserId],
             ['처리 사유', report.resolution],
         ];
+        if (report.chatEvidence) {
+            values.push(
+                ['채팅 메시지 ID', report.chatEvidence.messageId],
+                ['채팅 작성자', `${report.chatEvidence.senderNickname} (#${report.chatEvidence.senderUserId})`],
+                ['채팅 내용', report.chatEvidence.content],
+                ['채팅 전송 시각', formatDateTime(report.chatEvidence.sentAt)],
+            );
+        }
 
         // <dl> 안에 <dt>/<dd> 쌍을 생성
         for (const [label, value] of values) {
@@ -306,7 +324,14 @@ export function adminReportsPage() {
             detailFields.append(dt, dd);
         }
 
-        actions.classList.toggle('d-none', report.status !== 'RECEIVED');
+        const available = reportActionAvailability(report);
+        dismissButton.classList.toggle('d-none', !available.dismiss);
+        removeButton.classList.toggle('d-none', !available.remove);
+        resolveButton.classList.toggle('d-none', !available.resolve);
+        actions.classList.toggle(
+            'd-none',
+            !available.dismiss && !available.remove && !available.resolve,
+        );
         updateControls();
     }
 
@@ -528,7 +553,7 @@ export function adminReportsPage() {
     /**
      * 선택된 신고에 대한 기각·강퇴 확인 Modal을 엽니다.
      * 처리 영향과 입력 사유를 확인한 뒤 별도 제출을 받습니다.
-     * @param {'dismiss'|'remove'} kind 조치 종류
+     * @param {'dismiss'|'remove'|'resolve'} kind 조치 종류
      * @returns {void}
      */
     function openActionDialog(kind) {
@@ -537,14 +562,19 @@ export function adminReportsPage() {
         actionKind = kind;
         reasonInput.value = '';
         dialogError.textContent = '';
-        dialogTitle.textContent =
-            kind === 'dismiss' ? '신고 기각 확인' : '신고 기반 강퇴 확인';
+        dialogTitle.textContent = kind === 'dismiss'
+            ? '신고 기각 확인'
+            : kind === 'resolve'
+                ? '비활성 대상 처리 완료 확인'
+                : '신고 기반 강퇴 확인';
 
         dialogWarning.textContent = kind === 'dismiss'
             ? `신고 #${selectedReport.reportId}를 기각합니다. 처리 후 되돌릴 수 없습니다.`
-            : `신고 #${selectedReport.reportId}의 대상 회원을 ` +
-            `그룹 #${selectedReport.groupId}에서 강퇴합니다. ` +
-            '24시간 재가입 제한이 적용됩니다. 주 관리자는 직접 강퇴할 수 없습니다.';
+            : kind === 'resolve'
+                ? `신고 #${selectedReport.reportId}의 대상이 이미 그룹을 떠난 경우 추가 강퇴 없이 처리 완료합니다.`
+                : `신고 #${selectedReport.reportId}의 대상 회원을 ` +
+                `그룹 #${selectedReport.groupId}에서 강퇴합니다. ` +
+                '24시간 재가입 제한이 적용됩니다. 주 관리자는 직접 강퇴할 수 없습니다.';
 
         // 네이티브 dialog는 포커스 관리와 배경 조작 제한을 제공합니다.
         dialog.showModal();
@@ -579,7 +609,9 @@ export function adminReportsPage() {
             // 실제 상태 변경은 기존 API 모듈과 서버에 위임합니다.
             const updated = kind === 'dismiss'
                 ? await dismissReport(reportId, reason)
-                : await removeReportedMember(reportId, reason);
+                : kind === 'resolve'
+                    ? await resolveInactiveReportedMember(reportId, reason)
+                    : await removeReportedMember(reportId, reason);
             if (disposed) return;
 
             dialog.close();
@@ -590,7 +622,7 @@ export function adminReportsPage() {
             const refreshed = await loadReports();
             if (refreshed && !disposed) {
                 showNotice(
-                    `신고 #${reportId} ${kind === 'dismiss' ? '기각' : '강퇴'} ` +
+                    `신고 #${reportId} ${kind === 'dismiss' ? '기각' : kind === 'resolve' ? '완료' : '강퇴'} ` +
                     '처리가 완료됐습니다.',
                     'success'
                 );
@@ -598,7 +630,10 @@ export function adminReportsPage() {
         } catch (error) {
             if (disposed) return;
 
-            if (error instanceof ApiError && error.status === 409) {
+            if (kind === 'resolve' && error instanceof ApiError && error.status === 409) {
+                dialogError.textContent =
+                    '대상이 현재 활성 회원이거나 신고 상태가 변경되었습니다. 활성 회원은 강퇴 처리를 사용해 주세요.';
+            } else if (error instanceof ApiError && error.status === 409) {
                 // 다른 관리자가 먼저 처리했을 가능성이 있으므로 재조회합니다.
                 dialog.close();
                 actionKind = null;
@@ -699,6 +734,7 @@ export function adminReportsPage() {
     };
     const onDismiss = () => openActionDialog('dismiss');
     const onRemove = () => openActionDialog('remove');
+    const onResolve = () => openActionDialog('resolve');
     const onDialogClose = () => {
         actionKind = null;
     };
@@ -711,6 +747,7 @@ export function adminReportsPage() {
     rowsNode.addEventListener('click', onRowClick);
     dismissButton.addEventListener('click', onDismiss);
     removeButton.addEventListener('click', onRemove);
+    resolveButton.addEventListener('click', onResolve);
     confirmForm.addEventListener('submit', submitAction);
     cancelButton.addEventListener('click', onCancel);
     dialog.addEventListener('cancel', onDialogCancel);
@@ -735,6 +772,7 @@ export function adminReportsPage() {
             rowsNode.removeEventListener('click', onRowClick);
             dismissButton.removeEventListener('click', onDismiss);
             removeButton.removeEventListener('click', onRemove);
+            resolveButton.removeEventListener('click', onResolve);
             confirmForm.removeEventListener('submit', submitAction);
             cancelButton.removeEventListener('click', onCancel);
             dialog.removeEventListener('cancel', onDialogCancel);

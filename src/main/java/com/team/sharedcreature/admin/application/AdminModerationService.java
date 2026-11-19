@@ -46,4 +46,16 @@ public class AdminModerationService {
             throw exception;
         }
     }
+
+    /** 이미 비활성인 신고 대상을 추가 멤버십 변경 없이 처리합니다. */
+    public AdminReportResponse resolveInactive(Long actorId, Long reportId, String reason) {
+        try {
+            commandExecutor.resolveInactive(actorId, reportId, reason.trim());
+            return queryService.get(reportId);
+        } catch (BusinessException exception) {
+            auditService.recordFailure(actorId, AdminAuditActionType.RESOLVE_REPORT,
+                    AdminAuditTargetType.USER_REPORT, reportId, exception.code());
+            throw exception;
+        }
+    }
 }

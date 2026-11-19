@@ -1,0 +1,147 @@
+package com.team.sharedcreature.admin.application;
+
+import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature._core.realtime.GroupPresenceRevocationService;
+import com.team.sharedcreature.admin.infrastructure.AdminAuditLogRepository;
+import com.team.sharedcreature.auth.domain.GlobalRole;
+import com.team.sharedcreature.auth.domain.User;
+import com.team.sharedcreature.auth.domain.UserStatus;
+import com.team.sharedcreature.auth.infrastructure.UserRepository;
+import com.team.sharedcreature.group.domain.Group;
+import com.team.sharedcreature.group.domain.GroupJoinRestriction;
+import com.team.sharedcreature.group.domain.GroupMembership;
+import com.team.sharedcreature.group.domain.GroupMembershipStatus;
+import com.team.sharedcreature.group.domain.GroupRole;
+import com.team.sharedcreature.group.domain.GroupStatus;
+import com.team.sharedcreature.group.domain.UserReport;
+import com.team.sharedcreature.group.domain.UserReportCategory;
+import com.team.sharedcreature.group.domain.UserReportStatus;
+import com.team.sharedcreature.group.infrastructure.GroupJoinRestrictionRepository;
+import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
+import com.team.sharedcreature.group.infrastructure.GroupRepository;
+import com.team.sharedcreature.group.infrastructure.ModerationActionRepository;
+import com.team.sharedcreature.group.infrastructure.UserReportRepository;
+import org.junit.jupiter.api.Test;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+class AdminModerationCommandExecutorTest {
+
+    @Test
+    void 신고_대상이_이미_그룹을_떠났으면_추가_강퇴_없이_처리한다() {
+        Fixture fixture = new Fixture(false);
+
+        fixture.executor.resolveInactive(99L, 30L, "이미 탈퇴 확인");
+
+        assertThat(fixture.report.getStatus()).isEqualTo(UserReportStatus.RESOLVED);
+        assertThat(fixture.report.getResolution()).isEqualTo("이미 탈퇴 확인");
+        verify(fixture.auditLogs).save(any());
+        verify(fixture.memberships).findActiveMembershipId(10L, 2L);
+    }
+
+    @Test
+    void 신고_대상이_아직_활성_회원이면_처리_완료를_거부한다() {
+        Fixture fixture = new Fixture(true);
+
+        assertThatThrownBy(() -> fixture.executor.resolveInactive(99L, 30L, "처리"))
+                .isInstanceOf(BusinessException.class);
+        assertThat(fixture.report.getStatus()).isEqualTo(UserReportStatus.RECEIVED);
+        verify(fixture.auditLogs, never()).save(any());
+    }
+
+    @Test
+    void 신고_기반_강퇴는_같은_트랜잭션에서_Commit_후_권한_회수를_예약한다() {
+        UserReportRepository reports = mock(UserReportRepository.class);
+        UserRepository users = mock(UserRepository.class);
+        GroupRepository groups = mock(GroupRepository.class);
+        GroupMembershipRepository memberships = mock(GroupMembershipRepository.class);
+        GroupJoinRestrictionRepository restrictions = mock(GroupJoinRestrictionRepository.class);
+        ModerationActionRepository actions = mock(ModerationActionRepository.class);
+        AdminAuditLogRepository auditLogs = mock(AdminAuditLogRepository.class);
+        GroupPresenceRevocationService presence = mock(GroupPresenceRevocationService.class);
+        Group group = mock(Group.class);
+        User reporter = mock(User.class);
+        User target = mock(User.class);
+        User actor = mock(User.class);
+        GroupMembership membership = mock(GroupMembership.class);
+        GroupJoinRestriction restriction = mock(GroupJoinRestriction.class);
+        Instant now = Instant.parse("2026-11-19T00:00:00Z");
+        UserReport report = UserReport.receive(
+                reporter, target, group, UserReportCategory.HARASSMENT, "신고", now.minusSeconds(60));
+        when(group.getId()).thenReturn(10L);
+        when(group.getStatus()).thenReturn(GroupStatus.ACTIVE);
+        when(actor.getId()).thenReturn(99L);
+        when(actor.getStatus()).thenReturn(UserStatus.ACTIVE);
+        when(actor.getGlobalRole()).thenReturn(GlobalRole.SUPER_ADMIN);
+        when(target.getId()).thenReturn(2L);
+        when(target.getStatus()).thenReturn(UserStatus.ACTIVE);
+        when(reports.findByIdForUpdate(30L)).thenReturn(Optional.of(report));
+        when(users.findByIdForUpdate(2L)).thenReturn(Optional.of(target));
+        when(users.findByIdForUpdate(99L)).thenReturn(Optional.of(actor));
+        when(groups.findByIdForUpdate(10L)).thenReturn(Optional.of(group));
+        when(memberships.findActiveMembershipId(10L, 2L)).thenReturn(Optional.of(200L));
+        when(memberships.findByIdForUpdate(200L)).thenReturn(Optional.of(membership));
+        when(membership.getStatus()).thenReturn(GroupMembershipStatus.ACTIVE);
+        when(membership.getGroup()).thenReturn(group);
+        when(membership.getRole()).thenReturn(GroupRole.MEMBER);
+        when(restrictions.findByUserIdForUpdate(2L)).thenReturn(Optional.of(restriction));
+        AdminModerationCommandExecutor executor = new AdminModerationCommandExecutor(
+                reports, users, groups, memberships, restrictions, actions, auditLogs, presence,
+                Clock.fixed(now, ZoneOffset.UTC));
+
+        executor.remove(99L, 30L, "신고 확인");
+
+        verify(membership).removeForReport(actor, now);
+        verify(presence).revokeAfterCommit(2L, now);
+        assertThat(report.getStatus()).isEqualTo(UserReportStatus.RESOLVED);
+    }
+
+    private static final class Fixture {
+        private final GroupMembershipRepository memberships = mock(GroupMembershipRepository.class);
+        private final AdminAuditLogRepository auditLogs = mock(AdminAuditLogRepository.class);
+        private final GroupPresenceRevocationService presenceRevocationService =
+                mock(GroupPresenceRevocationService.class);
+        private final UserReport report;
+        private final AdminModerationCommandExecutor executor;
+
+        private Fixture(boolean activeTarget) {
+            UserReportRepository reports = mock(UserReportRepository.class);
+            UserRepository users = mock(UserRepository.class);
+            Group group = mock(Group.class);
+            User reporter = mock(User.class);
+            User target = mock(User.class);
+            User actor = mock(User.class);
+            when(group.getId()).thenReturn(10L);
+            when(target.getId()).thenReturn(2L);
+            when(actor.getStatus()).thenReturn(UserStatus.ACTIVE);
+            when(actor.getGlobalRole()).thenReturn(GlobalRole.SUPER_ADMIN);
+            report = UserReport.receive(reporter, target, group, UserReportCategory.OTHER,
+                    "신고", Instant.parse("2026-11-18T00:00:00Z"));
+            when(reports.findByIdForUpdate(30L)).thenReturn(Optional.of(report));
+            when(users.findByIdForUpdate(99L)).thenReturn(Optional.of(actor));
+            when(memberships.findActiveMembershipId(10L, 2L)).thenReturn(
+                    activeTarget ? Optional.of(200L) : Optional.empty());
+            executor = new AdminModerationCommandExecutor(
+                    reports,
+                    users,
+                    mock(GroupRepository.class),
+                    memberships,
+                    mock(GroupJoinRestrictionRepository.class),
+                    mock(ModerationActionRepository.class),
+                    auditLogs,
+                    presenceRevocationService,
+                    Clock.fixed(Instant.parse("2026-11-19T00:00:00Z"), ZoneOffset.UTC));
+        }
+    }
+}

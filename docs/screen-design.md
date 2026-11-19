@@ -29,7 +29,7 @@ Vanilla JavaScript ES Module·Vite·Bootstrap v5 기반 Full CSR 화면과 Histo
 | 공개 | `/invite/:token` | `REQ-INV-001` | 초대 확인·수락·거절 | [초대 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/invite.html) · [HTML 소스](design/wireframes/invite.html) |
 | 가입 진행 | `/signup` | `REQ-AUTH-002`, `REQ-AUTH-003`, `REQ-INV-001` | 닉네임 확정·가입 완료 | [회원가입 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/signup.html) · [HTML 소스](design/wireframes/signup.html) |
 | 그룹 없음 | `/groups/select` | `REQ-AUTH-002`, `REQ-GRP-001`, `REQ-GRP-002`, `REQ-AI-001` | 공개 그룹 가입·생성·소개 교정 | [그룹 선택 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/group-select.html) · [HTML 소스](design/wireframes/group-select.html) |
-| 그룹 회원 | `/creature` | `REQ-SEA-001`, `REQ-SEA-002`, `REQ-SEA-003`, `REQ-QST-002`, `REQ-AVA-002`, `REQ-RT-001` | 크리처 홈·Presence | [크리처 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/creature.html) · [HTML 소스](design/wireframes/creature.html) |
+| 그룹 회원 | `/creature` | `REQ-SEA-001`, `REQ-SEA-002`, `REQ-SEA-003`, `REQ-QST-002`, `REQ-AVA-002`, `REQ-RT-001` | 크리처 홈·Presence·말풍선 채팅 | [크리처 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/creature.html) · [HTML 소스](design/wireframes/creature.html) |
 | 그룹 회원 | `/quests` | `REQ-QST-001`, `REQ-QST-002`, `REQ-QST-003`, `REQ-QST-004` | 일일·주간 퀘스트·사진 제출 | [퀘스트 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/quests.html) · [HTML 소스](design/wireframes/quests.html) |
 | 그룹 회원 | `/rankings` | `REQ-RNK-001`, `REQ-RNK-002` | 시즌 개인·그룹 랭킹 | [랭킹 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/rankings.html) · [HTML 소스](design/wireframes/rankings.html) |
 | 그룹 회원 | `/group` | `REQ-GRP-002`, `REQ-GRP-003`, `REQ-GRP-006` | 그룹 현황·탈퇴·신고 | [그룹 미리보기](https://heebaek200.github.io/shared-creature-game/design/wireframes/group.html) · [HTML 소스](design/wireframes/group.html) |
@@ -182,24 +182,29 @@ Vanilla JavaScript ES Module·Vite·Bootstrap v5 기반 Full CSR 화면과 Histo
 
 ### 구현할 기능
 
-크리처 성장 상태·시즌 시각·그룹 기여·최대 20명 아바타 Presence를 보여 줍니다.
+크리처 성장 상태·시즌 시각·그룹 기여·최대 20명 아바타 Presence와 짧은 말풍선 채팅을 보여 줍니다.
 
 ### 주요 규칙
 
 - 최대 20명의 아바타를 10개 구역에 분산하고 인접 구역을 포함한 근거리 무작위 이동으로 섞습니다. 한 번의 이동 거리는 필드 백분율 좌표상 32 이내, 동시 이동은 최대 3명이며 접속자가 적을수록 대기시간을 줄입니다. 자신은 `나`로 표시합니다.
-- 다른 아바타를 선택하면 닉네임·순위·기여도·장착 아이템과 판매 상품 이동을 제공합니다.
+- 다른 아바타를 선택하면 닉네임·순위·기여도·장착 아이템과 판매 상품 이동을 제공합니다. 표시 중인 메시지가 있으면 같은 정보 카드에서 `이 메시지 신고`를 제공합니다.
 - 알 상태에서는 부화까지 남은 시간을, 부화 후에는 시즌 종료까지 남은 시간을 서버 시각 기준으로 표시합니다. 종 미선택 알은 회색, 선택 완료 알은 해당 종의 색상으로 표시합니다.
 - 완전체 이후에도 누적 경험치는 증가합니다. 애니메이션 축소 설정에서는 정적 배치를 사용합니다.
+- 채팅 입력은 크리처 필드 아래에 배치하고 앞뒤 공백 제거 후 80 Unicode 코드 포인트의 단일 행으로 제한합니다. `maxlength`만으로 검증을 끝내지 않으며 서버 응답을 최종값으로 사용합니다. 실시간 연결 복구 중에는 입력과 전송을 비활성화합니다.
+- 말풍선은 발신자 아바타와 함께 이동하며 5초 후 사라집니다. 같은 사용자의 새 메시지는 기존 메시지를 교체하고 hover·focus 중에는 소멸 시간을 일시정지합니다.
+- REST 성공 응답으로 발신자의 말풍선을 즉시 표시하고 같은 `messageId`의 WebSocket 이벤트는 중복 표시하지 않습니다. 일반 채팅 목록과 재접속 후 메시지 복원은 제공하지 않습니다.
 
 ### 처리 순서
 
-1. `getCreatureHome` Snapshot으로 초기 렌더링합니다.
-2. Commit 후 WebSocket 이벤트를 수신해 상태를 갱신합니다.
-3. 재연결 시 REST Snapshot으로 Presence·장착 상태를 교정합니다.
+1. `/live`와 `/chat`을 구독합니다.
+2. `getCreatureHome` Snapshot으로 상태를 초기화하고 구독 중 수신한 상태 이벤트와 교정합니다.
+3. Snapshot 복구까지 완료되면 채팅 입력을 활성화합니다.
+4. 채팅 REST 성공 응답과 `/chat` 이벤트를 `messageId`로 중복 제거해 말풍선을 표시합니다.
+5. 재연결 시 두 채널을 다시 구독하고 REST Snapshot으로 Presence·장착 상태만 교정하며 과거 채팅은 복원하지 않습니다.
 
 ### 완료 확인
 
-성장·기여 변경, 접속·퇴장, 장착 변화가 반영되고 재연결 후 잘못된 접속 표시가 남지 않습니다.
+성장·기여 변경, 접속·퇴장, 장착 변화와 말풍선 채팅이 반영되고 재연결 후 잘못된 접속 표시나 중복 채팅이 남지 않습니다.
 
 ## 9. 퀘스트 화면
 
@@ -233,6 +238,8 @@ Vanilla JavaScript ES Module·Vite·Bootstrap v5 기반 Full CSR 화면과 Histo
 - 그룹 정원은 20명이며 주·부 관리자의 관리 화면 이동을 제공합니다.
 - 유일한 주 관리자 탈퇴는 **그룹 비활성화·초대 링크·시즌 참여 종료**를 함께 확인합니다.
 - 신고 대상은 본인을 제외한 그룹 구성원이며 신고 상세 내용은 공백만 입력할 수 없고 1~1000자입니다. 신고만으로 자동 강퇴하지 않습니다.
+- 일반 신고와 채팅 신고는 같은 Modal을 사용합니다. 채팅 신고는 서버가 확인한 메시지를 함께 접수하고 관리자 신고 상세에 원문·발신자·작성 시각을 표시하며 목록에는 원문을 노출하지 않습니다.
+- 관리자 신고 상세는 서버의 현재 활성 멤버십 값으로 동작을 구분합니다. 비활성 대상은 기각·`처리 완료`, 활성 대상은 기각·강퇴만 제공합니다.
 
 ### 완료 확인
 
