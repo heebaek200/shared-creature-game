@@ -14,6 +14,13 @@ import {
     getCreatureHome,
     selectCreatureSpecies
 } from '../features/creature/api.js';
+import {
+    canManageCreatureSelection,
+    invitationIssuanceKey,
+    isSameInvitationIssuance,
+    normalizeCreatureSpeciesId,
+    reconcileCreatureSelectionDraft
+} from '../features/group-admin/state-policy.js';
 
 import creatureLv0 from '../../assets/creature/lv0.png';
 
@@ -496,6 +503,7 @@ export function adminPage({navigate, currentUser}) {
     let rotatingInvitation = false;
     let invitationLoadVersion = 0;
     let oneTimeInvitationUrl = '';
+    let oneTimeInvitationKey = null;
 
     // 크리처 선택 탭
     const creatureTab = content.querySelector('[data-admin-tab="creature"]');
@@ -516,6 +524,8 @@ export function adminPage({navigate, currentUser}) {
     let creatureHomeData = null;
     let creatureSpeciesList = [];
     let creatureSelectedId = '';
+    let creatureBaselineId = '';
+    let creatureReconcileOutcome = 'SYNCED';
 
     // 중복 요청 및 페이지 종료 처리
     let creatureLoading = false;
@@ -629,14 +639,34 @@ export function adminPage({navigate, currentUser}) {
 
     /**
      * 한 번 표시한 초대 URL을 페이지 메모리와 DOM에서 지웁니다.
-     * 새로운 발급 요청이나 명시적인 정보 재조회 전에 호출합니다.
+     * 다른 발급이 확인되거나 권한·페이지 수명 종료 시 호출합니다.
      * 브라우저 저장소에는 URL을 기록하지 않습니다.
      */
     function clearOneTimeInvitationUrl() {
         oneTimeInvitationUrl = '';
+        oneTimeInvitationKey = null;
         invitationUrlInput.value = '';
         invitationCopyStatus.textContent = '';
         invitationResult.classList.add('d-none');
+    }
+
+    /**
+     * 발급 상태를 확인하는 동안 URL 원문을 메모리에만 보존하고 화면에서는 숨깁니다.
+     * 동일 발급임이 확인되기 전에는 사용자가 유효한 링크로 오인하지 않게 합니다.
+     */
+    function hideOneTimeInvitationUrlForVerification() {
+        invitationUrlInput.value = '';
+        invitationCopyStatus.textContent = '';
+        invitationResult.classList.add('d-none');
+    }
+
+    /** 동일 발급 정보가 확인된 URL을 다시 복사할 수 있도록 표시합니다. */
+    function revealOneTimeInvitationUrl() {
+        if (!oneTimeInvitationUrl || !oneTimeInvitationKey) return;
+
+        invitationUrlInput.value = oneTimeInvitationUrl;
+        invitationCopyStatus.textContent = '';
+        invitationResult.classList.remove('d-none');
     }
 
     /**
@@ -706,12 +736,12 @@ export function adminPage({navigate, currentUser}) {
             void loadInvitationInfo();
         }
 
-        if (tab === 'creature') {
-            if (!creatureHomeData && !creatureLoading) {
-                void loadCreatureSelection();
-            } else {
-                tickCreatureDeadline();
-            }
+        if (tab === 'creature' && !creatureLoading) {
+            // 탭에 다시 들어올 때 공동 관리자의 변경과 최신 권한을 확인합니다.
+            void loadCreatureSelection({
+                preserveDraft: true,
+                verifyRole: true
+            });
         }
     }
 
@@ -737,7 +767,8 @@ export function adminPage({navigate, currentUser}) {
     /**
      * 활성 초대 링크의 발급 정보를 서버에서 조회합니다.
      * 조회에 실패하면 재발급을 잠그고 재조회를 요청하도록 안내합니다.
-     * 수동 재조회 시 화면에 남은 새 URL도 제거합니다.
+     * 동일 발급 정보가 확인되면 메모리에 보관한 일회성 URL을 다시 표시합니다.
+     * 조회 실패 중에는 URL을 숨겨 유효하다고 오인하지 않게 합니다.
      *
      * @returns {Promise<void>} 화면 갱신 작업
      */
@@ -750,8 +781,8 @@ export function adminPage({navigate, currentUser}) {
         invitationLoaded = false;
         invitationData = null;
 
-        // 재조회 시 기존의 일회성 URL을 다시 제공하지 않습니다.
-        clearOneTimeInvitationUrl();
+        // 동일 발급임이 확인되기 전까지 URL을 화면에서만 숨깁니다.
+        hideOneTimeInvitationUrlForVerification();
         invitationError.classList.add('d-none');
         invitationRotateOpen.disabled = true;
         invitationRefresh.disabled = true;
@@ -774,6 +805,15 @@ export function adminPage({navigate, currentUser}) {
             invitationData = data;
             invitationLoaded = true;
             renderInvitationInfo(data);
+
+            if (oneTimeInvitationUrl) {
+                if (isSameInvitationIssuance(oneTimeInvitationKey, data)) {
+                    revealOneTimeInvitationUrl();
+                } else {
+                    // 다른 관리자가 재발급한 링크라면 기존 URL은 폐기합니다.
+                    clearOneTimeInvitationUrl();
+                }
+            }
 
         } catch (error) {
             if (!mounted || version !== invitationLoadVersion) return;
@@ -831,6 +871,9 @@ export function adminPage({navigate, currentUser}) {
         invitationRefresh.disabled = true;
         invitationDialogError.classList.add('d-none');
 
+        // 재발급 결과가 확정되기 전에는 기존 URL을 유효한 링크로 표시하지 않습니다.
+        hideOneTimeInvitationUrlForVerification();
+
         try {
             const result = await rotateInvitation();
 
@@ -851,6 +894,7 @@ export function adminPage({navigate, currentUser}) {
             renderInvitationInfo(result);
 
             oneTimeInvitationUrl = result.invitationUrl;
+            oneTimeInvitationKey = invitationIssuanceKey(result);
             invitationUrlInput.value = oneTimeInvitationUrl;
             invitationResult.classList.remove('d-none');
 
@@ -862,7 +906,7 @@ export function adminPage({navigate, currentUser}) {
             // 응답 손실 시 서버에서 발급이 완료됐을 가능성도 있습니다.
             invitationLoaded = false;
             invitationData = null;
-            clearOneTimeInvitationUrl();
+            hideOneTimeInvitationUrlForVerification();
 
             invitationDialogError.textContent =
                 '재발급 결과를 확정할 수 없습니다. ' +
@@ -935,7 +979,7 @@ export function adminPage({navigate, currentUser}) {
     function canManageCreature() {
         const role = groupData?.myMembership?.role;
 
-        return role === 'PRIMARY' || role === 'DEPUTY';
+        return canManageCreatureSelection(role);
     }
 
     /**
@@ -1195,30 +1239,48 @@ export function adminPage({navigate, currentUser}) {
      * 두 API를 병렬 호출하고 성공한 최신 결과만 화면에 적용합니다.
      * 이전 페이지나 이전 요청의 응답은 무시합니다.
      *
-     * @param {{afterSave?: boolean}} options 저장 후 재조회 여부
+     * 저장하지 않은 선택은 서버 기준값이 바뀌지 않은 경우에만 유지합니다.
+     * 저장 직전에는 최신 관리자 권한도 함께 확인합니다.
+     *
+     * @param {{
+     *   afterSave?: boolean,
+     *   beforeSave?: boolean,
+     *   preserveDraft?: boolean,
+     *   verifyRole?: boolean
+     * }} options 조회 목적과 사용자 초안 보존 여부
      * @returns {Promise<boolean>} 최신 정보 조회 성공 여부
      */
-    async function loadCreatureSelection({afterSave = false} = {}) {
+    async function loadCreatureSelection({
+        afterSave = false,
+        beforeSave = false,
+        preserveDraft = false,
+        verifyRole = false
+    } = {}) {
         if (
             !mounted ||
             !canManageCreature() ||
             creatureLoading ||
             busy ||
             rotatingInvitation ||
-            (creatureSaving && !afterSave)
+            (creatureSaving && !afterSave && !beforeSave)
         ) {
             return false;
         }
 
         const version = ++creatureLoadVersion;
+        const previousBaselineId = creatureBaselineId;
+        const previousDraftId = creatureSelectedId;
         creatureLoading = true;
+        creatureReconcileOutcome = 'SYNCED';
 
-        // 이전 정보로 다시 저장하지 못하도록 상태를 비웁니다.
-        creatureHomeData = null;
-        creatureSpeciesList = [];
-        creatureSelectedId = '';
-
-        creatureOptions.replaceChildren();
+        // 최초 조회에서는 빈 화면을 사용하고, 재조회에서는 초안과 기존 목록을 유지합니다.
+        if (!preserveDraft) {
+            creatureHomeData = null;
+            creatureSpeciesList = [];
+            creatureSelectedId = '';
+            creatureBaselineId = '';
+            creatureOptions.replaceChildren();
+        }
         creatureError.classList.add('d-none');
 
         if (!afterSave) {
@@ -1228,11 +1290,15 @@ export function adminPage({navigate, currentUser}) {
         renderCreatureStatus();
 
         try {
-            // 기존 크리처 홈 API와 종 목록 API를 재사용합니다.
-            const [home, species] = await Promise.all([
+            // 기존 Snapshot·종 목록 API를 재사용하고 필요할 때 최신 역할도 확인합니다.
+            const requests = [
                 getCreatureHome(),
                 getActiveCreatureSpecies()
-            ]);
+            ];
+
+            if (verifyRole) requests.push(getMyGroup());
+
+            const [home, species, latestGroup] = await Promise.all(requests);
 
             if (!mounted || version !== creatureLoadVersion) {
                 return false;
@@ -1248,16 +1314,44 @@ export function adminPage({navigate, currentUser}) {
                 );
             }
 
+            if (verifyRole) {
+                const latestRole = latestGroup?.myMembership?.role;
+
+                if (!canManageCreatureSelection(latestRole)) {
+                    navigate('/group');
+                    return false;
+                }
+
+                // 이후 UI 판정과 저장 버튼도 최신 역할을 사용합니다.
+                groupData = latestGroup;
+            }
+
             creatureHomeData = home;
             creatureSpeciesList = species;
 
             const savedId = home.creature.creatureSpeciesId;
+            const latestId = normalizeCreatureSpeciesId(savedId);
 
-            // 현재 서버에 저장된 선택을 라디오 버튼의 초기값으로 사용합니다.
-            creatureSelectedId =
-                savedId === null || savedId === undefined
-                    ? ''
-                    : String(savedId);
+            if (preserveDraft) {
+                const reconciliation = reconcileCreatureSelectionDraft({
+                    baselineId: previousBaselineId,
+                    draftId: previousDraftId,
+                    latestId,
+                    activeSpeciesIds: species.map(
+                        item => item.creatureSpeciesId
+                    ),
+                    selectionOpen: isCreatureSelectionOpen()
+                });
+
+                creatureSelectedId = reconciliation.selectedId;
+                creatureReconcileOutcome = reconciliation.outcome;
+
+            } else {
+                creatureSelectedId = latestId;
+            }
+
+            // 다음 재조회에서는 이번 서버 선택을 비교 기준으로 사용합니다.
+            creatureBaselineId = latestId;
 
             // 최초 조회 시 이미 마감된 경우 중복 자동 조회하지 않습니다.
             const deadlineAt = Date.parse(
@@ -1269,6 +1363,21 @@ export function adminPage({navigate, currentUser}) {
                 Date.now() >= deadlineAt;
 
             renderCreatureOptions();
+
+            if (creatureReconcileOutcome === 'CONFLICT') {
+                creatureFeedback.className = 'alert alert-warning mt-3';
+                creatureFeedback.textContent =
+                    '다른 관리자가 크리처 종을 변경했습니다. ' +
+                    '최신 선택을 표시했으니 다시 선택해 주세요.';
+                creatureFeedback.classList.remove('d-none');
+
+            } else if (creatureReconcileOutcome === 'ALREADY_APPLIED') {
+                creatureFeedback.className = 'alert alert-info mt-3';
+                creatureFeedback.textContent =
+                    '동일한 크리처 종 선택이 이미 서버에 반영되었습니다.';
+                creatureFeedback.classList.remove('d-none');
+            }
+
             return true;
 
         } catch (error) {
@@ -1320,7 +1429,10 @@ export function adminPage({navigate, currentUser}) {
         ) {
             // 시간이 지난 후에는 서버의 실제 상태를 확인합니다.
             creatureDeadlineChecked = true;
-            void loadCreatureSelection();
+            void loadCreatureSelection({
+                preserveDraft: true,
+                verifyRole: true
+            });
         }
     }
 
@@ -1367,27 +1479,49 @@ export function adminPage({navigate, currentUser}) {
             return;
         }
 
-        const speciesId = Number(creatureSelectedId);
-        const currentId =
-            creatureHomeData?.creature?.creatureSpeciesId;
-
-        if (
-            !Number.isSafeInteger(speciesId) ||
-            speciesId <= 0 ||
-            !creatureSpeciesList.some(
-                item => Number(item.creatureSpeciesId) === speciesId
-            ) ||
-            String(currentId ?? '') === creatureSelectedId
-        ) {
-            return;
-        }
-
         creatureSaving = true;
         creatureFeedback.classList.add('d-none');
         creatureError.classList.add('d-none');
         renderCreatureStatus();
 
         try {
+            // 저장 직전 최신 선택·마감·관리자 권한을 확인합니다.
+            const preflightSucceeded = await loadCreatureSelection({
+                beforeSave: true,
+                preserveDraft: true,
+                verifyRole: true
+            });
+
+            if (!mounted || !preflightSucceeded) return;
+
+            // 다른 관리자의 변경은 최신 상태를 표시한 뒤 사용자가 다시 선택하게 합니다.
+            if (
+                creatureReconcileOutcome === 'CONFLICT' ||
+                creatureReconcileOutcome === 'ALREADY_APPLIED'
+            ) {
+                return;
+            }
+
+            if (!isCreatureSelectionOpen()) {
+                creatureError.textContent =
+                    '크리처 종 선택 권한 또는 선택 가능 시간이 종료되었습니다.';
+                creatureError.classList.remove('d-none');
+                return;
+            }
+
+            const speciesId = Number(creatureSelectedId);
+
+            if (
+                !Number.isSafeInteger(speciesId) ||
+                speciesId <= 0 ||
+                !creatureSpeciesList.some(
+                    item => Number(item.creatureSpeciesId) === speciesId
+                ) ||
+                creatureBaselineId === creatureSelectedId
+            ) {
+                return;
+            }
+
             // 서버에서 부화 기한·권한·활성 종을 최종 확인합니다.
             await selectCreatureSpecies(speciesId);
 
@@ -1395,7 +1529,8 @@ export function adminPage({navigate, currentUser}) {
 
             // 요청 성공 직후 서버의 실제 선택 상태를 다시 조회합니다.
             const refreshed = await loadCreatureSelection({
-                afterSave: true
+                afterSave: true,
+                verifyRole: true
             });
 
             if (!mounted) return;
@@ -1442,7 +1577,10 @@ export function adminPage({navigate, currentUser}) {
 
             // 마감 또는 동시성 오류 시 최신 서버 상태를 다시 확인합니다.
             if (hasStateChanged) {
-                await loadCreatureSelection({afterSave: true});
+                await loadCreatureSelection({
+                    afterSave: true,
+                    verifyRole: true
+                });
             }
 
             if (!mounted) return;
@@ -1993,7 +2131,10 @@ export function adminPage({navigate, currentUser}) {
      * 부화 처리 대기 중에도 사용자가 직접 상태를 재확인할 수 있습니다.
      */
     function onCreatureRefresh() {
-        void loadCreatureSelection();
+        void loadCreatureSelection({
+            preserveDraft: true,
+            verifyRole: true
+        });
     }
 
     /**
@@ -2052,6 +2193,8 @@ export function adminPage({navigate, currentUser}) {
             creatureHomeData = null;
             creatureSpeciesList = [];
             creatureSelectedId = '';
+            creatureBaselineId = '';
+            creatureReconcileOutcome = 'SYNCED';
 
             // 페이지가 종료된 후 도착하는 초대 조회 응답을 무시합니다.
             invitationLoadVersion++;
