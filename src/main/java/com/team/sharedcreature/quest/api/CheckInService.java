@@ -216,30 +216,27 @@ public class CheckInService {
     /**
      * 체크인을 귀속할 현재 그룹 시즌을 쓰기 잠금으로 조회합니다.
      *
-     * 활성 시즌 또는 그룹 시즌이 없거나 그룹 시즌이 종료 상태이면
-     * 체크인 처리를 거절합니다.
+     * 그룹 시즌이 없거나 종료 상태이면 체크인 처리를 거절합니다.
      *
      * @param membership 사용자의 활성 그룹 멤버십
      * @param season 체크인 시작 시 공유 잠금을 획득한 현재 시즌
-     * @throws BusinessException 현재 그룹 시즌이 활성 상태가 아니면 409 QUEST_PERIOD_ENDED
+     * @throws BusinessException 그룹 시즌이 없으면 404 RESOURCE_NOT_FOUND,
+     *                           종료 상태이면 409 GROUP_SEASON_ENDED
      */
-    private GroupSeason findActiveGroupSeason(GroupMembership membership, Season season) {
+    private GroupSeason findRewardableGroupSeason(GroupMembership membership, Season season) {
         GroupSeason groupSeason = groupSeasonRepository
                 .findForUpdateByGroupIdAndSeasonId(
                         membership.getGroup().getId(),
                         season.getId()
                 )
-                // 409 QUEST_PERIOD_ENDED 퀘스트 유효 기간 밖
                 .orElseThrow(() -> new BusinessException(
-                        ErrorCode.QUEST_PERIOD_ENDED,
-                        "현재 그룹 시즌이 활성 상태가 아닙니다."
+                        ErrorCode.RESOURCE_NOT_FOUND,
+                        "그룹 시즌을 찾을 수 없습니다."
                 ));
 
-        if (groupSeason.getStatus() != GroupSeasonStatus.ACTIVE) {
-            throw new BusinessException(
-                    ErrorCode.QUEST_PERIOD_ENDED,
-                    "현재 그룹 시즌이 활성 상태가 아닙니다."
-            );
+        if (groupSeason.getStatus() != GroupSeasonStatus.PREPARING
+                && groupSeason.getStatus() != GroupSeasonStatus.ACTIVE) {
+            throw new BusinessException(ErrorCode.GROUP_SEASON_ENDED);
         }
 
         return groupSeason;
@@ -256,10 +253,10 @@ public class CheckInService {
     @Transactional
     public CheckInResponse createCheckIn(Long userId) {
         // 퀘스트 완료와 같은 순서로 시즌 공유 잠금을 먼저 획득합니다.
-        Season season = seasonQueryService.findCurrentSeasonForShare();
+        Season season = seasonQueryService.findCurrentQuestSeasonForShare();
         User user = findUserForUpdate(userId);
         GroupMembership membership = findActiveMembership(userId);
-        GroupSeason groupSeason = findActiveGroupSeason(membership, season);
+        GroupSeason groupSeason = findRewardableGroupSeason(membership, season);
 
         // 시간 및 날짜 계산
         Instant checkedInAt = Instant.now(clock);

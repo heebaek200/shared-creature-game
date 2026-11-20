@@ -3,6 +3,7 @@ package com.team.sharedcreature.payment.application;
 import com.team.sharedcreature._core.exception.BusinessException;
 import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
+import com.team.sharedcreature.payment.api.RefundResponse;
 import com.team.sharedcreature.payment.domain.Purchase;
 import com.team.sharedcreature.payment.domain.RefundRequest;
 import com.team.sharedcreature.payment.domain.RefundStatus;
@@ -33,7 +34,7 @@ class RefundWithdrawalServiceTest {
                 refund.getPurchase(), null, refund
         ));
 
-        var response = service.withdrawRefundRequest(1L, 10L);
+        RefundResponse response = service.withdrawRefundRequest(1L, 10L);
 
         assertThat(response.status()).isEqualTo(RefundStatus.WITHDRAWN);
         assertThat(response.withdrawnAt()).isEqualTo(NOW);

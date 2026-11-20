@@ -52,7 +52,7 @@ class RestApiExceptionHandlerTest {
 
     @Test
     void 채팅_전송_제한은_Retry_After_Header를_반환한다() {
-        var response = handler.handleChatRateLimit(
+        ResponseEntity<ErrorResponse> response = handler.handleChatRateLimit(
                 new ChatRateLimitException(2), request("request-chat"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);

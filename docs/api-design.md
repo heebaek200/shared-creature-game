@@ -123,6 +123,8 @@
 | 409 | `INACTIVITY_REQUIREMENT_NOT_MET` | 비활동 강퇴 조건 미충족 |
 | 409 | `PRIMARY_TRANSFER_REQUIRED` | 주 관리자 이전이 필요 |
 | 409 | `CREATURE_SELECTION_CLOSED` | 종 선택 72시간 종료 |
+| 409 | `SEASON_NOT_ACTIVE` | 요청한 퀘스트의 공통 시즌이 활성 상태가 아님 |
+| 409 | `GROUP_SEASON_ENDED` | 요청자의 그룹 시즌이 종료됨 |
 | 409 | `QUEST_PERIOD_ENDED` | 퀘스트 유효 기간 밖 |
 | 409 | `QUEST_COMPLETION_NOT_ALLOWED` | 해당 판정 유형 직접 완료 불가 |
 | 409 | `PHOTO_ATTEMPT_LIMIT_EXCEEDED` | 사진 제출 횟수 5회 초과 |
@@ -1235,7 +1237,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 ### completeQuestAssignment — `POST /api/v1/quest-assignments/{assignmentId}/completions`
 
 - **Operation ID:** `completeQuestAssignment` · **요구사항:** `REQ-QST-002` · **인증·권한:** `GROUP_MEMBER` · **성공 HTTP:** `200`
-- **엔드포인트 조건:** Body 없음. SELF_CHECK에만 직접 완료 허용, 중복 완료 시 기존 확정 결과 재전송.
+- **엔드포인트 조건:** Body 없음. SELF_CHECK에만 직접 완료 허용. 공통 시즌 `ACTIVE`와 유효한 배정 기간에서 그룹 시즌 `PREPARING`·`ACTIVE` 완료를 허용하며, 중복 완료 시 기존 확정 결과를 재전송합니다.
 
 **요청 필드**
 
@@ -1271,6 +1273,8 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | 400 | `INVALID_FIELD_VALUE` | 필드 타입·길이·값·형식 검증 실패 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
 | 404 | `RESOURCE_NOT_FOUND` | 없거나 요청자에게 노출하지 않는 리소스 |
+| 409 | `SEASON_NOT_ACTIVE` | 배정의 공통 시즌이 활성 상태가 아님 |
+| 409 | `GROUP_SEASON_ENDED` | 요청자의 그룹 시즌이 종료됨 |
 | 409 | `QUEST_PERIOD_ENDED` | 퀘스트 유효 기간 밖 |
 | 409 | `QUEST_COMPLETION_NOT_ALLOWED` | 해당 판정 유형 직접 완료 불가 |
 | 409 | `CONCURRENT_MODIFICATION` | 현재 시즌·기간 정상화 중, 동시 처리 또는 이미 변경된 리소스 |
@@ -1278,7 +1282,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 ### createCheckIn — `POST /api/v1/check-ins`
 
 - **Operation ID:** `createCheckIn` · **요구사항:** `REQ-QST-003` · **인증·권한:** `GROUP_MEMBER` · **성공 HTTP:** `200`
-- **엔드포인트 조건:** KST 일 1회, 05:00 이상 09:00 미만 오전 기상 판정. Body 없음.
+- **엔드포인트 조건:** KST 일 1회, 05:00 이상 09:00 미만 오전 기상 판정. 그룹 시즌 `PREPARING`·`ACTIVE`에서 허용. Body 없음.
 
 **요청 필드**
 
@@ -1307,6 +1311,9 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | 403 | `ROLE_FORBIDDEN` | 요청자 권한 부족 |
 | 403 | `CSRF_INVALID` | CSRF 토큰 없음 또는 불일치 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
+| 404 | `RESOURCE_NOT_FOUND` | 현재 시즌의 그룹 시즌 정보가 없음 |
+| 409 | `SEASON_NOT_ACTIVE` | 현재 공통 시즌이 활성 상태가 아님 |
+| 409 | `GROUP_SEASON_ENDED` | 요청자의 그룹 시즌이 종료됨 |
 | 409 | `QUEST_PERIOD_ENDED` | 퀘스트 유효 기간 밖 |
 | 409 | `CONCURRENT_MODIFICATION` | 현재 시즌·기간 정상화 중, 동시 처리 또는 이미 변경된 리소스 |
 
@@ -1358,6 +1365,8 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
 | 413 | `FILE_TOO_LARGE` | 사진 10 MiB 초과 |
 | 409 | `PHOTO_ATTEMPT_LIMIT_EXCEEDED` | 사진 제출 횟수 5회 초과 |
+| 409 | `SEASON_NOT_ACTIVE` | 배정의 공통 시즌이 활성 상태가 아님 |
+| 409 | `GROUP_SEASON_ENDED` | 요청자의 그룹 시즌이 종료됨 |
 | 409 | `QUEST_PERIOD_ENDED` | 퀘스트 유효 기간 밖 |
 | 409 | `CONCURRENT_MODIFICATION` | 현재 시즌·기간 정상화 중 또는 이미 변경된 리소스 |
 | 429 | `RATE_LIMIT_EXCEEDED` | 호출량/동시 처리 제한 초과 |

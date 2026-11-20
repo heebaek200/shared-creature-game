@@ -16,7 +16,9 @@ import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.group.infrastructure.GroupMembershipRepository;
 import com.team.sharedcreature.quest.domain.QuestAssignment;
 import com.team.sharedcreature.quest.domain.QuestCompletion;
+import com.team.sharedcreature.quest.domain.PhotoSubmission;
 import com.team.sharedcreature.quest.domain.QuestPeriod;
+import com.team.sharedcreature.quest.domain.QuestTemplate;
 import com.team.sharedcreature.quest.domain.QuestRewardLedger;
 import com.team.sharedcreature.quest.domain.QuestRewardType;
 import com.team.sharedcreature.quest.domain.QuestVerificationType;
@@ -53,7 +55,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -65,6 +69,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -94,6 +99,7 @@ class QuestCompletionServiceTest {
     @Mock private QuestAssignmentRepository assignmentRepository;
     @Mock private QuestCompletionRepository completionRepository;
     @Mock private PhotoSubmissionRepository photoSubmissionRepository;
+    @Mock private ObjectMapper objectMapper;
 
     private QuestCompletionService service;
     private User user;
@@ -128,7 +134,7 @@ class QuestCompletionServiceTest {
                 completionRepository,
                 photoSubmissionRepository,
                 Clock.fixed(NOW, ZoneOffset.UTC),
-                mock(ObjectMapper.class)
+                objectMapper
         );
 
         user = mock(User.class);
@@ -180,9 +186,13 @@ class QuestCompletionServiceTest {
                 .thenReturn(Optional.of(groupSeason));
     }
 
-    @Test
-    void 완료_보상은_요청값이_아닌_배정_Snapshot의_경험치와_기여도를_사용한다() {
-        givenValidSelfCheckAssignment();
+    @ParameterizedTest
+    @EnumSource(value = GroupSeasonStatus.class, names = {"PREPARING", "ACTIVE"})
+    void 부화전과_부화후_완료_보상은_배정_Snapshot의_경험치와_기여도를_사용한다(
+            GroupSeasonStatus groupSeasonStatus
+    ) {
+        givenValidSelfCheckAssignment(groupSeasonStatus);
+        givenRewardDomain(QuestPeriodType.WEEKLY);
         when(completionRepository.findAllByUserIdAndQuestAssignmentIdIn(7L, List.of(11L)))
                 .thenReturn(List.of());
         when(groupCreatureRepository.findForUpdateByGroupSeasonId(31L))
@@ -216,6 +226,129 @@ class QuestCompletionServiceTest {
         verify(creatureUpdateEventPublisher).publishAfterCommit(any());
     }
 
+    @Test
+    void 부화전_SERVER_EVENT_기상_체크인은_완료와_보상을_반영한다() {
+        givenValidRewardAssignment(
+                GroupSeasonStatus.PREPARING,
+                QuestVerificationType.SERVER_EVENT,
+                "D-M-01"
+        );
+        givenRewardPersistence(QuestPeriodType.DAILY);
+        when(seasonQueryService.findCurrentSeason()).thenReturn(season);
+        when(period.getPeriodDate()).thenReturn(NOW.atZone(ZoneOffset.UTC).toLocalDate());
+        when(serviceCheckInRepository.existsByUserIdAndCheckInDateAndIsMorningTrue(
+                7L,
+                NOW.atZone(ZoneOffset.UTC).toLocalDate(),
+                41L,
+                31L
+        )).thenReturn(true);
+
+        QuestCompletionResponse response = service.completeServerEventAssignment(7L, 11L);
+
+        assertThat(response.getCreatureExperienceAwarded()).isEqualTo(300L);
+        verify(rewardLedgerRepository).saveAll(any());
+        verify(creatureExperienceLedgerRepository).save(any());
+    }
+
+    @Test
+    void 부화전_AGGREGATE_체크인_조건을_충족하면_완료와_보상을_반영한다() throws Exception {
+        givenValidRewardAssignment(
+                GroupSeasonStatus.PREPARING,
+                QuestVerificationType.AGGREGATE,
+                "W-L-01"
+        );
+        givenRewardPersistence(QuestPeriodType.WEEKLY);
+        givenTargetSnapshot(3);
+        when(period.getPeriodDate()).thenReturn(java.time.LocalDate.of(2026, 11, 2));
+        when(serviceCheckInRepository.countCheckInsInDateRange(
+                7L,
+                41L,
+                31L,
+                java.time.LocalDate.of(2026, 11, 2),
+                java.time.LocalDate.of(2026, 11, 9)
+        )).thenReturn(3L);
+
+        Optional<QuestCompletionResponse> response =
+                service.completeCheckInAggregateIfEligible(7L, 11L);
+
+        assertThat(response).isPresent();
+        assertThat(response.orElseThrow().getContributionAwarded()).isEqualTo(60L);
+        verify(rewardLedgerRepository).saveAll(any());
+    }
+
+    @Test
+    void 부화전_PHOTO_EXIF_인증은_완료와_보상을_함께_반영한다() throws Exception {
+        givenValidRewardAssignment(
+                GroupSeasonStatus.PREPARING,
+                QuestVerificationType.PHOTO_EXIF,
+                null
+        );
+        givenRewardPersistence(QuestPeriodType.WEEKLY);
+        givenTargetSnapshot(1);
+        PhotoSubmission submission = mock(PhotoSubmission.class);
+        when(submission.getUser()).thenReturn(user);
+        when(submission.getQuestAssignment()).thenReturn(assignment);
+        when(photoSubmissionRepository.findForVerificationUpdate(71L))
+                .thenReturn(Optional.of(submission));
+        Instant capturedAt = NOW.minusSeconds(3600);
+        BigDecimal latitude = BigDecimal.valueOf(37.5);
+        BigDecimal longitude = BigDecimal.valueOf(127.0);
+
+        Optional<QuestCompletionResponse> response = service.completePhotoExifAssignment(
+                7L,
+                11L,
+                71L,
+                capturedAt,
+                latitude,
+                longitude
+        );
+
+        assertThat(response).isPresent();
+        verify(submission).markValid(capturedAt, latitude, longitude, NOW);
+        verify(rewardLedgerRepository).saveAll(any());
+    }
+
+    @Test
+    void 종료된_그룹_시즌은_기간_종료와_구분해_거절한다() {
+        givenValidSelfCheckAssignment(GroupSeasonStatus.ENDED);
+        when(completionRepository.findAllByUserIdAndQuestAssignmentIdIn(7L, List.of(11L)))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.completeQuestAssignment(7L, 11L))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.GROUP_SEASON_ENDED));
+
+        verifyNoInteractions(rewardLedgerRepository, creatureExperienceLedgerRepository);
+    }
+
+    @Test
+    void 비활성_시즌은_완료와_보상을_차단한다() {
+        givenValidSelfCheckAssignment(GroupSeasonStatus.PREPARING);
+        when(season.isActiveAt(NOW)).thenReturn(false);
+        when(completionRepository.findAllByUserIdAndQuestAssignmentIdIn(7L, List.of(11L)))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.completeQuestAssignment(7L, 11L))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.SEASON_NOT_ACTIVE));
+
+        verifyNoInteractions(rewardLedgerRepository, creatureExperienceLedgerRepository);
+    }
+
+    @Test
+    void 만료된_퀘스트_기간은_완료와_보상을_차단한다() {
+        givenValidSelfCheckAssignment(GroupSeasonStatus.PREPARING);
+        when(period.getEndAt()).thenReturn(NOW);
+        when(completionRepository.findAllByUserIdAndQuestAssignmentIdIn(7L, List.of(11L)))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.completeQuestAssignment(7L, 11L))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.QUEST_PERIOD_ENDED));
+
+        verifyNoInteractions(rewardLedgerRepository, creatureExperienceLedgerRepository);
+    }
+
     @ParameterizedTest
     @MethodSource("savedAndLegacyGrowthStages")
     void 이미_완료한_배정은_시즌이_끝난_뒤에도_기존_결과를_반환한다(
@@ -226,7 +359,6 @@ class QuestCompletionServiceTest {
         when(userRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(user));
         when(membershipRepository.findActiveWithGroupByUserId(7L))
                 .thenReturn(Optional.of(membership));
-        when(seasonQueryService.findCurrentSeasonForShareIfPresent()).thenReturn(Optional.empty());
         when(assignment.getId()).thenReturn(11L);
         when(assignment.getVerificationTypeSnapshot()).thenReturn(QuestVerificationType.SELF_CHECK);
         when(assignmentRepository.findWithSnapshotById(11L)).thenReturn(Optional.of(assignment));
@@ -268,6 +400,8 @@ class QuestCompletionServiceTest {
         assertThat(response.getGroupSeasonScore()).isEqualTo(120L);
         verify(seasonQueryService, never()).findCurrentSeason();
         verify(creatureUpdateEventPublisher, never()).publishAfterCommit(any());
+        verify(rewardLedgerRepository, never()).saveAll(any());
+        verify(creatureExperienceLedgerRepository, never()).save(any());
     }
 
     /** 저장된 다섯 단계와 과거 미기록 데이터의 부화 전·후 복원 경로를 검증합니다. */
@@ -282,38 +416,91 @@ class QuestCompletionServiceTest {
         return java.util.stream.Stream.concat(saved, legacy);
     }
 
-    private void givenValidSelfCheckAssignment() {
-        when(user.getId()).thenReturn(7L);
-        when(group.getId()).thenReturn(9L);
-        when(membership.getGroup()).thenReturn(group);
+    private void givenValidSelfCheckAssignment(GroupSeasonStatus groupSeasonStatus) {
+        givenValidRewardAssignment(
+                groupSeasonStatus,
+                QuestVerificationType.SELF_CHECK,
+                null
+        );
+        when(seasonQueryService.findCurrentSeasonForShareIfPresent())
+                .thenReturn(Optional.of(season));
+    }
+
+    private void givenValidRewardAssignment(
+            GroupSeasonStatus groupSeasonStatus,
+            QuestVerificationType verificationType,
+            String templateCode
+    ) {
+        lenient().when(group.getId()).thenReturn(9L);
+        lenient().when(membership.getGroup()).thenReturn(group);
         when(season.getId()).thenReturn(3L);
-        when(groupSeason.getId()).thenReturn(31L);
-        when(groupSeason.getStatus()).thenReturn(GroupSeasonStatus.ACTIVE);
-        when(groupSeason.getSeason()).thenReturn(season);
-        when(groupSeason.getGroup()).thenReturn(group);
-        when(membership.getId()).thenReturn(41L);
+        lenient().when(groupSeason.getStatus()).thenReturn(groupSeasonStatus);
         when(period.getSeason()).thenReturn(season);
         when(period.getStatus()).thenReturn(QuestPeriodStatus.ACTIVE);
-        when(period.getPeriodType()).thenReturn(QuestPeriodType.WEEKLY);
         when(period.getStartAt()).thenReturn(NOW.minusSeconds(60));
         when(period.getEndAt()).thenReturn(NOW.plusSeconds(60));
         when(assignment.getId()).thenReturn(11L);
         when(assignment.getQuestPeriod()).thenReturn(period);
-        when(assignment.getVerificationTypeSnapshot()).thenReturn(QuestVerificationType.SELF_CHECK);
-        when(assignment.getCreatureExperienceSnapshot()).thenReturn(300L);
-        when(assignment.getContributionScoreSnapshot()).thenReturn(60L);
-        when(creature.getGroupSeason()).thenReturn(groupSeason);
-        when(creature.getId()).thenReturn(51L);
+        when(assignment.getVerificationTypeSnapshot()).thenReturn(verificationType);
 
-        when(seasonQueryService.findCurrentSeasonForShareIfPresent())
-                .thenReturn(Optional.of(season));
-        when(seasonQueryService.findCurrentSeason()).thenReturn(season);
+        if (templateCode != null && verificationType != QuestVerificationType.PHOTO_EXIF) {
+            QuestTemplate template = mock(QuestTemplate.class);
+            when(assignment.getQuestTemplate()).thenReturn(template);
+            when(template.getCode()).thenReturn(templateCode);
+        }
+
+        when(season.isActiveAt(NOW)).thenReturn(true);
+        if (verificationType != QuestVerificationType.SELF_CHECK) {
+            when(seasonQueryService.findCurrentQuestSeasonForShare()).thenReturn(season);
+        }
         when(userRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(user));
         when(membershipRepository.findActiveWithGroupByUserId(7L))
                 .thenReturn(Optional.of(membership));
         when(assignmentRepository.findWithSnapshotById(11L))
                 .thenReturn(Optional.of(assignment));
-        when(groupSeasonRepository.findForUpdateByGroupIdAndSeasonId(9L, 3L))
+        lenient().when(groupSeasonRepository.findForUpdateByGroupIdAndSeasonId(9L, 3L))
                 .thenReturn(Optional.of(groupSeason));
+    }
+
+    private void givenRewardDomain(QuestPeriodType periodType) {
+        when(user.getId()).thenReturn(7L);
+        when(groupSeason.getId()).thenReturn(31L);
+        when(groupSeason.getSeason()).thenReturn(season);
+        when(groupSeason.getGroup()).thenReturn(group);
+        when(membership.getId()).thenReturn(41L);
+        when(period.getPeriodType()).thenReturn(periodType);
+        when(assignment.getCreatureExperienceSnapshot()).thenReturn(300L);
+        when(assignment.getContributionScoreSnapshot()).thenReturn(60L);
+        when(creature.getGroupSeason()).thenReturn(groupSeason);
+        when(creature.getId()).thenReturn(51L);
+    }
+
+    private void givenRewardPersistence(QuestPeriodType periodType) {
+        givenRewardDomain(periodType);
+        when(completionRepository.findAllByUserIdAndQuestAssignmentIdIn(7L, List.of(11L)))
+                .thenReturn(List.of());
+        when(groupCreatureRepository.findForUpdateByGroupSeasonId(31L))
+                .thenReturn(Optional.of(creature));
+        when(memberContributionRepository.findByGroupSeasonIdAndUserId(31L, 7L))
+                .thenReturn(Optional.of(contribution));
+        when(groupScoreRepository.findForUpdateByGroupSeasonId(31L)).thenReturn(Optional.of(groupScore));
+        when(completionRepository.save(any(QuestCompletion.class))).thenReturn(completion);
+        when(completion.getId()).thenReturn(101L);
+        when(completion.getCompletedAt()).thenReturn(NOW);
+        when(creature.getTotalExperience()).thenReturn(800L);
+        when(creature.getGrowthStage()).thenReturn(CreatureGrowthStage.MATURE);
+        when(groupScore.getScore()).thenReturn(120L);
+        when(contribution.getContributionScore()).thenReturn(60L);
+    }
+
+    private void givenTargetSnapshot(int target) throws Exception {
+        JsonNode root = mock(JsonNode.class);
+        JsonNode targetNode = mock(JsonNode.class);
+        when(assignment.getVerificationParametersSnapshot()).thenReturn("{\"target\":" + target + "}");
+        when(objectMapper.readTree("{\"target\":" + target + "}")).thenReturn(root);
+        when(root.get("target")).thenReturn(targetNode);
+        when(targetNode.isIntegralNumber()).thenReturn(true);
+        when(targetNode.canConvertToInt()).thenReturn(true);
+        when(targetNode.asInt()).thenReturn(target);
     }
 }
