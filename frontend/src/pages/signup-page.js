@@ -230,6 +230,7 @@ export function signupPage({navigate, currentUser }) {
 
         submit.disabled = true;
         checkButton.disabled = true;
+        nickname.disabled = true;
 
         feedback.textContent = '회원가입을 진행하고 있습니다.';
         feedback.className = 'alert alert-info mb-3';
@@ -288,6 +289,7 @@ export function signupPage({navigate, currentUser }) {
 
             submit.disabled = false;
             checkButton.disabled = false;
+            nickname.disabled = false;
         }
     }
 
