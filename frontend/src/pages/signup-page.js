@@ -80,12 +80,12 @@ export function signupPage({navigate, currentUser }) {
                                         id="check-nickname"
                                         type="button"
                                     >
-                                        입력 형식 확인
+                                        확인
                                     </button>
                                 </div>
 
                             <div class="form-text">
-                                2~20자 · 중복 여부는 가입 시 확인합니다.
+                                2~20자 닉네임을 지정해 주세요.
                             </div>
                         </div>
 
@@ -135,6 +135,18 @@ export function signupPage({navigate, currentUser }) {
 
     let disposed = false;
     let contextLoaded = false;
+    let nicknameFormatPassed = false;
+    let nicknameInputVersion = 0;
+
+    // 닉네임 입력 변경 시 형식 검사 성공 안내 초기화
+    function clearNicknameFormatFeedback() {
+        if (!nicknameFormatPassed) return;
+
+        nicknameFormatPassed = false;
+        feedback.textContent = '닉네임을 입력하고 가입을 진행해 주세요.';
+        feedback.className =
+            'alert alert-secondary border-0 border-start border-4 mb-3';
+    }
 
     /** 닉네임 정규화 및 길이 검사 */
     function normalizeNickname(value) {
@@ -198,16 +210,21 @@ export function signupPage({navigate, currentUser }) {
 
     /** 닉네임 형식을 확인합니다. */
     function onCheckNickname() {
+        if (!contextLoaded) return;
+
+        clearNicknameFormatFeedback();
         if (!validateNickname()) return;
 
-        feedback.textContent =
-            '닉네임 입력 형식이 올바릅니다. 실제 중복 여부는 가입 시 확인합니다.';
+        nicknameFormatPassed = true;
+        feedback.textContent = '올바른 닉네임 형식입니다.';
         feedback.className = 'alert alert-info mb-3';
     }
 
     /** 가입 완료 */
     async function onSubmit(event) {
         event.preventDefault();
+
+        clearNicknameFormatFeedback();
 
         if (!contextLoaded || !validateNickname()) return;
 
@@ -216,6 +233,8 @@ export function signupPage({navigate, currentUser }) {
 
         feedback.textContent = '회원가입을 진행하고 있습니다.';
         feedback.className = 'alert alert-info mb-3';
+
+        const submittedInputVersion = nicknameInputVersion;
 
         try {
             const result = await completeSignup(nickname.value);
@@ -245,12 +264,22 @@ export function signupPage({navigate, currentUser }) {
                 (fieldError) => fieldError.field === 'nickname'
             );
 
-            if (error?.code === 'NICKNAME_ALREADY_USED') {
-                showNicknameError(
-                    '이미 사용 중인 닉네임입니다. 다른 닉네임을 입력해 주세요.'
-                );
-            } else if (error?.code === 'INVALID_FIELD_VALUE' && nicknameFieldError) {
-                showNicknameError(nicknameFieldError.message);
+            const isDuplicate = error?.code === 'NICKNAME_ALREADY_USED';
+            const isNicknameFieldError =
+                error?.code === 'INVALID_FIELD_VALUE' && nicknameFieldError;
+
+            if (isDuplicate || isNicknameFieldError) {
+                feedback.textContent = '닉네임을 입력하고 가입을 진행해 주세요.';
+                feedback.className =
+                    'alert alert-secondary border-0 border-start border-4 mb-3';
+
+                if (submittedInputVersion === nicknameInputVersion) {
+                    showNicknameError(
+                        isDuplicate
+                            ? '이미 사용 중인 닉네임입니다. 다른 닉네임을 입력해 주세요.'
+                            : nicknameFieldError.message
+                    );
+                }
             } else {
                 feedback.textContent =
                     error?.message || '회원가입에 실패했습니다. 다시 시도해 주세요.';
@@ -273,8 +302,9 @@ export function signupPage({navigate, currentUser }) {
 
     // 수정) 기존 익명 함수는 cleanup() 에서 이벤트 리스너를 제거할 수 없어서 이름을 지정했습니다.
     function onNicknameInput() {
+        nicknameInputVersion += 1;
         clearNicknameError();
-        checkButton.disabled = false;
+        clearNicknameFormatFeedback();
     }
 
     nickname.addEventListener('input', onNicknameInput);
