@@ -14,10 +14,16 @@ const FALLBACK_MESSAGES = {
 /**
  * 서버가 안전하게 제공한 업무 메시지를 우선하고 응답 메시지가 없을 때만 코드 문구를 사용합니다.
  *
- * @param {{code?: string, message?: string}|null|undefined} error API 또는 사진 선택 오류
+ * @param {{code?: string, message?: string, serverMessage?: string|null}|null|undefined} error API 또는 사진 선택 오류
  * @returns {string} 사용자에게 표시할 오류 문구
  */
 export function questErrorMessage(error) {
+  if (error && 'serverMessage' in error) {
+    return error.serverMessage
+      ?? FALLBACK_MESSAGES[error.code]
+      ?? '요청을 처리하지 못했습니다.';
+  }
+
   return error?.message
     ?? FALLBACK_MESSAGES[error?.code]
     ?? '요청을 처리하지 못했습니다.';

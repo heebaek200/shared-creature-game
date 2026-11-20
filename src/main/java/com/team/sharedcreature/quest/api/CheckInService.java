@@ -216,12 +216,12 @@ public class CheckInService {
     /**
      * 체크인을 귀속할 현재 그룹 시즌을 쓰기 잠금으로 조회합니다.
      *
-     * 활성 시즌 또는 그룹 시즌이 없거나 그룹 시즌이 종료 상태이면
-     * 체크인 처리를 거절합니다.
+     * 그룹 시즌이 없거나 종료 상태이면 체크인 처리를 거절합니다.
      *
      * @param membership 사용자의 활성 그룹 멤버십
      * @param season 체크인 시작 시 공유 잠금을 획득한 현재 시즌
-     * @throws BusinessException 현재 그룹 시즌이 종료 상태이면 409 GROUP_SEASON_ENDED
+     * @throws BusinessException 그룹 시즌이 없으면 404 RESOURCE_NOT_FOUND,
+     *                           종료 상태이면 409 GROUP_SEASON_ENDED
      */
     private GroupSeason findRewardableGroupSeason(GroupMembership membership, Season season) {
         GroupSeason groupSeason = groupSeasonRepository
@@ -230,7 +230,8 @@ public class CheckInService {
                         season.getId()
                 )
                 .orElseThrow(() -> new BusinessException(
-                        ErrorCode.GROUP_SEASON_ENDED
+                        ErrorCode.RESOURCE_NOT_FOUND,
+                        "그룹 시즌을 찾을 수 없습니다."
                 ));
 
         if (groupSeason.getStatus() != GroupSeasonStatus.PREPARING

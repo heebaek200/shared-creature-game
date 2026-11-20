@@ -1,9 +1,13 @@
 package com.team.sharedcreature.quest.api;
 
 import com.team.sharedcreature.quest.domain.QuestPeriodType;
+import com.team.sharedcreature.quest.domain.QuestAssignment;
+import com.team.sharedcreature.quest.domain.QuestPeriod;
+import com.team.sharedcreature.quest.domain.QuestTemplate;
 import com.team.sharedcreature.season.domain.GroupSeasonStatus;
 
 import com.team.sharedcreature._core.exception.BusinessException;
+import com.team.sharedcreature._core.exception.ErrorCode;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.auth.infrastructure.UserRepository;
 import com.team.sharedcreature.group.domain.Group;
@@ -45,9 +49,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -138,6 +144,69 @@ class CheckInServiceTest {
         verify(serviceCheckInRepository).save(any(ServiceCheckIn.class));
     }
 
+    @Test
+    void 부화전_기상_체크인은_SERVER_EVENT와_주간_AGGREGATE를_자동_완료한다() {
+        Instant now = Instant.parse("2026-11-04T20:00:00Z");
+        CheckInService service = givenService(now);
+        givenSuccessfulCheckIn(now, GroupSeasonStatus.PREPARING);
+
+        QuestPeriod dailyPeriod = mock(QuestPeriod.class);
+        QuestPeriod weeklyPeriod = mock(QuestPeriod.class);
+        QuestAssignment morningAssignment = mock(QuestAssignment.class);
+        QuestAssignment aggregateAssignment = mock(QuestAssignment.class);
+        QuestTemplate morningTemplate = mock(QuestTemplate.class);
+        QuestTemplate aggregateTemplate = mock(QuestTemplate.class);
+        when(dailyPeriod.getId()).thenReturn(101L);
+        when(weeklyPeriod.getId()).thenReturn(102L);
+        when(morningAssignment.getId()).thenReturn(201L);
+        when(aggregateAssignment.getId()).thenReturn(202L);
+        when(morningAssignment.getQuestTemplate()).thenReturn(morningTemplate);
+        when(aggregateAssignment.getQuestTemplate()).thenReturn(aggregateTemplate);
+        when(morningTemplate.getCode()).thenReturn("D-M-01");
+        when(aggregateTemplate.getCode()).thenReturn("W-L-01");
+        when(periodRepository.findCurrentBySeasonAndType(9L, QuestPeriodType.DAILY, now))
+                .thenReturn(Optional.of(dailyPeriod));
+        when(periodRepository.findCurrentBySeasonAndType(9L, QuestPeriodType.WEEKLY, now))
+                .thenReturn(Optional.of(weeklyPeriod));
+        when(assignmentRepository.findAllWithSnapshotByPeriodId(101L))
+                .thenReturn(List.of(morningAssignment));
+        when(assignmentRepository.findAllWithSnapshotByPeriodId(102L))
+                .thenReturn(List.of(aggregateAssignment));
+
+        service.createCheckIn(1L);
+
+        verify(questCompletionService).completeServerEventAssignment(1L, 201L);
+        verify(questCompletionService).completeCheckInAggregateIfEligible(1L, 202L);
+    }
+
+    @Test
+    void 그룹_시즌_정보가_없으면_RESOURCE_NOT_FOUND로_거절한다() {
+        Instant now = Instant.parse("2026-11-05T01:00:00Z");
+        CheckInService service = givenService(now);
+        givenCheckInContext(now);
+        when(groupSeasonRepository.findForUpdateByGroupIdAndSeasonId(5L, 9L))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.createCheckIn(1L))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND));
+
+        verifyNoInteractions(activityEventRepository);
+    }
+
+    @Test
+    void 종료된_그룹_시즌은_GROUP_SEASON_ENDED로_거절한다() {
+        Instant now = Instant.parse("2026-11-05T01:00:00Z");
+        CheckInService service = givenService(now);
+        givenCheckInContext(now, GroupSeasonStatus.ENDED);
+
+        assertThatThrownBy(() -> service.createCheckIn(1L))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.GROUP_SEASON_ENDED));
+
+        verifyNoInteractions(activityEventRepository);
+    }
+
     private CheckInService givenService(Instant now) {
         return new CheckInService(
                 questCompletionService,
@@ -173,8 +242,8 @@ class CheckInServiceTest {
         when(season.getId()).thenReturn(9L);
         when(groupSeasonRepository.findForUpdateByGroupIdAndSeasonId(5L, 9L))
                 .thenReturn(Optional.of(groupSeason));
-        when(groupSeason.getStatus()).thenReturn(status);
-        when(serviceCheckInRepository.existsByUserIdAndCheckInDate(
+        lenient().when(groupSeason.getStatus()).thenReturn(status);
+        lenient().when(serviceCheckInRepository.existsByUserIdAndCheckInDate(
                 1L,
                 now.atZone(ZoneId.of("Asia/Seoul")).toLocalDate()
         )).thenReturn(false);

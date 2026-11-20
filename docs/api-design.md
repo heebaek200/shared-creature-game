@@ -1311,6 +1311,7 @@ OAuth 인증 실패 시 Token과 인가 코드를 노출하지 않고 `302 Locat
 | 403 | `ROLE_FORBIDDEN` | 요청자 권한 부족 |
 | 403 | `CSRF_INVALID` | CSRF 토큰 없음 또는 불일치 |
 | 400 | `INVALID_REQUEST` | JSON 형식/인코딩/필수 객체/중복 또는 미등록 입력 |
+| 404 | `RESOURCE_NOT_FOUND` | 현재 시즌의 그룹 시즌 정보가 없음 |
 | 409 | `SEASON_NOT_ACTIVE` | 현재 공통 시즌이 활성 상태가 아님 |
 | 409 | `GROUP_SEASON_ENDED` | 요청자의 그룹 시즌이 종료됨 |
 | 409 | `QUEST_PERIOD_ENDED` | 퀘스트 유효 기간 밖 |
