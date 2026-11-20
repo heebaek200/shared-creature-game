@@ -180,9 +180,12 @@ class QuestCompletionServiceTest {
                 .thenReturn(Optional.of(groupSeason));
     }
 
-    @Test
-    void 완료_보상은_요청값이_아닌_배정_Snapshot의_경험치와_기여도를_사용한다() {
-        givenValidSelfCheckAssignment();
+    @ParameterizedTest
+    @EnumSource(value = GroupSeasonStatus.class, names = {"PREPARING", "ACTIVE"})
+    void 부화전과_부화후_완료_보상은_배정_Snapshot의_경험치와_기여도를_사용한다(
+            GroupSeasonStatus groupSeasonStatus
+    ) {
+        givenValidSelfCheckAssignment(groupSeasonStatus);
         when(completionRepository.findAllByUserIdAndQuestAssignmentIdIn(7L, List.of(11L)))
                 .thenReturn(List.of());
         when(groupCreatureRepository.findForUpdateByGroupSeasonId(31L))
@@ -216,6 +219,19 @@ class QuestCompletionServiceTest {
         verify(creatureUpdateEventPublisher).publishAfterCommit(any());
     }
 
+    @Test
+    void 종료된_그룹_시즌은_기간_종료와_구분해_거절한다() {
+        givenValidSelfCheckAssignment(GroupSeasonStatus.ENDED);
+        when(completionRepository.findAllByUserIdAndQuestAssignmentIdIn(7L, List.of(11L)))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.completeQuestAssignment(7L, 11L))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.GROUP_SEASON_ENDED));
+
+        verifyNoInteractions(rewardLedgerRepository, creatureExperienceLedgerRepository);
+    }
+
     @ParameterizedTest
     @MethodSource("savedAndLegacyGrowthStages")
     void 이미_완료한_배정은_시즌이_끝난_뒤에도_기존_결과를_반환한다(
@@ -226,7 +242,6 @@ class QuestCompletionServiceTest {
         when(userRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(user));
         when(membershipRepository.findActiveWithGroupByUserId(7L))
                 .thenReturn(Optional.of(membership));
-        when(seasonQueryService.findCurrentSeasonForShareIfPresent()).thenReturn(Optional.empty());
         when(assignment.getId()).thenReturn(11L);
         when(assignment.getVerificationTypeSnapshot()).thenReturn(QuestVerificationType.SELF_CHECK);
         when(assignmentRepository.findWithSnapshotById(11L)).thenReturn(Optional.of(assignment));
@@ -282,32 +297,35 @@ class QuestCompletionServiceTest {
         return java.util.stream.Stream.concat(saved, legacy);
     }
 
-    private void givenValidSelfCheckAssignment() {
-        when(user.getId()).thenReturn(7L);
+    private void givenValidSelfCheckAssignment(GroupSeasonStatus groupSeasonStatus) {
         when(group.getId()).thenReturn(9L);
         when(membership.getGroup()).thenReturn(group);
         when(season.getId()).thenReturn(3L);
-        when(groupSeason.getId()).thenReturn(31L);
-        when(groupSeason.getStatus()).thenReturn(GroupSeasonStatus.ACTIVE);
-        when(groupSeason.getSeason()).thenReturn(season);
-        when(groupSeason.getGroup()).thenReturn(group);
-        when(membership.getId()).thenReturn(41L);
+        when(groupSeason.getStatus()).thenReturn(groupSeasonStatus);
         when(period.getSeason()).thenReturn(season);
         when(period.getStatus()).thenReturn(QuestPeriodStatus.ACTIVE);
-        when(period.getPeriodType()).thenReturn(QuestPeriodType.WEEKLY);
         when(period.getStartAt()).thenReturn(NOW.minusSeconds(60));
         when(period.getEndAt()).thenReturn(NOW.plusSeconds(60));
         when(assignment.getId()).thenReturn(11L);
         when(assignment.getQuestPeriod()).thenReturn(period);
         when(assignment.getVerificationTypeSnapshot()).thenReturn(QuestVerificationType.SELF_CHECK);
-        when(assignment.getCreatureExperienceSnapshot()).thenReturn(300L);
-        when(assignment.getContributionScoreSnapshot()).thenReturn(60L);
-        when(creature.getGroupSeason()).thenReturn(groupSeason);
-        when(creature.getId()).thenReturn(51L);
 
+        if (groupSeasonStatus != GroupSeasonStatus.ENDED) {
+            when(user.getId()).thenReturn(7L);
+            when(groupSeason.getId()).thenReturn(31L);
+            when(groupSeason.getSeason()).thenReturn(season);
+            when(groupSeason.getGroup()).thenReturn(group);
+            when(membership.getId()).thenReturn(41L);
+            when(period.getPeriodType()).thenReturn(QuestPeriodType.WEEKLY);
+            when(assignment.getCreatureExperienceSnapshot()).thenReturn(300L);
+            when(assignment.getContributionScoreSnapshot()).thenReturn(60L);
+            when(creature.getGroupSeason()).thenReturn(groupSeason);
+            when(creature.getId()).thenReturn(51L);
+        }
+
+        when(season.isActiveAt(NOW)).thenReturn(true);
         when(seasonQueryService.findCurrentSeasonForShareIfPresent())
                 .thenReturn(Optional.of(season));
-        when(seasonQueryService.findCurrentSeason()).thenReturn(season);
         when(userRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(user));
         when(membershipRepository.findActiveWithGroupByUserId(7L))
                 .thenReturn(Optional.of(membership));

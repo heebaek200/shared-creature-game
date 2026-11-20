@@ -25,6 +25,8 @@ public enum ErrorCode {
     INACTIVITY_REQUIREMENT_NOT_MET(HttpStatus.CONFLICT, "비활동 강퇴 조건을 충족하지 않습니다."),
     PRIMARY_TRANSFER_REQUIRED(HttpStatus.CONFLICT, "주 관리자 이전이 필요합니다."),
     CREATURE_SELECTION_CLOSED(HttpStatus.CONFLICT, "크리처 선택 시간이 종료됐습니다."),
+    SEASON_NOT_ACTIVE(HttpStatus.CONFLICT, "현재 진행 중인 시즌이 아닙니다."),
+    GROUP_SEASON_ENDED(HttpStatus.CONFLICT, "그룹 시즌이 종료됐습니다."),
     QUEST_PERIOD_ENDED(HttpStatus.CONFLICT, "퀘스트 유효 기간이 종료됐습니다."),
     QUEST_COMPLETION_NOT_ALLOWED(HttpStatus.CONFLICT, "직접 완료할 수 없는 퀘스트입니다."),
     PHOTO_ATTEMPT_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "사진 제출 가능 횟수를 초과했습니다."),

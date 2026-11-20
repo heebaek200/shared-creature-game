@@ -221,6 +221,7 @@ Vanilla JavaScript ES Module·Vite·Bootstrap v5 기반 Full CSR 화면과 Histo
 | 사진 | JPEG·최대 10 MiB, `accept=image/jpeg`는 안내용 |
 | HEIC·HEIF | 자동 변환하지 않고 JPEG 재촬영·내보내기 안내 |
 | 판정 | GPS·촬영 시각의 유효성만 표시, 실제 실외 활동 검증이라고 주장하지 않음 |
+| 완료 오류 | 서버의 안전한 업무 메시지를 우선 표시하고 기간 종료·시즌 비활성·그룹 시즌 종료·권한 오류를 구분 |
 
 ### 완료 확인
 

@@ -13,3 +13,4 @@ import './admin-refunds-page.test.js';
 import './payments-withdrawal-page.test.js';
 import './group-live-manager.test.js';
 import './group-admin-state-policy.test.js';
+import './quest-error-policy.test.js';

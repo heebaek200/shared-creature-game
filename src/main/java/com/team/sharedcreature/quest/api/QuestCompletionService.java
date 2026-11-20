@@ -36,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.team.sharedcreature.auth.domain.User;
 import com.team.sharedcreature.group.domain.GroupMembership;
 import com.team.sharedcreature.season.domain.GroupSeason;
+import com.team.sharedcreature.season.domain.Season;
 import com.team.sharedcreature.season.domain.SeasonMemberContribution;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -487,11 +488,7 @@ public class QuestCompletionService {
                 ));
 
         Instant now = Instant.now(clock);
-        Long currentSeasonId = seasonQueryService.findCurrentSeason().getId();
-
-        // 시즌 일치 여부
-        boolean currentSeason = assignment.getQuestPeriod().getSeason().getId()
-                .equals(currentSeasonId);
+        boolean activeSeason = assignment.getQuestPeriod().getSeason().isActiveAt(now);
 
         /**활성 기간 확인*/
         boolean activePeriod = assignment.getQuestPeriod().getStatus() == QuestPeriodStatus.ACTIVE
@@ -499,7 +496,10 @@ public class QuestCompletionService {
                 && now.isBefore(assignment.getQuestPeriod().getEndAt());
 
         // 409	QUEST_PERIOD_ENDED	퀘스트 유효 기간 밖
-        if (!currentSeason || !activePeriod) {
+        if (!activeSeason) {
+            throw new BusinessException(ErrorCode.SEASON_NOT_ACTIVE);
+        }
+        if (!activePeriod) {
             throw new BusinessException(
                     ErrorCode.QUEST_PERIOD_ENDED,
                     "퀘스트 유효 기간이 아닙니다."
@@ -586,22 +586,22 @@ public class QuestCompletionService {
         Instant now = Instant.now(clock);
         Long assignmentSeasonId = assignment.getQuestPeriod().getSeason().getId();
 
-        boolean currentSeason = seasonQueryService.findCurrentSeasonForShareIfPresent()
-                .map(season -> season.getId().equals(assignmentSeasonId))
-                .orElse(false);
+        boolean activeSeason = assignment.getQuestPeriod().getSeason().isActiveAt(now);
         boolean activePeriod = assignment.getQuestPeriod().getStatus() == QuestPeriodStatus.ACTIVE
                 && !now.isBefore(assignment.getQuestPeriod().getStartAt())
                 && now.isBefore(assignment.getQuestPeriod().getEndAt());
-        boolean activeGroupSeason = groupSeason.getStatus() == GroupSeasonStatus.ACTIVE
-                && groupSeason.getSeason().getId().equals(assignmentSeasonId);
+        boolean matchingGroupSeason = groupSeason.getSeason().getId().equals(assignmentSeasonId);
 
-        // 409  QUEST_PERIOD_ENDED  퀘스트 유효 기간 밖
-        if (!currentSeason || !activePeriod || !activeGroupSeason) {
+        if (!activeSeason) {
+            throw new BusinessException(ErrorCode.SEASON_NOT_ACTIVE);
+        }
+        if (!activePeriod) {
             throw new BusinessException(
                     ErrorCode.QUEST_PERIOD_ENDED,
                     "퀘스트 유효 기간이 아닙니다."
             );
         }
+        ensureRewardableGroupSeason(groupSeason, matchingGroupSeason);
 
         // 유저 멤버십 및 그룹 소속 위변조 방지 (보안 검증)
         // 403  ROLE_FORBIDDEN  요청자 권한 부족
@@ -622,6 +622,15 @@ public class QuestCompletionService {
                     ErrorCode.ROLE_FORBIDDEN,
                     "요청 권한이 없습니다."
             );
+        }
+    }
+
+    /** PREPARING과 ACTIVE 그룹 시즌만 완료·보상을 받을 수 있도록 검증합니다. */
+    private void ensureRewardableGroupSeason(GroupSeason groupSeason, boolean matchingSeason) {
+        boolean rewardableStatus = groupSeason.getStatus() == GroupSeasonStatus.PREPARING
+                || groupSeason.getStatus() == GroupSeasonStatus.ACTIVE;
+        if (!matchingSeason || !rewardableStatus) {
+            throw new BusinessException(ErrorCode.GROUP_SEASON_ENDED);
         }
     }
 
@@ -646,16 +655,12 @@ public class QuestCompletionService {
             );
         }
 
-        // 기존 완료 결과 재조회는 시즌이 이미 끝난 뒤에도 허용하되,
-        // 활성 시즌이 있으면 이후 사용자 잠금보다 먼저 공유 잠금을 얻습니다.
-        seasonQueryService.findCurrentSeasonForShareIfPresent();
-
-        // 401	AUTH_REQUIRED	세션 인증 없음
+        // 완료 조회보다 시즌 공유 잠금과 사용자 쓰기 잠금을 먼저 얻어 반복 읽기 Snapshot을 고정합니다.
+        Optional<Season> currentSeason =
+                seasonQueryService.findCurrentSeasonForShareIfPresent();
         User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.AUTH_REQUIRED, "로그인이 필요합니다."));
-
-        // 403	ROLE_FORBIDDEN	요청자 권한 부족
         GroupMembership membership = membershipRepository.findActiveWithGroupByUserId(userId)
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.ROLE_FORBIDDEN, "요청 권한이 없습니다."));
@@ -686,6 +691,14 @@ public class QuestCompletionService {
             return buildExistingCompletionResponse(existing);
         }
 
+        Long assignmentSeasonId = requestedAssignment.getQuestPeriod().getSeason().getId();
+        boolean currentAssignmentSeason = currentSeason
+                .map(season -> season.getId().equals(assignmentSeasonId))
+                .orElse(false);
+        if (!currentAssignmentSeason) {
+            throw new BusinessException(ErrorCode.SEASON_NOT_ACTIVE);
+        }
+
         QuestAssignment assignment = findCompletableAssignment(userId, assignmentId, QuestVerificationType.SELF_CHECK);
 
         // 404	RESOURCE_NOT_FOUND	없거나 요청자에게 노출하지 않는 리소스
@@ -695,11 +708,7 @@ public class QuestCompletionService {
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.RESOURCE_NOT_FOUND, "그룹 시즌을 찾을 수 없습니다."));
 
-        /**409	QUEST_PERIOD_ENDED	퀘스트 유효 기간 밖*/
-        if (groupSeason.getStatus() != GroupSeasonStatus.ACTIVE) {
-            throw new BusinessException(
-                    ErrorCode.QUEST_PERIOD_ENDED, "그룹 시즌이 활성 상태가 아닙니다.");
-        }
+        ensureRewardableGroupSeason(groupSeason, true);
 
         return completeAndReward(user, membership, groupSeason, assignment);
     }
@@ -720,7 +729,7 @@ public class QuestCompletionService {
             Long userId,
             Long assignmentId
     ) {
-        seasonQueryService.findCurrentSeasonForShare();
+        seasonQueryService.findCurrentQuestSeasonForShare();
 
         //401 AUTH_REQUIRED	세션 인증 없음
         User user = userRepository.findByIdForUpdate(userId)
@@ -751,12 +760,7 @@ public class QuestCompletionService {
                         "그룹 시즌을 찾을 수 없습니다."
                 ));
 
-        if (groupSeason.getStatus() != GroupSeasonStatus.ACTIVE) {
-            throw new BusinessException(
-                    ErrorCode.QUEST_PERIOD_ENDED, // 409  QUEST_PERIOD_ENDED  퀘스트 유효 기간 밖
-                    "그룹 시즌이 활성 상태가 아닙니다."
-            );
-        }
+        ensureRewardableGroupSeason(groupSeason, true);
 
         // 실제 기상 퀘스트 체크 이력 검증
         boolean morningQuest = assignment.getQuestPeriod().getPeriodType() == QuestPeriodType.DAILY
@@ -806,8 +810,7 @@ public class QuestCompletionService {
             BigDecimal latitude,
             BigDecimal longitude
     ) {
-        // 시즌 종료 처리와 경합하지 않도록 시즌 공유 잠금을 먼저 획득합니다.
-        seasonQueryService.findCurrentSeasonForShare();
+        seasonQueryService.findCurrentQuestSeasonForShare();
 
         // 사용자 행 잠금으로 같은 사용자의 동시 보상 처리를 직렬화합니다.
         User user = userRepository.findByIdForUpdate(userId)
@@ -824,7 +827,6 @@ public class QuestCompletionService {
                         "요청 권한이 없습니다."
                 ));
 
-        // 배정 존재 여부와 검증 유형을 확인합니다.
         QuestAssignment requestedAssignment =
                 assignmentRepository.findWithSnapshotById(assignmentId)
                         .orElseThrow(() -> new BusinessException(
@@ -895,12 +897,7 @@ public class QuestCompletionService {
                         "그룹 시즌을 찾을 수 없습니다."
                 ));
 
-        if (groupSeason.getStatus() != GroupSeasonStatus.ACTIVE) {
-            throw new BusinessException(
-                    ErrorCode.QUEST_PERIOD_ENDED,
-                    "그룹 시즌이 활성 상태가 아닙니다."
-            );
-        }
+        ensureRewardableGroupSeason(groupSeason, true);
 
         submission.markValid(
                 capturedAt,
@@ -966,8 +963,7 @@ public class QuestCompletionService {
             Long userId,
             Long assignmentId
     ) {
-        // 동시성 제어
-        seasonQueryService.findCurrentSeasonForShare();
+        seasonQueryService.findCurrentQuestSeasonForShare();
         // 401  AUTH_REQUIRED  세션 인증 없음
         User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(
@@ -1015,12 +1011,7 @@ public class QuestCompletionService {
                         ErrorCode.RESOURCE_NOT_FOUND,
                         "그룹 시즌을 찾을 수 없습니다."
                 ));
-        if (groupSeason.getStatus() != GroupSeasonStatus.ACTIVE) {
-            throw new BusinessException(
-                    ErrorCode.QUEST_PERIOD_ENDED,
-                    "그룹 시즌이 활성 상태가 아닙니다."
-            );
-        }
+        ensureRewardableGroupSeason(groupSeason, true);
 
         LocalDate weekStart = assignment.getQuestPeriod().getPeriodDate();
         LocalDate weekEndExclusive = weekStart.plusWeeks(1);

@@ -94,11 +94,11 @@ class CheckInServiceTest {
                 membershipRepository,
                 groupSeasonRepository
         );
-        lockOrder.verify(seasonQueryService).findCurrentSeasonForShare();
+        lockOrder.verify(seasonQueryService).findCurrentQuestSeasonForShare();
         lockOrder.verify(userRepository).findByIdForUpdate(1L);
         lockOrder.verify(membershipRepository).findActiveWithGroupByUserId(1L);
         lockOrder.verify(groupSeasonRepository).findForUpdateByGroupIdAndSeasonId(5L, 9L);
-        verify(seasonQueryService, times(1)).findCurrentSeasonForShare();
+        verify(seasonQueryService, times(1)).findCurrentQuestSeasonForShare();
 
         assertThat(response.getCheckInDate()).isEqualTo(LocalDate.of(2026, 11, 5));
         assertThat(response.isMorning()).isTrue();
@@ -125,6 +125,19 @@ class CheckInServiceTest {
         assertThat(response.getCompletedQuestIds()).isEmpty();
     }
 
+    @Test
+    void 부화전_그룹도_체크인을_기록하고_집계_근거를_남긴다() {
+        Instant now = Instant.parse("2026-11-05T00:00:00Z");
+        CheckInService service = givenService(now);
+        givenSuccessfulCheckIn(now, GroupSeasonStatus.PREPARING);
+
+        CheckInResponse response = service.createCheckIn(1L);
+
+        assertThat(response.getCheckInDate()).isEqualTo(LocalDate.of(2026, 11, 5));
+        verify(activityEventRepository).save(any(UserActivityEvent.class));
+        verify(serviceCheckInRepository).save(any(ServiceCheckIn.class));
+    }
+
     private CheckInService givenService(Instant now) {
         return new CheckInService(
                 questCompletionService,
@@ -141,6 +154,10 @@ class CheckInServiceTest {
     }
 
     private void givenCheckInContext(Instant now) {
+        givenCheckInContext(now, GroupSeasonStatus.ACTIVE);
+    }
+
+    private void givenCheckInContext(Instant now, GroupSeasonStatus status) {
         User user = mock(User.class);
         Group group = mock(Group.class);
         GroupMembership membership = mock(GroupMembership.class);
@@ -152,11 +169,11 @@ class CheckInServiceTest {
                 .thenReturn(Optional.of(membership));
         when(membership.getGroup()).thenReturn(group);
         when(group.getId()).thenReturn(5L);
-        when(seasonQueryService.findCurrentSeasonForShare()).thenReturn(season);
+        when(seasonQueryService.findCurrentQuestSeasonForShare()).thenReturn(season);
         when(season.getId()).thenReturn(9L);
         when(groupSeasonRepository.findForUpdateByGroupIdAndSeasonId(5L, 9L))
                 .thenReturn(Optional.of(groupSeason));
-        when(groupSeason.getStatus()).thenReturn(GroupSeasonStatus.ACTIVE);
+        when(groupSeason.getStatus()).thenReturn(status);
         when(serviceCheckInRepository.existsByUserIdAndCheckInDate(
                 1L,
                 now.atZone(ZoneId.of("Asia/Seoul")).toLocalDate()
@@ -164,7 +181,11 @@ class CheckInServiceTest {
     }
 
     private void givenSuccessfulCheckIn(Instant now) {
-        givenCheckInContext(now);
+        givenSuccessfulCheckIn(now, GroupSeasonStatus.ACTIVE);
+    }
+
+    private void givenSuccessfulCheckIn(Instant now, GroupSeasonStatus status) {
+        givenCheckInContext(now, status);
 
         UserActivityEvent activityEvent = mock(UserActivityEvent.class);
         when(activityEventRepository.save(any(UserActivityEvent.class))).thenReturn(activityEvent);
