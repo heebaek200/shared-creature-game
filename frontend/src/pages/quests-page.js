@@ -7,6 +7,7 @@ import {
   submitQuestPhoto,
 } from '../features/quest/api.js';
 import { validateQuestPhoto } from '../features/quest/photo-upload.js';
+import { questErrorMessage } from '../features/quest/error-policy.js';
 
 const DIFFICULTY_LABELS = { LOW: '하', MEDIUM: '중', HIGH: '상' };
 const VERIFICATION_LABELS = {
@@ -319,7 +320,7 @@ export function questPage({ navigate, currentUser }) {
       } else if (error?.status === 403) {
         navigate('/403');
       } else {
-        const message = photoOrQuestErrorMessage(error);
+        const message = questErrorMessage(error);
         if (itemFeedback instanceof HTMLElement) {
           itemFeedback.className = 'small mt-3 text-danger';
           itemFeedback.textContent = message;
@@ -390,17 +391,4 @@ function formatDeadline(value) {
 /** 점수와 보상 숫자를 한국어 자릿수 구분으로 표시합니다. */
 function numberText(value) {
   return Number(value ?? 0).toLocaleString('ko-KR');
-}
-
-/** HTTP·사진 선택 오류를 퀘스트 화면 문구로 변환합니다. */
-function photoOrQuestErrorMessage(error) {
-  const messages = {
-    FILE_TOO_LARGE: '사진은 최대 10 MiB까지 제출할 수 있습니다.',
-    PHOTO_ATTEMPT_LIMIT_EXCEEDED: '이 퀘스트의 사진 제출 가능 횟수를 모두 사용했습니다.',
-    RATE_LIMIT_EXCEEDED: '사진 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
-    QUEST_PERIOD_ENDED: '퀘스트 기간이 종료되었습니다.',
-    QUEST_COMPLETION_NOT_ALLOWED: '이 퀘스트는 해당 방식으로 직접 완료할 수 없습니다.',
-    CONCURRENT_MODIFICATION: '다른 요청으로 상태가 변경되었습니다.',
-  };
-  return messages[error?.code] ?? error?.message ?? '요청을 처리하지 못했습니다.';
 }

@@ -4,13 +4,23 @@ let csrfToken = '';
 
 /** 서버 오류 code와 필드 오류를 보존합니다. */
 export class ApiError extends Error {
+  /**
+   * 공통 오류 메시지 호환성을 유지하면서 서버가 실제 제공한 메시지를 별도로 보존합니다.
+   * @param {number} status HTTP 상태 코드
+   * @param {{message?: string, code?: string, fieldErrors?: unknown[], traceId?: string}|null} body 오류 응답 본문
+   * @param {number|null} retryAfter 재시도 대기 시간(초)
+   */
   constructor(status, body, retryAfter = null) {
-    super(body?.message ?? '요청을 처리하지 못했습니다.');
+    const serverMessage = typeof body?.message === 'string' && body.message.trim()
+      ? body.message
+      : null;
+    super(serverMessage ?? '요청을 처리하지 못했습니다.');
     this.status = status;
     this.code = body?.code ?? 'UNKNOWN_ERROR';
     this.fieldErrors = body?.fieldErrors ?? [];
     this.traceId = body?.traceId ?? null;
     this.retryAfter = retryAfter;
+    this.serverMessage = serverMessage;
   }
 }
 

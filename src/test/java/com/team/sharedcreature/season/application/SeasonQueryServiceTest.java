@@ -179,4 +179,33 @@ class SeasonQueryServiceTest {
                         .orElseThrow()
         );
     }
+
+    /** 퀘스트 배정 시즌은 ID 공유 잠금 후 활성 상태일 때만 반환합니다. */
+    @Test
+    void questSeasonShareLockReturnsActiveSeason() {
+        Season season = mock(Season.class);
+        when(repository.findForShareByStatus(
+                eq(SeasonStatus.ACTIVE), any(Pageable.class)
+        )).thenReturn(List.of(season));
+        when(season.isActiveAt(NOW)).thenReturn(true);
+
+        assertSame(season, service.findCurrentQuestSeasonForShare());
+    }
+
+    /** 종료되거나 시간 경계를 벗어난 배정 시즌은 명시적인 시즌 오류로 거절합니다. */
+    @Test
+    void inactiveQuestSeasonReturnsSeasonNotActive() {
+        Season season = mock(Season.class);
+        when(repository.findForShareByStatus(
+                eq(SeasonStatus.ACTIVE), any(Pageable.class)
+        )).thenReturn(List.of(season));
+        when(season.isActiveAt(NOW)).thenReturn(false);
+
+        BusinessException error = assertThrows(
+                BusinessException.class,
+                service::findCurrentQuestSeasonForShare
+        );
+
+        assertEquals("SEASON_NOT_ACTIVE", error.code());
+    }
 }

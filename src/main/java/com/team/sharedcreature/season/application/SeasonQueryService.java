@@ -98,11 +98,23 @@ public class SeasonQueryService {
         return candidate.filter(season -> season.isActiveAt(now));
     }
 
+    /** 퀘스트 명령이 현재 활성 시즌의 공유 잠금을 가장 먼저 획득하도록 합니다. */
+    @Transactional
+    public Season findCurrentQuestSeasonForShare() {
+        return findCurrentSeasonForShareIfPresent()
+                .orElseThrow(this::seasonNotActive);
+    }
+
     /**
      * 현재 시즌이 업무를 처리할 준비가 되지 않았음을 나타냄
      */
     private BusinessException seasonNotReady() {
         return new BusinessException(ErrorCode.CONCURRENT_MODIFICATION, "현재 시즌이 준비되지 않았습니다.");
+    }
+
+    /** 퀘스트가 속한 시즌에서 더는 완료·보상을 확정할 수 없음을 나타냅니다. */
+    private BusinessException seasonNotActive() {
+        return new BusinessException(ErrorCode.SEASON_NOT_ACTIVE);
     }
 
 }
