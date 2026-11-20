@@ -24,6 +24,7 @@ export function groupSelectPage({navigate, currentUser}) {
     let pendingLoad = false;
     let joining = false;
     let totalPages = 0;
+    let createdGroupId = null;
 
     content.innerHTML = `
         <section class="card border-0 shadow-sm rounded-4 mb-4">
@@ -636,9 +637,12 @@ export function groupSelectPage({navigate, currentUser}) {
                 Math.max(0, groupCapacity - currentCount)
             );
 
-            // 서버의 그룹별 가입 가능 여부와 현재 사용자 제한을 함께 확인합니다.
+            const isCurrentGroup =
+                createdGroupId !== null && group.groupId === createdGroupId;
+
+            // 본인 소속 그룹에는 가입 버튼을 활성화하지 않습니다.
             const canJoin =
-                group.joinable === true && !isRestrictionLocked();
+                !isCurrentGroup && group.joinable === true && !isRestrictionLocked();
 
             // 서버 확인 중에는 임의로 가입 가능 버튼을 표시하지 않습니다.
             const blockedReason = isRestrictionLocked()
@@ -675,7 +679,7 @@ export function groupSelectPage({navigate, currentUser}) {
                                 ${remaining <= 0 ? '정원 마감' : '가입 불가'}
                             </button>
                             <div class="small text-danger mt-1">
-                                ${escapeHtml(getBlockedMessage(blockedReason))}
+                                ${escapeHtml(isCurrentGroup ? '이미 해당 그룹에 가입되어 있습니다.' : getBlockedMessage(blockedReason))}
                             </div>
                         `
                     }
@@ -871,6 +875,9 @@ export function groupSelectPage({navigate, currentUser}) {
             });
 
             creationSucceeded = true;
+
+            createdGroupId = result.group.myMembership.groupId;
+            void loadGroup();
 
             createAlert.className =
                 'alert alert-success create-alert mt-3 mb-0';
