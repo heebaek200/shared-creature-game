@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.Instant;
 
 /** 같은 그룹의 활성 회원 사이에서 사용자 신고를 접수합니다. */
 @Service
@@ -59,7 +60,7 @@ public class UserReportService {
         if (category == null) {
             throw new BusinessException(ErrorCode.INVALID_FIELD_VALUE);
         }
-        var now = clock.instant();
+        Instant now = clock.instant();
         UserReport report;
         if (chatMessageId == null) {
             GroupMembership reported = membershipRepository.findActiveWithGroupByUserId(reportedUserId)
