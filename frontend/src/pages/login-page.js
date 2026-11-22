@@ -51,8 +51,10 @@ export function loginPage({ currentUser, navigate }) {
 
           <button
               id="google-login-button"
-              class="btn btn-primary w-100 py-2 mb-3"
+              class="btn w-100 py-2 mb-3"
+              style="background-color: #FFFFFF; color: #1F1F1F; border-color: #747775"
               type="button">
+            <img src="/assets/ui/google-g.png" alt="구글 아이콘" class="me-2" width="21" height="21" />
             Google로 계속하기
           </button>
 
@@ -61,7 +63,8 @@ export function loginPage({ currentUser, navigate }) {
               class="btn w-100 py-2 mb-3 text-white"
               style="background-color: #03C75A;"
               type="button">
-            Naver로 계속하기
+            <strong class="me-2">N</strong>
+            네이버로 계속하기
           </button>
 
           <!-- OAuth 인증 및 연결 실패 안내 -->

@@ -16,6 +16,29 @@ const mockNicknames = [
     '달빛', '은하', '보름', '수풀', '아침',
 ];
 
+const mockChatContents = [
+    '우리 크리처가 완전체가 됐어요!',
+    '오늘도 퀘스트 완료!',
+    '다 같이 키우니까 더 뿌듯해요.',
+    '새싹 연구소 최고!',
+    '다음 시즌도 함께해요.',
+    '오늘 기여도도 힘내볼게요.',
+    '완전체 모습이 정말 멋져요!',
+    '모두 수고했어요.',
+    '꾸준히 모은 경험치의 결과네요.',
+    '우리 팀워크가 빛났어요!',
+    '내일 퀘스트도 잊지 마세요.',
+    '함께 성장해서 즐거웠어요.',
+    '크리처와 기념사진 찰칵!',
+    '이번 시즌 목표 달성!',
+    '오늘도 좋은 하루 보내세요.',
+    '모두의 아바타가 모였네요.',
+    '완전체 달성을 축하해요!',
+    '조금씩 모은 힘이 대단해요.',
+    '다음 성장도 기대할게요.',
+    '우리 모두 정말 잘했어요!',
+];
+
 /**
  * 비트 조합으로 장착 슬롯을 구성해 Mock 아바타마다 다른 복장을 만듭니다.
  *
@@ -63,7 +86,7 @@ function createMockMember(index) {
  * 20명의 복장·색상을 구분해 이동 애니메이션을 한 화면에서 점검할 수 있습니다.
  */
 export const mockCreatureHomeData = {
-    groupId: 5031,
+    groupId: 501,
     groupName: '새싹 연구소',
     season: {
         seasonId: 1,
@@ -99,3 +122,19 @@ export const mockCreatureHomeData = {
     streamInstanceId: '11111111-1111-4111-8111-111111111111',
     sequence: 20,
 };
+
+/**
+ * 완전체 크리처 시연에서 20명이 한 번씩 표시할 말풍선 메시지입니다.
+ * 크리처 홈은 이 순서를 일정 간격으로 재생해 실제 다중 접속 없이 공동 공간을 시연합니다.
+ */
+export const mockCreatureChatMessages = mockCreatureHomeData.onlineMembers.map(
+    (member, index) => ({
+        messageId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+        groupId: mockCreatureHomeData.groupId,
+        senderUserId: member.userId,
+        senderNickname: member.nickname,
+        content: mockChatContents[index],
+        createdAt: new Date(Date.parse(mockCreatureHomeData.snapshotAt) + index * 1000)
+            .toISOString(),
+    }),
+);

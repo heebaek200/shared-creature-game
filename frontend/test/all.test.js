@@ -1,5 +1,6 @@
 import './snapshot-sync.test.js';
 import './mock-creature-page.test.js';
+import './mock-quest-ranking.test.js';
 import './avatar-field.test.js';
 import './avatar-bubble-policy.test.js';
 import './recent-message-ids.test.js';

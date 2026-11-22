@@ -12,7 +12,7 @@
 
 사용자는 공개 그룹에 자유롭게 가입하거나 새로운 그룹을 만들고, 기상 체크인이나 사진 인증 등 일일·주간 퀘스트를 수행합니다. 개인의 활동은 기여도로 기록되고 그룹이 함께 육성하는 **크리처**의 성장에 반영됩니다. 또한 그룹 내 개인 랭킹과 그룹 간 경쟁을 통해 지속적인 참여 동기를 제공합니다.
 
-**이 프로젝트가 제공하고자 하는 가치는 일상의 작은 실천을 눈에 보이는 성취로 바꾸고, 공동의 목표를 통해 느슨한 사회적 연결을 만드는 것입니다.** 다만 실제 생활 습관 개선이나 사회적 교류 증대 효과는 아직 검증되지 않은 기대 효과입니다.
+이 프로젝트가 제공하고자 하는 가치는 일상의 작은 실천을 눈에 보이는 성취로 바꾸고, 공동의 목표를 통해 느슨한 사회적 연결을 만드는 것입니다.
 
 ### 👥 팀 구성 및 역할
 
@@ -57,7 +57,7 @@ GitHub Projects의 칸반 보드를 이용하여 업무의 진행 상태를 시�
 
 이러한 방식을 통해 별도의 업무 관리 도구 없이도 **설계 문서 → Issue → 구현 및 Pull Request**로 이어지는 작업 이력을 관리하고, 여러 기능을 병렬로 개발하는 과정에서 업무 범위와 진행 상황을 명확히 공유하고자 했습니다.
 
-**[GitHub Projects 보기](https://github.com/heebaek200/shared-creature-game/projects)**
+**[GitHub Projects 보기](https://github.com/users/heebaek200/projects/12)**
 
 | GitHub Projects 칸반 보드 |
 |:---:|
@@ -99,54 +99,273 @@ GitHub Projects의 칸반 보드를 이용하여 업무의 진행 상태를 시�
 - [2026-11-16 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/101)
 - [2026-11-17 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/105)
 - [2026-11-18 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/111)
+- [2026-11-19 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/123)
+- [2026-11-20 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/140)
+
+### ✅ 통합 테스트
+
+기능별 구현을 완료한 뒤 실제 API·데이터베이스·외부 연동 환경에서 주요 사용자 흐름과 동시성, 결제, 실시간 통신 및 모바일 사진 인증을 검증했습니다.
+
+테스트에서 발견한 결함과 UX 개선 사항은 `QA 피드백` 이슈로 분리했으며, 프로젝트 종료 범위에 따라 수정·보류·스킵 여부를 기록합니다.
+
+| 검증 범위 | 결과 문서 |
+|---|---|
+| 가입·초대·그룹 제한 | [QA-01 결과](docs/test-results/QA-01-auth-group.md) |
+| 퀘스트 보상·Scheduler | [QA-02 결과](docs/test-results/QA-02-rewards-scheduler.md) |
+| 결제·환불·Webhook | [QA-03 결과](docs/test-results/QA-03-payment-refund.md) |
+| WebSocket 세션·동기화 | [QA-04 결과](docs/test-results/QA-04-websocket.md) |
+| 모바일 사진·EXIF 인증 | [QA-05 결과](docs/test-results/QA-05-mobile-exif.md) |
+| 전체 사용자 시나리오·결함 추적 | [QA-06 결과](docs/test-results/QA-06-e2e.md) |
+
+### 🔒 긴급 보안 대응
+
+개발 기간 중 Java 런타임 보안 취약점 권고를 확인하고 프로젝트의 영향 가능성을 검토했습니다.
+
+애플리케이션에서 취약점 악용 가능성이 확인됐다고 단정하지 않고, 예방 조치로 Amazon Corretto 21의 보안 수정 버전을 적용했습니다. 이후 `JAVA_HOME`, IDE와 Gradle Toolchain의 실제 사용 버전을 확인하고 OAuth, 세션, WebSocket, 테스트 결제·환불 및 관리자 기능을 회귀 점검했습니다.
+
+| 대응 단계 | 수행 내용 |
+|---|---|
+| 영향 분석 | 사용 중인 JDK 버전과 외부 입력 처리 영역 확인 |
+| 환경 조치 | Amazon Corretto 21 보안 수정 버전 적용 |
+| 적용 확인 | `java -version`, `JAVA_HOME`, Gradle Toolchain 점검 |
+| 회귀 검증 | 인증·실시간 통신·결제·관리자 기능 수동 점검 |
+| 후속 관리 | 팀원별 개발 환경 업데이트와 검증 결과 추적 |
+
+**[긴급 보안 대응 과정 보기 — Issue #112](https://github.com/heebaek200/shared-creature-game/issues/112)**
 
 ## 🎮 주요 기능과 사용자 시나리오
 
-기능별 시연 GIF는 [#40 전체 시나리오·결함 수정](https://github.com/heebaek200/shared-creature-game/issues/40)의 통합 검증 결과와 함께 이 절에 추가합니다.
 
-### 가입과 그룹 참여
+<table style="text-align: center">
+    <tr>
+        <th colspan="2"><strong>가입과 그룹 참여</strong></th>
+    </tr>
+    <tr>
+        <td colspan="2" style="text-align: left;">
+            1. Google·Naver 소셜 로그인과 닉네임 가입<br>
+            2. 공개 그룹 검색과 가입<br>
+            3. Gemini 제안을 선택 적용한 그룹 생성<br>
+            4. 초대 링크 확인과 그룹 참여
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details open>
+                <summary>1. 소셜 로그인·가입</summary>
+                <img src="docs/images/demos/01-auth-signup.gif"
+                     alt="소셜 로그인과 회원가입" width="400">
+            </details>
+        </td>
+        <td>
+            <details open>
+                <summary>2. 공개 그룹 가입</summary>
+                <img src="docs/images/demos/02-group-join.gif"
+                     alt="공개 그룹 검색과 가입" width="400">
+            </details>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details>
+                <summary>3. AI 교정·그룹 생성</summary>
+                <img src="docs/images/demos/03-group-create.gif"
+                     alt="AI 교정 제안과 그룹 생성" width="400">
+            </details>
+        </td>
+        <td>
+            <details>
+                <summary>4. 초대 링크 참여</summary>
+                <img src="docs/images/demos/04-invite-join.gif"
+                     alt="초대 링크를 통한 그룹 참여" width="400">
+            </details>
+        </td>
+    </tr>
+</table>
 
-1. Google 또는 Naver 계정으로 로그인합니다.
-2. 신규 사용자는 닉네임을 등록해 회원가입을 완료합니다.
-3. 공개 그룹을 검색해 가입하거나 새로운 그룹을 생성합니다.
-4. 초대 링크를 받은 사용자는 링크의 그룹 정보를 확인한 뒤 참여합니다.
+<table style="text-align: center">
+    <tr>
+        <th colspan="2"><strong>퀘스트와 공동 크리처 성장</strong></th>
+    </tr>
+    <tr>
+        <td colspan="2" style="text-align: left;">
+            1. 일일·주간 퀘스트 확인과 체크인<br>
+            2. JPEG EXIF 사진 인증<br>
+            3. 보상에 따른 기여도·크리처 성장<br>
+            4. 개인·그룹 시즌 랭킹 확인
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details>
+                <summary>1. 퀘스트 체크인</summary>
+                <img src="docs/images/demos/05-quest-checkin.gif"
+                     alt="일일 및 주간 퀘스트 체크인" width="400">
+            </details>
+        </td>
+        <td>
+            <details>
+                <summary>2. 사진 인증</summary>
+                <img src="docs/images/demos/06-quest-photo.gif"
+                     alt="JPEG EXIF 사진 인증" width="400">
+            </details>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details open>
+                <summary>3. 공동 크리처 성장</summary>
+                <img src="docs/images/demos/07-creature-growth.gif"
+                     alt="퀘스트 보상과 공동 크리처 성장" width="400">
+            </details>
+        </td>
+        <td>
+            <details open>
+                <summary>4. 시즌 랭킹</summary>
+                <img src="docs/images/demos/08-rankings.gif"
+                     alt="개인 및 그룹 시즌 랭킹" width="400">
+            </details>
+        </td>
+    </tr>
+</table>
 
-### 퀘스트와 공동 크리처 성장
+<table style="text-align: center">
+    <tr>
+        <th colspan="2"><strong>상점·아바타와 결제·환불</strong></th>
+    </tr>
+    <tr>
+        <td colspan="2" style="text-align: left;">
+            1. PortOne V2 테스트 결제<br>
+            2. 구매 내역과 아이템 지급 확인<br>
+            3. 아바타 아이템 장착<br>
+            4. 미사용 환불과 사용 후 환불 제한
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details>
+                <summary>1. 테스트 결제</summary>
+                <img src="docs/images/demos/09-test-payment.gif"
+                     alt="PortOne V2 테스트 결제" width="400">
+            </details>
+        </td>
+        <td>
+            <details>
+                <summary>2. 구매·지급 확인</summary>
+                <img src="docs/images/demos/10-purchase-delivery.gif"
+                     alt="구매 내역과 아이템 지급 확인" width="400">
+            </details>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details open>
+                <summary>3. 아바타 장착</summary>
+                <img src="docs/images/demos/11-avatar-equip.gif"
+                     alt="아바타 아이템 장착" width="400">
+            </details>
+        </td>
+        <td>
+            <details>
+                <summary>4. 환불 분기</summary>
+                <img src="docs/images/demos/12-refund-flow.gif"
+                     alt="미사용 환불과 사용 후 환불 제한" width="400">
+            </details>
+        </td>
+    </tr>
+</table>
 
-1. 사용자는 현재 배정된 일일·주간 퀘스트를 확인합니다.
-2. 체크인 또는 JPEG 사진 인증으로 퀘스트를 수행합니다.
-3. 완료 보상으로 개인 기여도와 그룹 크리처 경험치가 증가합니다.
-4. 다른 그룹원의 화면에는 성장 결과와 아바타 상태가 실시간으로 반영되며, 이벤트 누락 시 REST Snapshot으로 복구합니다.
-5. 개인·그룹 랭킹에서 현재 시즌의 참여 결과를 확인합니다.
+<table style="text-align: center">
+    <tr>
+        <th colspan="2"><strong>그룹·서비스 운영</strong></th>
+    </tr>
+    <tr>
+        <td colspan="2" style="text-align: left;">
+            1. 역할 변경과 주 관리자 이전<br>
+            2. 초대 링크 재발급과 이전 링크 무효화<br>
+            3. 전체 관리자 대시보드 조회<br>
+            4. 환불·신고 대기열과 Scheduler 상태 확인
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details>
+                <summary>1. 그룹 역할 관리</summary>
+                <img src="docs/images/demos/13-group-role.gif"
+                     alt="그룹 역할 변경과 주 관리자 이전" width="400">
+            </details>
+        </td>
+        <td>
+            <details>
+                <summary>2. 초대 링크 재발급</summary>
+                <img src="docs/images/demos/14-invite-reissue.gif"
+                     alt="초대 링크 재발급과 이전 링크 무효화" width="400">
+            </details>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details open>
+                <summary>3. 운영 대시보드</summary>
+                <img src="docs/images/demos/15-admin-dashboard.gif"
+                     alt="전체 관리자 운영 대시보드" width="400">
+            </details>
+        </td>
+        <td>
+            <details>
+                <summary>4. 운영 현황 확인</summary>
+                <img src="docs/images/demos/16-admin-operations.gif"
+                     alt="환불 신고 대기열과 Scheduler 상태 확인" width="400">
+            </details>
+        </td>
+    </tr>
+</table>
 
-### 실시간 아바타·채팅과 신고 처리
+<table style="text-align: center">
+    <tr>
+        <th colspan="2"><strong>Full CSR·반응형 사용자 환경</strong></th>
+    </tr>
+    <tr>
+        <td colspan="2" style="text-align: left;">
+            1. 새로고침 없는 메뉴 이동과 History 복원<br>
+            2. URL 직접 접근·새로고침 상태 복원<br>
+            3. 데스크톱·모바일 내비게이션 전환<br>
+            4. 시스템·라이트·다크 테마 전환
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details>
+                <summary>1. CSR 메뉴 이동</summary>
+                <img src="docs/images/demos/17-csr-navigation.gif"
+                     alt="새로고침 없는 Full CSR 메뉴 이동" width="400">
+            </details>
+        </td>
+        <td>
+            <details>
+                <summary>2. URL·새로고침 복원</summary>
+                <img src="docs/images/demos/18-route-restore.gif"
+                     alt="URL 직접 접근과 새로고침 상태 복원" width="400">
+            </details>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details open>
+                <summary>3. 반응형 내비게이션</summary>
+                <img src="docs/images/demos/19-responsive-navigation.gif"
+                     alt="데스크톱과 모바일 내비게이션" width="400">
+            </details>
+        </td>
+        <td>
+            <details open>
+                <summary>4. 테마 전환</summary>
+                <img src="docs/images/demos/20-theme-switch.gif"
+                     alt="시스템 라이트 다크 테마 전환" width="400">
+            </details>
+        </td>
+    </tr>
+</table>
 
-1. 그룹원이 크리처 홈에 접속하면 WebSocket Presence를 기준으로 각 사용자의 아바타가 필드에 표시됩니다.
-2. 사용자가 메시지를 전송하면 같은 그룹의 화면에 아바타 말풍선 채팅으로 실시간 표시됩니다.
-3. 다른 사용자의 말풍선을 선택하면 해당 메시지를 근거로 신고할 수 있습니다.
-4. 신고 시점의 메시지·작성자·그룹 정보를 별도 증거로 보존하므로 원본 채팅의 보존 기한이 지나도 관리자가 당시 내용을 확인할 수 있습니다.
-5. 전체 관리자는 신고 목록과 증거를 검토하고 기각, 강퇴 또는 처리 완료로 상태를 확정합니다.
-
-### 상점·아바타와 결제·환불
-
-1. 사용자는 상점에서 판매 중인 아바타 아이템을 선택합니다.
-2. PortOne V2 테스트 결제를 완료하면 서버가 실제 결제 정보를 검증하고 아이템을 지급합니다.
-3. 보유 아이템을 아바타 슬롯에 장착하거나 해제합니다.
-4. 환불 조건을 만족하는 구매는 환불을 요청하고, 관리자의 승인·거절 및 PG 취소 결과를 확인합니다.
-
-### 그룹·서비스 운영
-
-1. 그룹 관리자는 멤버 역할 변경, 강퇴, 주 관리자 이전과 초대 링크 재발급을 수행합니다.
-2. 사용자는 그룹 내 문제 사용자를 신고할 수 있습니다.
-3. 전체 관리자는 대시보드에서 그룹·사용자·결제·신고 현황과 Scheduler 경고를 확인하고 필요한 조치를 수행합니다.
-
-### 새로고침 없는 Full CSR 화면 이동
-
-1. 브라우저가 최초 HTML과 JavaScript 모듈을 받은 뒤 Vanilla JavaScript Router가 현재 URL과 로그인·역할 상태에 맞는 Page를 선택합니다.
-2. 화면 데이터는 Spring Boot REST API의 JSON 응답으로 조회하고, 필요한 DOM만 다시 그립니다.
-3. 메뉴 이동은 History API로 처리하여 전체 페이지를 다시 받지 않으며 뒤로가기·앞으로가기도 같은 Router가 복원합니다.
-4. Page를 떠날 때 Event Listener, Timer와 WebSocket 구독을 정리하여 중복 처리와 메모리 누적을 막습니다.
-5. 프론트엔드 Route 검사는 화면 접근을 안내하고, 실제 보안 경계는 Spring Security와 Service 소유권 검사가 강제합니다.
 
 ## 🛠️ 주요 기술 스택
 
