@@ -2,6 +2,14 @@
 import { ApiError } from '../api/client.js';
 import { mockCreatureHomeData } from './mock-creature-page.js';
 import { completeMockRefund, reconcileMockRefundState } from './mock-payment-state.js';
+import {
+  completeMockQuestAssignment,
+  createMockCheckIn,
+  getMockGroupRanking,
+  getMockMemberRanking,
+  listMockCurrentQuests,
+  submitMockQuestPhoto,
+} from './mock-quest-ranking.js';
 
 const MOCK_STATE_KEY = 'shared-creature-mock-state';
 
@@ -871,6 +879,48 @@ export const mockApi = {
   async getCurrentSeason() {
     await delay(150);
     return mockCreatureHomeData.season;
+  },
+
+  /** 랭킹에서 선택할 수 있는 Mock 시즌을 최신 순으로 반환합니다. */
+  async listRankableSeasons() {
+    await delay(120);
+    return [structuredClone(mockCreatureHomeData.season)];
+  },
+
+  /** 현재 사용자의 일일·주간 Mock 퀘스트를 반환합니다. */
+  async listCurrentQuests() {
+    await delay(150);
+    return listMockCurrentQuests();
+  },
+
+  /** SELF_CHECK Mock 퀘스트를 완료합니다. */
+  async completeQuestAssignment(assignmentId) {
+    await delay(180);
+    return completeMockQuestAssignment(assignmentId);
+  },
+
+  /** 아침 체크인과 연결된 Mock 퀘스트를 완료합니다. */
+  async createCheckIn() {
+    await delay(180);
+    return createMockCheckIn();
+  },
+
+  /** 사진 검증 성공과 Mock 퀘스트 진행도 증가를 재현합니다. */
+  async submitQuestPhoto(assignmentId) {
+    await delay(220);
+    return submitMockQuestPhoto(assignmentId);
+  },
+
+  /** 현재 그룹의 개인 Mock 시즌 랭킹을 반환합니다. */
+  async getMemberRanking(filters) {
+    await delay(150);
+    return getMockMemberRanking(filters);
+  },
+
+  /** 전체 그룹의 Mock 시즌 랭킹을 반환합니다. */
+  async getGroupRanking(filters) {
+    await delay(150);
+    return getMockGroupRanking(filters);
   },
 
   /** 판매 중인 Mock 상품 목록을 반환합니다. */

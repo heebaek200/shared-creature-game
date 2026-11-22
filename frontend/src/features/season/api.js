@@ -18,8 +18,11 @@ export async function getCurrentSeason() {
 
 /**
  * 랭킹에서 선택할 수 있는 현재·종료 시즌을 최신 순으로 조회합니다.
- * #93 실제 테스트 데이터를 사용하므로 이 Operation에는 별도 목 응답을 두지 않습니다.
  */
 export function listRankableSeasons() {
+    if (USE_MOCK) {
+        return mockApi.listRankableSeasons();
+    }
+
     return apiRequest('/api/v1/seasons');
 }

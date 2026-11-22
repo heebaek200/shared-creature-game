@@ -2,7 +2,7 @@
 
 - **관련 이슈:** [#40](https://github.com/heebaek200/shared-creature-game/issues/40)
 - **작성자:** 이희백
-- **최종 업데이트:** YYYY-MM-DD
+- **최종 업데이트:** 2026-11-22
 - **테스트 대상:** `f/40-endtoend` / `(테스트 직전 커밋 ID)`
 
 ## 1. 기록 기준
@@ -13,22 +13,23 @@
 - 화면 문구·디자인 문제도 기록하되, 가입·보상·권한·결제·데이터 정합성에 영향을 주는 문제는 별도 결함 이슈로 연결합니다.
 - `스킵`은 해결 상태가 아닙니다. 이번 프로젝트에서 진행하지 않는다는 결정과 남는 영향을 기록하며 해결 건수에 포함하지 않습니다.
 
-**상태:** `재현 대기` / `확인 중` / `수정 중` / `재검증 대기` / `해결` / `보류`
+**상태:** `재현 대기` / `확인 중` / `수정 중` / `재검증 대기` / `해결` / `스킵` / `보류`
 
 ## 2. QA 피드백 후속 조치 이슈
 
-2026-11-20 기준 `QA 피드백` 라벨이 붙은 이슈 전체입니다. `현재 상태`는 GitHub Issue와 프로젝트 보드의 상태이며, `처리 결정`은 프로젝트 마감 범위에 맞춰 별도로 확정합니다.
+2026-11-22 기준 `QA 피드백` 라벨이 붙은 이슈 전체입니다. 프로젝트 보드가 `Done`인 이슈는 완료로 기록하고, `TBD` 또는 `In Progress`인 이슈는 이번 프로젝트에서 스킵합니다.
 
 | 추적 ID | 관련 이슈 | 출처·관련 TC | 분류 | 후속 조치 내용 | 현재 상태 | 처리 결정 |
 |---|---|---|---|---|---|---|
-| FOLLOW-40-001 | [#122 사진퀘스트 백엔드 보완](https://github.com/heebaek200/shared-creature-game/issues/122) | QA-05 / TC-40-02 | 백엔드 결함 | 완료 후 재제출 차단, EXIF 시각 엄격 파싱, 손상 GPS의 500 오류 방지 | `OPEN` · `In Progress` · [PR #125](https://github.com/heebaek200/shared-creature-game/pull/125) 열림 | (진행/스킵/보류) |
-| FOLLOW-40-002 | [#126 닉네임 검증 상태·문구](https://github.com/heebaek200/shared-creature-game/issues/126) | QA-01 / TC-40-01 | P2 UX·상태 오류 | 입력 변경 시 이전 검증 성공 상태 초기화와 문구 정리 | `OPEN` · `TBD` | (진행/스킵/보류) |
-| FOLLOW-40-003 | [#127 사진 재제출 안내·입력 제어](https://github.com/heebaek200/shared-creature-game/issues/127) | QA-05 / TC-40-02 | P2 프론트엔드 | 완료된 사진 퀘스트의 PC·모바일 안내와 제출 UI 일치 | `OPEN` · `TBD` | (진행/스킵/보류) |
-| FOLLOW-40-004 | [#128 주간 사진 제출 횟수 정책](https://github.com/heebaek200/shared-creature-game/issues/128) | QA-05 / TC-40-02 | P2 정책 검토 | 주간 배정 전체 5회 정책의 유지·변경 결정 | `OPEN` · `TBD` | (진행/스킵/보류) |
-| FOLLOW-40-005 | [#129 서비스 계정 탈퇴](https://github.com/heebaek200/shared-creature-game/issues/129) | QA-01 TC-35-08 / TC-40-01 | P2 기능 누락 | `WITHDRAWN` 처리, 세션 정리와 회원 탈퇴 화면 구현 | `OPEN` · `TBD` | (진행/스킵/보류) |
-| FOLLOW-40-006 | [#130 모바일 직접 촬영](https://github.com/heebaek200/shared-creature-game/issues/130) | QA-05 / TC-40-02 | P2 기능·UX | 카메라 직접 촬영과 기존 보관함 선택 경로 제공 | `OPEN` · `TBD` | (진행/스킵/보류) |
-| FOLLOW-40-007 | [#131 Naver 계정 전환](https://github.com/heebaek200/shared-creature-game/issues/131) | QA-01 TC-35-01 / TC-40-01 | P3 UX 검토 | 게임 로그아웃 후 다른 Naver 계정 선택 정책 검토 | `OPEN` · `TBD` | (진행/스킵/보류) |
-| FOLLOW-40-008 | [#132 소속 그룹 안내 문구](https://github.com/heebaek200/shared-creature-game/issues/132) | QA-01 TC-35-03 / TC-40-01 | P3 문구 개선 | 본인 소속 그룹에 맞는 가입 불가 문구 표시 | `OPEN` · `TBD` | (진행/스킵/보류) |
+| FOLLOW-40-001 | [#122 사진퀘스트 백엔드 보완](https://github.com/heebaek200/shared-creature-game/issues/122) | QA-05 / TC-40-02 | 백엔드 결함 | 완료 후 재제출 차단, EXIF 시각 엄격 파싱, 손상 GPS의 500 오류 방지 | `OPEN` · `In Progress` · [PR #125](https://github.com/heebaek200/shared-creature-game/pull/125) 열림 | 스킵 |
+| FOLLOW-40-002 | [#126 닉네임 검증 상태·문구](https://github.com/heebaek200/shared-creature-game/issues/126) | QA-01 / TC-40-01 | P2 UX·상태 오류 | 입력 변경 시 상태 초기화, 지연 응답 보호, 가입 요청 중 입력 잠금과 문구 정리 | `CLOSED` · `Done` · [PR #138](https://github.com/heebaek200/shared-creature-game/pull/138) 병합 | 완료 |
+| FOLLOW-40-003 | [#127 사진 재제출 안내·입력 제어](https://github.com/heebaek200/shared-creature-game/issues/127) | QA-05 / TC-40-02 | P2 프론트엔드 | 완료된 사진 퀘스트의 PC·모바일 안내와 제출 UI 일치 | `OPEN` · `TBD` | 스킵 |
+| FOLLOW-40-004 | [#128 주간 사진 제출 횟수 정책](https://github.com/heebaek200/shared-creature-game/issues/128) | QA-05 / TC-40-02 | P2 정책 검토 | 주간 배정 전체 5회 정책의 유지·변경 결정 | `OPEN` · `TBD` | 스킵 |
+| FOLLOW-40-005 | [#129 서비스 계정 탈퇴](https://github.com/heebaek200/shared-creature-game/issues/129) | QA-01 TC-35-08 / TC-40-01 | P2 기능 누락 | `WITHDRAWN` 처리, 세션 정리와 회원 탈퇴 화면 구현 | `OPEN` · `TBD` | 스킵 |
+| FOLLOW-40-006 | [#130 모바일 직접 촬영](https://github.com/heebaek200/shared-creature-game/issues/130) | QA-05 / TC-40-02 | P2 기능·UX | 카메라 직접 촬영과 기존 보관함 선택 경로 제공 | `OPEN` · `TBD` | 스킵 |
+| FOLLOW-40-007 | [#131 Naver 계정 전환](https://github.com/heebaek200/shared-creature-game/issues/131) | QA-01 TC-35-01 / TC-40-01 | P3 UX 검토 | 게임 로그아웃 후 다른 Naver 계정 선택 정책 검토 | `OPEN` · `TBD` | 스킵 |
+| FOLLOW-40-008 | [#132 소속 그룹 안내 문구](https://github.com/heebaek200/shared-creature-game/issues/132) | QA-01 TC-35-03 / TC-40-01 | P3 문구 개선 | 본인 소속 그룹에 맞는 가입 불가 문구 표시 | `CLOSED` · `Done` · [PR #139](https://github.com/heebaek200/shared-creature-game/pull/139) 병합 | 완료 |
+| FOLLOW-40-009 | [#135 부화 전 퀘스트·오류 안내](https://github.com/heebaek200/shared-creature-game/issues/135) | QA-04 TC-38-02 / TC-40-02·03 | P1 기능 차단 | `PREPARING` 그룹의 퀘스트 완료·보상 누적과 오류 안내 정합성 보완 | `CLOSED` · `Done` · [PR #137](https://github.com/heebaek200/shared-creature-game/pull/137) 병합 | 완료 |
 
 ### 이슈화되지 않은 잔여 검증
 
@@ -84,25 +85,26 @@
 
 | 추적 ID | 처리 결정 | 재검증 날짜 | 결과 | 실제 결과 또는 스킵 후 남는 영향 |
 |---|---|---|---|---|
-| FOLLOW-40-001 | (진행/스킵/보류) | 미실시 | NOT RUN | (기입) |
-| FOLLOW-40-002 | (진행/스킵/보류) | 미실시 | NOT RUN | (기입) |
-| FOLLOW-40-003 | (진행/스킵/보류) | 미실시 | NOT RUN | (기입) |
-| FOLLOW-40-004 | (진행/스킵/보류) | 미실시 | NOT RUN | (기입) |
-| FOLLOW-40-005 | (진행/스킵/보류) | 미실시 | NOT RUN | (기입) |
-| FOLLOW-40-006 | (진행/스킵/보류) | 미실시 | NOT RUN | (기입) |
-| FOLLOW-40-007 | (진행/스킵/보류) | 미실시 | NOT RUN | (기입) |
-| FOLLOW-40-008 | (진행/스킵/보류) | 미실시 | NOT RUN | (기입) |
+| FOLLOW-40-001 | 스킵 | 미실시 | NOT RUN | PR #125가 열려 있어 보완 내용은 main 미반영. 완료 후 재제출·비정상 EXIF·손상 GPS 경계 검증이 남음 |
+| FOLLOW-40-002 | 완료 | 2026-11-20 | PASS(이슈 완료 기준) | PR #138 병합. 입력 변경 시 이전 상태를 초기화하고 지연 응답을 무시하며 가입 요청 중 닉네임 입력을 잠금 |
+| FOLLOW-40-003 | 스킵 | 미실시 | NOT RUN | 완료 후 재제출 안내의 PC·모바일 차이와 #122 의존성 잔존 |
+| FOLLOW-40-004 | 스킵 | 미실시 | NOT RUN | 주간 사진 퀘스트는 배정 전체 5회 정책을 유지하며 날짜별 제출 기회는 미도입 |
+| FOLLOW-40-005 | 스킵 | 미실시 | NOT RUN | 서비스 계정 탈퇴 API·화면 미제공. 그룹 탈퇴와 구분하여 관련 시연 제외 |
+| FOLLOW-40-006 | 스킵 | 미실시 | NOT RUN | 모바일은 보관함 사진 선택만 제공하며 직접 촬영 시연 제외 |
+| FOLLOW-40-007 | 스킵 | 미실시 | NOT RUN | Naver 공급자 세션을 이용한 다른 계정 선택 정책과 안내 미결정 |
+| FOLLOW-40-008 | 완료 | 2026-11-20 | PASS(이슈 완료 기준) | PR #139 병합. 본인 그룹 문구를 구분하고 타 그룹·정원·재가입 제한 동작을 유지 |
+| FOLLOW-40-009 | 완료 | 2026-11-20 | PASS(이슈 완료 기준) | PR #137 병합. 부화 전 퀘스트 완료·보상 누적을 허용하고 서버 업무 메시지를 우선 표시하도록 보완 |
 | TRACK-40-001 | (검증/스킵) | 미실시 | NOT RUN | (기입) |
 
 ## 6. 요약
 
-- **QA 피드백 후속 조치:** 8건
+- **QA 피드백 후속 조치:** 9건
 - **이슈화되지 않은 잔여 검증:** 1건
-- **신규 등록:** __건
-- **해결:** __건
-- **스킵:** __건
-- **보류:** __건
-- **미해결 결함:** __건
-- **재현하지 못한 항목:** (없음 / 결함 ID와 사유)
-- **최종 시연을 차단하는 문제:** (없음 / 결함 ID와 영향)
+- **신규 등록:** 0건
+- **해결:** 3건(FOLLOW-40-002, FOLLOW-40-008, FOLLOW-40-009)
+- **스킵:** 6건(FOLLOW-40-001, FOLLOW-40-003~007)
+- **보류:** 0건
+- **미해결 후속 조치:** 6건(스킵 항목)
+- **재현하지 못한 항목:** TRACK-40-001(비-JPEG 서버 거절 · NOT RUN)
+- **최종 시연을 차단하는 문제:** 없음. 스킵 항목과 직접 촬영·계정 탈퇴 장면은 시연에서 제외
 - **민감정보 노출 점검:** (이상 없음 / 조치 내용)

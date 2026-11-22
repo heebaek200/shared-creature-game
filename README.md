@@ -12,7 +12,7 @@
 
 사용자는 공개 그룹에 자유롭게 가입하거나 새로운 그룹을 만들고, 기상 체크인이나 사진 인증 등 일일·주간 퀘스트를 수행합니다. 개인의 활동은 기여도로 기록되고 그룹이 함께 육성하는 **크리처**의 성장에 반영됩니다. 또한 그룹 내 개인 랭킹과 그룹 간 경쟁을 통해 지속적인 참여 동기를 제공합니다.
 
-**이 프로젝트가 제공하고자 하는 가치는 일상의 작은 실천을 눈에 보이는 성취로 바꾸고, 공동의 목표를 통해 느슨한 사회적 연결을 만드는 것입니다.**
+이 프로젝트가 제공하고자 하는 가치는 일상의 작은 실천을 눈에 보이는 성취로 바꾸고, 공동의 목표를 통해 느슨한 사회적 연결을 만드는 것입니다.
 
 ### 👥 팀 구성 및 역할
 
@@ -57,7 +57,7 @@ GitHub Projects의 칸반 보드를 이용하여 업무의 진행 상태를 시�
 
 이러한 방식을 통해 별도의 업무 관리 도구 없이도 **설계 문서 → Issue → 구현 및 Pull Request**로 이어지는 작업 이력을 관리하고, 여러 기능을 병렬로 개발하는 과정에서 업무 범위와 진행 상황을 명확히 공유하고자 했습니다.
 
-**[GitHub Projects 보기](https://github.com/heebaek200/shared-creature-game/projects)**
+**[GitHub Projects 보기](https://github.com/users/heebaek200/projects/12)**
 
 | GitHub Projects 칸반 보드 |
 |:---:|
@@ -100,7 +100,7 @@ GitHub Projects의 칸반 보드를 이용하여 업무의 진행 상태를 시�
 - [2026-11-17 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/105)
 - [2026-11-18 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/111)
 - [2026-11-19 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/123)
-- [2026-11-20 일일 리포트 (TBD)](https://github.com/heebaek200/shared-creature-game/discussions/)
+- [2026-11-20 일일 리포트](https://github.com/heebaek200/shared-creature-game/discussions/140)
 
 ### ✅ 통합 테스트
 
@@ -135,163 +135,237 @@ GitHub Projects의 칸반 보드를 이용하여 업무의 진행 상태를 시�
 
 ## 🎮 주요 기능과 사용자 시나리오
 
+
 <table style="text-align: center">
-   <tr>
-      <th colspan="2"><strong>가입과 그룹 참여</strong></th>
-   </tr>
-   <tr>
-      <td colspan="2" style="text-align: left;">1. Google·Naver 소셜 로그인과 닉네임 가입<br>2. 공개 그룹 검색과 가입<br>3. Gemini 제안을 선택 적용한 그룹 생성<br>4. 초대 링크 확인과 그룹 참여</td>
-   </tr>
-   <tr>
-      <td>
-        <details>
-            <summary>1. 소셜 로그인·가입</summary>
-
-![소셜 로그인과 회원가입](docs/images/demos/01-auth-signup.gif)</details></td>
-      <td>
-
-**2. 공개 그룹 가입**<br>![공개 그룹 검색과 가입](docs/images/demos/02-group-join.gif)</td>
-   </tr>
-
-   <tr>
-      <td>
-
-**3. AI 교정·그룹 생성**<br>![AI 교정 제안과 그룹 생성](docs/images/demos/03-group-create.gif)</td>
-      <td>
-
-**4. 초대 링크 참여**<br>![초대 링크를 통한 그룹 참여](docs/images/demos/04-invite-join.gif)</td>
-   </tr>
+    <tr>
+        <th colspan="2"><strong>가입과 그룹 참여</strong></th>
+    </tr>
+    <tr>
+        <td colspan="2" style="text-align: left;">
+            1. Google·Naver 소셜 로그인과 닉네임 가입<br>
+            2. 공개 그룹 검색과 가입<br>
+            3. Gemini 제안을 선택 적용한 그룹 생성<br>
+            4. 초대 링크 확인과 그룹 참여
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details open>
+                <summary>1. 소셜 로그인·가입</summary>
+                <img src="docs/images/demos/01-auth-signup.gif"
+                     alt="소셜 로그인과 회원가입" width="400">
+            </details>
+        </td>
+        <td>
+            <details open>
+                <summary>2. 공개 그룹 가입</summary>
+                <img src="docs/images/demos/02-group-join.gif"
+                     alt="공개 그룹 검색과 가입" width="400">
+            </details>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details>
+                <summary>3. AI 교정·그룹 생성</summary>
+                <img src="docs/images/demos/03-group-create.gif"
+                     alt="AI 교정 제안과 그룹 생성" width="400">
+            </details>
+        </td>
+        <td>
+            <details>
+                <summary>4. 초대 링크 참여</summary>
+                <img src="docs/images/demos/04-invite-join.gif"
+                     alt="초대 링크를 통한 그룹 참여" width="400">
+            </details>
+        </td>
+    </tr>
 </table>
 
 <table style="text-align: center">
-   <tr>
-      <th colspan="2"><strong>퀘스트와 공동 크리처 성장</strong></th>
-   </tr>
-   <tr>
-      <td colspan="2" style="text-align: left;">1. 일일·주간 퀘스트 확인과 체크인<br>2. JPEG EXIF 사진 인증<br>3. 보상에 따른 기여도·크리처 성장<br>4. 개인·그룹 시즌 랭킹 확인</td>
-   </tr>
-   <tr>
-      <td>
-
-**1. 퀘스트 체크인**<br>![일일 및 주간 퀘스트 체크인](docs/images/demos/05-quest-checkin.gif)</td>
-<td>
-
-**2. 사진 인증**<br>![JPEG EXIF 사진 인증](docs/images/demos/06-quest-photo.gif)</td>
-   </tr>
-
-   <tr>
-      <td>
-
-**3. 공동 크리처 성장**<br>![퀘스트 보상과 공동 크리처 성장](docs/images/demos/07-creature-growth.gif)</td>
-<td>
-
-**4. 시즌 랭킹**<br>![개인 및 그룹 시즌 랭킹](docs/images/demos/08-rankings.gif)</td>
-   </tr>
+    <tr>
+        <th colspan="2"><strong>퀘스트와 공동 크리처 성장</strong></th>
+    </tr>
+    <tr>
+        <td colspan="2" style="text-align: left;">
+            1. 일일·주간 퀘스트 확인과 체크인<br>
+            2. JPEG EXIF 사진 인증<br>
+            3. 보상에 따른 기여도·크리처 성장<br>
+            4. 개인·그룹 시즌 랭킹 확인
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details>
+                <summary>1. 퀘스트 체크인</summary>
+                <img src="docs/images/demos/05-quest-checkin.gif"
+                     alt="일일 및 주간 퀘스트 체크인" width="400">
+            </details>
+        </td>
+        <td>
+            <details>
+                <summary>2. 사진 인증</summary>
+                <img src="docs/images/demos/06-quest-photo.gif"
+                     alt="JPEG EXIF 사진 인증" width="400">
+            </details>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details open>
+                <summary>3. 공동 크리처 성장</summary>
+                <img src="docs/images/demos/07-creature-growth.gif"
+                     alt="퀘스트 보상과 공동 크리처 성장" width="400">
+            </details>
+        </td>
+        <td>
+            <details open>
+                <summary>4. 시즌 랭킹</summary>
+                <img src="docs/images/demos/08-rankings.gif"
+                     alt="개인 및 그룹 시즌 랭킹" width="400">
+            </details>
+        </td>
+    </tr>
 </table>
 
 <table style="text-align: center">
-   <tr>
-      <th colspan="2"><strong>실시간 아바타·채팅과 신고</strong></th>
-   </tr>
-   <tr>
-      <td colspan="2" style="text-align: left;">1. 두 브라우저 세션의 Presence<br>2. 아바타 말풍선 채팅<br>3. 채팅 메시지 증거를 포함한 신고<br>4. 관리자의 신고 검토와 상태 확정</td>
-   </tr>
-   <tr>
-      <td>
-
-**1. 실시간 Presence**<br>![두 브라우저 세션의 아바타 Presence](docs/images/demos/09-realtime-presence.gif)</td>
-<td>
-
-**2. 말풍선 채팅**<br>![아바타 말풍선 채팅](docs/images/demos/10-bubble-chat.gif)</td>
-   </tr>
-
-   <tr>
-      <td>
-
-**3. 메시지 신고**<br>![채팅 메시지 신고](docs/images/demos/11-chat-report.gif)</td>
-<td>
-
-**4. 신고 처리**<br>![관리자의 신고 검토와 처리](docs/images/demos/12-admin-report.gif)</td>
-   </tr>
+    <tr>
+        <th colspan="2"><strong>상점·아바타와 결제·환불</strong></th>
+    </tr>
+    <tr>
+        <td colspan="2" style="text-align: left;">
+            1. PortOne V2 테스트 결제<br>
+            2. 구매 내역과 아이템 지급 확인<br>
+            3. 아바타 아이템 장착<br>
+            4. 미사용 환불과 사용 후 환불 제한
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details>
+                <summary>1. 테스트 결제</summary>
+                <img src="docs/images/demos/09-test-payment.gif"
+                     alt="PortOne V2 테스트 결제" width="400">
+            </details>
+        </td>
+        <td>
+            <details>
+                <summary>2. 구매·지급 확인</summary>
+                <img src="docs/images/demos/10-purchase-delivery.gif"
+                     alt="구매 내역과 아이템 지급 확인" width="400">
+            </details>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details open>
+                <summary>3. 아바타 장착</summary>
+                <img src="docs/images/demos/11-avatar-equip.gif"
+                     alt="아바타 아이템 장착" width="400">
+            </details>
+        </td>
+        <td>
+            <details>
+                <summary>4. 환불 분기</summary>
+                <img src="docs/images/demos/12-refund-flow.gif"
+                     alt="미사용 환불과 사용 후 환불 제한" width="400">
+            </details>
+        </td>
+    </tr>
 </table>
 
 <table style="text-align: center">
-   <tr>
-      <th colspan="2"><strong>상점·아바타와 결제·환불</strong></th>
-   </tr>
-   <tr>
-      <td colspan="2" style="text-align: left;">1. 두 브라우저 세션의 Presence<br>2. 아바타 말풍선 채팅<br>3. 채팅 메시지 증거를 포함한 신고<br>4. 관리자의 신고 검토와 상태 확정</td>
-   </tr>
-   <tr>
-      <td>
-
-**1. 테스트 결제**<br>![PortOne V2 테스트 결제](docs/images/demos/13-test-payment.gif)</td>
-<td>
-
-**2. 구매·지급 확인**<br>![구매 내역과 아이템 지급 확인](docs/images/demos/14-purchase-delivery.gif)</td>
-   </tr>
-
-   <tr>
-      <td>
-
-**3. 아바타 장착**<br>![아바타 아이템 장착](docs/images/demos/15-avatar-equip.gif)</td>
-<td>
-
-**4. 환불 분기**<br>![미사용 환불과 사용 후 환불 제한](docs/images/demos/16-refund-flow.gif)</td>
-   </tr>
+    <tr>
+        <th colspan="2"><strong>그룹·서비스 운영</strong></th>
+    </tr>
+    <tr>
+        <td colspan="2" style="text-align: left;">
+            1. 역할 변경과 주 관리자 이전<br>
+            2. 초대 링크 재발급과 이전 링크 무효화<br>
+            3. 전체 관리자 대시보드 조회<br>
+            4. 환불·신고 대기열과 Scheduler 상태 확인
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details>
+                <summary>1. 그룹 역할 관리</summary>
+                <img src="docs/images/demos/13-group-role.gif"
+                     alt="그룹 역할 변경과 주 관리자 이전" width="400">
+            </details>
+        </td>
+        <td>
+            <details>
+                <summary>2. 초대 링크 재발급</summary>
+                <img src="docs/images/demos/14-invite-reissue.gif"
+                     alt="초대 링크 재발급과 이전 링크 무효화" width="400">
+            </details>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details open>
+                <summary>3. 운영 대시보드</summary>
+                <img src="docs/images/demos/15-admin-dashboard.gif"
+                     alt="전체 관리자 운영 대시보드" width="400">
+            </details>
+        </td>
+        <td>
+            <details>
+                <summary>4. 운영 현황 확인</summary>
+                <img src="docs/images/demos/16-admin-operations.gif"
+                     alt="환불 신고 대기열과 Scheduler 상태 확인" width="400">
+            </details>
+        </td>
+    </tr>
 </table>
 
 <table style="text-align: center">
-   <tr>
-      <th colspan="2"><strong>그룹·서비스 운영</strong></th>
-   </tr>
-   <tr>
-      <td colspan="2" style="text-align: left;">1. 역할 변경과 주 관리자 이전<br>2. 초대 링크 재발급과 이전 링크 무효화<br>3. 전체 관리자 대시보드 조회<br>4. 환불·신고 대기열과 Scheduler 상태 확인</td>
-   </tr>
-   <tr>
-      <td>
-
-**1. 그룹 역할 관리**<br>![그룹 역할 변경과 주 관리자 이전](docs/images/demos/17-group-role.gif)</td>
-<td>
-
-**2. 초대 링크 재발급**<br>![초대 링크 재발급과 이전 링크 무효화](docs/images/demos/18-invite-reissue.gif)</td>
-   </tr>
-
-   <tr>
-      <td>
-
-**3. 운영 대시보드**<br>![전체 관리자 운영 대시보드](docs/images/demos/19-admin-dashboard.gif)</td>
-<td>
-
-**4. 운영 현황 확인**<br>![환불 신고 대기열과 Scheduler 상태 확인](docs/images/demos/20-admin-operations.gif)</td>
-   </tr>
+    <tr>
+        <th colspan="2"><strong>Full CSR·반응형 사용자 환경</strong></th>
+    </tr>
+    <tr>
+        <td colspan="2" style="text-align: left;">
+            1. 새로고침 없는 메뉴 이동과 History 복원<br>
+            2. URL 직접 접근·새로고침 상태 복원<br>
+            3. 데스크톱·모바일 내비게이션 전환<br>
+            4. 시스템·라이트·다크 테마 전환
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details>
+                <summary>1. CSR 메뉴 이동</summary>
+                <img src="docs/images/demos/17-csr-navigation.gif"
+                     alt="새로고침 없는 Full CSR 메뉴 이동" width="400">
+            </details>
+        </td>
+        <td>
+            <details>
+                <summary>2. URL·새로고침 복원</summary>
+                <img src="docs/images/demos/18-route-restore.gif"
+                     alt="URL 직접 접근과 새로고침 상태 복원" width="400">
+            </details>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <details open>
+                <summary>3. 반응형 내비게이션</summary>
+                <img src="docs/images/demos/19-responsive-navigation.gif"
+                     alt="데스크톱과 모바일 내비게이션" width="400">
+            </details>
+        </td>
+        <td>
+            <details open>
+                <summary>4. 테마 전환</summary>
+                <img src="docs/images/demos/20-theme-switch.gif"
+                     alt="시스템 라이트 다크 테마 전환" width="400">
+            </details>
+        </td>
+    </tr>
 </table>
 
-<table style="text-align: center">
-   <tr>
-      <th colspan="2"><strong>Full CSR·반응형 사용자 환경</strong></th>
-   </tr>
-   <tr>
-      <td colspan="2" style="text-align: left;">1. 새로고침 없는 메뉴 이동과 History 복원<br>2. URL 직접 접근·새로고침 상태 복원<br>3. 데스크톱·모바일 내비게이션 전환<br>4. 시스템·라이트·다크 테마 전환</td>
-   </tr>
-   <tr>
-      <td>
-
-**1. CSR 메뉴 이동**<br>![새로고침 없는 Full CSR 메뉴 이동](docs/images/demos/21-csr-navigation.gif)</td>
-<td>
-
-**2. URL·새로고침 복원**<br>![URL 직접 접근과 새로고침 상태 복원](docs/images/demos/22-route-restore.gif)</td>
-   </tr>
-
-   <tr>
-      <td>
-
-**3. 반응형 내비게이션**<br>![데스크톱과 모바일 내비게이션](docs/images/demos/23-responsive-navigation.gif)</td>
-<td>
-
-**4. 테마 전환**<br>![시스템 라이트 다크 테마 전환](docs/images/demos/24-theme-switch.gif)</td>
-   </tr>
-</table>
 
 ## 🛠️ 주요 기술 스택
 

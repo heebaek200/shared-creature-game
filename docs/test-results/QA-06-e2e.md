@@ -148,32 +148,32 @@
 
 | 보고서 | 확인 결과 | QA-06에서 추적할 항목 | QA-06 결과 |
 |---|---|---|---|
-| [QA-01 가입·그룹](QA-01-auth-group.md) | 기본 가입·그룹 흐름 PASS. 회원 탈퇴 화면 FAIL, 가입 동시성·정원 수동 시험 NOT RUN | [#129 계정 탈퇴](https://github.com/heebaek200/shared-creature-game/issues/129), [#126 닉네임 검증](https://github.com/heebaek200/shared-creature-game/issues/126), [#131 Naver 계정 전환](https://github.com/heebaek200/shared-creature-game/issues/131), [#132 소속 그룹 문구](https://github.com/heebaek200/shared-creature-game/issues/132) | (기입) |
-| [QA-02 보상·Scheduler](QA-02-rewards-scheduler.md) | 기본 4건과 선택 검증 PASS | 실제 사용자 흐름에서 퀘스트 완료 → 성장 → 랭킹 연결 | (기입) |
-| [QA-03 결제·환불](QA-03-payment-refund.md) | 미제출·기본 5건 NOT RUN | 테스트 결제 → 지급 → 장착 → 환불 가능·불가 분기 전체 | (기입) |
-| [QA-04 WebSocket](QA-04-websocket.md) | 미제출·기본 4건 NOT RUN | 두 브라우저 세션의 성장·Presence·채팅·재연결 | (기입) |
-| [QA-05 사진 EXIF](QA-05-mobile-exif.md) | 기본 3건 PASS, 1건 BLOCKED. 재제출 UX FAIL과 직접 촬영 BLOCKED | [#122 백엔드 사진 검증](https://github.com/heebaek200/shared-creature-game/issues/122), [#127 재제출 UI](https://github.com/heebaek200/shared-creature-game/issues/127), [#128 주간 제출 정책](https://github.com/heebaek200/shared-creature-game/issues/128), [#130 직접 촬영](https://github.com/heebaek200/shared-creature-game/issues/130), 비-JPEG 서버 거절 미검증 | (기입) |
+| [QA-01 가입·그룹](QA-01-auth-group.md) | 수행 완료 · [PR #121](https://github.com/heebaek200/shared-creature-game/pull/121) main 병합. 기본 가입·그룹 흐름 PASS, 계정 탈퇴 화면 FAIL, 가입 동시성·정원 수동 시험 NOT RUN | 완료: [#126 닉네임 검증](https://github.com/heebaek200/shared-creature-game/issues/126), [#132 소속 그룹 문구](https://github.com/heebaek200/shared-creature-game/issues/132). 스킵: [#129 계정 탈퇴](https://github.com/heebaek200/shared-creature-game/issues/129), [#131 Naver 계정 전환](https://github.com/heebaek200/shared-creature-game/issues/131) | 후속조치 2건 완료 · 2건 스킵 |
+| [QA-02 보상·Scheduler](QA-02-rewards-scheduler.md) | 수행 완료 · [PR #118](https://github.com/heebaek200/shared-creature-game/pull/118) main 병합. 기본 4건과 선택 검증 PASS | 실제 사용자 흐름에서 퀘스트 완료 → 성장 → 랭킹 연결 | 선행 결과 PASS · QA-06 수동 확인 대상 |
+| [QA-03 결제·환불](QA-03-payment-refund.md) | 수행 완료 · [PR #136](https://github.com/heebaek200/shared-creature-game/pull/136) main 병합. 기본 5건과 선택 검증 PASS | 테스트 결제 → 지급 → 장착 → 환불 가능·불가 분기 전체 | 선행 결과 PASS · QA-06 수동 확인 대상 |
+| [QA-04 WebSocket](QA-04-websocket.md) | 수행 완료 · [PR #134](https://github.com/heebaek200/shared-creature-game/pull/134) main 병합. 기본 4건 중 PASS 3·BLOCKED 1, 추가 5건 PASS | 두 브라우저 세션의 성장·Presence·채팅·재연결. 부화 전 퀘스트 차단은 [#135](https://github.com/heebaek200/shared-creature-game/issues/135)에서 보완 | #135 완료 · QA-06에서 대표 실시간 흐름 확인 대상 |
+| [QA-05 사진 EXIF](QA-05-mobile-exif.md) | 수행 완료 · [PR #120](https://github.com/heebaek200/shared-creature-game/pull/120) main 병합. 기본 4건 중 PASS 3·BLOCKED 1 | 스킵: [#122 백엔드 사진 검증](https://github.com/heebaek200/shared-creature-game/issues/122), [#127 재제출 UI](https://github.com/heebaek200/shared-creature-game/issues/127), [#128 주간 제출 정책](https://github.com/heebaek200/shared-creature-game/issues/128), [#130 직접 촬영](https://github.com/heebaek200/shared-creature-game/issues/130). 비-JPEG 서버 거절 미검증 | 후속조치 4건 스킵 · 잔여 검증 1건 NOT RUN |
 
 ## 5. QA 피드백 후속 조치
 
-2026-11-20 기준 `QA 피드백` 라벨 이슈와 프로젝트 보드 상태입니다. 이슈가 열려 있거나 `TBD`라는 이유만으로 QA-06을 실패 처리하지 않으며, 실제 시나리오 영향과 아래 처리 결정을 기준으로 최종 판정합니다.
+2026-11-22 기준 `QA 피드백` 라벨 이슈와 프로젝트 보드 상태입니다. 프로젝트 보드가 `Done`인 이슈는 완료로 기록하고, `TBD` 또는 `In Progress`인 이슈는 이번 프로젝트에서 스킵합니다. 스킵은 해결로 집계하지 않습니다.
 
 | 이슈 | 출처·성격 | 현재 상태 | 처리 결정 | 종료 시 기록할 내용 |
 |---|---|---|---|---|
-| [#122 사진퀘스트 백엔드 보완](https://github.com/heebaek200/shared-creature-game/issues/122) | QA-05 / 결함 보완 | `OPEN` · `In Progress` · [PR #125](https://github.com/heebaek200/shared-creature-game/pull/125) 열림 | (진행/스킵/보류) | 병합·재검증 결과 또는 스킵 후 남는 검증·데이터 영향 |
-| [#126 닉네임 검증 상태·문구](https://github.com/heebaek200/shared-creature-game/issues/126) | QA-01 / P2 UX·상태 오류 | `OPEN` · `TBD` | (진행/스킵/보류) | 현재 값과 이전 성공 상태의 혼동 가능성 |
-| [#127 사진 재제출 안내·입력 제어](https://github.com/heebaek200/shared-creature-game/issues/127) | QA-05 / P2 프론트엔드 | `OPEN` · `TBD` | (진행/스킵/보류) | PC·모바일 안내 차이와 #122 의존성 |
-| [#128 주간 사진 제출 횟수 정책](https://github.com/heebaek200/shared-creature-game/issues/128) | QA-05 / P2 정책 검토 | `OPEN` · `TBD` | (진행/스킵/보류) | 기존 배정당 5회 정책 유지 여부 |
-| [#129 서비스 계정 탈퇴](https://github.com/heebaek200/shared-creature-game/issues/129) | QA-01 / P2 기능 누락 | `OPEN` · `TBD` | (진행/스킵/보류) | 회원 탈퇴 미제공 범위와 시연 제외 여부 |
-| [#130 모바일 직접 촬영](https://github.com/heebaek200/shared-creature-game/issues/130) | QA-05 / P2 기능·UX | `OPEN` · `TBD` | (진행/스킵/보류) | 보관함 업로드만 제공되는 제한 |
-| [#131 Naver 계정 전환](https://github.com/heebaek200/shared-creature-game/issues/131) | QA-01 / P3 UX 검토 | `OPEN` · `TBD` | (진행/스킵/보류) | 게임 세션과 공급자 세션 차이 안내 여부 |
-| [#132 소속 그룹 안내 문구](https://github.com/heebaek200/shared-creature-game/issues/132) | QA-01 / P3 문구 개선 | `OPEN` · `TBD` | (진행/스킵/보류) | 차단 동작은 정상이며 문구 혼동만 잔존 |
+| [#122 사진퀘스트 백엔드 보완](https://github.com/heebaek200/shared-creature-game/issues/122) | QA-05 / 결함 보완 | `OPEN` · `In Progress` · [PR #125](https://github.com/heebaek200/shared-creature-game/pull/125) 열림 | 스킵 | 완료 후 재제출·잘못된 EXIF·손상 GPS 보완이 main에 병합되지 않음 |
+| [#126 닉네임 검증 상태·문구](https://github.com/heebaek200/shared-creature-game/issues/126) | QA-01 / P2 UX·상태 오류 | `CLOSED` · `Done` · [PR #138](https://github.com/heebaek200/shared-creature-game/pull/138) 병합 | 완료 | 입력 변경 시 이전 검증 상태 초기화, 지연 응답 보호, 가입 요청 중 입력 잠금과 문구 개선 |
+| [#127 사진 재제출 안내·입력 제어](https://github.com/heebaek200/shared-creature-game/issues/127) | QA-05 / P2 프론트엔드 | `OPEN` · `TBD` | 스킵 | 완료 후 재제출 안내의 PC·모바일 차이와 #122 의존성 잔존 |
+| [#128 주간 사진 제출 횟수 정책](https://github.com/heebaek200/shared-creature-game/issues/128) | QA-05 / P2 정책 검토 | `OPEN` · `TBD` | 스킵 | 배정 전체 5회 정책 유지, 날짜별 제출 기회 정책 미결정 |
+| [#129 서비스 계정 탈퇴](https://github.com/heebaek200/shared-creature-game/issues/129) | QA-01 / P2 기능 누락 | `OPEN` · `TBD` | 스킵 | 서비스 계정 탈퇴 API·화면 미제공, 관련 시연 제외 |
+| [#130 모바일 직접 촬영](https://github.com/heebaek200/shared-creature-game/issues/130) | QA-05 / P2 기능·UX | `OPEN` · `TBD` | 스킵 | 모바일은 보관함 사진 선택만 제공, 직접 촬영 시연 제외 |
+| [#131 Naver 계정 전환](https://github.com/heebaek200/shared-creature-game/issues/131) | QA-01 / P3 UX 검토 | `OPEN` · `TBD` | 스킵 | 게임 세션과 Naver 공급자 세션의 계정 전환 정책 미결정 |
+| [#132 소속 그룹 안내 문구](https://github.com/heebaek200/shared-creature-game/issues/132) | QA-01 / P3 문구 개선 | `CLOSED` · `Done` · [PR #139](https://github.com/heebaek200/shared-creature-game/pull/139) 병합 | 완료 | 본인 그룹은 “이미 해당 그룹에 가입되어 있습니다.”로 구분하고 기존 제한 유지 |
+| [#135 부화 전 퀘스트·오류 안내](https://github.com/heebaek200/shared-creature-game/issues/135) | QA-04 / P1 기능 차단 | `CLOSED` · `Done` · [PR #137](https://github.com/heebaek200/shared-creature-game/pull/137) 병합 | 완료 | `PREPARING` 그룹의 퀘스트 완료·보상 누적 허용과 안전한 서버 업무 메시지 표시 |
 
 처리 결정 기준:
 
-- **진행:** 구현 또는 정책 결정을 완료한 뒤 관련 TC를 재검증합니다.
-- **스킵:** 이번 프로젝트에서 구현하지 않습니다. 해결 건수에 포함하지 않고 최종 미완료 항목에 사용자 영향과 시연 제외 여부를 기록합니다.
-- **보류:** 결정되지 않은 상태입니다. 프로젝트 종료 전 진행 또는 스킵으로 확정합니다.
+- **완료:** 프로젝트 보드 `Done`, 이슈 `CLOSED`, 연결 PR의 main 병합을 확인했습니다.
+- **스킵:** 이번 프로젝트에서 구현하지 않습니다. 해결 건수에 포함하지 않고 남는 사용자 영향과 시연 제외 범위를 기록합니다.
 
 ## 6. 결함 및 재검증
 
@@ -182,13 +182,13 @@
 | 항목 | 결과 |
 |---|---|
 | QA-06에서 새로 발견한 결함 | __건 |
-| QA 피드백 후속 조치 이슈 | 8건 |
-| 이슈화되지 않은 잔여 검증 항목 | 1건(비-JPEG 서버 거절) |
-| 재검증 PASS | __건 |
-| 스킵 | __건 |
-| 보류 | __건 |
-| 미해결 결함 | (없음 / 결함 ID) |
-| 최종 시연 차단 결함 | (없음 / 결함 ID와 영향) |
+| QA 피드백 후속 조치 이슈 | 9건 |
+| 이슈화되지 않은 잔여 검증 항목 | 1건(비-JPEG 서버 거절 · NOT RUN) |
+| 후속 조치 완료 | 3건(#126, #132, #135) |
+| 스킵 | 6건(#122, #127~#131) |
+| 보류 | 0건 |
+| 미해결 후속 조치 | 6건(스킵 항목) |
+| 최종 시연 차단 결함 | 없음. 스킵 항목과 직접 촬영·계정 탈퇴 장면은 시연에서 제외 |
 
 ## 7. README 시연 GIF 확인
 

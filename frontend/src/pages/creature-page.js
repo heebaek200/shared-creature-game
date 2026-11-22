@@ -9,9 +9,15 @@ import { creatureAccessErrorRoute } from '../features/creature/access-error-poli
 import { groupLiveManager } from '../realtime/group-live-manager.js';
 import { createRecentMessageIdRegistry } from '../realtime/recent-message-ids.js';
 import { createUserReport } from '../features/group/api.js';
+import { mockCreatureChatMessages } from '../mocks/mock-creature-page.js';
 
 import creatureLv0 from '../../assets/creature/lv0.png';
 import { createAppShell } from '../components/app-shell.js';
+
+const USE_MOCK = import.meta.env.VITE_USE_MOCK_API === 'true';
+const MOCK_CHAT_AFTER_COMPLETE_DELAY_MS = 1200;
+const MOCK_CHAT_GROWTH_ANIMATION_DELAY_MS = 12000;
+const MOCK_CHAT_INTERVAL_MS = 800;
 
 /**
  * 크리처 홈 페이지 마운트 및 렌더링합니다.
@@ -477,6 +483,9 @@ export function creaturePage(context) {
     let chatRetryTimer = null;
     let unsubscribeChatMessages = null;
     let unsubscribeLiveStatus = null;
+    let mockChatShowcaseStarted = false;
+    /** @type {Set<number>} */
+    const mockChatTimerIds = new Set();
 
     function syncSelectedChatMessage(message) {
         if (String(selectedAvatarUserId) !== String(message.senderUserId)
@@ -505,6 +514,37 @@ export function creaturePage(context) {
                 syncSelectedChatMessage(pending.message);
             }
         }
+    }
+
+    /**
+     * Mock 화면의 온라인 구성원 20명이 한 번씩 말풍선을 표시하도록 예약합니다.
+     * 실제 WebSocket 메시지 흐름과 같은 displayChatMessage 경로를 사용합니다.
+     *
+     * @param {Array<Record<string, any>>} onlineMembers 현재 Snapshot의 온라인 구성원
+     */
+    function startMockChatShowcase(onlineMembers) {
+        if (!USE_MOCK || mockChatShowcaseStarted || onlineMembers.length !== 20) return;
+
+        const onlineUserIds = new Set(onlineMembers.map(
+            (member) => String(member.userId),
+        ));
+        const messages = mockCreatureChatMessages.filter(
+            (message) => onlineUserIds.has(String(message.senderUserId)),
+        );
+        if (messages.length !== 20) return;
+
+        mockChatShowcaseStarted = true;
+        const growthStage = element.querySelector('#growth-stage')?.textContent?.trim();
+        const startDelay = growthStage === '완전체'
+            ? MOCK_CHAT_AFTER_COMPLETE_DELAY_MS
+            : MOCK_CHAT_GROWTH_ANIMATION_DELAY_MS;
+        messages.forEach((message, index) => {
+            const timerId = window.setTimeout(() => {
+                mockChatTimerIds.delete(timerId);
+                if (isMounted) displayChatMessage(message);
+            }, startDelay + index * MOCK_CHAT_INTERVAL_MS);
+            mockChatTimerIds.add(timerId);
+        });
     }
 
     function updateChatAvailability(state = groupLiveManager.getState()) {
@@ -1008,6 +1048,7 @@ export function creaturePage(context) {
 
         avatarField.render(onlineMembers, currentUserId);
         flushPendingChatMessages();
+        startMockChatShowcase(onlineMembers);
 
         if (selectedAvatarUserId !== null) {
             const selectedMember = onlineMembers.find((member) =>
@@ -1125,6 +1166,8 @@ export function creaturePage(context) {
             if (countdownIntervalId !== null) clearInterval(countdownIntervalId);
             if (deadlineTimeoutId !== null) clearTimeout(deadlineTimeoutId);
             if (chatRetryTimer !== null) clearTimeout(chatRetryTimer);
+            mockChatTimerIds.forEach((timerId) => clearTimeout(timerId));
+            mockChatTimerIds.clear();
             growthAnimationTimeoutIds.forEach(timeoutId => clearTimeout(timeoutId));
             growthAnimationTimeoutIds.clear();
             retryButton?.removeEventListener('click', onRetryLoad);
