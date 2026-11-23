@@ -1,0 +1,1423 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="다 같이 키우는 생명체 프로젝트 발표 자료">
+  <title>다 같이 키우는 생명체 | 프로젝트 발표</title>
+  <style>
+    /* 파스텔 프로젝트 기록집을 위한 공통 토큰 */
+    :root {
+      color-scheme: light;
+      --ink: #263238;
+      --ink-soft: #516067;
+      --paper: #fffdf7;
+      --mint: #c8f0df;
+      --mint-strong: #55cba2;
+      --blue: #d9eaff;
+      --pink: #f9dce7;
+      --yellow: #fff0b8;
+      --lavender: #e7def9;
+      --peach: #ffd9c7;
+      --red: #d94343;
+      --line: rgba(38, 50, 56, 0.16);
+      --shadow: 0 18px 50px rgba(59, 67, 72, 0.12);
+      --sans: "Pretendard Variable", Pretendard, "Noto Sans KR", system-ui, -apple-system, sans-serif;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      overflow: hidden;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: var(--sans);
+    }
+
+    button,
+    a { font: inherit; }
+
+    a { color: inherit; }
+    button { border: 0; }
+
+    /* 슬라이드 무대 */
+    .deck {
+      position: relative;
+      width: 100vw;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      align-content: center;
+      padding: clamp(5.2rem, 7vh, 7rem) clamp(2rem, 7vw, 8.5rem) clamp(5rem, 7vh, 6.5rem);
+      overflow: auto;
+      visibility: hidden;
+      opacity: 0;
+      transform: translateY(1rem);
+      color: var(--ink);
+      background-color: var(--paper);
+      background-image:
+        radial-gradient(circle at 12px 12px, rgba(38,50,56,.06) 1.2px, transparent 1.4px);
+      background-size: 24px 24px;
+      transition: opacity 220ms ease, transform 300ms ease, visibility 0s linear 320ms;
+      scrollbar-width: thin;
+    }
+
+    .slide.is-active {
+      visibility: visible;
+      opacity: 1;
+      transform: none;
+      transition-delay: 0s;
+    }
+
+    .slide--mint { background-color: #e4f7ee; }
+    .slide--blue { background-color: #eaf3ff; }
+    .slide--pink { background-color: #fcecf2; }
+    .slide--yellow { background-color: #fff8db; }
+    .slide--lavender { background-color: #f2edfc; }
+    .slide--peach { background-color: #fff0e7; }
+
+    .slide__inner {
+      width: min(100%, 103rem);
+      margin: auto;
+    }
+
+    .slide__inner--narrow { width: min(100%, 82rem); }
+
+    /* 타이포그래피 */
+    h1,
+    h2,
+    h3,
+    p { margin-top: 0; }
+
+    h1 {
+      margin-bottom: 1.25rem;
+      font-size: clamp(4rem, 7vw, 8rem);
+      font-weight: 880;
+      letter-spacing: -0.075em;
+      line-height: 0.95;
+    }
+
+    h2 {
+      max-width: 18ch;
+      margin-bottom: clamp(1rem, 2.2vh, 1.8rem);
+      font-size: clamp(2.6rem, 4.8vw, 5.4rem);
+      font-weight: 850;
+      letter-spacing: -0.06em;
+      line-height: 1.03;
+    }
+
+    h3 {
+      margin-bottom: 0.55rem;
+      font-size: clamp(1.08rem, 1.35vw, 1.45rem);
+      letter-spacing: -0.03em;
+      line-height: 1.3;
+    }
+
+    p { line-height: 1.62; }
+
+    .lede {
+      max-width: 52rem;
+      margin-bottom: 0;
+      color: var(--ink-soft);
+      font-size: clamp(1.08rem, 1.55vw, 1.55rem);
+      letter-spacing: -0.02em;
+      line-height: 1.65;
+    }
+
+    .accent {
+      position: relative;
+      z-index: 0;
+      display: inline-block;
+    }
+
+    .accent::after {
+      position: absolute;
+      z-index: -1;
+      right: -0.08em;
+      bottom: 0.04em;
+      left: -0.08em;
+      height: 0.34em;
+      content: "";
+      background: var(--mint-strong);
+      border-radius: 999px;
+      opacity: 0.48;
+      transform: rotate(-1.2deg);
+    }
+
+    .source {
+      display: inline-block;
+      margin-top: 1rem;
+      color: var(--ink-soft);
+      font-size: 0.86rem;
+      text-underline-offset: 0.22em;
+    }
+
+    /* 종이 카드와 스티커 */
+    .paper-card {
+      padding: clamp(1rem, 1.7vw, 1.6rem);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      background: rgba(255,255,255,.78);
+      border-radius: 1.4rem 1.4rem 1.4rem 0.45rem;
+      box-shadow: var(--shadow);
+    }
+
+    .paper-card p:last-child,
+    .paper-card ul:last-child { margin-bottom: 0; }
+
+    .paper-card--link {
+      display: block;
+      text-decoration: none;
+      transition: transform 160ms ease, box-shadow 160ms ease;
+    }
+
+    .paper-card--link h3 {
+      text-decoration: underline;
+      text-decoration-thickness: 0.08em;
+      text-underline-offset: 0.18em;
+    }
+
+    .paper-card--link:hover {
+      transform: translateY(-0.18rem);
+      box-shadow: 0 24px 58px rgba(59, 67, 72, 0.16);
+    }
+
+    .paper-card--link:focus-visible {
+      outline: 0.22rem solid var(--ink);
+      outline-offset: 0.2rem;
+    }
+
+    .paper-card--mint { background: var(--mint); }
+    .paper-card--blue { background: var(--blue); }
+    .paper-card--pink { background: var(--pink); }
+    .paper-card--yellow { background: var(--yellow); }
+    .paper-card--lavender { background: var(--lavender); }
+    .paper-card--peach { background: var(--peach); }
+
+    .tape {
+      position: absolute;
+      z-index: 3;
+      top: -0.65rem;
+      left: 50%;
+      width: 6rem;
+      height: 1.45rem;
+      background: rgba(255, 240, 184, 0.82);
+      transform: translateX(-50%) rotate(-2deg);
+      box-shadow: 0 2px 7px rgba(0,0,0,.08);
+    }
+
+    .sticker {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.5rem 0.8rem;
+      border: 1.5px solid var(--ink);
+      background: var(--yellow);
+      border-radius: 999px;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      font-weight: 800;
+      transform: rotate(-2deg);
+    }
+
+    .grid { display: grid; gap: clamp(0.8rem, 1.25vw, 1.25rem); }
+    .grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+    .split {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(26rem, 1.1fr);
+      align-items: center;
+      gap: clamp(2rem, 5vw, 6rem);
+    }
+
+    .split--reverse {
+      grid-template-columns: minmax(26rem, 1.1fr) minmax(0, 0.9fr);
+    }
+
+    .clean-list {
+      display: grid;
+      gap: 0.68rem;
+      margin: 1rem 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .clean-list li {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.7rem;
+      line-height: 1.5;
+    }
+
+    .clean-list li::before {
+      content: "●";
+      color: var(--mint-strong);
+      font-size: 0.68rem;
+      transform: translateY(0.25rem);
+    }
+
+    /* 상단 브랜드 */
+    .brand {
+      position: fixed;
+      z-index: 30;
+      top: 1.25rem;
+      left: clamp(1.25rem, 3vw, 3rem);
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      color: var(--ink);
+      font-size: 0.88rem;
+      font-weight: 780;
+    }
+
+    .brand img {
+      width: 1.85rem;
+      height: 1.85rem;
+      object-fit: contain;
+    }
+
+    /* 표지 */
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(26rem, 0.95fr);
+      align-items: center;
+      gap: clamp(2rem, 5vw, 6rem);
+    }
+
+    .hero__title span { display: block; white-space: nowrap; }
+
+    .hero__photo {
+      position: relative;
+      width: min(100%, 35rem);
+      justify-self: end;
+      padding: 1rem 1rem 3.3rem;
+      background: white;
+      border-radius: 0.8rem;
+      box-shadow: 0 28px 70px rgba(55,70,70,.18);
+      transform: rotate(1.5deg);
+    }
+
+    .hero__photo::after {
+      position: absolute;
+      right: 1.3rem;
+      bottom: 1rem;
+      content: "4명 · 3주 · 공동 크리처 1마리";
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      font-weight: 800;
+    }
+
+    .hero__photo img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      border-radius: 0.35rem;
+    }
+
+    .hero__meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-top: 1.4rem;
+    }
+
+    /* 핵심 이용 흐름 */
+    .loop {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+
+    .loop article { min-height: 12.5rem; }
+
+    .loop strong {
+      display: block;
+      margin-bottom: 2rem;
+      font-size: 2.5rem;
+      line-height: 1;
+    }
+
+    /* 영상과 이미지 프레임 */
+    .media {
+      position: relative;
+      overflow: hidden;
+      border: 0.75rem solid white;
+      background: white;
+      border-radius: 1.2rem;
+      box-shadow: var(--shadow);
+    }
+
+    .media img {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 1;
+      object-fit: cover;
+      border-radius: 0.5rem;
+    }
+
+    .media--wide img {
+      aspect-ratio: 16 / 9;
+      object-position: top;
+    }
+
+    .media-pair {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+    }
+
+    .media-placeholder {
+      display: grid;
+      place-items: center;
+      aspect-ratio: 1;
+      color: var(--ink-soft);
+      background: var(--mint);
+      font-size: 0.85rem;
+    }
+
+    .screen-shot {
+      position: relative;
+      padding: 0.9rem;
+      background: white;
+      border-radius: 1rem;
+      box-shadow: var(--shadow);
+      transform: rotate(-0.6deg);
+    }
+
+    .screen-shot img {
+      display: block;
+      width: 100%;
+      max-height: 38rem;
+      object-fit: contain;
+      border-radius: 0.4rem;
+    }
+
+    /* README 표를 그대로 옮기는 표 스타일 */
+    .readme-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.78);
+      border-radius: 1rem;
+      box-shadow: var(--shadow);
+      font-size: clamp(0.78rem, 0.92vw, 1rem);
+    }
+
+    .readme-table th,
+    .readme-table td {
+      padding: 0.67rem 0.8rem;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      line-height: 1.38;
+    }
+
+    .readme-table th:last-child,
+    .readme-table td:last-child { border-right: 0; }
+    .readme-table tr:last-child td { border-bottom: 0; }
+
+    .readme-table thead th {
+      background: var(--mint);
+      font-weight: 820;
+    }
+
+    .readme-table code {
+      font-family: var(--mono);
+      font-size: 0.86em;
+    }
+
+    /* 강의 확장 카드 */
+    .extension-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.8rem;
+    }
+
+    .extension-grid article {
+      min-height: 13.2rem;
+    }
+
+    .extension-grid p {
+      margin-bottom: 0;
+      color: var(--ink-soft);
+      font-size: 0.93rem;
+      line-height: 1.55;
+    }
+
+    /* 폴더 트리 */
+    .tree {
+      margin: 0;
+      padding: 1.25rem 1.5rem;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      color: #30444a;
+      background: rgba(255,255,255,.8);
+      border-radius: 1.2rem;
+      box-shadow: var(--shadow);
+      font-family: var(--mono);
+      font-size: clamp(0.69rem, 0.83vw, 0.9rem);
+      line-height: 1.38;
+      white-space: pre;
+    }
+
+    /* Mermaid ER 다이어그램과 같은 관계 중심 표현 */
+    .erd-diagram {
+      width: 100%;
+      height: min(55vh, 34rem);
+      margin-top: 1rem;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.76);
+      border-radius: 1.2rem;
+      box-shadow: var(--shadow);
+    }
+
+    .erd-diagram__domain {
+      fill: rgba(255,255,255,.42);
+      stroke: rgba(38,50,56,.13);
+      stroke-dasharray: 7 6;
+      stroke-width: 1.5;
+    }
+
+    .erd-diagram__domain-title {
+      fill: var(--ink);
+      font-family: var(--sans);
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .erd-diagram__edge {
+      fill: none;
+      stroke: #77918a;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 2.2;
+    }
+
+    .erd-diagram__relation {
+      fill: var(--ink-soft);
+      stroke: rgba(255,255,255,.95);
+      stroke-width: 5px;
+      paint-order: stroke;
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 700;
+      text-anchor: middle;
+    }
+
+    .erd-diagram__entity rect {
+      fill: #fff;
+      stroke: #516067;
+      stroke-width: 1.7;
+    }
+
+    .erd-diagram__entity text {
+      fill: var(--ink);
+      font-family: var(--mono);
+      font-size: 16px;
+      font-weight: 700;
+      text-anchor: middle;
+    }
+
+    .erd-legend {
+      margin: 0.75rem 0 0;
+      color: var(--ink-soft);
+      font-family: var(--mono);
+      font-size: 0.86rem;
+    }
+
+    /* 보안 경고 */
+    .security {
+      display: grid;
+      grid-template-columns: 0.72fr 1.28fr;
+      align-items: center;
+      gap: 3.5rem;
+    }
+
+    .warning-light {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: min(24vw, 21rem);
+      aspect-ratio: 1;
+      margin: auto;
+      color: white;
+      text-align: center;
+      background: var(--red);
+      border: 1.4rem solid rgba(255,255,255,.7);
+      border-radius: 50%;
+      box-shadow: 0 0 0 1px rgba(38,50,56,.16), 0 0 80px rgba(217,67,67,.28);
+    }
+
+    .warning-light::before {
+      position: absolute;
+      inset: -2.4rem;
+      content: "";
+      border: 0.35rem dashed rgba(217,67,67,.45);
+      border-radius: 50%;
+    }
+
+    .warning-light strong {
+      display: block;
+      font-size: clamp(2rem, 3.5vw, 3.8rem);
+      line-height: 1;
+    }
+
+    .warning-light span {
+      display: block;
+      margin-top: 0.7rem;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+    }
+
+    /* QA 요약 */
+    .qa-flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.8rem;
+      margin-bottom: 1rem;
+    }
+
+    .qa-flow article { min-height: 9rem; }
+
+    .status {
+      display: inline-block;
+      padding: 0.26rem 0.48rem;
+      border-radius: 999px;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 800;
+    }
+
+    .status--done { background: var(--mint); }
+    .status--skip { background: var(--yellow); }
+    .status--limited { background: var(--pink); }
+
+    /* 팀 */
+    .team-card {
+      min-height: 15rem;
+    }
+
+    .team-card strong {
+      display: block;
+      margin-bottom: 0.2rem;
+      font-size: 1.6rem;
+    }
+
+    .team-card small {
+      display: block;
+      margin-bottom: 1rem;
+      color: var(--ink-soft);
+      font-family: var(--mono);
+    }
+
+    .team-card p {
+      margin-bottom: 0;
+      font-size: 0.94rem;
+    }
+
+    /* 시연 영상 인덱스 */
+    .demo-index {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 0.6rem;
+    }
+
+    .demo-link {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 6rem;
+      padding: 0.8rem;
+      border: 1px solid var(--line);
+      text-decoration: none;
+      background: rgba(255,255,255,.75);
+      border-radius: 0.85rem;
+      transition: transform 160ms ease, box-shadow 160ms ease;
+    }
+
+    .demo-link:hover,
+    .demo-link:focus-visible {
+      transform: translateY(-0.18rem) rotate(-0.5deg);
+      box-shadow: var(--shadow);
+    }
+
+    .demo-link span {
+      color: var(--ink-soft);
+      font-family: var(--mono);
+      font-size: 0.7rem;
+    }
+
+    .demo-link strong { font-size: 0.87rem; }
+
+    /* 발표 컨트롤 */
+    .controls {
+      position: fixed;
+      z-index: 40;
+      right: clamp(1rem, 2.2vw, 2.4rem);
+      bottom: clamp(1rem, 2vh, 1.8rem);
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.35rem;
+      border: 1px solid rgba(38,50,56,.18);
+      background: rgba(255,255,255,.88);
+      border-radius: 999px;
+      box-shadow: 0 8px 24px rgba(38,50,56,.12);
+      backdrop-filter: blur(12px);
+    }
+
+    .controls button {
+      flex-shrink: 0;
+      min-width: 2.6rem;
+      min-height: 2.6rem;
+      padding: 0 0.72rem;
+      color: var(--ink);
+      cursor: pointer;
+      background: transparent;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .controls button:hover,
+    .controls button:focus-visible {
+      background: var(--mint);
+      outline: none;
+    }
+
+    .slide-count {
+      min-width: 4rem;
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+    }
+
+    .progress {
+      position: fixed;
+      z-index: 35;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 0.25rem;
+      background: rgba(38,50,56,.08);
+    }
+
+    .progress__bar {
+      height: 100%;
+      background: var(--mint-strong);
+      transition: width 220ms ease;
+    }
+
+    .overview {
+      position: fixed;
+      z-index: 50;
+      inset: 0;
+      display: none;
+      padding: 4rem;
+      overflow: auto;
+      background: rgba(255,253,247,.97);
+      backdrop-filter: blur(16px);
+    }
+
+    .overview.is-open { display: block; }
+
+    .overview__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: min(100%, 85rem);
+      margin: 0 auto 1.2rem;
+    }
+
+    .overview__header h2 { margin: 0; font-size: 2.8rem; }
+
+    .overview__close {
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      background: var(--pink);
+      border-radius: 999px;
+    }
+
+    .overview__grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.7rem;
+      width: min(100%, 85rem);
+      margin: auto;
+    }
+
+    .overview__item {
+      min-height: 7rem;
+      padding: 1rem;
+      border: 1px solid var(--line);
+      text-align: left;
+      cursor: pointer;
+      background: white;
+      border-radius: 1rem;
+    }
+
+    .overview__item.is-current { background: var(--mint); }
+
+    .overview__item span {
+      display: block;
+      margin-bottom: 1rem;
+      color: var(--ink-soft);
+      font-family: var(--mono);
+      font-size: 0.7rem;
+    }
+
+    /* 작은 화면 */
+    @media (max-width: 980px) {
+      .slide { align-content: start; padding-top: 5.5rem; }
+      .hero,
+      .split,
+      .split--reverse,
+      .security { grid-template-columns: 1fr; }
+      .hero__photo { width: min(82vw, 30rem); justify-self: center; }
+      .grid--4,
+      .loop,
+      .qa-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid--3,
+      .extension-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .demo-index { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .overview__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .warning-light { width: 15rem; }
+    }
+
+    @media (max-width: 640px) {
+      h1 { font-size: clamp(3rem, 13vw, 4.2rem); }
+      h2 { font-size: clamp(2.25rem, 11vw, 3.4rem); }
+      .slide { padding-inline: 1rem; }
+      .grid--2,
+      .grid--3,
+      .grid--4,
+      .loop,
+      .qa-flow,
+      .extension-grid,
+      .media-pair,
+      .overview__grid { grid-template-columns: 1fr; }
+      .demo-index { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .controls { left: 50%; right: auto; transform: translateX(-50%); }
+      .controls [data-action="fullscreen"] { display: none; }
+      .brand span { display: none; }
+      .overview { padding: 1rem; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+      }
+    }
+
+    @media print {
+      @page { size: 16in 9in; margin: 0; }
+      html, body { overflow: visible; }
+      .deck { width: auto; height: auto; }
+      .slide {
+        position: relative;
+        width: 16in;
+        height: 9in;
+        padding: 0.65in;
+        visibility: visible;
+        opacity: 1;
+        transform: none;
+        overflow: hidden;
+        page-break-after: always;
+      }
+      .brand, .controls, .progress, .overview { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck" aria-live="polite">
+    <div class="brand" aria-hidden="true">
+      <img src="https://raw.githubusercontent.com/heebaek200/shared-creature-game/main/frontend/assets/ui/header-title-icon.png" alt="">
+      <span>다 같이 키우는 생명체</span>
+    </div>
+
+    <section class="slide slide--mint is-active" data-title="다 같이 키우는 생명체" aria-hidden="false">
+      <div class="slide__inner hero">
+        <div>
+          <span class="sticker">WEB SOCIAL CREATURE GAME</span>
+          <h1 class="hero__title">
+            <span>다 같이 키우는</span>
+            <span><span class="accent">생명체</span></span>
+          </h1>
+          <p class="lede">일상 속 작은 활동을 게임으로 연결하고, 여러 사용자가 하나의 생명체를 함께 성장시키는 웹 기반 소셜 육성 서비스</p>
+          <div class="hero__meta">
+            <span class="sticker">4명</span>
+            <span class="sticker">3주</span>
+            <span class="sticker">Spring Boot + Vanilla JS</span>
+          </div>
+        </div>
+        <figure class="hero__photo">
+          <span class="tape"></span>
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/07-creature-growth.gif" alt="여러 사용자가 함께 성장시킨 완전체 크리처 화면" hidden>
+        </figure>
+      </div>
+    </section>
+
+    <section class="slide slide--blue" data-title="프로젝트 개요" aria-hidden="true">
+      <div class="slide__inner split">
+        <div>
+          <h2>작은 실천을<br><span class="accent">공동의 성장</span>으로</h2>
+          <p class="lede">규칙적인 생활이나 가벼운 야외 활동은 혼자 꾸준히 실천하기 어렵고, 새로운 사람과 적극적으로 교류하는 일도 부담스러울 수 있습니다.</p>
+        </div>
+        <div class="grid grid--2">
+          <article class="paper-card paper-card--yellow"><h3>공개 그룹</h3><p>사용자는 공개 그룹에 자유롭게 가입하거나 새로운 그룹을 만듭니다.</p></article>
+          <article class="paper-card paper-card--mint"><h3>일일·주간 퀘스트</h3><p>기상 체크인과 사진 인증 등 작은 활동을 수행합니다.</p></article>
+          <article class="paper-card paper-card--pink"><h3>공동 크리처</h3><p>개인의 활동은 기여도로 기록되고 그룹 크리처의 성장에 반영됩니다.</p></article>
+          <article class="paper-card paper-card--lavender"><h3>협력과 경쟁</h3><p>개인·그룹 랭킹으로 참여 동기를 이어갑니다.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--yellow" data-title="핵심 이용 흐름" aria-hidden="true">
+      <div class="slide__inner">
+        <h2>가입부터 성장까지<br>하나의 <span class="accent">이용 흐름</span></h2>
+        <div class="loop">
+          <article class="paper-card paper-card--blue"><strong>01</strong><h3>소셜 로그인·그룹 참여</h3><p>Google·Naver 로그인 후 공개 그룹에 가입하거나 그룹을 생성합니다.</p></article>
+          <article class="paper-card paper-card--pink"><strong>02</strong><h3>일상 퀘스트 수행</h3><p>일일·주간 체크인과 JPEG EXIF 사진 퀘스트를 수행합니다.</p></article>
+          <article class="paper-card paper-card--mint"><strong>03</strong><h3>공동 크리처 성장</h3><p>보상·기여도·경험치가 반영되고 변화가 실시간으로 공유됩니다.</p></article>
+          <article class="paper-card paper-card--lavender"><strong>04</strong><h3>랭킹·꾸미기</h3><p>개인·그룹 랭킹을 확인하고 아바타 꾸미기 아이템을 이용합니다.</p></article>
+        </div>
+        <a class="source" href="project_plan.md#4-핵심-이용-흐름">프로젝트 기획안의 핵심 이용 흐름</a>
+      </div>
+    </section>
+
+    <section class="slide slide--pink" data-title="주요 기능 영역" aria-hidden="true">
+      <div class="slide__inner">
+        <h2>하나의 루프를 지탱하는<br><span class="accent">다섯 영역</span></h2>
+        <div class="grid grid--3">
+          <article class="paper-card"><h3>가입과 그룹 참여</h3><p>Google·Naver 소셜 로그인, 공개 그룹 가입, Gemini 제안을 활용한 그룹 생성, 초대 링크 참여</p></article>
+          <article class="paper-card"><h3>퀘스트와 공동 성장</h3><p>일일·주간 퀘스트, JPEG EXIF 사진 인증, 기여도·경험치 반영, 개인·그룹 시즌 랭킹</p></article>
+          <article class="paper-card"><h3>상점·아바타·환불</h3><p>PortOne V2 테스트 결제, 아이템 지급, 아바타 장착, 사용 여부 기반 환불 제한</p></article>
+          <article class="paper-card"><h3>그룹·서비스 운영</h3><p>역할 변경, 주 관리자 이전, 초대 링크 재발급, 신고·환불·Scheduler 운영 화면</p></article>
+          <article class="paper-card"><h3>Full CSR 사용자 경험</h3><p>새로고침 없는 이동, URL 복원, 반응형 내비게이션, 시스템·라이트·다크 테마</p></article>
+          <article class="paper-card paper-card--yellow"><h3>핵심 원칙</h3><p>크리처의 기본 육성은 비과금이며, 테스트 결제는 사용자 아바타 꾸미기에 연결했습니다.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--mint" data-title="공동 크리처 성장" aria-hidden="true">
+      <div class="slide__inner split split--reverse">
+        <figure class="media">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/07-creature-growth.gif" alt="퀘스트 결과가 공동 크리처 성장으로 이어지는 화면" hidden>
+        </figure>
+        <div>
+          <h2>여러 사용자가<br>하나의 생명체를 <span class="accent">함께</span></h2>
+          <ul class="clean-list">
+            <li>그룹마다 시즌별 활성 공동 크리처 1마리</li>
+            <li>퀘스트 보상이 개인 기여도와 그룹 성장에 반영</li>
+            <li>크리처는 공동 육성, 아바타는 개인 꾸미기 역할</li>
+            <li>성장 결과와 참여 상태를 같은 그룹에 실시간 공유</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--lavender" data-title="설계 문서" aria-hidden="true">
+      <div class="slide__inner">
+        <h2>구현 전에<br><span class="accent">공통 기준</span>부터 만들었습니다.</h2>
+        <p class="lede">팀원들이 함께 설계를 수립한 뒤, 확정된 설계를 기준으로 기능별 구현을 진행했습니다. 구현 중 발견한 변경 사항은 다시 문서에 반영했습니다.</p>
+        <div class="grid grid--4" style="margin-top:1.5rem">
+          <a class="paper-card paper-card--link paper-card--yellow" href="project_plan.md"><h3>프로젝트 기획안</h3><p>서비스 목적·MVP 범위</p></a>
+          <a class="paper-card paper-card--link paper-card--blue" href="requirements.md"><h3>요구사항 정의서</h3><p>기능·완료 조건</p></a>
+          <a class="paper-card paper-card--link paper-card--pink" href="business-rules.md"><h3>업무 규칙</h3><p>시나리오·상태·예외</p></a>
+          <a class="paper-card paper-card--link paper-card--mint" href="database-design.md"><h3>DB 설계·ERD</h3><p>컬럼·제약·관계</p></a>
+          <a class="paper-card paper-card--link paper-card--peach" href="api-design.md"><h3>REST API</h3><p>요청·응답·오류</p></a>
+          <a class="paper-card paper-card--link paper-card--yellow" href="screen-design.md"><h3>화면 설계</h3><p>Route·권한·상태</p></a>
+          <a class="paper-card paper-card--link paper-card--blue" href="class-diagram.md"><h3>클래스 다이어그램</h3><p>패키지·책임 구조</p></a>
+          <a class="paper-card paper-card--link" href="index.md"><h3>설계 → 구현 → 재반영</h3><p>문서와 실제 구현의 차이를 축소</p></a>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--blue" data-title="GitHub Projects" aria-hidden="true">
+      <div class="slide__inner split split--reverse">
+        <figure class="screen-shot">
+          <span class="tape"></span>
+          <img src="images/github-projects-kanban.png" alt="GitHub Projects 칸반 보드">
+        </figure>
+        <div>
+          <h2>GitHub Projects와 Issues로<br><span class="accent">업무를 관리</span>했습니다.</h2>
+          <p>설계 단계에서 정의한 기능을 구현 가능한 작업 단위의 Issue로 나누고, 담당자와 구현 범위, 업무 규칙, API 계약 및 완료 조건을 정리했습니다.</p>
+          <p>칸반 보드에서 각 팀원의 현재 작업과 다음 작업을 확인하고, Pull Request를 통해 구현 내용을 공유했습니다.</p>
+          <p><strong>설계 문서 → Issue → 구현 및 Pull Request</strong>로 이어지는 작업 이력을 관리했습니다.</p>
+          <a class="source" href="https://github.com/users/heebaek200/projects/12">GitHub Projects 보기</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--yellow" data-title="일일 리포트" aria-hidden="true">
+      <div class="slide__inner split">
+        <div>
+          <h2>매일 자신의 작업을<br><span class="accent">돌아보고 공유</span>했습니다.</h2>
+          <p>각 팀원은 그날 진행한 작업, 다음에 진행할 작업, 작업 과정에서 느낀 점을 GitHub Discussions에 기록했습니다.</p>
+          <div class="grid grid--2">
+            <article class="paper-card paper-card--mint"><h3>진행 상황 공유</h3><p>각자의 작업 현황과 다음 작업을 파악</p></article>
+            <article class="paper-card paper-card--pink"><h3>문제 조기 발견</h3><p>어려움과 지연 요소를 공유해 지원·조율</p></article>
+            <article class="paper-card paper-card--blue"><h3>업무 회고</h3><p>수행한 작업과 판단을 돌아보고 방향 정리</p></article>
+            <article class="paper-card paper-card--lavender"><h3>개발 과정 기록</h3><p>결과뿐 아니라 과정과 팀원의 경험을 보존</p></article>
+          </div>
+          <a class="source" href="https://github.com/heebaek200/shared-creature-game/discussions">전체 일일 리포트 보기</a>
+        </div>
+        <figure class="screen-shot">
+          <span class="tape"></span>
+          <img src="images/github-discussions-reports.png" alt="GitHub Discussions 일일 리포트 목록">
+        </figure>
+      </div>
+    </section>
+
+    <section class="slide slide--mint" data-title="주요 기술 스택" aria-hidden="true">
+      <div class="slide__inner">
+        <h2>주요 기술 스택</h2>
+        <table class="readme-table">
+          <thead><tr><th>분류</th><th>기술</th><th>프로젝트에서의 역할</th></tr></thead>
+          <tbody>
+            <tr><td>언어·빌드</td><td>Java 21, JavaScript ES Modules, Gradle, npm</td><td>Spring Boot 서버와 브라우저 애플리케이션 구현, 의존성·빌드 관리</td></tr>
+            <tr><td>백엔드</td><td>Spring Boot 4.1.1, Spring MVC, Spring Security, Spring Data JPA</td><td>REST API, 세션 인증·역할 인가, 트랜잭션과 영속성 관리</td></tr>
+            <tr><td>프론트엔드</td><td>Vite 7, Vanilla JavaScript, Bootstrap 5, HTML/CSS</td><td>History API 기반 CSR/SPA, 반응형 화면과 공통 테마 구성</td></tr>
+            <tr><td>데이터베이스·세션</td><td>MySQL 8, Spring Session JDBC</td><td>업무 데이터와 로그인 세션 영속화, UNIQUE·락 기반 정합성 보장</td></tr>
+            <tr><td>인증</td><td>OAuth 2.0 Authorization Code, OpenID Connect</td><td>Google·Naver 소셜 인증, 공급자 신원 검증과 서버 세션 로그인</td></tr>
+            <tr><td>실시간</td><td>WebSocket, STOMP</td><td>그룹별 상태 이벤트·Presence·아바타 동기화와 Snapshot 복구 신호 전달</td></tr>
+            <tr><td>외부 서비스</td><td>PortOne V2, Gemini API, Metadata Extractor</td><td>테스트 결제·환불, 그룹 소개 교정, JPEG EXIF 추출</td></tr>
+            <tr><td>정기 작업</td><td>Spring Scheduler</td><td>시즌·퀘스트·부화, 결제·환불 복구, 사진 보존 기한 정리</td></tr>
+            <tr><td>테스트</td><td>JUnit 5, Spring Boot Test, Spring Security Test</td><td>단위·통합·동시성·보안 경계 검증</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="slide slide--pink" data-title="강의에서 더 나아간 부분" aria-hidden="true">
+      <div class="slide__inner">
+        <h2>강의 블로그에서<br><span class="accent">여기까지 확장</span>했습니다.</h2>
+        <div class="extension-grid">
+          <article class="paper-card paper-card--blue"><h3>🚀 서버 렌더링 → Full CSR</h3><p>Spring Boot REST API와 Vite 프론트엔드를 분리하고 History API, Page 생명주기, App Shell, Fetch Client를 직접 구현했습니다.</p></article>
+          <article class="paper-card paper-card--yellow"><h3>🔐 세션 검사 → OAuth·Security</h3><p>Google·Naver OAuth/OIDC, Spring Security, JDBC Session, state·nonce, CSRF와 역할별 401·403을 연결했습니다.</p></article>
+          <article class="paper-card paper-card--mint"><h3>💬 화면 조회 → 실시간 공동 공간</h3><p>WebSocket/STOMP로 성장·아바타·Presence·채팅을 공유하고, 누락 시 REST Snapshot으로 복구합니다.</p></article>
+          <article class="paper-card paper-card--lavender"><h3>⚔️ 단순 CRUD → 동시성 정합성</h3><p>락, UNIQUE, 멱등성 키와 원장을 조합해 동시 가입·중복 보상·Webhook 경합을 제어했습니다.</p></article>
+          <article class="paper-card paper-card--peach"><h3>💳 결제 성공 → 장애 복구 상태머신</h3><p>PG 거래를 서버에서 재검증하고 Webhook·Scheduler로 결과 불명 결제와 환불을 복구합니다.</p></article>
+          <article class="paper-card"><h3>📷 업로드 → 제한된 EXIF 파이프라인</h3><p>JPEG Signature·EXIF를 재검증하고 고정 Worker, Timeout, 제출 제한과 보존 기한으로 작업량을 제어합니다.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--blue" data-title="주요 폴더 트리" aria-hidden="true">
+      <div class="slide__inner">
+        <h2>주요 폴더 트리</h2>
+        <pre class="tree">shared-creature-game/
+├── docs/                              # 기획·요구사항·DB·API·화면 설계 및 검증 기록
+├── frontend/
+│   ├── assets/                        # 이미지·그래픽 에셋
+│   └── src/
+│       ├── app/                       # 애플리케이션 시작·라우팅
+│       ├── api/                       # 공통 HTTP 요청과 오류 처리
+│       ├── components/                # 공통 UI 구성 요소
+│       ├── features/                  # 기능별 API·UI 구성
+│       ├── pages/                     # 화면(Route) 단위 컴포넌트
+│       ├── realtime/                  # WebSocket 연동
+│       └── styles/                    # 전역·테마 스타일
+├── src/
+│   ├── main/
+│   │   ├── java/com/team/sharedcreature/
+│   │   │   ├── _core/                 # 인증·예외·공통 인프라
+│   │   │   ├── auth/                  # 사용자 인증
+│   │   │   ├── group/                 # 그룹 및 멤버십
+│   │   │   ├── quest/                 # 퀘스트와 보상
+│   │   │   ├── payment/               # 결제 연동
+│   │   │   ├── ai/                    # Gemini 교정
+│   │   │   └── ...                    # 크리처·아바타·운영 등 기타 도메인
+│   │   └── resources/
+│   │       ├── db/                    # SQL 초기화·데이터 및 로컬 테스트 자료
+│   │       ├── application.yaml       # 공통 설정
+│   │       └── application-local.yaml
+│   └── test/                          # 백엔드 자동 테스트
+├── .env.example                       # 로컬 환경변수 예시
+├── build.gradle                       # Spring Boot·Java 의존성
+└── README.md</pre>
+      </div>
+    </section>
+
+    <section class="slide slide--yellow" data-title="요약 ERD" aria-hidden="true">
+      <div class="slide__inner">
+        <h2>요약 ERD</h2>
+        <p class="lede">43개의 업무 테이블 중 핵심 흐름과 관계가 드러나는 테이블을 발췌했습니다.</p>
+        <svg class="erd-diagram" viewBox="0 0 1500 500" role="img" aria-labelledby="erd-title erd-description">
+          <title id="erd-title">핵심 업무 테이블 요약 ERD</title>
+          <desc id="erd-description">README의 Mermaid ERD에서 발췌한 인증과 그룹, 퀘스트와 보상, 상점과 환불 테이블의 관계</desc>
+
+          <rect class="erd-diagram__domain" x="15" y="15" width="475" height="470" rx="18"/>
+          <rect class="erd-diagram__domain" x="510" y="15" width="475" height="470" rx="18"/>
+          <rect class="erd-diagram__domain" x="1005" y="15" width="480" height="470" rx="18"/>
+          <text class="erd-diagram__domain-title" x="35" y="48">인증 · 그룹 · 크리처</text>
+          <text class="erd-diagram__domain-title" x="530" y="48">퀘스트 · 보상</text>
+          <text class="erd-diagram__domain-title" x="1025" y="48">상점 · 환불</text>
+
+          <g aria-hidden="true">
+            <path class="erd-diagram__edge" d="M225 100 H250 V150 H280"/>
+            <path class="erd-diagram__edge" d="M225 230 H260 V150 H280"/>
+            <path class="erd-diagram__edge" d="M225 230 H250 V300 H280"/>
+            <path class="erd-diagram__edge" d="M225 360 H260 V300 H280"/>
+            <path class="erd-diagram__edge" d="M375 325 V400"/>
+            <text class="erd-diagram__relation" x="250" y="91">|| joins o{</text>
+            <text class="erd-diagram__relation" x="257" y="191">|| contains o{</text>
+            <text class="erd-diagram__relation" x="250" y="264">|| participates o{</text>
+            <text class="erd-diagram__relation" x="260" y="347">|| runs o{</text>
+            <text class="erd-diagram__relation" x="375" y="370">|| nurtures ||</text>
+
+            <path class="erd-diagram__edge" d="M710 100 H755 V175 H790"/>
+            <path class="erd-diagram__edge" d="M710 325 H755 V175 H790"/>
+            <path class="erd-diagram__edge" d="M885 200 V365"/>
+            <text class="erd-diagram__relation" x="750" y="91">|| completes o{</text>
+            <text class="erd-diagram__relation" x="753" y="277">|| receives o{</text>
+            <text class="erd-diagram__relation" x="885" y="285">|| grants o{</text>
+
+            <path class="erd-diagram__edge" d="M1205 100 H1245 V160 H1280"/>
+            <path class="erd-diagram__edge" d="M1205 230 H1245 V160 H1280"/>
+            <path class="erd-diagram__edge" d="M1375 185 V310"/>
+            <path class="erd-diagram__edge" d="M1375 185 V430"/>
+            <text class="erd-diagram__relation" x="1245" y="91">|| buys o{</text>
+            <text class="erd-diagram__relation" x="1245" y="221">|| sold_as o{</text>
+            <text class="erd-diagram__relation" x="1375" y="255">|| grants o|</text>
+            <text class="erd-diagram__relation" x="1375" y="375">|| requested_for o{</text>
+          </g>
+
+          <g class="erd-diagram__entity"><rect x="35" y="75" width="190" height="50" rx="7"/><text x="130" y="106">users</text></g>
+          <g class="erd-diagram__entity"><rect x="35" y="205" width="190" height="50" rx="7"/><text x="130" y="236">game_groups</text></g>
+          <g class="erd-diagram__entity"><rect x="35" y="335" width="190" height="50" rx="7"/><text x="130" y="366">seasons</text></g>
+          <g class="erd-diagram__entity"><rect x="280" y="125" width="190" height="50" rx="7"/><text x="375" y="156">group_memberships</text></g>
+          <g class="erd-diagram__entity"><rect x="280" y="275" width="190" height="50" rx="7"/><text x="375" y="306">group_seasons</text></g>
+          <g class="erd-diagram__entity"><rect x="280" y="400" width="190" height="50" rx="7"/><text x="375" y="431">group_creatures</text></g>
+
+          <g class="erd-diagram__entity"><rect x="530" y="75" width="180" height="50" rx="7"/><text x="620" y="106">users</text></g>
+          <g class="erd-diagram__entity"><rect x="530" y="300" width="180" height="50" rx="7"/><text x="620" y="331">quest_assignments</text></g>
+          <g class="erd-diagram__entity"><rect x="790" y="150" width="190" height="50" rx="7"/><text x="885" y="181">quest_completions</text></g>
+          <g class="erd-diagram__entity"><rect x="790" y="365" width="190" height="50" rx="7"/><text x="885" y="396">quest_reward_ledgers</text></g>
+
+          <g class="erd-diagram__entity"><rect x="1025" y="75" width="180" height="50" rx="7"/><text x="1115" y="106">users</text></g>
+          <g class="erd-diagram__entity"><rect x="1025" y="205" width="180" height="50" rx="7"/><text x="1115" y="236">shop_items</text></g>
+          <g class="erd-diagram__entity"><rect x="1280" y="135" width="190" height="50" rx="7"/><text x="1375" y="166">purchases</text></g>
+          <g class="erd-diagram__entity"><rect x="1280" y="285" width="190" height="50" rx="7"/><text x="1375" y="316">owned_items</text></g>
+          <g class="erd-diagram__entity"><rect x="1280" y="405" width="190" height="50" rx="7"/><text x="1375" y="436">refund_requests</text></g>
+        </svg>
+        <p class="erd-legend">|| 1개 · o{ 0개 이상 · o| 0개 또는 1개</p>
+        <a class="source" href="database-design.md">데이터베이스 설계서 및 전체 ERD 보기</a>
+      </div>
+    </section>
+
+    <section class="slide slide--lavender" data-title="URL 및 API 매핑" aria-hidden="true">
+      <div class="slide__inner">
+        <h2>주요 URL 및 API 매핑</h2>
+        <table class="readme-table">
+          <thead><tr><th>기능</th><th>화면 URL</th><th>대표 Backend API</th></tr></thead>
+          <tbody>
+            <tr><td>로그인·가입</td><td><code>/login</code>, <code>/signup</code></td><td><code>POST /api/v1/auth/oauth-attempts</code>, <code>POST /api/v1/auth/signup</code></td></tr>
+            <tr><td>공개 그룹·AI 교정</td><td><code>/groups/select</code></td><td><code>GET /api/v1/groups</code>, <code>POST /api/v1/groups</code>, <code>POST /api/v1/ai/proofreads</code></td></tr>
+            <tr><td>그룹 현황·관리</td><td><code>/group</code>, <code>/group-admin</code></td><td><code>GET /api/v1/groups/me</code>, <code>GET /api/v1/groups/me/members</code></td></tr>
+            <tr><td>크리처 육성</td><td><code>/creature</code></td><td><code>GET /api/v1/groups/me/creature-home</code></td></tr>
+            <tr><td>퀘스트·사진 인증</td><td><code>/quests</code></td><td><code>GET /api/v1/quests/current</code>, <code>POST /api/v1/photo-submissions</code></td></tr>
+            <tr><td>랭킹</td><td><code>/rankings</code></td><td><code>GET /api/v1/rankings/members</code>, <code>GET /api/v1/rankings/groups</code></td></tr>
+            <tr><td>상점·아바타</td><td><code>/shop</code>, <code>/avatar</code></td><td><code>GET /api/v1/shop-items</code>, <code>GET /api/v1/avatar</code></td></tr>
+            <tr><td>구매·환불 내역</td><td><code>/payments</code></td><td><code>GET /api/v1/purchases</code>, <code>GET /api/v1/refund-requests</code></td></tr>
+            <tr><td>관리자</td><td><code>/admin</code>, <code>/admin/reports</code>, <code>/admin/refunds</code>, <code>/admin/operations</code></td><td><code>GET /api/v1/admin/dashboard</code>, <code>GET /api/v1/admin/refund-requests</code></td></tr>
+          </tbody>
+        </table>
+        <p style="margin-top:0.8rem">WebSocket은 <code>/ws</code> 연결을 사용하며, Vite 개발 서버가 <code>/api</code>, <code>/oauth2</code>, <code>/ws</code> 요청을 Spring Boot로 프록시합니다.</p>
+      </div>
+    </section>
+
+    <section class="slide slide--peach" data-title="결제·아이템·환불" aria-hidden="true">
+      <div class="slide__inner split split--reverse">
+        <figure class="media">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/09-test-payment.gif" alt="PortOne V2 카카오페이 테스트 결제 화면" hidden>
+        </figure>
+        <div>
+          <h2>상점·아바타와<br>결제·환불</h2>
+          <ul class="clean-list">
+            <li>PortOne V2 카카오페이 테스트 결제</li>
+            <li>서버 검증 후 구매 내역과 아이템 지급 확인</li>
+            <li>아바타 아이템 장착·해제</li>
+            <li>미사용 구매 환불과 사용 후 환불 제한</li>
+            <li>결과 불명 상태는 Webhook·Scheduler로 재조회</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--blue" data-title="그룹·서비스 운영" aria-hidden="true">
+      <div class="slide__inner split">
+        <div>
+          <h2>그룹과 서비스를<br><span class="accent">운영하는 화면</span></h2>
+          <ul class="clean-list">
+            <li>그룹 역할 변경과 주 관리자 이전</li>
+            <li>초대 링크 재발급과 이전 링크 무효화</li>
+            <li>전체 관리자 대시보드의 회원·그룹·결제 통계</li>
+            <li>환불·신고 대기열과 Scheduler 운영 경고</li>
+          </ul>
+        </div>
+        <figure class="media">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/15-admin-dashboard.gif" alt="전체 관리자 운영 대시보드" hidden>
+        </figure>
+      </div>
+    </section>
+
+    <section class="slide slide--mint" data-title="Full CSR·반응형 경험" aria-hidden="true">
+      <div class="slide__inner split split--reverse">
+        <div class="media-pair">
+          <figure class="media"><div class="media-placeholder">시연 영상 불러오는 중</div><img data-src="images/demos/19-responsive-navigation.gif" alt="반응형 내비게이션" hidden></figure>
+          <figure class="media"><div class="media-placeholder">시연 영상 불러오는 중</div><img data-src="images/demos/20-theme-switch.gif" alt="라이트·다크 테마 전환" hidden></figure>
+        </div>
+        <div>
+          <h2>Full CSR·반응형<br>사용자 경험</h2>
+          <ul class="clean-list">
+            <li>새로고침 없는 메뉴 이동과 History 복원</li>
+            <li>URL 직접 접근·새로고침 상태 복원</li>
+            <li>데스크톱·모바일 내비게이션 전환</li>
+            <li>시스템·라이트·다크 테마 전환과 저장</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--pink" data-title="Java4Shell 보안 대응" aria-hidden="true">
+      <div class="slide__inner security">
+        <div class="warning-light" aria-label="Java4Shell 고위험 보안 경고">
+          <div><strong>!</strong><span>HIGH RISK</span></div>
+        </div>
+        <div>
+          <h2>Java4Shell<br><span class="accent">CVE-2026-114938</span></h2>
+          <p class="lede">OpenJDK의 Base64 디코딩 처리 과정에서 메모리 손상과 원격 코드 실행 가능성이 제기된 고위험 취약점입니다.</p>
+          <ul class="clean-list">
+            <li>프로젝트의 Java 21 환경과 외부 입력 처리 영역의 영향 가능성 검토</li>
+            <li>실제 악용 가능성이 확인됐다고 단정하지 않고 예방 조치 수행</li>
+            <li>Amazon Corretto 21.0.13.1.2 이상 보안 수정 버전 적용</li>
+            <li>OAuth·세션·WebSocket·테스트 결제·관리자 기능 회귀 점검</li>
+          </ul>
+          <p style="margin-top:1rem"><strong>기능 구현뿐 아니라 개발 환경의 보안 이슈까지 함께 생각해보았습니다.</strong></p>
+          <a class="source" href="https://github.com/heebaek200/shared-creature-game/issues/112">보안 대응 과정 · Issue #112</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--yellow" data-title="통합 테스트와 후속 조치" aria-hidden="true">
+      <div class="slide__inner">
+        <h2>통합 테스트와<br><span class="accent">지적사항 후속 조치</span></h2>
+        <div class="qa-flow">
+          <article class="paper-card paper-card--blue"><h3>테스트</h3><p>실제 API·MySQL·외부 연동 환경에서 가입, 보상, 결제, WebSocket, 모바일 EXIF와 전체 흐름을 확인했습니다.</p></article>
+          <article class="paper-card paper-card--pink"><h3>지적사항</h3><p>결함과 UX 개선점을 별도 <code>QA 피드백</code> 이슈로 분리해 영향과 재현 범위를 기록했습니다.</p></article>
+          <article class="paper-card paper-card--mint"><h3>수정</h3><p>닉네임 검증, 소속 그룹 안내, 부화 전 퀘스트·오류 안내를 수정하고 PR 병합을 확인했습니다.</p></article>
+          <article class="paper-card paper-card--yellow"><h3>패스·스킵</h3><p>사진 후속 보완, 직접 촬영, 계정 탈퇴 등 미완료 항목은 해결로 세지 않고 시연 제외 범위를 공개했습니다.</p></article>
+        </div>
+        <table class="readme-table">
+          <thead><tr><th>검증 범위</th><th>요약</th><th>남은 범위</th></tr></thead>
+          <tbody>
+            <tr><td>가입·초대·그룹 제한</td><td><span class="status status--done">기본 흐름 확인</span></td><td>계정 탈퇴 화면 제외, 수동 동시성은 자동 테스트로 보완</td></tr>
+            <tr><td>퀘스트 보상·Scheduler</td><td><span class="status status--done">기본·선택 검증 PASS</span></td><td>전체 사용자 흐름에서 연결 확인</td></tr>
+            <tr><td>결제·환불·Webhook</td><td><span class="status status--done">기본 5건 PASS</span></td><td>테스트 결제 환경 기준</td></tr>
+            <tr><td>WebSocket 세션·동기화</td><td><span class="status status--done">기본 3건 + 추가 5건 PASS</span></td><td>일부 복구·보안 경계 미검증</td></tr>
+            <tr><td>모바일 사진·EXIF</td><td><span class="status status--limited">Android JPEG 범위 확인</span></td><td>iOS·직접 촬영·실제 HEIC 제외</td></tr>
+            <tr><td>QA 피드백</td><td><span class="status status--done">3건 수정</span> <span class="status status--skip">6건 스킵</span></td><td>스킵 항목은 시연에서 제외</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="slide slide--lavender" data-title="팀 구성과 역할" aria-hidden="true">
+      <div class="slide__inner">
+        <h2>팀 구성과 역할</h2>
+        <div class="grid grid--4">
+          <article class="paper-card paper-card--yellow team-card"><strong>이희백</strong><small>heebaek200</small><p><b>프로젝트 관리</b> · GitHub Projects, 설계 문서<br><b>백엔드</b> · 기반, Scheduler, WebSocket, 그룹, 관리자<br><b>프론트엔드</b> · 퀘스트, 상점·결제, 관리자</p></article>
+          <article class="paper-card paper-card--mint team-card"><strong>이수현</strong><small>is-hyun</small><p><b>기술 검증</b> · 그래픽 리소스 확보·활용<br><b>리소스 준비</b> · 크리처·아바타 그래픽<br><b>프론트엔드</b> · 크리처 홈, 레이아웃·테마, 아바타</p></article>
+          <article class="paper-card paper-card--pink team-card"><strong>양현재</strong><small>a67286268-oss</small><p><b>기술 검증</b> · JPEG EXIF 사진 인증<br><b>백엔드</b> · 퀘스트, 아이템, 랭킹, 환불<br><b>품질 개선</b> · 백엔드 리팩터링</p></article>
+          <article class="paper-card paper-card--blue team-card"><strong>김희성</strong><small>asd27429697-design</small><p><b>기술 검증</b> · 브라우저 그래픽 표현<br><b>백엔드</b> · Naver OAuth, Gemini<br><b>프론트엔드</b> · 회원가입·그룹 관리, OAuth, AI 교정</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--blue" data-title="전체 시연 영상" aria-hidden="true">
+      <div class="slide__inner">
+        <h2>전체 시연 영상</h2>
+        <div class="demo-index">
+          <a class="demo-link" href="images/demos/01-auth-signup.gif"><span>01</span><strong>소셜 로그인·가입</strong></a>
+          <a class="demo-link" href="images/demos/02-group-join.gif"><span>02</span><strong>공개 그룹 가입</strong></a>
+          <a class="demo-link" href="images/demos/03-group-create.gif"><span>03</span><strong>AI 교정·그룹 생성</strong></a>
+          <a class="demo-link" href="images/demos/04-invite-join.gif"><span>04</span><strong>초대 링크 참여</strong></a>
+          <a class="demo-link" href="images/demos/05-quest-checkin.gif"><span>05</span><strong>퀘스트 체크인</strong></a>
+          <a class="demo-link" href="images/demos/06-quest-photo.gif"><span>06</span><strong>JPEG 사진 인증</strong></a>
+          <a class="demo-link" href="images/demos/07-creature-growth.gif"><span>07</span><strong>공동 크리처 성장</strong></a>
+          <a class="demo-link" href="images/demos/08-rankings.gif"><span>08</span><strong>시즌 랭킹</strong></a>
+          <a class="demo-link" href="images/demos/09-test-payment.gif"><span>09</span><strong>테스트 결제</strong></a>
+          <a class="demo-link" href="images/demos/10-purchase-delivery.gif"><span>10</span><strong>구매·지급 확인</strong></a>
+          <a class="demo-link" href="images/demos/11-avatar-equip.gif"><span>11</span><strong>아바타 장착</strong></a>
+          <a class="demo-link" href="images/demos/12-refund-flow.gif"><span>12</span><strong>환불 분기</strong></a>
+          <a class="demo-link" href="images/demos/13-group-role.gif"><span>13</span><strong>그룹 역할 관리</strong></a>
+          <a class="demo-link" href="images/demos/14-invite-reissue.gif"><span>14</span><strong>초대 링크 재발급</strong></a>
+          <a class="demo-link" href="images/demos/15-admin-dashboard.gif"><span>15</span><strong>운영 대시보드</strong></a>
+          <a class="demo-link" href="images/demos/16-admin-operations.gif"><span>16</span><strong>운영 현황 확인</strong></a>
+          <a class="demo-link" href="images/demos/17-csr-navigation.gif"><span>17</span><strong>CSR 메뉴 이동</strong></a>
+          <a class="demo-link" href="images/demos/18-route-restore.gif"><span>18</span><strong>URL·새로고침 복원</strong></a>
+          <a class="demo-link" href="images/demos/19-responsive-navigation.gif"><span>19</span><strong>반응형 내비게이션</strong></a>
+          <a class="demo-link" href="images/demos/20-theme-switch.gif"><span>20</span><strong>테마 전환</strong></a>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--mint" data-title="마무리" aria-hidden="true">
+      <div class="slide__inner slide__inner--narrow" style="text-align:center">
+        <h2 style="max-width:none">일상의 작은 실천을<br><span class="accent">함께 키우는 경험</span>으로</h2>
+        <p class="lede" style="margin-inline:auto">설계와 협업 기록, 실제 구현과 검증 결과까지 모두 저장소에 남겼습니다.</p>
+        <div class="hero__meta" style="justify-content:center">
+          <a class="sticker" href="https://github.com/heebaek200/shared-creature-game">GitHub 저장소</a>
+          <a class="sticker" href="index.md">전체 설계 문서</a>
+          <a class="sticker" href="../README.md#-주요-기능과-사용자-시나리오">README 시연 영상</a>
+        </div>
+      </div>
+    </section>
+
+    <div class="controls" aria-label="발표 자료 제어">
+      <button type="button" data-action="previous" aria-label="이전 슬라이드">이전</button>
+      <span class="slide-count" aria-label="현재 슬라이드"></span>
+      <button type="button" data-action="next" aria-label="다음 슬라이드">다음</button>
+      <button type="button" data-action="overview" aria-label="전체 슬라이드 보기">목차</button>
+      <button type="button" data-action="fullscreen" aria-label="전체 화면 전환">전체</button>
+    </div>
+    <div class="progress" aria-hidden="true"><div class="progress__bar"></div></div>
+
+    <aside class="overview" aria-label="슬라이드 목차" aria-hidden="true">
+      <div class="overview__header"><h2>발표 목차</h2><button type="button" class="overview__close">닫기</button></div>
+      <div class="overview__grid"></div>
+    </aside>
+  </main>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const countLabel = document.querySelector('.slide-count');
+    const progressBar = document.querySelector('.progress__bar');
+    const overview = document.querySelector('.overview');
+    const overviewGrid = document.querySelector('.overview__grid');
+    let currentIndex = 0;
+    let touchStartX = 0;
+
+    /**
+     * 현재 슬라이드의 GIF만 불러와 초기 다운로드 비용을 줄인다.
+     * @param {HTMLElement} slide 활성화할 슬라이드
+     */
+    function loadSlideMedia(slide) {
+      slide.querySelectorAll('img[data-src]').forEach((image) => {
+        const placeholder = image.previousElementSibling;
+        image.addEventListener('load', () => {
+          image.hidden = false;
+          if (placeholder?.classList.contains('media-placeholder')) placeholder.hidden = true;
+        }, { once: true });
+        image.src = image.dataset.src;
+        delete image.dataset.src;
+      });
+    }
+
+    /**
+     * 지정 슬라이드를 표시하고 진행률·URL·접근성 상태를 동기화한다.
+     * @param {number} targetIndex 표시할 슬라이드 인덱스
+     * @param {boolean} updateHash URL Hash 갱신 여부
+     */
+    function showSlide(targetIndex, updateHash = true) {
+      currentIndex = Math.min(Math.max(targetIndex, 0), slides.length - 1);
+      slides.forEach((slide, index) => {
+        const active = index === currentIndex;
+        slide.classList.toggle('is-active', active);
+        slide.setAttribute('aria-hidden', String(!active));
+        if (active) slide.scrollTop = 0;
+      });
+      loadSlideMedia(slides[currentIndex]);
+      if (slides[currentIndex + 1]) loadSlideMedia(slides[currentIndex + 1]);
+      countLabel.textContent = `${String(currentIndex + 1).padStart(2, '0')} / ${String(slides.length).padStart(2, '0')}`;
+      progressBar.style.width = `${((currentIndex + 1) / slides.length) * 100}%`;
+      document.title = `${slides[currentIndex].dataset.title} | 다 같이 키우는 생명체`;
+      if (updateHash) history.replaceState(null, '', `#slide-${currentIndex + 1}`);
+      overviewGrid.querySelectorAll('.overview__item').forEach((item, index) => item.classList.toggle('is-current', index === currentIndex));
+    }
+
+    /** 발표 목차를 열거나 닫는다. */
+    function toggleOverview(forceOpen) {
+      const open = typeof forceOpen === 'boolean' ? forceOpen : !overview.classList.contains('is-open');
+      overview.classList.toggle('is-open', open);
+      overview.setAttribute('aria-hidden', String(!open));
+      if (open) overview.querySelector('.overview__item.is-current')?.focus();
+    }
+
+    /** 브라우저 전체 화면 상태를 전환한다. */
+    async function toggleFullscreen() {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    }
+
+    /** 슬라이드 제목으로 목차 버튼을 만든다. */
+    function buildOverview() {
+      slides.forEach((slide, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'overview__item';
+        button.innerHTML = `<span>${String(index + 1).padStart(2, '0')}</span><strong>${slide.dataset.title}</strong>`;
+        button.addEventListener('click', () => { showSlide(index); toggleOverview(false); });
+        overviewGrid.append(button);
+      });
+    }
+
+    document.querySelector('[data-action="previous"]').addEventListener('click', () => showSlide(currentIndex - 1));
+    document.querySelector('[data-action="next"]').addEventListener('click', () => showSlide(currentIndex + 1));
+    document.querySelector('[data-action="overview"]').addEventListener('click', () => toggleOverview());
+    document.querySelector('[data-action="fullscreen"]').addEventListener('click', () => void toggleFullscreen());
+    document.querySelector('.overview__close').addEventListener('click', () => toggleOverview(false));
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && overview.classList.contains('is-open')) { toggleOverview(false); return; }
+      if (overview.classList.contains('is-open')) return;
+      if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(event.key)) { event.preventDefault(); showSlide(currentIndex + 1); }
+      if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(event.key)) { event.preventDefault(); showSlide(currentIndex - 1); }
+      if (event.key === 'Home') showSlide(0);
+      if (event.key === 'End') showSlide(slides.length - 1);
+      if (event.key.toLowerCase() === 'o') toggleOverview();
+      if (event.key.toLowerCase() === 'f') void toggleFullscreen();
+    });
+
+    document.addEventListener('touchstart', (event) => { touchStartX = event.changedTouches[0].clientX; }, { passive: true });
+    document.addEventListener('touchend', (event) => {
+      const distance = event.changedTouches[0].clientX - touchStartX;
+      if (Math.abs(distance) >= 55 && !overview.classList.contains('is-open')) showSlide(currentIndex + (distance < 0 ? 1 : -1));
+    }, { passive: true });
+
+    window.addEventListener('hashchange', () => {
+      const match = location.hash.match(/^#slide-(\d+)$/);
+      if (match) showSlide(Number(match[1]) - 1, false);
+    });
+
+    buildOverview();
+    const initialSlide = location.hash.match(/^#slide-(\d+)$/);
+    showSlide(initialSlide ? Number(initialSlide[1]) - 1 : 0, false);
+  </script>
+</body>
+</html>

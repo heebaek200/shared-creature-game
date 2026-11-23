@@ -2,6 +2,8 @@
 
 [![프로젝트 아이콘](frontend/assets/ui/header-title-icon.png)](frontend/assets/ui/header-title-icon.png)
 
+**[프로젝트 발표 자료 보기](https://heebaek200.github.io/shared-creature-game/presentation.html)**
+
 ## 프로젝트 정보
 
 ### 📌 개요
