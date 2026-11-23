@@ -23,10 +23,19 @@ public interface PhotoSubmissionRepository extends JpaRepository<PhotoSubmission
 
     /**
      * 사용자의 동일 퀘스트 사진 제출 횟수를 반환합니다.
-     * PENDING/VALID/INVALID 모두 제출 제한에 포함합니다.
+     * PENDING/VALID/INVALID 모두 포함하되 완료 경합으로 거절된 제출은 제외합니다.
      * 사진 인증 업무에서 기존 API를 그대로 사용합니다.
      */
-    long countByUser_IdAndQuestAssignment_Id(Long userId, Long questAssignmentId);
+    @Query("""
+            SELECT COUNT(submission)
+              FROM PhotoSubmission submission
+             WHERE submission.user.id = :userId
+               AND submission.questAssignment.id = :questAssignmentId
+               AND (submission.failureReason IS NULL
+                    OR submission.failureReason <> com.team.sharedcreature.quest.domain.PhotoFailureReason.QUEST_ALREADY_COMPLETED)
+            """)
+    long countByUser_IdAndQuestAssignment_Id(
+            @Param("userId") Long userId, @Param("questAssignmentId") Long questAssignmentId);
 
     /**
      * 사용자별 일정 구간의 제출 횟수를 계산합니다.

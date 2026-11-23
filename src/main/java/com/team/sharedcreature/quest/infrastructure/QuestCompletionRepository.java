@@ -16,6 +16,9 @@ import java.util.List;
  */
 public interface QuestCompletionRepository extends JpaRepository<QuestCompletion, Long> {
 
+    /** 파일 저장 전 사전 검사에 사용할 최종 완료 기록의 존재 여부를 조회합니다. */
+    boolean existsByUserIdAndQuestAssignmentId(Long userId, Long assignmentId);
+
     /**
      * 지정한 사용자가 지정된 퀘스트 배정들을 완료했는지 조회합니다.
      *

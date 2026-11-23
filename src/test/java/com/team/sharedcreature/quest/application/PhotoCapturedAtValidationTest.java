@@ -2,6 +2,9 @@ package com.team.sharedcreature.quest.application;
 
 import com.team.sharedcreature.quest.domain.PhotoFailureReason;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Instant;
 
@@ -11,6 +14,22 @@ import static org.assertj.core.api.Assertions.assertThat;
  * PHOTO_EXIF 촬영 시각의 접수·멤버십·배정 기간 경계를 검증합니다.
  */
 class PhotoCapturedAtValidationTest {
+
+    @ParameterizedTest
+    @CsvSource({
+            "2024:02:29 12:00:00, , 2024-02-29T03:00:00Z",
+            "2026:11:19 12:00:00, +09:00, 2026-11-19T03:00:00Z",
+            "2026:11:19 12:00:00, -05:00, 2026-11-19T17:00:00Z"
+    })
+    void strictParsingPreservesLeapDatesAndOffsets(String raw, String offset, String expected) {
+        assertThat(PhotoVerificationService.parseCapturedAt(raw, offset)).isEqualTo(Instant.parse(expected));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"2026:02:30 12:00:00", "2025:02:29 12:00:00", "2026:11:19 24:00:00"})
+    void strictParsingRejectsInvalidCalendarValues(String raw) {
+        assertThat(PhotoVerificationService.parseCapturedAt(raw, null)).isNull();
+    }
 
     private static final Instant MEMBERSHIP_JOINED_AT =
             Instant.parse("2026-11-10T00:00:00Z");
