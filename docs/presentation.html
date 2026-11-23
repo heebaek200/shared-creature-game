@@ -351,103 +351,6 @@
       line-height: 1;
     }
 
-    /* 크리처 3종의 다섯 성장 단계를 비교하는 보드 */
-    .creature-summary h2 { max-width: none; }
-
-    .creature-showcase {
-      margin-top: 1.15rem;
-      overflow-x: clip;
-      scrollbar-width: thin;
-    }
-
-    .creature-growth-grid {
-      display: grid;
-      min-width: 58rem;
-      grid-template-columns: minmax(11.5rem, 1.15fr) repeat(5, minmax(7rem, 1fr));
-      gap: 0.55rem;
-      align-items: stretch;
-    }
-
-    .creature-stage {
-      position: relative;
-      display: grid;
-      place-items: center;
-      min-height: 3.4rem;
-      padding: 0.55rem;
-      text-align: center;
-      background: rgba(255,255,255,.7);
-      border-radius: 0.9rem;
-      font-weight: 820;
-    }
-
-    .creature-stage:not(:last-child)::after {
-      position: absolute;
-      z-index: 2;
-      top: 50%;
-      right: -0.48rem;
-      content: "›";
-      color: var(--ink-soft);
-      font-size: 1.25rem;
-      transform: translateY(-52%);
-    }
-
-    .creature-stage--label::after,
-    .creature-stage--final::after { content: none; }
-
-    .creature-stage small {
-      display: block;
-      margin-top: 0.12rem;
-      color: var(--ink-soft);
-      font-family: var(--mono);
-      font-size: 0.66rem;
-    }
-
-    .creature-species,
-    .creature-cell {
-      min-height: 8.35rem;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,.72);
-      border-radius: 1rem;
-      box-shadow: 0 10px 26px rgba(59,67,72,.08);
-    }
-
-    .creature-species {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      padding: 1rem 1.1rem;
-    }
-
-    .creature-species strong {
-      font-size: clamp(1rem, 1.15vw, 1.25rem);
-      line-height: 1.35;
-    }
-
-    .creature-species small {
-      margin-top: 0.4rem;
-      color: var(--ink-soft);
-      font-family: var(--mono);
-      font-size: 0.67rem;
-    }
-
-    .creature-species--griffin { border-left: 0.45rem solid #efaac5; }
-    .creature-species--golem { border-left: 0.45rem solid #71b98a; }
-    .creature-species--jellyfish { border-left: 0.45rem solid #8975d7; }
-
-    .creature-cell {
-      display: grid;
-      place-items: center;
-      padding: 0.35rem;
-    }
-
-    .creature-cell img {
-      display: block;
-      width: min(100%, 8.2rem);
-      height: 7.6rem;
-      object-fit: contain;
-      image-rendering: pixelated;
-    }
-
     /* 영상과 이미지 프레임 */
     .media {
       position: relative;
@@ -925,7 +828,6 @@
     /* 작은 화면 */
     @media (max-width: 980px) {
       .slide { align-content: start; padding-top: 5.5rem; }
-      .creature-showcase { overflow-x: auto; }
       .hero,
       .split,
       .split--reverse,
@@ -1062,39 +964,19 @@
     </section>
 
     <section class="slide slide--mint" data-title="공동 크리처 성장" aria-hidden="true">
-      <div class="slide__inner creature-summary">
-        <h2>세 가지 크리처의 <span class="accent">다섯 성장 단계</span></h2>
-        <p class="lede">알 상태에서도 퀘스트 경험치를 누적하고, 부화하면 누적 경험치에 맞는 단계부터 성장을 이어갑니다.</p>
-        <div class="creature-showcase" aria-label="세 가지 크리처의 성장 단계 비교">
-          <div class="creature-growth-grid">
-            <div class="creature-stage creature-stage--label">크리처 / 단계</div>
-            <div class="creature-stage">알<small>EGG</small></div>
-            <div class="creature-stage">유년기<small>HATCHLING</small></div>
-            <div class="creature-stage">성장기<small>GROWING</small></div>
-            <div class="creature-stage">성숙기<small>MATURE</small></div>
-            <div class="creature-stage creature-stage--final">완전체<small>COMPLETE</small></div>
-
-            <div class="creature-species creature-species--griffin"><strong>솜털 그리핀</strong><small>cotton-griffin</small></div>
-            <div class="creature-cell"><img src="images/creatures/cotton-griffin/lv1.png" alt="솜털 그리핀 알" decoding="async"></div>
-            <div class="creature-cell"><img src="images/creatures/cotton-griffin/lv2.png" alt="솜털 그리핀 유년기" decoding="async"></div>
-            <div class="creature-cell"><img src="images/creatures/cotton-griffin/lv3.png" alt="솜털 그리핀 성장기" decoding="async"></div>
-            <div class="creature-cell"><img src="images/creatures/cotton-griffin/lv4.png" alt="솜털 그리핀 성숙기" decoding="async"></div>
-            <div class="creature-cell"><img src="images/creatures/cotton-griffin/lv5.png" alt="솜털 그리핀 완전체" decoding="async"></div>
-
-            <div class="creature-species creature-species--golem"><strong>이끼 낀 바위 골렘</strong><small>moss-golem</small></div>
-            <div class="creature-cell"><img src="images/creatures/moss-golem/lv1.png" alt="이끼 낀 바위 골렘 알" decoding="async"></div>
-            <div class="creature-cell"><img src="images/creatures/moss-golem/lv2.png" alt="이끼 낀 바위 골렘 유년기" decoding="async"></div>
-            <div class="creature-cell"><img src="images/creatures/moss-golem/lv3.png" alt="이끼 낀 바위 골렘 성장기" decoding="async"></div>
-            <div class="creature-cell"><img src="images/creatures/moss-golem/lv4.png" alt="이끼 낀 바위 골렘 성숙기" decoding="async"></div>
-            <div class="creature-cell"><img src="images/creatures/moss-golem/lv5.png" alt="이끼 낀 바위 골렘 완전체" decoding="async"></div>
-
-            <div class="creature-species creature-species--jellyfish"><strong>공허 속 우주 해파리</strong><small>abyss-jellyfish</small></div>
-            <div class="creature-cell"><img src="images/creatures/abyss-jellyfish/lv1.png" alt="공허 속 우주 해파리 알" decoding="async"></div>
-            <div class="creature-cell"><img src="images/creatures/abyss-jellyfish/lv2.png" alt="공허 속 우주 해파리 유년기" decoding="async"></div>
-            <div class="creature-cell"><img src="images/creatures/abyss-jellyfish/lv3.png" alt="공허 속 우주 해파리 성장기" decoding="async"></div>
-            <div class="creature-cell"><img src="images/creatures/abyss-jellyfish/lv4.png" alt="공허 속 우주 해파리 성숙기" decoding="async"></div>
-            <div class="creature-cell"><img src="images/creatures/abyss-jellyfish/lv5.png" alt="공허 속 우주 해파리 완전체" decoding="async"></div>
-          </div>
+      <div class="slide__inner split split--reverse">
+        <figure class="media">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/07-creature-growth.gif" alt="퀘스트 결과가 공동 크리처 성장으로 이어지는 화면" hidden>
+        </figure>
+        <div>
+          <h2>여러 사용자가<br>하나의 생명체를 <span class="accent">함께</span></h2>
+          <ul class="clean-list">
+            <li>그룹마다 시즌별 활성 공동 크리처 1마리</li>
+            <li>퀘스트 보상이 개인 기여도와 그룹 성장에 반영</li>
+            <li>크리처는 공동 육성, 아바타는 개인 꾸미기 역할</li>
+            <li>성장 결과와 참여 상태를 같은 그룹에 실시간 공유</li>
+          </ul>
         </div>
       </div>
     </section>
