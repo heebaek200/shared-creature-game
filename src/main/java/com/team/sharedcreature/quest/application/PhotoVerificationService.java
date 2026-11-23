@@ -96,6 +96,11 @@ public class PhotoVerificationService {
         // 2. Signature와 EXIF APP1 크기도 이력 저장 전에 사전 검사합니다.
         jpegExifReader.validateJpegAndExifSize(jpegBytes);
 
+        // 완료된 요청은 Worker 확보와 파일 저장 전에 거절합니다. 접수 시 잠금 내부 재검사는 유지합니다.
+        if (questCompletionService.isAssignmentCompleted(userId, assignmentId)) {
+            throw new BusinessException(ErrorCode.QUEST_ALREADY_COMPLETED);
+        }
+
         // 3. Worker 자리를 먼저 확보해 포화 요청이 제출 횟수에 포함되지 않게 합니다.
         try (PhotoProcessingLimiter.Permit permit =
                      photoProcessingLimiter.reserve()) {

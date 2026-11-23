@@ -245,6 +245,12 @@ public class QuestCompletionService {
         return completionsByAssignmentId;
     }
 
+    /** 파일 저장 전의 빠른 검사이며, 실제 접수 시 잠금 내부에서 다시 확인해야 합니다. */
+    @Transactional(readOnly = true)
+    public boolean isAssignmentCompleted(Long userId, Long assignmentId) {
+        return completionRepository.existsByUserIdAndQuestAssignmentId(userId, assignmentId);
+    }
+
     /**
      * 현재 사용자의 퀘스트 배정과 완료 상태를 조회해 응답 DTO로 변환합니다.
      * <p>

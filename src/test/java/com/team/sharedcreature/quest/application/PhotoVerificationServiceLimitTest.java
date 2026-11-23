@@ -32,6 +32,8 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.SimpleTransactionStatus;
@@ -60,6 +62,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * 사용자별 사진 제출 제한을 검증합니다.
@@ -120,7 +123,7 @@ class PhotoVerificationServiceLimitTest {
         when(transactionManager.getTransaction(any(TransactionDefinition.class)))
                 .thenReturn(new SimpleTransactionStatus());
 
-        photoProcessingLimiter = new PhotoProcessingLimiter();
+        photoProcessingLimiter = spy(new PhotoProcessingLimiter());
         jpegExifReader = spy(new JpegExifReader());
         service = new PhotoVerificationService(
                 photoSubmissionRepository,
@@ -219,6 +222,21 @@ class PhotoVerificationServiceLimitTest {
         verify(photoFileStorage).delete(
                 "00000000-0000-0000-0000-000000000011.jpg"
         );
+    }
+
+    @Test
+    @MockitoSettings(strictness = Strictness.LENIENT)
+    void completedPhotoQuestIsRejectedBeforeWorkerReservationAndFileStorage() throws Exception {
+        when(questCompletionService.isAssignmentCompleted(7L, 11L)).thenReturn(true);
+
+        for (int request = 0; request < 3; request++) {
+            assertThatThrownBy(() -> service.submit(7L, 11L, "image/jpeg", jpegBytes))
+                    .isInstanceOfSatisfying(BusinessException.class, exception ->
+                            assertThat(exception.errorCode()).isEqualTo(ErrorCode.QUEST_ALREADY_COMPLETED));
+        }
+
+        verify(photoProcessingLimiter, never()).reserve();
+        verifyNoInteractions(photoFileStorage, photoSubmissionRepository, userRepository, transactionManager);
     }
 
     @Test
