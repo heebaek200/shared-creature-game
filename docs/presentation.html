@@ -462,6 +462,46 @@
       line-height: 1.55;
     }
 
+    /* 트러블슈팅과 기술적 의사결정 요약 카드 */
+    .decision-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.75rem;
+      margin-top: 1.2rem;
+    }
+
+    .decision-summary h2 { max-width: none; }
+    .decision-summary .lede { max-width: 72rem; }
+
+    .decision-card {
+      display: flex;
+      min-height: 11.5rem;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .decision-card:nth-child(7) { grid-column: span 2; }
+
+    .decision-card__kind {
+      display: inline-block;
+      align-self: flex-start;
+      margin-bottom: 0.8rem;
+      padding: 0.25rem 0.52rem;
+      color: var(--ink-soft);
+      background: rgba(255,255,255,.68);
+      border-radius: 999px;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      font-weight: 800;
+    }
+
+    .decision-card p {
+      margin-bottom: 0;
+      color: var(--ink-soft);
+      font-size: clamp(0.78rem, 0.86vw, 0.94rem);
+      line-height: 1.48;
+    }
+
     /* 폴더 트리 */
     .tree {
       margin: 0;
@@ -797,7 +837,8 @@
       .loop,
       .qa-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .grid--3,
-      .extension-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .extension-grid,
+      .decision-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .demo-index { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .overview__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .warning-light { width: 15rem; }
@@ -813,8 +854,10 @@
       .loop,
       .qa-flow,
       .extension-grid,
+      .decision-grid,
       .media-pair,
       .overview__grid { grid-template-columns: 1fr; }
+      .decision-card:nth-child(7) { grid-column: span 1; }
       .demo-index { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .controls { left: 50%; right: auto; transform: translateX(-50%); }
       .controls [data-action="fullscreen"] { display: none; }
@@ -902,7 +945,7 @@
           <article class="paper-card paper-card--mint"><strong>03</strong><h3>공동 크리처 성장</h3><p>보상·기여도·경험치가 반영되고 변화가 실시간으로 공유됩니다.</p></article>
           <article class="paper-card paper-card--lavender"><strong>04</strong><h3>랭킹·꾸미기</h3><p>개인·그룹 랭킹을 확인하고 아바타 꾸미기 아이템을 이용합니다.</p></article>
         </div>
-        <a class="source" href="project_plan.md#4-핵심-이용-흐름">프로젝트 기획안의 핵심 이용 흐름</a>
+        <a class="source" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/project_plan.md#4-핵심-이용-흐름">프로젝트 기획안의 핵심 이용 흐름</a>
       </div>
     </section>
 
@@ -943,14 +986,14 @@
         <h2>구현 전에<br><span class="accent">공통 기준</span>부터 만들었습니다.</h2>
         <p class="lede">팀원들이 함께 설계를 수립한 뒤, 확정된 설계를 기준으로 기능별 구현을 진행했습니다. 구현 중 발견한 변경 사항은 다시 문서에 반영했습니다.</p>
         <div class="grid grid--4" style="margin-top:1.5rem">
-          <a class="paper-card paper-card--link paper-card--yellow" href="project_plan.md"><h3>프로젝트 기획안</h3><p>서비스 목적·MVP 범위</p></a>
-          <a class="paper-card paper-card--link paper-card--blue" href="requirements.md"><h3>요구사항 정의서</h3><p>기능·완료 조건</p></a>
-          <a class="paper-card paper-card--link paper-card--pink" href="business-rules.md"><h3>업무 규칙</h3><p>시나리오·상태·예외</p></a>
-          <a class="paper-card paper-card--link paper-card--mint" href="database-design.md"><h3>DB 설계·ERD</h3><p>컬럼·제약·관계</p></a>
-          <a class="paper-card paper-card--link paper-card--peach" href="api-design.md"><h3>REST API</h3><p>요청·응답·오류</p></a>
-          <a class="paper-card paper-card--link paper-card--yellow" href="screen-design.md"><h3>화면 설계</h3><p>Route·권한·상태</p></a>
-          <a class="paper-card paper-card--link paper-card--blue" href="class-diagram.md"><h3>클래스 다이어그램</h3><p>패키지·책임 구조</p></a>
-          <a class="paper-card paper-card--link" href="index.md"><h3>설계 → 구현 → 재반영</h3><p>문서와 실제 구현의 차이를 축소</p></a>
+          <a class="paper-card paper-card--link paper-card--yellow" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/project_plan.md"><h3>프로젝트 기획안</h3><p>서비스 목적·MVP 범위</p></a>
+          <a class="paper-card paper-card--link paper-card--blue" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/requirements.md"><h3>요구사항 정의서</h3><p>기능·완료 조건</p></a>
+          <a class="paper-card paper-card--link paper-card--pink" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/business-rules.md"><h3>업무 규칙</h3><p>시나리오·상태·예외</p></a>
+          <a class="paper-card paper-card--link paper-card--mint" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/database-design.md"><h3>DB 설계·ERD</h3><p>컬럼·제약·관계</p></a>
+          <a class="paper-card paper-card--link paper-card--peach" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/api-design.md"><h3>REST API</h3><p>요청·응답·오류</p></a>
+          <a class="paper-card paper-card--link paper-card--yellow" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/screen-design.md"><h3>화면 설계</h3><p>Route·권한·상태</p></a>
+          <a class="paper-card paper-card--link paper-card--blue" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/class-diagram.md"><h3>클래스 다이어그램</h3><p>패키지·책임 구조</p></a>
+          <a class="paper-card paper-card--link" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/index.md"><h3>설계 → 구현 → 재반영</h3><p>문서와 실제 구현의 차이를 축소</p></a>
         </div>
       </div>
     </section>
@@ -1022,6 +1065,44 @@
           <article class="paper-card paper-card--peach"><h3>💳 결제 성공 → 장애 복구 상태머신</h3><p>PG 거래를 서버에서 재검증하고 Webhook·Scheduler로 결과 불명 결제와 환불을 복구합니다.</p></article>
           <article class="paper-card"><h3>📷 업로드 → 제한된 EXIF 파이프라인</h3><p>JPEG Signature·EXIF를 재검증하고 고정 Worker, Timeout, 제출 제한과 보존 기한으로 작업량을 제어합니다.</p></article>
         </div>
+      </div>
+    </section>
+
+    <section class="slide slide--mint" data-title="문제 해결과 기술적 의사결정" aria-hidden="true">
+      <div class="slide__inner decision-summary">
+        <h2>문제를 해결하며 <span class="accent">선택 기준</span>도 남겼습니다.</h2>
+        <p class="lede">복잡한 기술을 더하는 대신 현재 규모에서 끝까지 검증할 수 있는 방법을 선택하고, 남은 한계까지 기록했습니다.</p>
+        <div class="decision-grid">
+          <article class="paper-card paper-card--blue decision-card">
+            <div><span class="decision-card__kind">실시간 복구</span><h3>WebSocket + Snapshot</h3></div>
+            <p>빠른 화면 갱신은 WebSocket, 누락·재접속 뒤 정확한 상태 복구는 REST Snapshot과 30초 조회가 맡습니다.</p>
+          </article>
+          <article class="paper-card paper-card--yellow decision-card">
+            <div><span class="decision-card__kind">누락 실행</span><h3>DB 상태 기반 Scheduler</h3></div>
+            <p>서버가 꺼져 놓친 작업은 실행 기록을 재생하지 않고, 현재 시각과 DB 상태를 확인해 필요한 작업만 복구합니다.</p>
+          </article>
+          <article class="paper-card paper-card--pink decision-card">
+            <div><span class="decision-card__kind">외부 연동</span><h3>PG timeout은 결과 불명</h3></div>
+            <p>응답을 못 받았다고 실패로 단정하지 않습니다. 최신 PG 상태를 조회해 환불 결과를 확정하고 중복 취소를 막습니다.</p>
+          </article>
+          <article class="paper-card paper-card--lavender decision-card">
+            <div><span class="decision-card__kind">동시성</span><h3>그룹 정원은 DB가 보장</h3></div>
+            <p>조건부 갱신, 잠금과 UNIQUE 제약을 함께 사용해 동시 가입에도 정원과 단일 소속 규칙을 지킵니다.</p>
+          </article>
+          <article class="paper-card paper-card--peach decision-card">
+            <div><span class="decision-card__kind">P1 결함</span><h3>PREPARING 퀘스트 차단</h3></div>
+            <p>알 상태도 정상 시즌으로 인정하도록 완료·보상 조건을 고치고, 화면에는 서버의 구체적인 오류 설명을 우선 표시했습니다.</p>
+          </article>
+          <article class="paper-card paper-card--blue decision-card">
+            <div><span class="decision-card__kind">표현 기술</span><h3>Canvas 대신 DOM/CSS</h3></div>
+            <p>최대 20명 규모에서는 대량 렌더링보다 클릭·말풍선·접근성과 기존 화면 재사용이 더 중요했습니다.</p>
+          </article>
+          <article class="paper-card paper-card--yellow decision-card">
+            <div><span class="decision-card__kind">설계 문서</span><h3>많이 쓰기보다 바로 구현할 수 있게</h3></div>
+            <p>문서마다 하나의 책임을 부여하고, 계약 복사본의 동기화 비용을 확인한 뒤 단일 원본을 참조하는 원칙을 남겼습니다.</p>
+          </article>
+        </div>
+        <a class="source" href="https://github.com/heebaek200/shared-creature-game/blob/main/README.md#-트러블슈팅-및-기술적-의사결정">README에서 문제·원인·결정·검증 과정 보기</a>
       </div>
     </section>
 
@@ -1124,7 +1205,7 @@
           <g class="erd-diagram__entity"><rect x="1280" y="405" width="190" height="50" rx="7"/><text x="1375" y="436">refund_requests</text></g>
         </svg>
         <p class="erd-legend">|| 1개 · o{ 0개 이상 · o| 0개 또는 1개</p>
-        <a class="source" href="database-design.md">데이터베이스 설계서 및 전체 ERD 보기</a>
+        <a class="source" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/database-design.md">데이터베이스 설계서 및 전체 ERD 보기</a>
       </div>
     </section>
 
@@ -1293,8 +1374,8 @@
         <p class="lede" style="margin-inline:auto">설계와 협업 기록, 실제 구현과 검증 결과까지 모두 저장소에 남겼습니다.</p>
         <div class="hero__meta" style="justify-content:center">
           <a class="sticker" href="https://github.com/heebaek200/shared-creature-game">GitHub 저장소</a>
-          <a class="sticker" href="index.md">전체 설계 문서</a>
-          <a class="sticker" href="../README.md#-주요-기능과-사용자-시나리오">README 시연 영상</a>
+          <a class="sticker" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/index.md">전체 설계 문서</a>
+          <a class="sticker" href="https://github.com/heebaek200/shared-creature-game/blob/main/README.md#-주요-기능과-사용자-시나리오">README 시연 영상</a>
         </div>
       </div>
     </section>
@@ -1320,6 +1401,7 @@
     const progressBar = document.querySelector('.progress__bar');
     const overview = document.querySelector('.overview');
     const overviewGrid = document.querySelector('.overview__grid');
+    const overviewButton = document.querySelector('[data-action="overview"]');
     let currentIndex = 0;
     let touchStartX = 0;
 
@@ -1345,6 +1427,7 @@
      * @param {boolean} updateHash URL Hash 갱신 여부
      */
     function showSlide(targetIndex, updateHash = true) {
+      if (overview.classList.contains('is-open')) setOverviewOpen(false, false);
       currentIndex = Math.min(Math.max(targetIndex, 0), slides.length - 1);
       slides.forEach((slide, index) => {
         const active = index === currentIndex;
@@ -1361,12 +1444,25 @@
       overviewGrid.querySelectorAll('.overview__item').forEach((item, index) => item.classList.toggle('is-current', index === currentIndex));
     }
 
-    /** 발표 목차를 열거나 닫는다. */
-    function toggleOverview(forceOpen) {
-      const open = typeof forceOpen === 'boolean' ? forceOpen : !overview.classList.contains('is-open');
+    /**
+     * 발표 목차의 표시·접근성·초점 상태를 함께 변경한다.
+     * @param {boolean} open 목차를 열지 여부
+     * @param {boolean} restoreFocus 닫은 뒤 목차 버튼으로 초점을 돌릴지 여부
+     */
+    function setOverviewOpen(open, restoreFocus = true) {
       overview.classList.toggle('is-open', open);
       overview.setAttribute('aria-hidden', String(!open));
-      if (open) overview.querySelector('.overview__item.is-current')?.focus();
+      overview.inert = !open;
+      if (open) {
+        overview.querySelector('.overview__item.is-current')?.focus();
+      } else if (restoreFocus) {
+        overviewButton.focus();
+      }
+    }
+
+    /** 발표 목차를 현재 상태의 반대로 전환한다. */
+    function toggleOverview() {
+      setOverviewOpen(!overview.classList.contains('is-open'));
     }
 
     /** 브라우저 전체 화면 상태를 전환한다. */
@@ -1382,19 +1478,36 @@
         button.type = 'button';
         button.className = 'overview__item';
         button.innerHTML = `<span>${String(index + 1).padStart(2, '0')}</span><strong>${slide.dataset.title}</strong>`;
-        button.addEventListener('click', () => { showSlide(index); toggleOverview(false); });
+        button.addEventListener('click', () => {
+          showSlide(index);
+          overviewButton.focus();
+        });
         overviewGrid.append(button);
+      });
+    }
+
+    /** 모든 자료 링크를 안전한 새 탭 링크로 통일한다. */
+    function prepareLinks() {
+      document.querySelectorAll('a[href]').forEach((link) => {
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        if (!link.hasAttribute('aria-label')) {
+          link.setAttribute('aria-label', `${link.textContent.trim()} (새 탭)`);
+        }
       });
     }
 
     document.querySelector('[data-action="previous"]').addEventListener('click', () => showSlide(currentIndex - 1));
     document.querySelector('[data-action="next"]').addEventListener('click', () => showSlide(currentIndex + 1));
-    document.querySelector('[data-action="overview"]').addEventListener('click', () => toggleOverview());
+    overviewButton.addEventListener('click', () => toggleOverview());
     document.querySelector('[data-action="fullscreen"]').addEventListener('click', () => void toggleFullscreen());
-    document.querySelector('.overview__close').addEventListener('click', () => toggleOverview(false));
+    document.querySelector('.overview__close').addEventListener('click', () => setOverviewOpen(false));
+    overview.addEventListener('click', (event) => {
+      if (event.target === overview) setOverviewOpen(false);
+    });
 
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && overview.classList.contains('is-open')) { toggleOverview(false); return; }
+      if (event.key === 'Escape' && overview.classList.contains('is-open')) { setOverviewOpen(false); return; }
       if (overview.classList.contains('is-open')) return;
       if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(event.key)) { event.preventDefault(); showSlide(currentIndex + 1); }
       if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(event.key)) { event.preventDefault(); showSlide(currentIndex - 1); }
@@ -1415,6 +1528,8 @@
       if (match) showSlide(Number(match[1]) - 1, false);
     });
 
+    prepareLinks();
+    setOverviewOpen(false, false);
     buildOverview();
     const initialSlide = location.hash.match(/^#slide-(\d+)$/);
     showSlide(initialSlide ? Number(initialSlide[1]) - 1 : 0, false);
