@@ -1,6 +1,6 @@
 # 다 같이 키우는 생명체
 
-[![프로젝트 아이콘](frontend/assets/ui/header-title-icon.png)](frontend/assets/ui/header-title-icon.png)
+[![프로젝트 아이콘](docs/images/header-title-icon.png)](docs/images/header-title-icon.png)
 
 **[프로젝트 발표 자료 보기](https://heebaek200.github.io/shared-creature-game/presentation.html)**
 
@@ -8,7 +8,7 @@
 
 ### 📌 개요
 
-**다 같이 키우는 생명체**는 일상 속 작은 활동을 게임으로 연결하고, 여러 사용자가 하나의 생명체를 함께 성장시키는 **웹 기반 소셜 육성 서비스**입니다.
+**다 같이 키우는 생명체**는 일상 속 작은 활동을 공동 육성 경험으로 연결하고, 여러 사용자가 하나의 생명체를 함께 성장시키는 **웹 기반 소셜 육성 서비스**입니다.
 
 규칙적인 생활이나 가벼운 야외 활동은 혼자 꾸준히 실천하기 어렵고, 새로운 사람과 적극적으로 교류하는 일도 부담스러울 수 있습니다. 이 프로젝트는 이러한 일상적인 어려움에 주목하여, 거창한 목표나 적극적인 소통 없이도 다른 사람들과 자연스럽게 협력할 수 있는 경험을 제공하고자 기획했습니다.
 
