@@ -327,6 +327,25 @@
       border-radius: 0.35rem;
     }
 
+    .hero-creature-trio {
+      display: grid;
+      min-height: 28rem;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      align-items: end;
+      gap: 0.5rem;
+      padding: 1.4rem 0.8rem;
+      background: linear-gradient(180deg, rgba(221,247,237,.9), rgba(240,232,255,.9));
+      border-radius: 0.35rem;
+    }
+
+    .hero__photo .hero-creature-trio img {
+      width: 100%;
+      height: 15rem;
+      aspect-ratio: auto;
+      object-fit: contain;
+      image-rendering: pixelated;
+    }
+
     .hero__meta {
       display: flex;
       flex-wrap: wrap;
@@ -478,6 +497,56 @@
       gap: 1rem;
     }
 
+    /* 설명 직후 영상 하나를 크게 보여 주는 시연 장 */
+    .demo-stage {
+      display: grid;
+      grid-template-columns: minmax(0, 0.78fr) minmax(28rem, 1.22fr);
+      align-items: center;
+      gap: clamp(1.5rem, 3vw, 3rem);
+    }
+
+    .demo-stage .media {
+      width: min(100%, 38rem);
+      justify-self: center;
+      border-width: 0.65rem;
+    }
+
+    .demo-stage--text-first {
+      grid-template-columns: minmax(28rem, 1.22fr) minmax(0, 0.78fr);
+    }
+
+    .demo-stage--text-first .demo-caption {
+      grid-column: 1;
+      grid-row: 1;
+    }
+
+    .demo-stage--text-first .media {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    .demo-stage .media img {
+      width: 100%;
+      height: auto;
+      max-height: 76vh;
+      aspect-ratio: 4 / 5;
+      object-fit: contain;
+      background: rgba(255,255,255,.78);
+    }
+
+    .demo-caption h2 {
+      max-width: none;
+      font-size: clamp(3rem, 4.4vw, 5.2rem);
+    }
+
+    .demo-caption p {
+      color: var(--ink-soft);
+      font-size: clamp(1rem, 1.2vw, 1.25rem);
+      line-height: 1.65;
+    }
+
+    .demo-caption .clean-list { margin-top: 1.2rem; }
+
     .media-placeholder {
       display: grid;
       place-items: center;
@@ -597,6 +666,135 @@
       color: var(--ink-soft);
       font-size: clamp(0.78rem, 0.86vw, 0.94rem);
       line-height: 1.48;
+    }
+
+    /* 문제 해결 사례를 문제·결정·검증 흐름으로 설명하는 상세 장 */
+    .case-slide h2 {
+      max-width: none;
+      font-size: clamp(3rem, 3.4vw, 4rem);
+    }
+    .case-slide .lede { max-width: 76rem; }
+
+    .case-pipeline {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1.2rem;
+      margin-top: 1.35rem;
+    }
+
+    .case-pipeline--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+    .case-step {
+      position: relative;
+      min-height: 10.5rem;
+      padding: 1.25rem 1.35rem;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.76);
+      border-radius: 1.1rem;
+      box-shadow: 0 12px 30px rgba(59,67,72,.08);
+    }
+
+    .case-step:not(:last-child)::after {
+      position: absolute;
+      z-index: 2;
+      top: 50%;
+      right: -1.32rem;
+      width: 1.42rem;
+      border-top: 0.18rem solid rgba(59,67,72,.35);
+      content: "";
+    }
+
+    .case-step small,
+    .case-choice small {
+      display: block;
+      margin-bottom: 0.65rem;
+      color: var(--ink-soft);
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 800;
+    }
+
+    .case-step strong {
+      display: block;
+      font-size: clamp(1.05rem, 1.3vw, 1.42rem);
+      line-height: 1.3;
+    }
+
+    .case-step p,
+    .case-choice p,
+    .case-note p {
+      margin: 0.7rem 0 0;
+      color: var(--ink-soft);
+      font-size: clamp(0.84rem, 0.94vw, 1.02rem);
+      line-height: 1.55;
+    }
+
+    .case-step--warning { border-top: 0.42rem solid #eaa0a9; }
+    .case-step--decision { border-top: 0.42rem solid #71b98a; }
+    .case-step--verify { border-top: 0.42rem solid #789fd6; }
+    .case-step--limit { border-top: 0.42rem solid #d2aa62; }
+
+    .case-notes,
+    .case-choices {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .case-note,
+    .case-choice {
+      min-height: 8.5rem;
+      padding: 1.15rem 1.3rem;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.68);
+      border-radius: 1rem;
+    }
+
+    .case-note h3,
+    .case-choice h3 {
+      margin: 0;
+      font-size: clamp(1.05rem, 1.25vw, 1.35rem);
+    }
+
+    .case-choice--selected {
+      border: 0.18rem solid #6bbd9f;
+      background: rgba(220,247,235,.78);
+    }
+
+    .case-source-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem 1rem;
+      margin-top: 0.9rem;
+    }
+
+    .case-source-row .source { margin-top: 0; }
+
+    .qa-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.15rem 0.7rem;
+      margin-top: 0.25rem;
+    }
+
+    .qa-links .source {
+      margin-top: 0;
+      font-size: 0.78rem;
+      white-space: nowrap;
+    }
+
+    .state-chip {
+      display: inline-block;
+      margin-top: 0.75rem;
+      padding: 0.28rem 0.58rem;
+      color: var(--ink);
+      background: rgba(255,255,255,.78);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 800;
     }
 
     /* 폴더 트리 */
@@ -869,7 +1067,7 @@
       z-index: 50;
       inset: 0;
       display: none;
-      padding: 4rem;
+      padding: 1.25rem 2.5rem;
       overflow: auto;
       background: rgba(255,253,247,.97);
       backdrop-filter: blur(16px);
@@ -881,14 +1079,14 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      width: min(100%, 85rem);
-      margin: 0 auto 1.2rem;
+      width: min(100%, 112rem);
+      margin: 0 auto 0.65rem;
     }
 
-    .overview__header h2 { margin: 0; font-size: 2.8rem; }
+    .overview__header h2 { margin: 0; font-size: 2rem; }
 
     .overview__close {
-      padding: 0.75rem 1rem;
+      padding: 0.55rem 0.85rem;
       cursor: pointer;
       background: var(--pink);
       border-radius: 999px;
@@ -896,27 +1094,29 @@
 
     .overview__grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 0.7rem;
-      width: min(100%, 85rem);
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 0.4rem;
+      width: min(100%, 112rem);
       margin: auto;
     }
 
     .overview__item {
-      min-height: 7rem;
-      padding: 1rem;
+      min-height: 4.25rem;
+      padding: 0.55rem 0.7rem;
       border: 1px solid var(--line);
       text-align: left;
       cursor: pointer;
       background: white;
-      border-radius: 1rem;
+      border-radius: 0.75rem;
+      font-size: 0.88rem;
+      line-height: 1.25;
     }
 
     .overview__item.is-current { background: var(--mint); }
 
     .overview__item span {
       display: block;
-      margin-bottom: 1rem;
+      margin-bottom: 0.3rem;
       color: var(--ink-soft);
       font-family: var(--mono);
       font-size: 0.7rem;
@@ -929,16 +1129,26 @@
       .hero,
       .split,
       .split--reverse,
+      .demo-stage,
       .security { grid-template-columns: 1fr; }
+      .demo-stage--text-first .demo-caption,
+      .demo-stage--text-first .media {
+        grid-column: auto;
+        grid-row: auto;
+      }
+      .demo-stage--text-first .demo-caption { order: 1; }
+      .demo-stage--text-first .media { order: 2; }
       .hero__photo { width: min(82vw, 30rem); justify-self: center; }
       .grid--4,
       .loop,
       .qa-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .grid--3,
       .extension-grid,
-      .decision-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .decision-grid,
+      .case-pipeline,
+      .case-pipeline--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .demo-index { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-      .overview__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .overview__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .warning-light { width: 15rem; }
     }
 
@@ -953,6 +1163,10 @@
       .qa-flow,
       .extension-grid,
       .decision-grid,
+      .case-pipeline,
+      .case-pipeline--4,
+      .case-notes,
+      .case-choices,
       .media-pair,
       .overview__grid { grid-template-columns: 1fr; }
       .decision-card:nth-child(7) { grid-column: span 1; }
@@ -992,19 +1206,19 @@
 <body>
   <main class="deck" aria-live="polite">
     <div class="brand" aria-hidden="true">
-      <img src="https://raw.githubusercontent.com/heebaek200/shared-creature-game/main/frontend/assets/ui/header-title-icon.png" alt="">
+      <img src="images/header-title-icon.png" alt="">
       <span>다 같이 키우는 생명체</span>
     </div>
 
     <section class="slide slide--mint is-active" data-title="다 같이 키우는 생명체" aria-hidden="false">
       <div class="slide__inner hero">
         <div>
-          <span class="sticker">WEB SOCIAL CREATURE GAME</span>
+          <span class="sticker">WEB SOCIAL CREATURE SERVICE</span>
           <h1 class="hero__title">
             <span>다 같이 키우는</span>
             <span><span class="accent">생명체</span></span>
           </h1>
-          <p class="lede">일상 속 작은 활동을 게임으로 연결하고, 여러 사용자가 하나의 생명체를 함께 성장시키는 웹 기반 소셜 육성 서비스</p>
+          <p class="lede">일상 속 작은 활동을 공동 육성 경험으로 연결하고, 여러 사용자가 하나의 생명체를 함께 성장시키는 웹 기반 소셜 육성 서비스</p>
           <div class="hero__meta">
             <span class="sticker">4명</span>
             <span class="sticker">3주</span>
@@ -1013,30 +1227,19 @@
         </div>
         <figure class="hero__photo">
           <span class="tape"></span>
-          <div class="media-placeholder">시연 영상 불러오는 중</div>
-          <img data-src="images/demos/07-creature-growth.gif" alt="여러 사용자가 함께 성장시킨 완전체 크리처 화면" hidden>
+          <div class="hero-creature-trio" aria-label="완전체 크리처 세 종">
+            <img src="images/creatures/cotton-griffin/lv5.png" alt="솜사탕 그리핀 완전체">
+            <img src="images/creatures/moss-golem/lv5.png" alt="이끼 낀 바위 골렘 완전체">
+            <img src="images/creatures/abyss-jellyfish/lv5.png" alt="공허 속 우주 해파리 완전체">
+          </div>
         </figure>
       </div>
     </section>
 
-    <section class="slide slide--blue" data-title="프로젝트 개요" aria-hidden="true">
-      <div class="slide__inner split">
-        <div>
-          <h2>작은 실천을<br><span class="accent">공동의 성장</span>으로</h2>
-          <p class="lede">규칙적인 생활이나 가벼운 야외 활동은 혼자 꾸준히 실천하기 어렵고, 새로운 사람과 적극적으로 교류하는 일도 부담스러울 수 있습니다.</p>
-        </div>
-        <div class="grid grid--2">
-          <article class="paper-card paper-card--yellow"><h3>공개 그룹</h3><p>사용자는 공개 그룹에 자유롭게 가입하거나 새로운 그룹을 만듭니다.</p></article>
-          <article class="paper-card paper-card--mint"><h3>일일·주간 퀘스트</h3><p>기상 체크인과 사진 인증 등 작은 활동을 수행합니다.</p></article>
-          <article class="paper-card paper-card--pink"><h3>공동 크리처</h3><p>개인의 활동은 기여도로 기록되고 그룹 크리처의 성장에 반영됩니다.</p></article>
-          <article class="paper-card paper-card--lavender"><h3>협력과 경쟁</h3><p>개인·그룹 랭킹으로 참여 동기를 이어갑니다.</p></article>
-        </div>
-      </div>
-    </section>
-
-    <section class="slide slide--yellow" data-title="핵심 이용 흐름" aria-hidden="true">
+    <section class="slide slide--yellow" data-title="서비스 이용 흐름" aria-hidden="true">
       <div class="slide__inner">
-        <h2>가입부터 성장까지<br>하나의 <span class="accent">이용 흐름</span></h2>
+        <h2>각자의 작은 실천이 하나의<br><span class="accent">크리처를 성장</span>시킵니다.</h2>
+        <p class="lede">혼자 꾸준히 하기 어렵고 적극적인 교류는 부담스러운 사용자가, 각자 편한 시간에 참여하면서 같은 성장 결과를 공유합니다.</p>
         <div class="loop">
           <article class="paper-card paper-card--blue"><strong>01</strong><h3>소셜 로그인·그룹 참여</h3><p>Google·Naver 로그인 후 공개 그룹에 가입하거나 그룹을 생성합니다.</p></article>
           <article class="paper-card paper-card--pink"><strong>02</strong><h3>일상 퀘스트 수행</h3><p>일일·주간 체크인과 JPEG EXIF 사진 퀘스트를 수행합니다.</p></article>
@@ -1047,16 +1250,70 @@
       </div>
     </section>
 
-    <section class="slide slide--pink" data-title="주요 기능 영역" aria-hidden="true">
-      <div class="slide__inner">
-        <h2>하나의 루프를 지탱하는<br><span class="accent">다섯 영역</span></h2>
-        <div class="grid grid--3">
-          <article class="paper-card"><h3>가입과 그룹 참여</h3><p>Google·Naver 소셜 로그인, 공개 그룹 가입, Gemini 제안을 활용한 그룹 생성, 초대 링크 참여</p></article>
-          <article class="paper-card"><h3>퀘스트와 공동 성장</h3><p>일일·주간 퀘스트, JPEG EXIF 사진 인증, 기여도·경험치 반영, 개인·그룹 시즌 랭킹</p></article>
-          <article class="paper-card"><h3>상점·아바타·환불</h3><p>PortOne V2 테스트 결제, 아이템 지급, 아바타 장착, 사용 여부 기반 환불 제한</p></article>
-          <article class="paper-card"><h3>그룹·서비스 운영</h3><p>역할 변경, 주 관리자 이전, 초대 링크 재발급, 신고·환불·Scheduler 운영 화면</p></article>
-          <article class="paper-card"><h3>Full CSR 사용자 경험</h3><p>새로고침 없는 이동, URL 복원, 반응형 내비게이션, 시스템·라이트·다크 테마</p></article>
-          <article class="paper-card paper-card--yellow"><h3>핵심 원칙</h3><p>크리처의 기본 육성은 비과금이며, 테스트 결제는 사용자 아바타 꾸미기에 연결했습니다.</p></article>
+    <section class="slide slide--mint" data-title="소셜 로그인·가입 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage demo-stage--text-first">
+        <figure class="media media--wide">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/01-auth-signup.gif" alt="Google 또는 Naver 계정으로 로그인하고 가입하는 화면" hidden>
+        </figure>
+        <div class="demo-caption">
+          <h2>소셜 계정으로<br><span class="accent">서비스를 시작</span>합니다.</h2>
+          <ul class="clean-list">
+            <li>Google·Naver OAuth 로그인</li>
+            <li>최초 로그인 시 가입 정보 확인</li>
+            <li>서버 세션 생성 뒤 그룹 선택으로 이동</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--blue" data-title="공개 그룹 가입 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage">
+        <figure class="media media--wide">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/02-group-join.gif" alt="공개 그룹을 검색하고 가입하는 화면" hidden>
+        </figure>
+        <div class="demo-caption">
+          <h2>원하는 그룹을 찾아<br><span class="accent">바로 참여</span>합니다.</h2>
+          <ul class="clean-list">
+            <li>공개 그룹 검색과 상세 정보 확인</li>
+            <li>현재 소속과 그룹 정원을 서버에서 재검증</li>
+            <li>가입 직후 공동 크리처와 퀘스트 흐름으로 연결</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--pink" data-title="그룹 생성 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage demo-stage--text-first">
+        <figure class="media media--wide">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/03-group-create.gif" alt="소개 문구를 교정하고 새 그룹을 생성하는 화면" hidden>
+        </figure>
+        <div class="demo-caption">
+          <h2>소개를 다듬고<br><span class="accent">새 그룹을 생성</span>합니다.</h2>
+          <ul class="clean-list">
+            <li>그룹명·소개·공개 범위 입력</li>
+            <li>Gemini API로 소개 문구 교정</li>
+            <li>생성자가 주 관리자로 등록</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--lavender" data-title="초대 링크 참여 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage">
+        <figure class="media media--wide">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/04-invite-join.gif" alt="초대 링크로 비공개 그룹에 참여하는 화면" hidden>
+        </figure>
+        <div class="demo-caption">
+          <h2>초대 링크로<br><span class="accent">비공개 그룹에 참여</span>합니다.</h2>
+          <ul class="clean-list">
+            <li>로그인 전 초대 URL 보존</li>
+            <li>로그인 뒤 초대 정보와 정원 재검증</li>
+            <li>유효한 초대만 가입 처리</li>
+          </ul>
         </div>
       </div>
     </section>
@@ -1095,6 +1352,74 @@
             <div class="creature-cell"><img src="images/creatures/abyss-jellyfish/lv4.png" alt="공허 속 우주 해파리 성숙기" decoding="async"></div>
             <div class="creature-cell"><img src="images/creatures/abyss-jellyfish/lv5.png" alt="공허 속 우주 해파리 완전체" decoding="async"></div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--mint" data-title="퀘스트 체크인 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage demo-stage--text-first">
+        <figure class="media media--wide">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/05-quest-checkin.gif" alt="사용자가 일일 퀘스트 체크인을 완료하는 화면" hidden>
+        </figure>
+        <div class="demo-caption">
+          <h2>일일 체크인으로<br><span class="accent">활동을 기록</span>합니다.</h2>
+          <ul class="clean-list">
+            <li>오늘 수행할 퀘스트 확인</li>
+            <li>완료 요청을 서버에서 중복 검증</li>
+            <li>보상과 경험치를 한 번만 반영</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--blue" data-title="사진 퀘스트 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage">
+        <figure class="media media--wide">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/06-quest-photo.gif" alt="JPEG 사진의 EXIF 정보를 확인해 퀘스트를 인증하는 화면" hidden>
+        </figure>
+        <div class="demo-caption">
+          <h2>사진의 촬영 정보를 확인해<br><span class="accent">퀘스트를 인증</span>합니다.</h2>
+          <ul class="clean-list">
+            <li>JPEG 사진 업로드</li>
+            <li>EXIF 촬영 시각과 위치 조건 검증</li>
+            <li>검증 결과만 보상 처리에 사용</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--pink" data-title="공동 크리처 성장 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage demo-stage--text-first">
+        <figure class="media media--wide">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/07-creature-growth.gif" alt="퀘스트 결과가 공동 크리처 성장으로 반영되는 화면" hidden>
+        </figure>
+        <div class="demo-caption">
+          <h2>개인의 활동이<br><span class="accent">공동 성장</span>으로 보입니다.</h2>
+          <ul class="clean-list">
+            <li>퀘스트 완료 결과와 개인 기여도 반영</li>
+            <li>그룹 경험치와 성장 단계 갱신</li>
+            <li>같은 그룹 사용자에게 변화 공유</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--yellow" data-title="시즌 랭킹 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage">
+        <figure class="media media--wide">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/08-rankings.gif" alt="개인과 그룹의 시즌 랭킹을 확인하는 화면" hidden>
+        </figure>
+        <div class="demo-caption">
+          <h2>기여 결과를<br><span class="accent">시즌 랭킹</span>으로 확인합니다.</h2>
+          <ul class="clean-list">
+            <li>그룹 안의 개인 기여 순위</li>
+            <li>그룹 사이의 시즌 순위</li>
+            <li>현재 시즌 기준으로 결과 집계</li>
+          </ul>
         </div>
       </div>
     </section>
@@ -1224,10 +1549,165 @@
       </div>
     </section>
 
+    <section class="slide slide--blue" data-title="WebSocket 상태 복구" aria-hidden="true">
+      <div class="slide__inner case-slide">
+        <h2>빠른 전달과 <span class="accent">정확한 복구</span>의 책임을 나눴습니다.</h2>
+        <p class="lede">WebSocket 이벤트를 모두 영구 보관하는 대신, 연결이 끊긴 뒤에도 기존 REST 조회로 현재 상태를 다시 맞춥니다.</p>
+        <div class="case-pipeline" aria-label="WebSocket 상태 복구 흐름">
+          <article class="case-step case-step--warning"><small>문제</small><strong>연결 중 이벤트 누락</strong><p>재접속한 사용자는 그동안의 이동·성장 이벤트를 받지 못해 화면이 서버 상태와 달라질 수 있습니다.</p></article>
+          <article class="case-step case-step--decision"><small>결정</small><strong>REST Snapshot 재조회</strong><p>이벤트 순번이 건너뛰거나 재접속하면 서버가 가진 최신 전체 상태를 다시 가져옵니다.</p></article>
+          <article class="case-step case-step--verify"><small>보정</small><strong>30초 간격 조회</strong><p>연결이 불안정한 동안에는 주기 조회가 화면을 보정하고, WebSocket은 빠른 변화 전달에 집중합니다.</p></article>
+        </div>
+        <div class="case-notes">
+          <article class="case-note"><h3>현재 규모에 맞춘 이유</h3><p>단일 서버·3주 프로젝트에서 Redis와 영속 이벤트 큐를 추가하기보다 이미 검증한 REST 상태 조회를 복구 경로로 재사용했습니다.</p></article>
+          <article class="case-note"><h3>검증과 남은 한계</h3><p>재접속과 Snapshot 경로를 구현했습니다. 서버 간 이벤트 공유와 과거 이벤트 재생은 지원하지 않으며 일부 브라우저 조건은 미검증입니다.</p></article>
+        </div>
+        <div class="case-source-row"><a class="source" href="https://github.com/heebaek200/shared-creature-game/issues/23#issuecomment-6814887355">설계 결정</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/pull/90">구현 PR #90</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/test-results/QA-04-websocket.md">QA-04 결과</a></div>
+      </div>
+    </section>
+
+    <section class="slide slide--yellow" data-title="Scheduler 재기동 복구" aria-hidden="true">
+      <div class="slide__inner case-slide">
+        <h2>놓친 실행을 재생하지 않고 <span class="accent">현재 상태</span>를 정상화합니다.</h2>
+        <p class="lede">서버가 꺼져 Cron 시각을 놓쳐도, 과거 작업 전체를 되감지 않고 지금 필요한 상태만 복구합니다.</p>
+        <div class="case-pipeline case-pipeline--4" aria-label="Scheduler 재기동 복구 흐름">
+          <article class="case-step case-step--warning"><small>호출점</small><strong>정기·기동·5분 보정</strong><p>세 경로가 같은 정규화 서비스를 호출합니다.</p></article>
+          <article class="case-step case-step--decision"><small>판단 기준</small><strong>현재 시각 + DB 상태</strong><p>실행 기록보다 지금 처리해야 할 시즌·퀘스트·부화를 찾습니다.</p></article>
+          <article class="case-step case-step--verify"><small>중복 방지</small><strong>Lease + Heartbeat</strong><p>동시에 호출돼도 한 실행자만 실제 작업을 수행합니다.</p></article>
+          <article class="case-step case-step--limit"><small>결과</small><strong>필요한 상태만 복구</strong><p>이미 처리된 상태는 건너뛰고 같은 호출이 반복돼도 같은 결과에 도달합니다.</p></article>
+        </div>
+        <div class="case-notes">
+          <article class="case-note"><h3>왜 실행 이력을 재생하지 않았나</h3><p>과거 작업을 무조건 다시 실행하면 끝난 시즌을 재생성하거나 보상을 중복 지급할 수 있기 때문입니다.</p></article>
+          <article class="case-note"><h3>검증 범위</h3><p>중복 실행, KST 갱신, 시즌 마감과 72시간 부화를 확인했습니다. 실제 다중 서버 장애 복구는 검증 범위에 포함하지 않았습니다.</p></article>
+        </div>
+        <div class="case-source-row"><a class="source" href="https://github.com/heebaek200/shared-creature-game/discussions/69#discussioncomment-19435435">문제 발견 기록</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/issues/54#issuecomment-6654380200">복구 설계</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/pull/86">구현 PR #86</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/test-results/QA-02-rewards-scheduler.md">QA-02 결과</a></div>
+      </div>
+    </section>
+
+    <section class="slide slide--pink" data-title="PG timeout과 환불 정합성" aria-hidden="true">
+      <div class="slide__inner case-slide">
+        <h2>응답 없음과 <span class="accent">환불 실패</span>를 구분했습니다.</h2>
+        <p class="lede">PG 응답을 받지 못해도 실제 취소가 진행됐을 수 있으므로, 상태를 확인하기 전에는 실패나 재요청을 확정하지 않습니다.</p>
+        <div class="case-pipeline case-pipeline--4" aria-label="환불 처리와 결과 불명 복구 흐름">
+          <article class="case-step case-step--decision"><small>DB 트랜잭션 1</small><strong>환불 처리권 확보</strong><p>중복 요청 가운데 한 요청만 PG 호출을 진행합니다.</p></article>
+          <article class="case-step case-step--warning"><small>외부 호출</small><strong>DB 잠금 없이 PG 요청</strong><p>느린 네트워크 호출 동안 장시간 잠금을 유지하지 않습니다.</p></article>
+          <article class="case-step case-step--limit"><small>timeout</small><strong>CANCEL_UNKNOWN</strong><p>실패로 바꾸지 않고 결과를 모르는 상태로 보존합니다.</p></article>
+          <article class="case-step case-step--verify"><small>복구</small><strong>최신 PG 상태 조회</strong><p>취소를 다시 요청하지 않고 조회 결과로 아이템과 환불 상태를 확정합니다.</p></article>
+        </div>
+        <div class="case-notes">
+          <article class="case-note"><h3>지킨 정합성</h3><p>실제 환불을 확인하기 전에는 아이템을 회수하지 않고, 중복 취소와 환불·장착 동시 실행의 경합을 막았습니다.</p></article>
+          <article class="case-note"><h3>검증 범위</h3><p>중복 요청, 역순 Webhook, 위조 서명, timeout 복구를 테스트 PG에서 확인했습니다. 실제 운영 PG 장애는 미검증입니다.</p></article>
+        </div>
+        <div class="case-source-row"><a class="source" href="https://github.com/heebaek200/shared-creature-game/pull/71">결제 구현 PR #71</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/pull/98">환불 복구 PR #98</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/test-results/QA-03-payment-refund.md">QA-03 결과</a></div>
+      </div>
+    </section>
+
+    <section class="slide slide--peach" data-title="환불 분기 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage demo-stage--text-first">
+        <figure class="media media--wide">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/12-refund-flow.gif" alt="아이템 사용 여부에 따라 환불 가능 여부를 확인하는 화면" hidden>
+        </figure>
+        <div class="demo-caption">
+          <h2>사용 여부에 따라<br><span class="accent">환불 결과</span>가 달라집니다.</h2>
+          <ul class="clean-list">
+            <li>미사용 구매는 환불 요청 가능</li>
+            <li>장착한 아이템은 사용 완료로 처리</li>
+            <li>결과 불명 상태는 최신 PG 상태로 복구</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--lavender" data-title="그룹 가입 동시성" aria-hidden="true">
+      <div class="slide__inner case-slide">
+        <h2>동시에 가입해도 <span class="accent">20명 정원</span>을 넘지 않습니다.</h2>
+        <p class="lede">19명이 있는 그룹에 두 요청이 함께 도착하면 둘 다 같은 빈자리를 볼 수 있습니다. 최종 판단은 모든 요청이 공유하는 DB가 맡습니다.</p>
+        <div class="case-pipeline" aria-label="그룹 동시 가입 처리 흐름">
+          <article class="case-step case-step--warning"><small>경합</small><strong>두 요청이 19명을 조회</strong><p>애플리케이션 사전 조회만 사용하면 두 요청 모두 가입 가능하다고 판단할 수 있습니다.</p></article>
+          <article class="case-step case-step--decision"><small>DB 보장</small><strong>조건부 갱신·잠금·UNIQUE</strong><p>정원 갱신과 단일 활성 멤버십 규칙을 DB 제약으로 함께 지킵니다.</p></article>
+          <article class="case-step case-step--verify"><small>결과</small><strong>한 요청만 성공</strong><p>나머지 요청은 <code>GROUP_FULL</code> 또는 <code>ALREADY_IN_GROUP</code>으로 종료합니다.</p></article>
+        </div>
+        <div class="case-notes">
+          <article class="case-note"><h3>왜 조회 한 번으로 부족한가</h3><p>동시성 문제는 여러 요청이 같은 이전 상태를 보는 순간 발생합니다. 읽기 뒤 쓰기 사이에서 조건이 달라질 수 있습니다.</p></article>
+          <article class="case-note"><h3>검증과 한계</h3><p>MySQL 병렬 테스트에서 정원과 단일 소속을 확인했습니다. 계정 부족으로 실제 브라우저 두 개의 수동 동시 요청은 실행하지 못했습니다.</p></article>
+        </div>
+        <div class="case-source-row"><a class="source" href="https://github.com/heebaek200/shared-creature-game/issues/14#issuecomment-6599218759">동시성 설계</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/pull/45">구현 PR #45</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/test-results/QA-01-auth-group.md">QA-01 결과</a></div>
+      </div>
+    </section>
+
+    <section class="slide slide--peach" data-title="PREPARING 퀘스트 차단" aria-hidden="true">
+      <div class="slide__inner case-slide">
+        <h2>알 상태도 <span class="accent">정상적인 시즌</span>입니다.</h2>
+        <p class="lede">QA에서 크리처가 아직 알인 그룹의 핵심 플레이가 막히는 P1 결함을 발견하고, 상태 계약과 오류 표시를 함께 수정했습니다.</p>
+        <div class="case-pipeline" aria-label="PREPARING 퀘스트 결함 수정 흐름">
+          <article class="case-step case-step--warning"><small>발견</small><strong>409 QUEST_PERIOD_ENDED</strong><p>시즌은 진행 중인데 알 상태의 그룹만 퀘스트 완료와 보상을 받지 못했습니다.</p></article>
+          <article class="case-step case-step--decision"><small>원인</small><strong>ACTIVE만 허용한 상태 검사</strong><p>업무상 정상 상태인 <code>PREPARING</code>을 종료 상태처럼 차단했고 화면도 공통 문구를 먼저 표시했습니다.</p></article>
+          <article class="case-step case-step--verify"><small>수정</small><strong>PREPARING + ACTIVE 허용</strong><p>수동·사진·복구 경로의 보상 조건을 맞추고 서버의 구체적인 업무 메시지를 우선 표시했습니다.</p></article>
+        </div>
+        <div class="case-notes">
+          <article class="case-note"><h3>확인한 결과</h3><p>알 상태에서 퀘스트 완료와 보상이 이어지도록 핵심 사용자 흐름을 복구했습니다.</p></article>
+          <article class="case-note"><h3>남은 검증 공백</h3><p>최초 QA가 이 오류에서 멈췄기 때문에 일부 후속 WebSocket 시나리오는 별도의 재검증 기록이 남아 있지 않습니다.</p></article>
+        </div>
+        <div class="case-source-row"><a class="source" href="https://github.com/heebaek200/shared-creature-game/issues/135">결함 Issue #135</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/pull/137">수정 PR #137</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/test-results/QA-04-websocket.md">발견 당시 QA-04</a></div>
+      </div>
+    </section>
+
+    <section class="slide slide--blue" data-title="Canvas 대신 DOM/CSS" aria-hidden="true">
+      <div class="slide__inner case-slide">
+        <h2>최대 20명에서는 <span class="accent">상호작용과 재사용</span>을 우선했습니다.</h2>
+        <p class="lede">Canvas와 DOM/CSS를 작은 기능으로 비교한 뒤, 이 프로젝트의 실제 인원과 구현 요구에 맞는 표현 기술을 선택했습니다.</p>
+        <div class="case-choices" aria-label="Canvas와 DOM CSS 비교">
+          <article class="case-choice"><small>검토한 대안</small><h3>Canvas</h3><p>많은 객체를 한 화면에 그리는 데 유리합니다. 대신 아바타별 클릭, 말풍선, 키보드 접근과 좌표 계산을 직접 구현해야 합니다.</p></article>
+          <article class="case-choice case-choice--selected"><small>최종 선택</small><h3>DOM + CSS</h3><p>각 아바타를 요소로 만들고 위치와 transition을 적용했습니다. 브라우저의 클릭·focus·레이아웃과 기존 UI 코드를 재사용했습니다.</p></article>
+        </div>
+        <div class="case-pipeline" aria-label="DOM CSS 선택 근거">
+          <article class="case-step case-step--decision"><small>규모</small><strong>그룹 최대 20명</strong><p>대규모 렌더링 최적화보다 개별 요소 제어가 중요했습니다.</p></article>
+          <article class="case-step case-step--verify"><small>구현</small><strong>바닐라 JavaScript에 통합</strong><p>별도 그래픽 엔진 없이 이동과 말풍선을 구현했습니다.</p></article>
+          <article class="case-step case-step--limit"><small>수용한 제약</small><strong>작은 화면의 겹침</strong><p>모바일에서 20명이 모이면 일부 아바타가 겹칠 수 있습니다.</p></article>
+        </div>
+        <div class="case-source-row"><a class="source" href="https://github.com/heebaek200/shared-creature-game/issues/6#issuecomment-6583798808">비교 Issue #6</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/pull/44">기술 검증 PR #44</a></div>
+      </div>
+    </section>
+
+    <section class="slide slide--lavender" data-title="아바타 장착 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage">
+        <figure class="media media--wide">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/11-avatar-equip.gif" alt="구매한 아이템을 개인 아바타에 장착하는 화면" hidden>
+        </figure>
+        <div class="demo-caption">
+          <h2>아바타를 DOM 요소로<br><span class="accent">직접 조작</span>합니다.</h2>
+          <ul class="clean-list">
+            <li>개별 요소의 클릭과 focus 재사용</li>
+            <li>아이템 장착 결과를 즉시 화면에 반영</li>
+            <li>공동 성장과 개인 꾸미기의 역할 분리</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--yellow" data-title="설계 문서 단순화" aria-hidden="true">
+      <div class="slide__inner case-slide">
+        <h2>문서의 기준을 <span class="accent">분량에서 구현 가능성</span>으로 바꿨습니다.</h2>
+        <p class="lede">내용이 많아도 계약을 찾기 어렵다면 구현 속도가 느려집니다. 문서별 책임과 계약 원본을 다시 정리했습니다.</p>
+        <div class="case-pipeline" aria-label="설계 문서 단순화 과정">
+          <article class="case-step case-step--warning"><small>처음 문제</small><strong>규칙과 계약이 여러 문서에 혼재</strong><p>담당자가 필요한 요구사항, DB 구조와 API 필드를 찾아 구현을 시작하기 어려웠습니다.</p></article>
+          <article class="case-step case-step--decision"><small>전면 축약</small><strong>문서마다 하나의 책임</strong><p>PR #46에서 1,481줄을 삭제하고 1,023줄을 다시 작성해 요구사항·업무 규칙·DB·API의 역할을 분리했습니다.</p></article>
+          <article class="case-step case-step--verify"><small>후속 원칙</small><strong>계약은 단일 원본</strong><p>Issue에는 전문을 복사하지 않고 원본 링크와 그 작업만의 지침을 남기는 방향을 정했습니다.</p></article>
+        </div>
+        <div class="case-notes">
+          <article class="case-note"><h3>도입하지 않은 자동화</h3><p>복사본 자동 갱신도 검토했지만, 잘못된 문서 구조를 유지하기 위한 GitHub Actions는 추가하지 않았습니다.</p></article>
+          <article class="case-note"><h3>남긴 결과</h3><p>“설명을 많이 담았는가”보다 “담당자가 계약을 바로 찾아 구현할 수 있는가”를 문서 품질의 기준으로 삼았습니다.</p></article>
+        </div>
+        <div class="case-source-row"><a class="source" href="https://github.com/heebaek200/shared-creature-game/discussions/49#discussioncomment-19369188">설계 문서 회고</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/pull/46">리팩터링 PR #46</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/discussions/91#discussioncomment-19559540">계약 복사본 회고</a></div>
+      </div>
+    </section>
+
     <section class="slide slide--blue" data-title="주요 폴더 트리" aria-hidden="true">
       <div class="slide__inner">
         <h2>주요 폴더 트리</h2>
-        <pre class="tree">shared-creature-game/
+        <pre class="tree">project-root/
 ├── docs/                              # 기획·요구사항·DB·API·화면 설계 및 검증 기록
 ├── frontend/
 │   ├── assets/                        # 이미지·그래픽 에셋
@@ -1305,7 +1785,7 @@
           </g>
 
           <g class="erd-diagram__entity"><rect x="35" y="75" width="190" height="50" rx="7"/><text x="130" y="106">users</text></g>
-          <g class="erd-diagram__entity"><rect x="35" y="205" width="190" height="50" rx="7"/><text x="130" y="236">game_groups</text></g>
+          <g class="erd-diagram__entity"><rect x="35" y="205" width="190" height="50" rx="7"/><text x="130" y="236">그룹</text></g>
           <g class="erd-diagram__entity"><rect x="35" y="335" width="190" height="50" rx="7"/><text x="130" y="366">seasons</text></g>
           <g class="erd-diagram__entity"><rect x="280" y="125" width="190" height="50" rx="7"/><text x="375" y="156">group_memberships</text></g>
           <g class="erd-diagram__entity"><rect x="280" y="275" width="190" height="50" rx="7"/><text x="375" y="306">group_seasons</text></g>
@@ -1349,55 +1829,208 @@
     </section>
 
     <section class="slide slide--peach" data-title="결제·아이템·환불" aria-hidden="true">
-      <div class="slide__inner split split--reverse">
-        <figure class="media">
+      <div class="slide__inner">
+        <h2>상점·아바타와<br><span class="accent">결제·환불</span></h2>
+        <div class="grid grid--3" style="margin-top:1.5rem">
+          <article class="paper-card paper-card--blue"><h3>테스트 결제</h3><p>PortOne V2 카카오페이 테스트 채널에서 결제를 요청합니다.</p></article>
+          <article class="paper-card paper-card--mint"><h3>서버 재검증</h3><p>PG 상태, 상점 ID, 금액과 통화가 일치할 때 한 번만 아이템을 지급합니다.</p></article>
+          <article class="paper-card paper-card--lavender"><h3>개인 꾸미기</h3><p>구매한 아이템을 아바타에 장착하고 최초 장착 시 사용으로 확정합니다.</p></article>
+          <article class="paper-card paper-card--yellow"><h3>환불 제한</h3><p>미사용 구매만 환불하고 사용한 아이템의 결제는 되돌리지 않습니다.</p></article>
+          <article class="paper-card paper-card--pink"><h3>결과 불명 복구</h3><p>Webhook과 Scheduler가 최신 PG 상태를 조회해 결제·환불 결과를 확정합니다.</p></article>
+          <article class="paper-card"><h3>공동 성장과 분리</h3><p>결제는 개인 아바타 꾸미기에만 연결하고 공동 크리처의 기본 육성은 비과금으로 유지합니다.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--pink" data-title="테스트 결제 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage demo-stage--text-first">
+        <figure class="media media--wide">
           <div class="media-placeholder">시연 영상 불러오는 중</div>
           <img data-src="images/demos/09-test-payment.gif" alt="PortOne V2 카카오페이 테스트 결제 화면" hidden>
         </figure>
-        <div>
-          <h2>상점·아바타와<br>결제·환불</h2>
+        <div class="demo-caption">
+          <h2>결제 결과를<br><span class="accent">서버가 다시 확인</span>합니다.</h2>
           <ul class="clean-list">
-            <li>PortOne V2 카카오페이 테스트 결제</li>
-            <li>서버 검증 후 구매 내역과 아이템 지급 확인</li>
-            <li>아바타 아이템 장착·해제</li>
-            <li>미사용 구매 환불과 사용 후 환불 제한</li>
-            <li>결과 불명 상태는 Webhook·Scheduler로 재조회</li>
+            <li>테스트 채널에서 결제 완료</li>
+            <li>서버 검증 뒤 구매 내역과 아이템 지급</li>
+            <li>동일 거래의 중복 지급 차단</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--lavender" data-title="구매·지급 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage">
+        <figure class="media media--wide">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/10-purchase-delivery.gif" alt="결제 완료 뒤 구매 내역과 아이템 지급을 확인하는 화면" hidden>
+        </figure>
+        <div class="demo-caption">
+          <h2>검증된 결제만<br><span class="accent">아이템으로 지급</span>합니다.</h2>
+          <ul class="clean-list">
+            <li>PG 승인 상태와 주문 정보 대조</li>
+            <li>구매 내역과 지급 원장 기록</li>
+            <li>보관함에서 지급 결과 확인</li>
           </ul>
         </div>
       </div>
     </section>
 
     <section class="slide slide--blue" data-title="그룹·서비스 운영" aria-hidden="true">
-      <div class="slide__inner split">
-        <div>
-          <h2>그룹과 서비스를<br><span class="accent">운영하는 화면</span></h2>
+      <div class="slide__inner">
+        <h2>그룹과 서비스를<br><span class="accent">운영하는 기능</span></h2>
+        <div class="grid grid--4" style="margin-top:1.5rem">
+          <article class="paper-card paper-card--yellow"><h3>그룹 역할</h3><p>멤버 역할 변경과 주 관리자 권한 이전을 서버 규칙에 따라 처리합니다.</p></article>
+          <article class="paper-card paper-card--mint"><h3>초대 관리</h3><p>초대 링크를 재발급하고 이전 링크를 즉시 무효화합니다.</p></article>
+          <article class="paper-card paper-card--blue"><h3>운영 대시보드</h3><p>회원·그룹·결제 통계와 주요 운영 상태를 한곳에서 확인합니다.</p></article>
+          <article class="paper-card paper-card--pink"><h3>대기열·경고</h3><p>환불·신고 대기열과 Scheduler 경고를 확인하고 후속 조치를 추적합니다.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--peach" data-title="그룹 역할 관리 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage demo-stage--text-first">
+        <figure class="media media--wide">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/13-group-role.gif" alt="그룹 구성원의 역할과 주 관리자 권한을 변경하는 화면" hidden>
+        </figure>
+        <div class="demo-caption">
+          <h2>그룹 역할과<br><span class="accent">관리 권한</span>을 변경합니다.</h2>
           <ul class="clean-list">
-            <li>그룹 역할 변경과 주 관리자 이전</li>
-            <li>초대 링크 재발급과 이전 링크 무효화</li>
-            <li>전체 관리자 대시보드의 회원·그룹·결제 통계</li>
-            <li>환불·신고 대기열과 Scheduler 운영 경고</li>
+            <li>구성원 역할 변경</li>
+            <li>주 관리자 권한 이전</li>
+            <li>권한 규칙을 서버에서 검증</li>
           </ul>
         </div>
-        <figure class="media">
+      </div>
+    </section>
+
+    <section class="slide slide--pink" data-title="초대 링크 재발급 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage">
+        <figure class="media media--wide">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/14-invite-reissue.gif" alt="그룹 초대 링크를 재발급하고 이전 링크를 무효화하는 화면" hidden>
+        </figure>
+        <div class="demo-caption">
+          <h2>초대 링크를 바꾸면<br><span class="accent">이전 링크는 종료</span>됩니다.</h2>
+          <ul class="clean-list">
+            <li>관리자만 재발급 가능</li>
+            <li>새 초대 토큰 생성</li>
+            <li>이전 링크는 즉시 무효화</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--yellow" data-title="운영 대시보드 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage demo-stage--text-first">
+        <figure class="media media--wide">
           <div class="media-placeholder">시연 영상 불러오는 중</div>
           <img data-src="images/demos/15-admin-dashboard.gif" alt="전체 관리자 운영 대시보드" hidden>
         </figure>
+        <div class="demo-caption">
+          <h2>서비스 상태를<br><span class="accent">운영 화면</span>에서 확인합니다.</h2>
+          <ul class="clean-list">
+            <li>회원·그룹·결제 통계 확인</li>
+            <li>환불과 신고 처리 대기열 조회</li>
+            <li>Scheduler 경고와 운영 상태 점검</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--lavender" data-title="운영 현황 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage">
+        <figure class="media media--wide">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/16-admin-operations.gif" alt="환불과 신고 대기열 및 Scheduler 경고를 확인하는 운영 화면" hidden>
+        </figure>
+        <div class="demo-caption">
+          <h2>처리가 필요한 항목을<br><span class="accent">운영 현황</span>에서 찾습니다.</h2>
+          <ul class="clean-list">
+            <li>환불·신고 대기열 확인</li>
+            <li>Scheduler 경고 조회</li>
+            <li>후속 조치가 필요한 상태 구분</li>
+          </ul>
+        </div>
       </div>
     </section>
 
     <section class="slide slide--mint" data-title="Full CSR·반응형 경험" aria-hidden="true">
-      <div class="slide__inner split split--reverse">
-        <div class="media-pair">
-          <figure class="media"><div class="media-placeholder">시연 영상 불러오는 중</div><img data-src="images/demos/19-responsive-navigation.gif" alt="반응형 내비게이션" hidden></figure>
-          <figure class="media"><div class="media-placeholder">시연 영상 불러오는 중</div><img data-src="images/demos/20-theme-switch.gif" alt="라이트·다크 테마 전환" hidden></figure>
+      <div class="slide__inner">
+        <h2>Full CSR·반응형<br><span class="accent">사용자 경험</span></h2>
+        <div class="grid grid--4" style="margin-top:1.5rem">
+          <article class="paper-card paper-card--blue"><h3>메뉴 이동</h3><p>페이지 전체 새로고침 없이 필요한 화면과 데이터를 교체합니다.</p></article>
+          <article class="paper-card paper-card--mint"><h3>URL 복원</h3><p>직접 접근과 새로고침 뒤에도 History API를 기준으로 같은 화면을 복원합니다.</p></article>
+          <article class="paper-card paper-card--yellow"><h3>반응형 내비게이션</h3><p>화면 크기에 맞춰 데스크톱과 모바일 메뉴 구조를 전환합니다.</p></article>
+          <article class="paper-card paper-card--lavender"><h3>테마 저장</h3><p>시스템·라이트·다크 테마를 선택하고 다음 방문에도 유지합니다.</p></article>
         </div>
-        <div>
-          <h2>Full CSR·반응형<br>사용자 경험</h2>
+      </div>
+    </section>
+
+    <section class="slide slide--mint" data-title="CSR 메뉴 이동 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage demo-stage--text-first">
+        <figure class="media media--wide">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/17-csr-navigation.gif" alt="전체 새로고침 없이 메뉴 사이를 이동하는 화면" hidden>
+        </figure>
+        <div class="demo-caption">
+          <h2>전체 새로고침 없이<br><span class="accent">화면을 전환</span>합니다.</h2>
           <ul class="clean-list">
-            <li>새로고침 없는 메뉴 이동과 History 복원</li>
-            <li>URL 직접 접근·새로고침 상태 복원</li>
-            <li>데스크톱·모바일 내비게이션 전환</li>
-            <li>시스템·라이트·다크 테마 전환과 저장</li>
+            <li>App Shell은 유지</li>
+            <li>화면 데이터와 본문만 교체</li>
+            <li>History API에 이동 기록</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--blue" data-title="URL 복원 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage">
+        <figure class="media media--wide">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/18-route-restore.gif" alt="URL 직접 접근과 새로고침 뒤 화면이 복원되는 모습" hidden>
+        </figure>
+        <div class="demo-caption">
+          <h2>새로고침 뒤에도<br><span class="accent">같은 화면</span>으로 돌아옵니다.</h2>
+          <ul class="clean-list">
+            <li>History API와 화면 Route 동기화</li>
+            <li>URL 직접 접근과 새로고침 복원</li>
+            <li>페이지 진입·정리 생명주기 관리</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--yellow" data-title="반응형 내비게이션 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage demo-stage--text-first">
+        <figure class="media media--wide">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/19-responsive-navigation.gif" alt="화면 폭에 따라 내비게이션 구조가 바뀌는 화면" hidden>
+        </figure>
+        <div class="demo-caption">
+          <h2>화면 폭에 맞춰<br><span class="accent">내비게이션이 전환</span>됩니다.</h2>
+          <ul class="clean-list">
+            <li>데스크톱 사이드 메뉴</li>
+            <li>모바일 메뉴 구조</li>
+            <li>같은 Route와 권한 규칙 유지</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide slide--pink" data-title="테마 전환 시연" aria-hidden="true">
+      <div class="slide__inner demo-stage">
+        <figure class="media media--wide">
+          <div class="media-placeholder">시연 영상 불러오는 중</div>
+          <img data-src="images/demos/20-theme-switch.gif" alt="시스템과 라이트 및 다크 테마를 전환하는 화면" hidden>
+        </figure>
+        <div class="demo-caption">
+          <h2>선택한 테마를<br><span class="accent">다음 방문에도 유지</span>합니다.</h2>
+          <ul class="clean-list">
+            <li>시스템·라이트·다크 모드 선택</li>
+            <li>즉시 전체 화면에 반영</li>
+            <li>브라우저 저장소에 설정 보존</li>
           </ul>
         </div>
       </div>
@@ -1435,12 +2068,12 @@
         <table class="readme-table">
           <thead><tr><th>검증 범위</th><th>요약</th><th>남은 범위</th></tr></thead>
           <tbody>
-            <tr><td>가입·초대·그룹 제한</td><td><span class="status status--done">기본 흐름 확인</span></td><td>계정 탈퇴 화면 제외, 수동 동시성은 자동 테스트로 보완</td></tr>
-            <tr><td>퀘스트 보상·Scheduler</td><td><span class="status status--done">기본·선택 검증 PASS</span></td><td>전체 사용자 흐름에서 연결 확인</td></tr>
-            <tr><td>결제·환불·Webhook</td><td><span class="status status--done">기본 5건 PASS</span></td><td>테스트 결제 환경 기준</td></tr>
-            <tr><td>WebSocket 세션·동기화</td><td><span class="status status--done">기본 3건 + 추가 5건 PASS</span></td><td>일부 복구·보안 경계 미검증</td></tr>
-            <tr><td>모바일 사진·EXIF</td><td><span class="status status--limited">Android JPEG 범위 확인</span></td><td>iOS·직접 촬영·실제 HEIC 제외</td></tr>
-            <tr><td>QA 피드백</td><td><span class="status status--done">3건 수정</span> <span class="status status--skip">6건 스킵</span></td><td>스킵 항목은 시연에서 제외</td></tr>
+            <tr><td>가입·초대·그룹 제한<div class="qa-links"><a class="source" href="https://github.com/heebaek200/shared-creature-game/issues/35">Issue #35</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/test-results/QA-01-auth-group.md">QA-01 결과</a></div></td><td><span class="status status--done">기본 흐름 확인</span></td><td>계정 탈퇴 화면 제외, 수동 동시성은 자동 테스트로 보완</td></tr>
+            <tr><td>퀘스트 보상·Scheduler<div class="qa-links"><a class="source" href="https://github.com/heebaek200/shared-creature-game/issues/36">Issue #36</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/test-results/QA-02-rewards-scheduler.md">QA-02 결과</a></div></td><td><span class="status status--done">기본·선택 검증 PASS</span></td><td>전체 사용자 흐름에서 연결 확인</td></tr>
+            <tr><td>결제·환불·Webhook<div class="qa-links"><a class="source" href="https://github.com/heebaek200/shared-creature-game/issues/37">Issue #37</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/test-results/QA-03-payment-refund.md">QA-03 결과</a></div></td><td><span class="status status--done">기본 5건 PASS</span></td><td>테스트 결제 환경 기준</td></tr>
+            <tr><td>WebSocket 세션·동기화<div class="qa-links"><a class="source" href="https://github.com/heebaek200/shared-creature-game/issues/38">Issue #38</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/test-results/QA-04-websocket.md">QA-04 결과</a></div></td><td><span class="status status--done">기본 3건 + 추가 5건 PASS</span></td><td>일부 복구·보안 경계 미검증</td></tr>
+            <tr><td>모바일 사진·EXIF<div class="qa-links"><a class="source" href="https://github.com/heebaek200/shared-creature-game/issues/39">Issue #39</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/test-results/QA-05-mobile-exif.md">QA-05 결과</a></div></td><td><span class="status status--limited">Android JPEG 범위 확인</span></td><td>iOS·직접 촬영·실제 HEIC 제외</td></tr>
+            <tr><td>전체 시나리오·QA 피드백<div class="qa-links"><a class="source" href="https://github.com/heebaek200/shared-creature-game/issues/40">Issue #40</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/test-results/QA-06-e2e.md">QA-06 결과</a><a class="source" href="https://github.com/heebaek200/shared-creature-game/blob/main/docs/test-results/QA-06-defect-log.md">결함 기록</a></div></td><td><span class="status status--done">3건 수정</span> <span class="status status--skip">6건 스킵</span></td><td>스킵 항목은 시연에서 제외</td></tr>
           </tbody>
         </table>
       </div>
