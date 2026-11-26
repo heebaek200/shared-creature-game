@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>공동 크리처 성장 시연</title>
+    <style>
+        /* 녹화 화면은 16:9로 유지하고 재생 조작은 캔버스 밖에 둡니다. */
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #101820; color: #edf4f2; font: 16px system-ui, sans-serif; }
+        main { width: min(100% - 24px, 1280px); margin: 16px auto; }
+        canvas { display: block; width: 100%; height: auto; border-radius: 16px; background: #17242a; }
+        .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+        button { font: inherit; padding: 8px 14px; border: 0; border-radius: 8px; cursor: pointer; }
+        button:disabled { opacity: .55; cursor: default; }
+        #status { margin: 0 0 0 8px; }
+    </style>
+</head>
+<body>
+<main aria-label="크리처 성장 Mock">
+    <canvas id="showcase" width="1280" height="720" role="img"
+            aria-label="솜사탕 그리핀, 이끼 낀 바위 골렘, 공허 속 우주 해파리의 성장 비교"></canvas>
+    <div class="controls">
+        <button id="play" type="button" disabled>재생</button>
+        <button id="reset" type="button" disabled>처음으로</button>
+        <button id="record" type="button" disabled>영상 저장</button>
+        <p id="status" role="status">성장 이미지 불러오는 중…</p>
+    </div>
+</main>
+<script type="module" src="./src/mocks/creature-growth-demo.js"></script>
+</body>
+</html>
