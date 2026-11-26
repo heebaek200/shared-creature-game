@@ -16,6 +16,20 @@
 
 서버 운영에 필요한 최소한의 수익은 개인 아바타 꾸미기 아이템 판매로 마련합니다. 사용자가 마음에 드는 아이템을 소장하고, 자신의 취향에 맞게 아바타를 꾸미고 싶은 마음이 구매로 이어지도록 설계합니다.
 
+### 🔐 사용자 역할과 권한
+
+그룹에는 일반 회원·부 관리자·주 관리자가 있습니다. 전체 관리자는 그룹 멤버십과 별도로 부여하는 서비스 운영 권한입니다.
+
+```mermaid
+flowchart LR
+    GROUP["그룹 멤버십"] --> MEMBER["일반 회원 (MEMBER)<br/>퀘스트 참여 · 크리처 공동 육성"]
+    GROUP --> DEPUTY["부 관리자 (DEPUTY)<br/>같은 그룹의 일반 회원 관리"]
+    GROUP --> PRIMARY["주 관리자 (PRIMARY)<br/>그룹 관리 · 부 관리자 지정 · 주 관리자 이전"]
+    SERVICE["서비스 운영"] --> SUPER["전체 관리자 (SUPER_ADMIN)<br/>신고·환불 처리 · 그룹 보호 조치"]
+```
+
+[사용자 역할 상세 규칙](docs/business-rules.md#1-사용자-역할)
+
 ### 👥 팀 구성 및 역할
 
 - **개발 인원:** 4명
@@ -286,6 +300,8 @@ GitHub Projects의 칸반 보드를 이용하여 업무의 진행 상태를 시�
                 <summary>3. 공동 크리처 성장</summary>
                 <img src="docs/images/demos/07-creature-growth.gif"
                      alt="퀘스트 보상과 공동 크리처 성장" width="400">
+                <br>
+                <a href="https://heebaek200.github.io/shared-creature-game/images/demos/21-creature-growth-showcase.mp4">세 종의 성장 단계 비교 시연 보기 (MP4 · 16초)</a>
             </details>
         </td>
         <td>
